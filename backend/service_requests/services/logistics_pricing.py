@@ -246,6 +246,39 @@ class LogisticsFareBreakdown(dict):
     """
 
 
+def tier_display_starting_fare(tier):
+    """
+    The lowest fare a customer can actually be quoted on this tier -- what a
+    "Starting from" card should say.
+
+    A distance-priced tier (per_km_rate set) is quoted by quote_logistics_fare
+    from base_fare (falling back to starting_price), loading/unloading and the
+    surge multiplier, then floored at minimum_fare. starting_price is only a
+    mirror of the Package base price and is NOT what that formula reads once
+    base_fare is set, so showing it can advertise a fare no quote will ever
+    produce. This runs the same steps for a zero-chargeable-km, standard
+    two-stop, no-cargo trip -- the cheapest booking that exists.
+
+    A flat tier (per_km_rate unset) is priced straight off starting_price by
+    resolve_logistics_fare, so that value is already the truth.
+    """
+    if getattr(tier, "per_km_rate", None) is None:
+        return _money(tier.starting_price)
+    base_fare = getattr(tier, "base_fare", None)
+    if base_fare is None:
+        base_fare = tier.starting_price
+    subtotal = _money(base_fare) + _money(getattr(tier, "loading_unloading_charge", 0) or 0)
+    surge = getattr(tier, "surge_multiplier", None)
+    surge = _money(surge) if surge is not None else Decimal("1.00")
+    if surge <= 0:
+        surge = Decimal("1.00")
+    total = _money(subtotal * surge)
+    minimum_fare = getattr(tier, "minimum_fare", None)
+    if minimum_fare is not None and total < _money(minimum_fare):
+        total = _money(minimum_fare)
+    return total
+
+
 def quote_logistics_fare(
     *,
     tier,
@@ -304,8 +337,14 @@ def quote_logistics_fare(
             "duration_seconds": total_duration,
             "source": overall_source,
         }
-        if stop_count == STANDARD_STOP_COUNT or stop_count < len(points):
-            stop_count = len(points)
+        # Bug found: this only corrected stop_count UP to match the actual
+        # routed waypoints (points, built from the real `waypoints` argument
+        # a few lines above -- the authoritative list once we're in this
+        # multi-stop branch), never down. A caller-supplied stop_count
+        # greater than the real waypoint count stayed inflated, so
+        # additional_stop_charge below could bill for stops that were never
+        # actually routed. points is authoritative here; always sync to it.
+        stop_count = len(points)
     else:
         route = get_route_eta(pickup_lat, pickup_lng, drop_lat, drop_lng)
         if route is None:
@@ -706,8 +745,16 @@ def resolve_logistics_fare_v2(
         if submitted_quote_id:
             cached_quote = cache.get(f"gt_quote_{submitted_quote_id}")
             if not cached_quote:
-                raise UnresolvedLogisticsFareError(
-                    f"Logistics quote '{submitted_quote_id}' has expired or is invalid. Please calculate a fresh quote."
+                has_coords = None not in (pickup_lat, pickup_lng, drop_lat, drop_lng)
+                if not (has_coords and logistics_tier is not None):
+                    raise UnresolvedLogisticsFareError(
+                        f"Logistics quote '{submitted_quote_id}' has expired or is invalid. Please calculate a fresh quote."
+                    )
+                logger.info(
+                    "Logistics quote '%s' not found in cache (evicted or server reloaded); "
+                    "re-verifying authoritatively with tier #%s and coordinates.",
+                    submitted_quote_id,
+                    getattr(logistics_tier, "id", None),
                 )
 
             if cached_quote:
@@ -765,9 +812,19 @@ def resolve_logistics_fare_v2(
                     )
 
                 # 4. Stop Count Verification
-                if cached_quote.get("stops") is not None and stop_count != cached_quote.get("stops"):
+                # A quote's `stops` counts the whole route (pickup + every
+                # intermediate stop + drop). The booking request only lists the
+                # intermediate stops, so when it carries any, the count to
+                # compare is derived from them; comparing the caller's default
+                # (2) rejected every legitimate multi-stop booking that carried
+                # its own quote. The waypoint list itself was already verified
+                # against the quote above.
+                request_stops = (
+                    STANDARD_STOP_COUNT + len(curr_canonical_wp) if curr_canonical_wp else stop_count
+                )
+                if cached_quote.get("stops") is not None and request_stops != cached_quote.get("stops"):
                     raise UnresolvedLogisticsFareError(
-                        f"Quote stop count mismatch: quote was generated for {cached_quote.get('stops')} stops, but request has {stop_count}. Please recalculate fare."
+                        f"Quote stop count mismatch: quote was generated for {cached_quote.get('stops')} stops, but request has {request_stops}. Please recalculate fare."
                     )
 
                 # 5. Cargo Identity & Quantities Verification (binding server-authoritative GoodsItem attributes)
@@ -864,6 +921,16 @@ def resolve_logistics_fare_v2(
             if not breakdown.get("is_cargo_fit", True):
                 reason = breakdown.get("cargo_fit_reason") or "Selected vehicle cannot safely carry this cargo."
                 raise UnresolvedLogisticsFareError(f"VEHICLE_CAPACITY_EXCEEDED: {reason}")
+            if submitted_quote_id and submitted_amount is not None:
+                try:
+                    sub_dec = _money(submitted_amount)
+                    calc_dec = _money(breakdown["total"])
+                    if sub_dec != calc_dec:
+                        raise UnresolvedLogisticsFareError(
+                            f"Quote total mismatch: submitted amount ({sub_dec}) does not match authoritative calculated total ({calc_dec}). Please calculate a fresh quote."
+                        )
+                except (InvalidOperation, TypeError):
+                    raise UnresolvedLogisticsFareError(f"Invalid submitted amount format: '{submitted_amount}'.")
             if submitted_quote_id:
                 breakdown["quote_id"] = submitted_quote_id
             if submitted_expires_at:

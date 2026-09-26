@@ -37,6 +37,28 @@ _TIME_FORMATS = ("%H:%M", "%H:%M:%S", "%I:%M %p", "%I %p", "%I:%M%p")
 ON_DEMAND_LOGISTICS_CATEGORIES = {"goods_transport_truck", "goods_transport_two_wheeler"}
 DEFAULT_LOGISTICS_CUTOFF_HOUR = 22
 
+# Bug found: every GT category (Mini Truck, Two Wheeler, Packers & Movers) has
+# its own authoritative slot/availability engine -- the admin-configured
+# LogisticsSlot rows, the capacity check in LogisticsSlotAvailabilityView, and
+# the logistics-specific cutoff hour/lead-time rules right in this file. That
+# engine already fully governs which GT slots are bookable. But
+# validate_booking_slot() below unconditionally also tries to resolve a
+# generic Service (the Service/Package catalog used by painting, AC, and
+# other non-GT verticals) for whatever service_category it's given, and if
+# one resolves it further validates against THAT service's separate
+# ServiceTimeSlotConfig-driven operating-hours engine. For GT bookings this
+# second, unrelated engine's default/configured hours and slot grid don't
+# line up with LogisticsSlot's own labels (e.g. GT's "06:00 AM - 07:00 AM"
+# falling outside the generic engine's default 9am-6pm window), so it
+# rejected every GT slot with "outside operating hours for this service" --
+# even ones LogisticsSlotAvailabilityView had just reported as available.
+# GT/logistics categories must skip this generic per-Service check entirely;
+# their own slot validation further down (same-day cutoff, lead time) and the
+# capacity check already applied by the caller are the authoritative gate.
+LOGISTICS_SLOT_CATEGORIES = {
+    "goods_transport_truck", "goods_transport_two_wheeler", "packers_movers", "goods_transport",
+}
+
 
 def get_cutoff_hour(service_category=None):
     clean_cat = (service_category or "").strip().lower()
@@ -119,16 +141,21 @@ def validate_booking_slot(preferred_date, preferred_time=None, now=None, service
     if preferred_date < today:
         return "Preferred date cannot be in the past."
 
-    # If service is passed or resolvable, validate against the authoritative service time slot engine
+    # If service is passed or resolvable, validate against the authoritative service time slot engine.
+    # Skipped for GT/logistics categories -- see LOGISTICS_SLOT_CATEGORIES docstring above: they have
+    # their own dedicated slot engine (LogisticsSlot + capacity check + the cutoff/lead-time checks
+    # below), and running them through this generic, unrelated per-Service engine as well incorrectly
+    # rejected every slot.
+    is_logistics_category = (service_category or "").strip().lower() in LOGISTICS_SLOT_CATEGORIES
     resolved_svc = service
-    if not resolved_svc and service_category:
+    if not resolved_svc and service_category and not is_logistics_category:
         try:
             from service_requests.services.time_slot_service import resolve_service
             resolved_svc, _ = resolve_service(service_category)
         except Exception:
             resolved_svc = None
 
-    if resolved_svc:
+    if resolved_svc and not is_logistics_category:
         try:
             from service_requests.services.time_slot_service import validate_slot_availability_for_booking
             is_valid, err_msg = validate_slot_availability_for_booking(resolved_svc, preferred_date, preferred_time)

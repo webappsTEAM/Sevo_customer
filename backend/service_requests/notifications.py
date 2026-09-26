@@ -919,10 +919,19 @@ _PM_LEG_NOTICE_COPY = {
         "Your move is complete -- all items have been delivered and unpacked.",
         "Move Completed",
     ),
-    "COMPLETED": (
-        "Your move is complete -- all items have been delivered and unpacked.",
-        "Move Completed",
-    ),
+    # Bug found: COMPLETED used to carry the identical copy as DELIVERED.
+    # PM_LEG_SEQUENCE treats DELIVERED and COMPLETED as two distinct,
+    # forward-only legs a normal move genuinely transitions through, and each
+    # leg transition calls notify_pm_move_update() separately (see
+    # workforce_integration/views.py), so every customer received the same
+    # "your move is complete" SMS + email twice -- the SMS dedup key is keyed
+    # per-leg (pm-delivered vs pm-completed), not per logical event, so it
+    # didn't catch this, and the email path has no dedup at all. DELIVERED is
+    # the customer-meaningful moment (goods actually arrived/unpacked);
+    # COMPLETED is an internal finalization step with nothing new to tell the
+    # customer, so it intentionally has no entry here and notify_pm_move_update
+    # no-ops for it (see the `if not copy: return` below) rather than sending
+    # a second identical notice.
 }
 
 

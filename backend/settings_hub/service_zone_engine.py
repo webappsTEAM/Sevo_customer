@@ -567,6 +567,87 @@ class RouteCoverageResult:
     drop_zone_name: str = ""
     open_access: bool = False
     coming_soon_zone: str = ""
+    # 1-based position among the intermediate stops when failed_point == "stop".
+    failed_stop_index: Optional[int] = None
+
+
+def extract_route_stops(stops):
+    """
+    Intermediate stops of a multi-stop trip, in order, as
+    [(number, lat, lng, has_address)] with `number` the 1-based position the
+    customer sees ("Stop 2").
+
+    Same shapes the fare engine accepts ([lat, lng] pairs, or dicts with
+    lat/lng or latitude/longitude); explicit PICKUP/DROP entries are skipped
+    (they are the trip's ends, checked separately) and fully blank entries are
+    ignored. A stop with an address but no readable coordinates comes back
+    with lat/lng None so the caller can refuse it rather than let it be saved
+    without a location.
+    """
+    out = []
+    if not isinstance(stops, (list, tuple)):
+        return out
+    number = 0
+    for s in stops:
+        lat = lng = None
+        has_address = False
+        if isinstance(s, dict):
+            if str(s.get("stop_type", "")).upper() in ("PICKUP", "DROP"):
+                continue
+            lat = s.get("lat") if s.get("lat") not in (None, "") else s.get("latitude")
+            lng = s.get("lng") if s.get("lng") not in (None, "") else s.get("longitude")
+            has_address = bool(str(s.get("address") or "").strip())
+        elif isinstance(s, (list, tuple)) and len(s) >= 2:
+            lat, lng = s[0], s[1]
+        else:
+            continue
+        if lat in (None, "") and lng in (None, "") and not has_address:
+            continue
+        number += 1
+        out.append((number, lat if lat != "" else None, lng if lng != "" else None, has_address))
+    return out
+
+
+def _stop_failure(number, result, *, service_label, vehicle_label, coming_soon_zone):
+    n = number
+    code = result.error_code or "SERVICE_NOT_AVAILABLE_IN_AREA"
+    base = dict(allowed=False, failed_point="stop", failed_stop_index=n)
+    if code in ("LOCATION_REQUIRED", "INVALID_LOCATION"):
+        return RouteCoverageResult(
+            error_code=f"STOP_{code}",
+            message=(
+                f"We couldn't read the location of stop {n}. Please select the stop {n} "
+                f"address from the suggestions or on the map, or remove the stop."
+            ),
+            **base,
+        )
+    if code == "VEHICLE_NOT_AVAILABLE_IN_ZONE":
+        return RouteCoverageResult(
+            error_code="STOP_VEHICLE_NOT_AVAILABLE",
+            message=(
+                f"{vehicle_label or 'The selected vehicle'} is not available at stop {n}. "
+                f"Please choose a different vehicle type or a different stop."
+            ),
+            **base,
+        )
+    if coming_soon_zone:
+        return RouteCoverageResult(
+            error_code="STOP_COMING_SOON",
+            coming_soon_zone=coming_soon_zone.name,
+            message=(
+                f"{service_label} is coming soon to {coming_soon_zone.name}. Stop {n} "
+                f"isn't bookable yet."
+            ),
+            **base,
+        )
+    return RouteCoverageResult(
+        error_code="STOP_OUT_OF_COVERAGE",
+        message=(
+            f"Stop {n} is outside our {service_label} service area. "
+            f"Please choose a stop within our coverage, or remove it."
+        ),
+        **base,
+    )
 
 
 _POINT_LABEL = {"pickup": "pickup", "drop": "drop"}
@@ -628,6 +709,7 @@ def check_route_coverage(
     vehicle_class: str = "",
     service_label: str = "Goods & Transport",
     vehicle_label: str = "",
+    stops=None,
 ) -> RouteCoverageResult:
     """
     Goods & Transport gate: BOTH pickup and drop must fall inside an ACTIVE
@@ -638,7 +720,21 @@ def check_route_coverage(
     Same open-access rule as check_booking_eligibility: when the company has
     no ACTIVE zones at all, geofencing has not been set up and nothing is
     blocked. Coming Soon / Paused zones never count as coverage.
+
+    `stops` (optional): the intermediate stops of a multi-stop trip. Each one
+    must satisfy the same coverage rules as pickup and drop, checked in route
+    order (pickup, stops, drop), and the failure names the stop ("Stop 2 ...").
+    A stop with an address but no readable coordinates is refused whatever the
+    geofencing state: it would be saved with no location while the fare engine
+    silently left it out of the price.
     """
+    route_stops = extract_route_stops(stops)
+    for number, s_lat, s_lng, has_address in route_stops:
+        if has_address and (s_lat is None or s_lng is None):
+            return _stop_failure(
+                number, ZoneCheckResult(allowed=False, error_code="LOCATION_REQUIRED"),
+                service_label=service_label, vehicle_label=vehicle_label, coming_soon_zone=None,
+            )
     company_id = _get_company_id(company)
     if not company_id:
         return RouteCoverageResult(allowed=True, open_access=True, message="No company context — open access.")
@@ -655,7 +751,29 @@ def check_route_coverage(
         return RouteCoverageResult(allowed=True, open_access=True, message="No service zones configured — open access.")
 
     zone_ids = {}
-    for point, lat, lng in (("pickup", pickup_lat, pickup_lng), ("drop", drop_lat, drop_lng)):
+    # Route order: pickup, then each stop, then drop.
+    checks = [("pickup", None, pickup_lat, pickup_lng)]
+    checks += [("stop", n, s_lat, s_lng) for n, s_lat, s_lng, _has in route_stops]
+    checks.append(("drop", None, drop_lat, drop_lng))
+    for point, number, lat, lng in checks:
+        if point == "stop":
+            try:
+                flat, flng = validate_coordinates(lat, lng)
+            except ValueError:
+                return _stop_failure(
+                    number, ZoneCheckResult(allowed=False, error_code="INVALID_LOCATION"),
+                    service_label=service_label, vehicle_label=vehicle_label, coming_soon_zone=None,
+                )
+            result = find_zone_for_service(flat, flng, service_slug, company_id, vehicle_class=vehicle_class)
+            if not result.allowed:
+                coming_soon = None
+                if result.error_code != "VEHICLE_NOT_AVAILABLE_IN_ZONE":
+                    coming_soon = find_coming_soon_zone(flat, flng, service_slug, company_id)
+                return _stop_failure(
+                    number, result,
+                    service_label=service_label, vehicle_label=vehicle_label, coming_soon_zone=coming_soon,
+                )
+            continue
         if lat is None or lat == "" or lng is None or lng == "":
             return _point_failure(
                 point, ZoneCheckResult(allowed=False, error_code="LOCATION_REQUIRED"),

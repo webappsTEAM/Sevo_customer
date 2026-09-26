@@ -749,7 +749,18 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
   const [expandedSlotCategory, setExpandedSlotCategory] = useState("Morning")
 
   useEffect(() => {
-    const dStr = selectedDate?.fullDate ? selectedDate.fullDate.toISOString().split("T")[0] : ""
+    // Bug found: same as the identical fix in MiniTruckBookingHosurPage --
+    // toISOString() converts to UTC before formatting, and for a
+    // selectedDate.fullDate built at local midnight (server dates use
+    // new Date(`${d.date}T00:00:00`)) under IST (UTC+5:30), that always
+    // rolls the date back to the previous calendar day, which the backend's
+    // validate_booking_slot() then correctly rejects as "in the past" --
+    // making every slot for every date show unavailable. Build the date
+    // string from local Y/M/D components instead, matching how the actual
+    // booking submission further below already does it correctly.
+    const dStr = selectedDate?.fullDate
+      ? `${selectedDate.fullDate.getFullYear()}-${String(selectedDate.fullDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.fullDate.getDate()).padStart(2, "0")}`
+      : ""
     const activeCityParam = selectedCity ? selectedCity.toLowerCase() : currentCitySlug
     setSlotsLoading(true)
     fetchLogisticsSlots({ date: dStr, category: "packers_movers", city: activeCityParam })
@@ -1388,12 +1399,12 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
         const [tiers, lanes, areas] = await Promise.all([
           fetchServiceTiers("packers_movers", activeCityParam),
           fetchLanes("packers_movers", activeCityParam),
-          fetchServiceAreas(activeCityParam),
+          fetchServiceAreas(activeCityParam, "packers_movers"),
         ])
         if (cancelled) return
         setFetchedTiers(tiers)
         setFetchedLanes(lanes)
-        setServiceAreas(areas)
+        setServiceAreas(Array.isArray(areas) ? areas : [])
       } catch (err) {
         console.warn("Failed to load logistics catalog:", err)
       }

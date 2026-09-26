@@ -711,7 +711,18 @@ class InvoiceDownloadView(APIView):
             c.drawString(370, y + 4, f"Rs. {ext_amount:,.0f}")
             c.drawRightString(W - 35, y + 4, f"Rs. {ext_amount:,.0f}")
 
-        final_total = base_total + ext_amount
+        # Bug found (mirrors the identical fix already applied to
+        # ServiceRequestDetailSerializer.get_base_amount): cart_data rows for
+        # GT/Packers & Movers bookings carry quote_id/cargo_items/pickup_floor
+        # etc, not a "price" key, so summing item.get("price", 0) here silently
+        # produced base_total=0 (invoice showing Rs. 0.00) for every such
+        # booking even though sr.total_amount was correctly charged.
+        # total_amount is the authoritative, already GST/fee/discount-inclusive
+        # figure captured at booking creation -- prefer it for the invoice's
+        # printed total, and only fall back to the cart/base_total sum (which
+        # stays as the per-line-item display above) if total_amount is unset.
+        authoritative_total = float(getattr(sr, "total_amount", 0) or 0)
+        final_total = authoritative_total if authoritative_total > 0 else (base_total + ext_amount)
 
         # Totals
         y -= 35

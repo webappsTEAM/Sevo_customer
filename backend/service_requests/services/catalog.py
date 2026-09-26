@@ -713,6 +713,14 @@ def update_package(package, data, actor, reason=None):
             if pkg.tag is not None and tier.icon != (pkg.tag or ""):
                 tier.icon = pkg.tag or ""
                 fields_to_update.append("icon")
+            # Package.tag is the admin's capacity label (see
+            # Package.gt_dimensions_label) and create_package mirrors it into
+            # capacity_label, but this incremental path never did -- so after
+            # any later edit the customer card kept the stale original text.
+            # A blank tag does not overwrite an existing label.
+            if pkg.tag and tier.capacity_label != pkg.tag:
+                tier.capacity_label = pkg.tag
+                fields_to_update.append("capacity_label")
             if pkg.status:
                 tier_is_active = (pkg.status == "ACTIVE")
                 if tier.is_active != tier_is_active:

@@ -25,9 +25,12 @@ export async function fetchLanes(category, city) {
   return unwrapResults(res)
 }
 
-export async function fetchServiceAreas(city) {
+// "Areas We Serve" is derived server-side from real coverage for this
+// city + service category (truck | two_wheeler | packers_movers).
+export async function fetchServiceAreas(city, category) {
   const params = {}
   if (city && city !== "undefined") params.city = city
+  if (category && category !== "undefined") params.category = category
   const qs = new URLSearchParams(params).toString()
   const res = await apiRequest(`/logistics/areas/${qs ? `?${qs}` : ""}`)
   return unwrapResults(res)
@@ -259,7 +262,7 @@ export async function fetchGTFaqs({ category = "", city = "" } = {}) {
  * Network failures resolve to inCoverage: true -- the booking and quote
  * endpoints enforce coverage server-side regardless.
  */
-export async function checkRouteCoverage({ serviceCategory, pickup, drop, vehicleClass }) {
+export async function checkRouteCoverage({ serviceCategory, pickup, drop, vehicleClass, stops }) {
   if (!pickup?.lat || !pickup?.lng || !drop?.lat || !drop?.lng) return { inCoverage: true, skipped: true }
   try {
     const res = await apiRequest("/settings/service-zones/check/", {
@@ -270,6 +273,8 @@ export async function checkRouteCoverage({ serviceCategory, pickup, drop, vehicl
         drop_lat: drop.lat,
         drop_lng: drop.lng,
         service_slug: serviceCategory,
+        // Intermediate stops must be inside coverage too (same rule as pickup/drop).
+        ...(Array.isArray(stops) && stops.length > 0 ? { stops: stops.map((p) => ({ lat: p.lat, lng: p.lng })) } : {}),
         ...(vehicleClass ? { vehicle_class: vehicleClass } : {}),
       },
     })
@@ -278,6 +283,7 @@ export async function checkRouteCoverage({ serviceCategory, pickup, drop, vehicl
       return {
         inCoverage: false,
         failedPoint: data.failed_point || "",
+        failedStopIndex: data.failed_stop_index ?? null,
         errorCode: data.error_code || "",
         message: data.message || "This trip is outside our service area.",
       }

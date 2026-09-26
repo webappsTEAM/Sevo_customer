@@ -1121,6 +1121,18 @@ class AdminLaneListView(APIView):
         except (InvalidOperation, TypeError, ValueError):
             return _fail("Invalid fare amount.", "INVALID_FARE", status.HTTP_400_BAD_REQUEST)
 
+        # GT audit fix: Lane.fare is a real money field -- the fixed fare
+        # quoted to customers on this lane -- but this whole view was gated
+        # only on plain "edit", the same gap Update 7/8 closed for
+        # GoodsItem.special_handling_charge and PackersMoversConfig's rate
+        # fields. A non-zero fare on create is exactly that same bypass.
+        if fare > Decimal("0.00") and not _can(request.user, "modify_price"):
+            return _fail(
+                "Creating a lane with a non-zero fare requires the "
+                "'modify_price' permission on the Pricing module.",
+                "PRICING_FORBIDDEN", status.HTTP_403_FORBIDDEN,
+            )
+
         distance_km = None
         if data.get("distance_km") not in (None, ""):
             try:
@@ -1231,6 +1243,16 @@ class AdminLaneDetailView(APIView):
                     except (InvalidOperation, TypeError, ValueError):
                         continue
                 if new_val != old_val:
+                    # GT audit fix: same modify_price gate as the create path
+                    # above -- fare is a real money field, the other three
+                    # dec_fields (distance_km/lat/lng) are not pricing and
+                    # stay on plain "edit".
+                    if dec_field == "fare" and not _can(request.user, "modify_price"):
+                        return _fail(
+                            "Changing a lane's fare requires the "
+                            "'modify_price' permission on the Pricing module.",
+                            "PRICING_FORBIDDEN", status.HTTP_403_FORBIDDEN,
+                        )
                     CatalogChangeLog.objects.create(
                         entity_type="Lane", entity_id=lane.id,
                         field_name=dec_field, old_value=str(old_val), new_value=str(new_val),

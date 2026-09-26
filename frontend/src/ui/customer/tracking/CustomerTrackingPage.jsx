@@ -108,6 +108,7 @@ export function CustomerTrackingPage({
 
   const [copiedOtp, setCopiedOtp] = useState(false)
   const [copiedPayOtp, setCopiedPayOtp] = useState(false)
+  const [copiedDeliveryOtp, setCopiedDeliveryOtp] = useState(false)
 
   // Multi-service booking (Sept 2026): when this booking is one task of a
   // multi-service parent Order (data.order_id + sibling_task_count > 1,
@@ -289,6 +290,7 @@ export function CustomerTrackingPage({
   const distKm = data?.technician?.distance_km ?? data?.distance_km ?? null
   const freshness = data?.freshness || "LIVE"
   const paymentConfirmationOtp = data?.payment_confirmation_otp || null
+  const deliveryOtp = data?.delivery_otp || null
 
   const copyOtp = () => {
     if (!startOtp || !navigator.clipboard) return
@@ -302,6 +304,13 @@ export function CustomerTrackingPage({
     navigator.clipboard.writeText(paymentConfirmationOtp)
     setCopiedPayOtp(true)
     setTimeout(() => setCopiedPayOtp(false), 2000)
+  }
+
+  const copyDeliveryOtp = () => {
+    if (!deliveryOtp || !navigator.clipboard) return
+    navigator.clipboard.writeText(deliveryOtp)
+    setCopiedDeliveryOtp(true)
+    setTimeout(() => setCopiedDeliveryOtp(false), 2000)
   }
 
   const openWA = () => {
@@ -456,8 +465,12 @@ export function CustomerTrackingPage({
               startOtp={startOtp}
               vendorName={vendorName}
               requestId={data?.request_id || activeIdentifier}
+              // Bug found: intermediate TripStop waypoints (already fetched
+              // into data.logistics.stops and listed in the address panel
+              // below) were never passed to the map, so they never appeared
+              // as markers and never factored into the camera's fitBounds.
               routePoints={isLogistics && (data?.pickup_location || data?.drop_location)
-                ? { pickup: data?.pickup_location, drop: data?.drop_location }
+                ? { pickup: data?.pickup_location, drop: data?.drop_location, stops: data?.logistics?.stops }
                 : null}
             />
 
@@ -788,6 +801,25 @@ export function CustomerTrackingPage({
                 <button className="ltp-otp-val" onClick={copyOtp} aria-label="Copy OTP" title="Click to copy">
                   {startOtp}
                   {copiedOtp ? <Check size={13} color="#10b981" /> : <Copy size={13} />}
+                </button>
+              </div>
+            )}
+
+            {/* Delivery OTP Card (goods & transport / packers & movers) */}
+            {isLogistics && deliveryOtp && !isCancelled && (
+              <div className="ltp-card ltp-otp-card highlight-arrived">
+                <div className="ltp-otp-left">
+                  <KeyRound size={18} color="#ea580c" />
+                  <div>
+                    <div className="ltp-otp-label">DELIVERY OTP</div>
+                    <div className="ltp-otp-hint">
+                      Share this code with the driver only after your goods have been delivered
+                    </div>
+                  </div>
+                </div>
+                <button className="ltp-otp-val" onClick={copyDeliveryOtp} aria-label="Copy Delivery OTP" title="Click to copy">
+                  {deliveryOtp}
+                  {copiedDeliveryOtp ? <Check size={13} color="#10b981" /> : <Copy size={13} />}
                 </button>
               </div>
             )}

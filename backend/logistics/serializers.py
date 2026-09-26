@@ -1,7 +1,7 @@
 from decimal import Decimal
 from rest_framework import serializers
 
-from .models import Lane, ServiceArea, ServiceTier
+from .models import Lane, LogisticsCategory, ServiceArea, ServiceTier
 
 
 class ServiceTierSerializer(serializers.ModelSerializer):
@@ -17,6 +17,17 @@ class ServiceTierSerializer(serializers.ModelSerializer):
             "max_weight_kg", "max_cft",
             "duration", "updated_at",
         ]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # "Starting from" must be a fare the quote engine can really produce.
+        # For Goods & Transport tiers that means the formula's floor, not the
+        # mirrored starting_price (which drifts from base_fare/minimum_fare).
+        # Packers & Movers tiers keep their own package pricing untouched.
+        if instance.category in (LogisticsCategory.TRUCK, LogisticsCategory.TWO_WHEELER):
+            from service_requests.services.logistics_pricing import tier_display_starting_fare
+            data["starting_price"] = str(tier_display_starting_fare(instance))
+        return data
 
     def get_image(self, obj):
         if not obj.image:

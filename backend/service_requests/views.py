@@ -451,6 +451,8 @@ class BookingCreateView(APIView):
                 company=company,
                 vehicle_class=(_tier.get_vehicle_class() if _tier is not None else ""),
                 vehicle_label=(getattr(_tier, "name", "") or ""),
+                # Intermediate stops must be covered (and located) too.
+                stops=(request.data.get("stops") or request.data.get("trip_stops") or request.data.get("waypoints")),
             )
             if not route_result.allowed:
                 if idem_cache_key:
@@ -461,6 +463,7 @@ class BookingCreateView(APIView):
                         "success": False,
                         "error_code": route_result.error_code,
                         "failed_point": route_result.failed_point,
+                        "failed_stop_index": route_result.failed_stop_index,
                         "message": route_result.message,
                     },
                     status=status.HTTP_400_BAD_REQUEST,
@@ -537,21 +540,22 @@ class BookingCreateView(APIView):
         # Services) are untouched.
         if _service_slug in ("goods_transport_truck", "goods_transport_two_wheeler"):
             _fb = fare_breakdown if isinstance(fare_breakdown, dict) else (dict(fare_breakdown) if fare_breakdown else {})
-            try:
-                _route_distance_km = float(_fb.get("distance_km") or 0)
-            except (TypeError, ValueError):
-                _route_distance_km = 0.0
-            if _route_distance_km <= 0.05:
-                if idem_cache_key:
-                    from django.core.cache import cache
-                    cache.delete(idem_cache_key)
-                return _error(
-                    "Your pickup and drop locations are the same (or too close together). "
-                    "Please choose a different drop location for your booking.",
-                    400,
-                    error="Pickup and drop resolve to the same location (zero-distance route).",
-                    code="ZERO_DISTANCE_ROUTE",
-                )
+            if "distance_km" in _fb:
+                try:
+                    _route_distance_km = float(_fb.get("distance_km") or 0)
+                except (TypeError, ValueError):
+                    _route_distance_km = 0.0
+                if _route_distance_km <= 0.05:
+                    if idem_cache_key:
+                        from django.core.cache import cache
+                        cache.delete(idem_cache_key)
+                    return _error(
+                        "Your pickup and drop locations are the same (or too close together). "
+                        "Please choose a different drop location for your booking.",
+                        400,
+                        error="Pickup and drop resolve to the same location (zero-distance route).",
+                        code="ZERO_DISTANCE_ROUTE",
+                    )
 
         # Fixes HS-B-01: Full server-side price authority for Home Services bookings.
         # Browser-submitted prices in cart_data or total_amount are NEVER trusted.
@@ -791,9 +795,25 @@ class BookingCreateView(APIView):
             "service_zone_id_snapshot": zone_result.zone_id,
             "service_zone_name_snapshot": zone_result.zone_name or "",
         }
+        # Bug found: this block resolved tier_obj from the fare breakdown's
+        # tier_id (the case where the fare was priced off a Lane or a
+        # locked quote snapshot rather than the serializer's own
+        # logistics_tier field -- see classification_only_snapshot /
+        # resolve_logistics_fare_v2 in logistics_pricing.py) but never
+        # actually put it anywhere: it was assigned to a local variable and
+        # then dropped, so save_kwargs never got a "logistics_tier" key and
+        # the ServiceRequest was saved with logistics_tier left NULL even
+        # though fare_breakdown correctly identified which vehicle was
+        # purchased. fare_breakdown (JSON) still recorded the tier_id, but
+        # the actual FK the rest of the system (Vendor dispatch, admin
+        # views, tier-based queries) reads never got backfilled. Put the
+        # resolved tier into save_kwargs so the FK is set exactly when this
+        # block already determined it should be.
         if not serializer.validated_data.get("logistics_tier") and fare_breakdown and fare_breakdown.get("tier_id"):
             from logistics.models import ServiceTier
             tier_obj = ServiceTier.objects.filter(id=fare_breakdown["tier_id"]).first()
+            if tier_obj:
+                save_kwargs["logistics_tier"] = tier_obj
         from service_requests.services.time_slot_service import (
             resolve_service,
             validate_slot_availability_for_booking,
@@ -1591,7 +1611,18 @@ class CustomerBookingCancelView(APIView):
                     # diverges once an admin enables a real advance
                     # percentage and a booking was cancelled after paying
                     # only the advance.
-                    refund_amount = _amount_actually_collected(sr) - cancellation_fee
+                    # Bug found: unlike the preview above (which floors at 0
+                    # via max(collected - fee, 0)), this had no floor.
+                    # GTCancellationPolicy.fee_for() caps the fee at
+                    # sr.total_amount, not at what was actually collected, so
+                    # once GTAdvancePaymentPolicy is enabled (advance-only
+                    # payment) a configured fee can legitimately exceed the
+                    # amount collected -- e.g. ₹2,000 collected as a 20%
+                    # advance on a ₹10,000 booking, FLAT/PERCENT fee computes
+                    # to ₹5,000 (capped at total_amount, not collected) --
+                    # producing a negative RefundRequest.amount with no
+                    # validation downstream. Floor at 0, matching the preview.
+                    refund_amount = max(_amount_actually_collected(sr) - cancellation_fee, 0)
                     refund_notes = f"Auto-created on booking cancellation. Cancellation reason: {reason}"
                     refund_type = RefundType.FULL
                     if cancellation_fee > 0:
@@ -1756,7 +1787,47 @@ def _haversine_meters(lat1, lon1, lat2, lon2):
         return None
 
 
-def _build_tracking_payload(sr, has_full_access):
+_DELIVERY_OTP_VISIBLE_LEGS = {
+    "EN_ROUTE_DROP", "UNLOADING",            # Goods & Transport
+    "IN_TRANSIT", "ARRIVED_DROP", "REASSEMBLY", "UNPACKING",  # Packers & Movers
+}
+
+
+def _latest_delivery_otp(sr):
+    """
+    The delivery OTP the vendor app issued for this booking, or None.
+
+    Read-only lookup of the DELIVERY_OTP notification the vendor writes for the
+    customer (see WorkforceJobLogisticsCheckpointView / issue_delivery_otp).
+    Only while the trip is at the drop end (a code from an earlier attempt is
+    never shown once the trip is delivered, and never before the driver has
+    reached the drop).
+    """
+    leg = (getattr(sr, "logistics_leg", "") or "").strip().upper()
+    if leg not in _DELIVERY_OTP_VISIBLE_LEGS:
+        return None
+    try:
+        import re
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT message FROM workforce_notification "
+                "WHERE related_object_id IN (%s, %s) "
+                "AND notification_type = 'DELIVERY_OTP' "
+                "ORDER BY created_at DESC LIMIT 1;",
+                [str(sr.id), str(sr.request_id or "")],
+            )
+            row = cursor.fetchone()
+            if row and row[0]:
+                m = re.search(r'OTP\s+([0-9]{6})', row[0])
+                if m:
+                    return m.group(1)
+    except Exception:
+        pass
+    return None
+
+
+def _build_tracking_payload(sr, has_full_access, include_delivery_otp=False):
     """
     Constructs the canonical live tracking response payload for a booking.
     Sensitive data (technician phone, Service Start OTP) is strictly omitted
@@ -2124,6 +2195,23 @@ def _build_tracking_payload(sr, has_full_access):
         except Exception:
             pass
 
+    # Goods & Transport / Packers & Movers delivery OTP. The vendor app
+    # issues it when the driver's GPS is verified at the drop and records it as
+    # a DELIVERY_OTP notification addressed to the customer (the same table the
+    # payment-confirmation OTP above is read from) -- but nothing in this app
+    # ever surfaced it, so the customer had no way to obtain the code the driver
+    # must enter to complete the delivery. Same guard rails as the other OTPs:
+    # full-access viewers only, hidden once the booking is terminal, and only
+    # shown while the trip is at the drop end and not yet delivered.
+    #
+    # Deliberately opt-in (include_delivery_otp): this builder also feeds the
+    # technician-facing endpoints and the websocket group broadcast, and the
+    # driver must never be able to read the code the customer is meant to give
+    # them. Only the customer/token/admin live-location endpoint asks for it.
+    delivery_otp = None
+    if include_delivery_otp and has_full_access and sr.service_category in LOGISTICS_CATEGORIES and not is_terminal:
+        delivery_otp = _latest_delivery_otp(sr)
+
     created_at_raw = getattr(sr, 'created_at', None) or getattr(sr, 'submitted_at', None)
     if created_at_raw and hasattr(created_at_raw, 'isoformat'):
         created_at_str = created_at_raw.isoformat()
@@ -2219,6 +2307,7 @@ def _build_tracking_payload(sr, has_full_access):
         "eta_minutes": eta_minutes,
         "start_otp": start_otp,
         "payment_confirmation_otp": payment_confirmation_otp,
+        "delivery_otp": delivery_otp,
         "tracking_token": str(sr.tracking_token) if (has_full_access and sr.tracking_token) else None,
         "vehicle_number": tracking.get("vehicle_number") if (tracking and isinstance(tracking, dict)) else "",
         "vehicle_type": tracking.get("vehicle_type") if (tracking and isinstance(tracking, dict)) else "",
@@ -2295,7 +2384,7 @@ class CustomerBookingLiveLocationView(APIView):
         if not (token_matches or is_admin_user or is_owner):
             return _error("Valid tracking token or authentication required.", 401)
 
-        payload = _build_tracking_payload(sr, has_full_access=True)
+        payload = _build_tracking_payload(sr, has_full_access=True, include_delivery_otp=True)
         return _success(data=payload)
 
 

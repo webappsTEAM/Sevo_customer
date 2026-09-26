@@ -324,8 +324,11 @@ export function CustomerTrackingMap({
   startOtp = null,
   vendorName = "",
   requestId = "",
-  // Logistics only: { pickup: {latitude, longitude, address}, drop: {...} }.
-  // Null/undefined for non-logistics bookings -> nothing extra is drawn.
+  // Logistics only: { pickup: {latitude, longitude, address}, drop: {...},
+  // stops: [{latitude, longitude, address, completed_at, arrived_at}, ...] }.
+  // stops is optional -- older callers that only pass {pickup, drop} keep
+  // working exactly as before. Null/undefined for non-logistics bookings ->
+  // nothing extra is drawn.
   routePoints = null,
 }) {
   const [mapLayer, setMapLayer] = useState("google_streets")
@@ -391,11 +394,20 @@ export function CustomerTrackingMap({
   const destLat = destination?.latitude != null ? parseFloat(destination.latitude) : null
   const destLng = destination?.longitude != null ? parseFloat(destination.longitude) : null
   const destinationPos = destLat != null && destLng != null && !isNaN(destLat) && !isNaN(destLng) ? [destLat, destLng] : null
-  // Logistics (GT / Packers & Movers): both pickup and drop are drawn as
-  // distinct P/D stop pins, so the generic single destination pin is hidden
-  // and the camera fits both stops.
+  // Logistics (GT / Packers & Movers): pickup, drop, and any intermediate
+  // TripStop waypoints are drawn as distinct pins, so the generic single
+  // destination pin is hidden and the camera fits all of them.
+  // Bug found: this used to only include pickup/drop -- intermediate stops
+  // (routePoints.stops, e.g. a multi-stop GT trip) were never factored into
+  // the camera's fitBounds, so the map could crop a stop right off screen
+  // even though it's rendered as a marker (see the stop-marker loop below,
+  // also added by this fix) and listed in the address panel.
   const logisticsStopPoints = routePoints
-    ? [toLatLng(routePoints.pickup), toLatLng(routePoints.drop)].filter(Boolean)
+    ? [
+        toLatLng(routePoints.pickup),
+        toLatLng(routePoints.drop),
+        ...(Array.isArray(routePoints.stops) ? routePoints.stops.map(toLatLng) : []),
+      ].filter(Boolean)
     : []
 
   const rawTechLat = technicianLocation?.latitude ?? technician?.latitude
@@ -873,6 +885,26 @@ export function CustomerTrackingMap({
               icon={createRoutePointIcon(label, color)}
               title={`${title}${routePoints[key]?.address ? `: ${routePoints[key].address}` : ""}`}
               zIndexOffset={150}
+            />
+          )
+        })}
+
+        {/* ── 2c. Intermediate stop markers (multi-stop GT trips) ──
+            Bug found: these were never rendered -- only pickup/drop had
+            markers, so a customer on a multi-stop trip saw the stop listed
+            in the address panel (CustomerTrackingPage.jsx) but not on the
+            map at all. */}
+        {routePoints && Array.isArray(routePoints.stops) && routePoints.stops.map((stop, idx) => {
+          const pos = toLatLng(stop)
+          if (!pos) return null
+          const done = !!(stop.completed_at || stop.arrived_at)
+          return (
+            <Marker
+              key={`route-stop-${stop.id || idx}`}
+              position={pos}
+              icon={createRoutePointIcon(String(idx + 1), done ? "#64748b" : "#f59e0b")}
+              title={`Stop ${idx + 1}${stop.address ? `: ${stop.address}` : ""}${done ? " (completed)" : ""}`}
+              zIndexOffset={140}
             />
           )
         })}

@@ -7,9 +7,11 @@ import {
   User, Mail, MessageSquare, AlertCircle, Zap, Calendar, Check, Ban, RefreshCw
 } from "lucide-react"
 import { routes } from "../routes.js"
+import { extractApiErrorMessage } from "../../api/client.js"
 import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchLogisticsQuote, checkRouteCoverage, fetchGoodsCategories, fetchGoodsItems, evaluateCargoFitment, fetchLogisticsSlots, fetchGTFaqs, fetchLogisticsCities } from "../../api/logisticsService.js"
 import { GoodsCargoSelectorModal } from "../../components/logistics/GoodsCargoSelectorModal.jsx"
-import { MultiStopRouteManager } from "../../components/logistics/MultiStopRouteManager.jsx"
+import { MultiStopRouteManager, findUnpinnedStop, locatedStops, coverageIssueForStops } from "../../components/logistics/MultiStopRouteManager.jsx"
+import { parseDimensionLabel, tierCapacityText, tierBadgeText } from "../../components/logistics/tierDisplay.js"
 import { createBooking, cancelBooking, getBookingStatus } from "../../api/bookingService.js"
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
 import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx"
@@ -50,7 +52,7 @@ function GenericTruckDiagram({ className = "w-full max-w-[240px] h-[120px]" }) {
 }
 
 /* ── Vehicle Dimension Diagrams matching Image 1 & Image 4 (Professional & Colorful) ── */
-function ThreeWheelerDiagram({ className = "w-full max-w-[240px] h-[120px]" }) {
+function ThreeWheelerDiagram({ className = "w-full max-w-[240px] h-[120px]", dims = null }) {
   return (
     <svg viewBox="0 0 260 130" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
@@ -69,13 +71,13 @@ function ThreeWheelerDiagram({ className = "w-full max-w-[240px] h-[120px]" }) {
       </defs>
 
       {/* Height Dimension (Left: 5ft) */}
-      <text x="10" y="58" fill="#475569" fontSize="15" fontWeight="700" fontFamily="system-ui, sans-serif">5ft</text>
+      {dims?.left && <text x="10" y="58" fill="#475569" fontSize="15" fontWeight="700" fontFamily="system-ui, sans-serif">{dims.left}</text>}
       <line x1="44" y1="26" x2="44" y2="86" stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="3 2" />
       <line x1="39" y1="26" x2="49" y2="26" stroke="#64748b" strokeWidth="1.5" />
       <line x1="39" y1="86" x2="49" y2="86" stroke="#64748b" strokeWidth="1.5" />
 
       {/* Length Dimension (Top: 6ft) */}
-      <text x="120" y="18" fill="#475569" fontSize="15" fontWeight="700" fontFamily="system-ui, sans-serif" textAnchor="middle">6ft</text>
+      {dims?.top && <text x="120" y="18" fill="#475569" fontSize="15" fontWeight="700" fontFamily="system-ui, sans-serif" textAnchor="middle">{dims.top}</text>}
       <line x1="56" y1="24" x2="186" y2="24" stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="3 2" />
       <line x1="56" y1="19" x2="56" y2="29" stroke="#64748b" strokeWidth="1.5" />
       <line x1="186" y1="19" x2="186" y2="29" stroke="#64748b" strokeWidth="1.5" />
@@ -116,7 +118,7 @@ function ThreeWheelerDiagram({ className = "w-full max-w-[240px] h-[120px]" }) {
   )
 }
 
-function TataAceDiagram({ className = "w-full max-w-[240px] h-[120px]" }) {
+function TataAceDiagram({ className = "w-full max-w-[240px] h-[120px]", dims = null }) {
   return (
     <svg viewBox="0 0 260 130" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
@@ -131,13 +133,13 @@ function TataAceDiagram({ className = "w-full max-w-[240px] h-[120px]" }) {
       </defs>
 
       {/* Height Dimension (Left: 6ft) */}
-      <text x="10" y="58" fill="#475569" fontSize="15" fontWeight="700" fontFamily="system-ui, sans-serif">6ft</text>
+      {dims?.left && <text x="10" y="58" fill="#475569" fontSize="15" fontWeight="700" fontFamily="system-ui, sans-serif">{dims.left}</text>}
       <line x1="44" y1="26" x2="44" y2="86" stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="3 2" />
       <line x1="39" y1="26" x2="49" y2="26" stroke="#64748b" strokeWidth="1.5" />
       <line x1="39" y1="86" x2="49" y2="86" stroke="#64748b" strokeWidth="1.5" />
 
       {/* Length Dimension (Top: 7ft) */}
-      <text x="135" y="18" fill="#475569" fontSize="15" fontWeight="700" fontFamily="system-ui, sans-serif" textAnchor="middle">7ft</text>
+      {dims?.top && <text x="135" y="18" fill="#475569" fontSize="15" fontWeight="700" fontFamily="system-ui, sans-serif" textAnchor="middle">{dims.top}</text>}
       <line x1="56" y1="24" x2="210" y2="24" stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="3 2" />
       <line x1="56" y1="19" x2="56" y2="29" stroke="#64748b" strokeWidth="1.5" />
       <line x1="210" y1="19" x2="210" y2="29" stroke="#64748b" strokeWidth="1.5" />
@@ -182,7 +184,7 @@ function TataAceDiagram({ className = "w-full max-w-[240px] h-[120px]" }) {
   )
 }
 
-function Pickup8ftDiagram({ className = "w-full max-w-[240px] h-[120px]" }) {
+function Pickup8ftDiagram({ className = "w-full max-w-[240px] h-[120px]", dims = null }) {
   return (
     <svg viewBox="0 0 260 130" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
@@ -206,13 +208,13 @@ function Pickup8ftDiagram({ className = "w-full max-w-[240px] h-[120px]" }) {
       </defs>
 
       {/* Height Dimension (Left: 5.5ft) */}
-      <text x="6" y="58" fill="#475569" fontSize="15" fontWeight="700" fontFamily="system-ui, sans-serif">5.5ft</text>
+      {dims?.left && <text x="6" y="58" fill="#475569" fontSize="15" fontWeight="700" fontFamily="system-ui, sans-serif">{dims.left}</text>}
       <line x1="46" y1="20" x2="46" y2="86" stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="3 2" />
       <line x1="41" y1="20" x2="51" y2="20" stroke="#64748b" strokeWidth="1.5" />
       <line x1="41" y1="86" x2="51" y2="86" stroke="#64748b" strokeWidth="1.5" />
 
       {/* Length Dimension (Top: 8ft) */}
-      <text x="130" y="16" fill="#475569" fontSize="15" fontWeight="700" fontFamily="system-ui, sans-serif" textAnchor="middle">8ft</text>
+      {dims?.top && <text x="130" y="16" fill="#475569" fontSize="15" fontWeight="700" fontFamily="system-ui, sans-serif" textAnchor="middle">{dims.top}</text>}
       <line x1="56" y1="22" x2="202" y2="22" stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="3 2" />
       <line x1="56" y1="17" x2="56" y2="27" stroke="#64748b" strokeWidth="1.5" />
       <line x1="202" y1="17" x2="202" y2="27" stroke="#64748b" strokeWidth="1.5" />
@@ -257,7 +259,7 @@ function Pickup8ftDiagram({ className = "w-full max-w-[240px] h-[120px]" }) {
   )
 }
 
-function OnePointSevenTonDiagram({ className = "w-full max-w-[240px] h-[120px]" }) {
+function OnePointSevenTonDiagram({ className = "w-full max-w-[240px] h-[120px]", dims = null }) {
   return (
     <svg viewBox="0 0 260 130" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
@@ -272,13 +274,13 @@ function OnePointSevenTonDiagram({ className = "w-full max-w-[240px] h-[120px]" 
       </defs>
 
       {/* Height Dimension (Left: 6.1ft) */}
-      <text x="6" y="58" fill="#475569" fontSize="15" fontWeight="700" fontFamily="system-ui, sans-serif">6.1ft</text>
+      {dims?.left && <text x="6" y="58" fill="#475569" fontSize="15" fontWeight="700" fontFamily="system-ui, sans-serif">{dims.left}</text>}
       <line x1="46" y1="26" x2="46" y2="86" stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="3 2" />
       <line x1="41" y1="26" x2="51" y2="26" stroke="#64748b" strokeWidth="1.5" />
       <line x1="41" y1="86" x2="51" y2="86" stroke="#64748b" strokeWidth="1.5" />
 
       {/* Length Dimension (Top: 9ft) */}
-      <text x="135" y="18" fill="#475569" fontSize="15" fontWeight="700" fontFamily="system-ui, sans-serif" textAnchor="middle">9ft</text>
+      {dims?.top && <text x="135" y="18" fill="#475569" fontSize="15" fontWeight="700" fontFamily="system-ui, sans-serif" textAnchor="middle">{dims.top}</text>}
       <line x1="52" y1="24" x2="218" y2="24" stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="3 2" />
       <line x1="52" y1="19" x2="52" y2="29" stroke="#64748b" strokeWidth="1.5" />
       <line x1="218" y1="19" x2="218" y2="29" stroke="#64748b" strokeWidth="1.5" />
@@ -437,6 +439,12 @@ function QRCodeGraphic({ className = "w-36 h-36" }) {
 /* ── Maps backend ServiceTier.slug → the illustration for that vehicle.
    Diagrams stay local (purely cosmetic); everything else (name, capacity,
    price, description) now comes from GET /api/logistics/tiers/. ── */
+// Attach the tier's admin-configured dimensions to its artwork (numbers are
+// never baked into the drawings).
+function withDims(diagram, dims) {
+  return diagram ? React.cloneElement(diagram, { dims }) : diagram
+}
+
 const TRUCK_DIAGRAM_BY_SLUG = {
   "3-wheeler": <ThreeWheelerDiagram />,
   "tata-ace": <TataAceDiagram />,
@@ -583,6 +591,8 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
   const [cargoItems, setCargoItems] = useState([])
   const [cargoSelectorOpen, setCargoSelectorOpen] = useState(false)
   const [intermediateStops, setIntermediateStops] = useState([])
+  // Set when a stop is outside service coverage (see the coverage check below).
+  const [stopCoverageIssue, setStopCoverageIssue] = useState(null)
   const [catalogError, setCatalogError] = useState("")
   const [goodsTypeModalOpen, setGoodsTypeModalOpen] = useState(false)
   const COUNTDOWN_TOTAL_SECONDS = 598 // 9:58 mins
@@ -801,7 +811,22 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
   const [slotsLoading, setSlotsLoading] = useState(false)
 
   useEffect(() => {
-    const dStr = selectedDate?.fullDate ? selectedDate.fullDate.toISOString().split("T")[0] : ""
+    // Bug found: toISOString() converts to UTC before formatting. For any
+    // selectedDate.fullDate constructed at local midnight (exactly what the
+    // server-provided dates below use: new Date(`${d.date}T00:00:00`)), and
+    // for IST (UTC+5:30) specifically, that UTC conversion always rolls the
+    // date back to the PREVIOUS calendar day (e.g. local midnight 25 Sep IST
+    // -> 18:30 UTC on 24 Sep). That wrong, earlier date was then sent to
+    // /api/logistics/slots/ as `date`, and the backend's
+    // validate_booking_slot() correctly rejects any preferred_date before
+    // today -- so every slot for "Today" (and every other date) came back
+    // unavailable, exactly like the actual booking submission a few hundred
+    // lines below (which never had this bug -- it builds the date string
+    // from local Y/M/D components, not toISOString()). Match that working
+    // pattern here instead.
+    const dStr = selectedDate?.fullDate
+      ? `${selectedDate.fullDate.getFullYear()}-${String(selectedDate.fullDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.fullDate.getDate()).padStart(2, "0")}`
+      : ""
     setSlotsLoading(true)
     fetchLogisticsSlots({ date: dStr, category: "goods_transport_truck", city: currentCitySlug })
       .then(res => {
@@ -1099,13 +1124,15 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
         const [tiers, lanes, areas, categories] = await Promise.all([
           fetchServiceTiers("truck", currentCitySlug),
           fetchLanes("truck", currentCitySlug),
-          fetchServiceAreas(currentCitySlug),
+          fetchServiceAreas(currentCitySlug, "truck"),
           fetchGoodsCategories(),
         ])
         if (cancelled) return
         if (Array.isArray(tiers) && tiers.length) setTruckTiers(tiers)
         if (Array.isArray(lanes) && lanes.length) setTruckLanes(lanes)
-        if (Array.isArray(areas) && areas.length) setServiceAreas(areas)
+        // Always apply the response: an empty list means no coverage, and
+        // must clear areas left over from a previously selected city.
+        setServiceAreas(Array.isArray(areas) ? areas : [])
         if (Array.isArray(categories) && categories.length) {
           const truckCats = categories.filter((c) => !c.is_prohibited)
           setDynamicCategories(truckCats)
@@ -1371,12 +1398,14 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
       : []
     const bestForText = tier.description || ""
     const isBadgeValid = isBadgeActive(tier.duration, tier.updated_at)
-    const badgeText = isBadgeValid ? (tier.icon || "") : ""
+    const capacityText = tierCapacityText(tier)
+    const badgeText = isBadgeValid ? tierBadgeText(tier.icon || "", tier, capacityText) : ""
+    const dims = parseDimensionLabel(tier.dimensions_label)
 
     return {
       id: tier.slug,
       name: tier.name,
-      capacity: tier.capacity_label,
+      capacity: capacityText,
       description: tier.description,
       badge: badgeText,
       suitableFor: suitableList,
@@ -1386,11 +1415,11 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
       // ServiceTier.image by the catalog sync bridge) over the built-in
       // technical line-drawing, with GenericTruckDiagram fallback for custom tiers.
       diagram: tier.image
-        ? <TierImageFallback src={tier.image} alt={tier.name} fallback={TRUCK_DIAGRAM_BY_SLUG[tier.slug] || <GenericTruckDiagram />} />
-        : (TRUCK_DIAGRAM_BY_SLUG[tier.slug] || <GenericTruckDiagram />),
+        ? <TierImageFallback src={tier.image} alt={tier.name} fallback={withDims(TRUCK_DIAGRAM_BY_SLUG[tier.slug], dims) || <GenericTruckDiagram />} />
+        : (withDims(TRUCK_DIAGRAM_BY_SLUG[tier.slug], dims) || <GenericTruckDiagram />),
       details: {
         name: tier.name,
-        capacity: tier.capacity_label ? `${tier.capacity_label} capacity` : "Standard capacity",
+        capacity: capacityText ? `${capacityText} capacity` : "Standard capacity",
         badge: badgeText,
         suitableFor: suitableList,
         bestFor: bestForText,
@@ -1482,6 +1511,9 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
     }
   }
 
+  // Changes whenever a stop is added, removed, reordered or moved.
+  const stopsCoverageKey = locatedStops(intermediateStops).map((l) => `${l.id}:${l.point.lat},${l.point.lng}`).join("|")
+
   // Real-time coverage check as soon as both points are known -- replaces
   // the old hardcoded Hosur address-string match (isHosurRouteServed), so
   // expanding coverage is an admin action, not a code change.
@@ -1489,23 +1521,29 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
     if (!pickupPoint || !dropPoint) {
       setCoverageMessage("")
       setNoServiceRoute(false)
+      setStopCoverageIssue(null)
       return
     }
     let cancelled = false
+    // Stops are part of the trip: each located stop is checked with the ends.
+    const located = locatedStops(intermediateStops)
     const timer = setTimeout(async () => {
       const res = await checkRouteCoverage({
         serviceCategory: "goods_transport_truck",
         pickup: pickupPoint,
         drop: dropPoint,
+        stops: located.map((l) => l.point),
         vehicleClass: (selectedVehicle || selectedVehicleEffective)?.vehicle_class || "",
       })
       if (cancelled) return
-      setCoverageMessage(res.inCoverage ? "" : res.message)
+      const stopIssue = coverageIssueForStops(res, located)
+      setStopCoverageIssue(stopIssue)
+      setCoverageMessage(res.inCoverage ? "" : (stopIssue ? stopIssue.message : res.message))
       setNoServiceRoute(!res.inCoverage)
     }, 300)
     return () => { cancelled = true; clearTimeout(timer) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pickupPoint?.lat, pickupPoint?.lng, dropPoint?.lat, dropPoint?.lng, (selectedVehicle || selectedVehicleEffective)?.vehicle_class])
+  }, [pickupPoint?.lat, pickupPoint?.lng, dropPoint?.lat, dropPoint?.lng, stopsCoverageKey, (selectedVehicle || selectedVehicleEffective)?.vehicle_class])
 
   const handleGetEstimate = (e) => {
     if (e) e.preventDefault()
@@ -1573,20 +1611,50 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
       // let the page submit a number no server ever produced -- which the
       // backend then rejected with an unresolved-fare 400 anyway. If there is
       // no quote there is no bookable fare; say so instead of inventing one.
-      if (serverQuote?.total == null) {
-        setBookingError(
-          quoteError ||
-          "We couldn't calculate a fare for this trip. Select the pickup and drop points from the suggestions, pick a vehicle, and try again."
-        )
+      // Check if current server quote is missing or expired
+      let currentQuote = serverQuote
+      const quoteExpiry = currentQuote?.expiresAt || currentQuote?.expires_at || currentQuote?.breakdown?.expires_at
+      const isQuoteExpired = quoteExpiry && new Date(quoteExpiry).getTime() <= Date.now()
+
+      if (!currentQuote?.total || isQuoteExpired) {
+        setQuoteLoading(true)
+        const validWaypoints = intermediateStops
+          .map((s) => usableCoords(s.coords, s.address))
+          .filter(Boolean)
+        const freshQuote = await fetchLogisticsQuote({
+          serviceCategory: "goods_transport_truck",
+          tierId: vehicle._tierId,
+          pickup: pickupPoint,
+          drop: dropPoint,
+          waypoints: validWaypoints,
+          stopCount: 2 + validWaypoints.length,
+          cargoItems: cargoItems.map((i) => ({
+            goods_item_id: i.goods_item_id || i.goods_item,
+            quantity: i.quantity,
+          })),
+          goodsCategoryId: selectedGoodsCategoryObj?.id,
+        })
+        setQuoteLoading(false)
+        if (freshQuote && !freshQuote.error && freshQuote.total != null) {
+          setServerQuote(freshQuote)
+          currentQuote = freshQuote
+        } else {
+          setBookingSubmitting(false)
+          setBookingError(
+            freshQuote?.message ||
+            quoteError ||
+            "We couldn't calculate a fare for this trip. Select the pickup and drop points from the suggestions, pick a vehicle, and try again."
+          )
+          return
+        }
+      }
+
+      if (currentQuote?.breakdown?.is_cargo_fit === false) {
+        setBookingError(currentQuote.breakdown.cargo_fit_reason || "Selected cargo exceeds vehicle capacity. Please select a larger vehicle.")
         setBookingSubmitting(false)
         return
       }
-      if (serverQuote?.breakdown?.is_cargo_fit === false) {
-        setBookingError(serverQuote.breakdown.cargo_fit_reason || "Selected cargo exceeds vehicle capacity. Please select a larger vehicle.")
-        setBookingSubmitting(false)
-        return
-      }
-      const fare = Number(serverQuote.total)
+      const fare = Number(currentQuote.total)
 
       // Check vehicle capacity fitment
       const totalCargoWeight = cargoItems.reduce((acc, i) => acc + (i.weight_kg || 0) * i.quantity, 0)
@@ -1619,8 +1687,17 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
 
       const customerEmail = user?.email || (typeof window !== "undefined" ? localStorage.getItem("sevo_customer_email") : "") || ""
 
-      const activePickupPoint = pickupPoint || (pickupCoords?.lat != null && pickupCoords?.lng != null ? { lat: Number(pickupCoords.lat), lng: Number(pickupCoords.lng) } : null)
-      const activeDropPoint = dropPoint || (dropCoords?.lat != null && dropCoords?.lng != null ? { lat: Number(dropCoords.lat), lng: Number(dropCoords.lng) } : null)
+      // Bug found: this used to fall back to the raw pickupCoords/dropCoords
+      // whenever usableCoords() rejected them (i.e. coords.forAddress didn't
+      // match the current address text -- meaning the user edited the
+      // address field after coordinates were resolved for a DIFFERENT
+      // address). That silently submitted the new address text paired with
+      // the OLD address's lat/lng -- wrong pickup/drop location on the map,
+      // wrong distance, driver dispatched to the wrong place. Sibling page
+      // PackersMoversBookingHosurPage.jsx already gets this right (no
+      // fallback, hard block below on null) -- match that pattern instead.
+      const activePickupPoint = pickupPoint
+      const activeDropPoint = dropPoint
 
       if (!activePickupPoint) {
         setBookingSubmitting(false)
@@ -1666,6 +1743,16 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
       }
       setReceiverPhoneError("")
 
+      // A stop with an address but no resolved location would be saved without
+      // coordinates (the driver could not navigate to it) while the quote --
+      // which only prices located stops -- silently ignored it.
+      const unpinnedStop = findUnpinnedStop(intermediateStops)
+      if (unpinnedStop) {
+        setBookingSubmitting(false)
+        setBookingError(`Stop ${unpinnedStop.index + 1}: choose a suggestion or pin it on the map, or remove the stop.`)
+        return
+      }
+
       const validStops = intermediateStops
         .filter((s) => s.address && s.address.trim())
         .map((s, idx) => ({
@@ -1706,9 +1793,9 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
         cart_data: [{
           tier: vehicle?.name || "Mini Truck",
           price: fare,
-          quote_id: serverQuote?.quoteId || serverQuote?.quote_id || serverQuote?.breakdown?.quote_id || null,
-          expires_at: serverQuote?.expiresAt || serverQuote?.expires_at || serverQuote?.breakdown?.expires_at || null,
-          quote_hash: serverQuote?.quoteHash || serverQuote?.quote_hash || serverQuote?.breakdown?.quote_hash || null,
+          quote_id: currentQuote?.quoteId || currentQuote?.quote_id || currentQuote?.breakdown?.quote_id || null,
+          expires_at: currentQuote?.expiresAt || currentQuote?.expires_at || currentQuote?.breakdown?.expires_at || null,
+          quote_hash: currentQuote?.quoteHash || currentQuote?.quote_hash || currentQuote?.breakdown?.quote_hash || null,
           goods_type: currentGoodsType,
           cargo_items: cargoItems,
           goods_items: cargoItems,
@@ -1770,24 +1857,40 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
       }
     } catch (err) {
       // A booking exists only if the backend created the ServiceRequest.
-      console.error("Booking creation failed:", err)
-      let detail = err?.body?.detail
-      if (!detail && err?.body?.errors && typeof err.body.errors === "object") {
-        const firstField = Object.keys(err.body.errors)[0]
-        const firstErr = err.body.errors[firstField]
-        detail = Array.isArray(firstErr) ? firstErr[0] : String(firstErr)
+      console.error("Booking creation failed:", err, "Details:", err?.body)
+      const detail = extractApiErrorMessage(err, "We couldn't confirm your booking just now. Nothing has been charged — please try again.")
+
+      const isQuoteIssue =
+        /expired|invalid|recalculate|quote/i.test(detail) ||
+        err?.body?.code === "UNRESOLVED_FARE"
+
+      if (isQuoteIssue) {
+        const vehicle = selectedVehicle || LIGHT_VEHICLES[0]
+        if (pickupPoint && dropPoint && vehicle?._tierId) {
+          const validWaypoints = intermediateStops
+            .map((s) => usableCoords(s.coords, s.address))
+            .filter(Boolean)
+          fetchLogisticsQuote({
+            serviceCategory: "goods_transport_truck",
+            tierId: vehicle._tierId,
+            pickup: pickupPoint,
+            drop: dropPoint,
+            waypoints: validWaypoints,
+            stopCount: 2 + validWaypoints.length,
+            cargoItems: cargoItems.map((i) => ({
+              goods_item_id: i.goods_item_id || i.goods_item,
+              quantity: i.quantity,
+            })),
+            goodsCategoryId: selectedGoodsCategoryObj?.id,
+          }).then((fresh) => {
+            if (fresh && !fresh.error && fresh.total != null) {
+              setServerQuote(fresh)
+            }
+          }).catch(() => {})
+        }
       }
-      if (!detail) {
-        detail =
-          err?.body?.message ||
-          (err?.status === 401
-            ? "Please sign in again to complete this booking."
-            : "")
-      }
-      setBookingError(
-        detail ||
-        "We couldn't confirm your booking just now. Nothing has been charged — please try again."
-      )
+
+      setBookingError(detail)
       setLookingForPartnerOpen(false)
     } finally {
       setBookingSubmitting(false)
@@ -1904,7 +2007,17 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
       setSelectedVehicle(LIGHT_VEHICLES[0])
     }
     setBookingMode("SCHEDULED")
-    if (!selectedDate) setSelectedDate(DELIVERY_DATES[0])
+    // Bug found: this used to seed selectedDate with DELIVERY_DATES[0], a
+    // client-only fallback whose id is "date_0" -- the server's real dates
+    // (fetched by the slot effect below and rendered as the actual date
+    // pills) use ids like "date_2026-09-25". Since selectedDate was already
+    // non-null, the slot effect's `if (!selectedDate) setSelectedDate(...)`
+    // auto-select never replaced it with the matching server date object, so
+    // no date pill ever showed as selected when entering via "Schedule your
+    // booking" (Book Now's handleBookNow already does this correctly via
+    // setSelectedDate(null)). Match that working pattern instead of
+    // reaching for the client fallback.
+    setSelectedDate(null)
     setVehicleSelectorOpen(false)
     setStepperStep(3)
     setSlotStepperOpen(true)
@@ -2348,8 +2461,13 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                   stops={intermediateStops}
                   onChangeStops={(newStops) => setIntermediateStops(newStops)}
                   maxStops={3}
-                  pickupAddress={pickup}
-                  dropAddress={drop}
+                  pickupAddress={pickupAddressValue}
+                  dropAddress={dropAddressValue}
+                  pickupPoint={pickupPoint}
+                  dropPoint={dropPoint}
+                  serviceSlug="goods_transport_truck"
+                  coverageIssue={stopCoverageIssue}
+                  cityName={currentCityName || "Hosur"}
                 />
               </div>
 
@@ -2373,12 +2491,12 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                     <p className="text-xs font-bold text-slate-800 mt-0.5 truncate">
                       {cargoItems.length > 0
                         ? cargoItems.map((i) => `${i.quantity}x ${i.name}`).join(", ")
-                        : "No specific items declared (Using default category fitment)"}
+                        : "No specific items declared (category rules only, no weight/volume assumed)"}
                     </p>
                     <p className="text-[11px] text-slate-500">
                       {cargoItems.length > 0
                         ? `Weight: ~${cargoItems.reduce((acc, i) => acc + (i.weight_kg || 0) * i.quantity, 0).toFixed(1)} kg • Volume: ~${cargoItems.reduce((acc, i) => acc + (i.cft || 0) * i.quantity, 0).toFixed(1)} CFT`
-                        : "Add items like Sofas, Boxes, Refrigerators, etc. to calculate vehicle fitment"}
+                        : "Add items like Sofas, Boxes, Refrigerators, etc. to calculate weight & volume fitment"}
                     </p>
                   </div>
                 </div>
@@ -3234,6 +3352,17 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                                 <p className="text-[14px] text-slate-800 font-medium leading-relaxed">{pickup || `${currentCityName || "Hosur"} Origin`}</p>
                               </div>
                             </div>
+                            {intermediateStops.filter((s) => s.address && s.address.trim()).map((stop, sIdx) => (
+                              <div key={stop.id || sIdx} className="flex items-start gap-4 relative bg-white" data-testid="summary-stop">
+                                <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
+                                  <MapPin className="w-3.5 h-3.5 text-blue-500" />
+                                </div>
+                                <div className="pt-0.5">
+                                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-700 block">Stop {sIdx + 1}</span>
+                                  <p className="text-[14px] text-slate-800 font-medium leading-relaxed">{stop.address}</p>
+                                </div>
+                              </div>
+                            ))}
                             <div className="flex items-start gap-4 relative bg-white">
                               <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
                                 <MapPin className="w-3.5 h-3.5 text-rose-500" />
@@ -3262,8 +3391,16 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                               <button
                                 type="button"
                                 onClick={() => {
+                                  // Bug found: same DELIVERY_DATES[0]
+                                  // client-fallback issue as
+                                  // handleScheduleBooking above -- its id
+                                  // ("date_0") never matches a server date's
+                                  // id ("date_2026-09-25"), so no date pill
+                                  // ever showed selected. Reset to null so
+                                  // the slot effect's server-date auto-select
+                                  // picks a real, matching date object.
                                   setBookingMode("SCHEDULED")
-                                  if (!selectedDate) setSelectedDate(DELIVERY_DATES[0])
+                                  setSelectedDate(null)
                                   setStepperStep(3)
                                 }}
                                 className="text-[12px] font-bold text-[#0B8860] border border-[#0B8860]/30 px-3.5 py-1.5 rounded-full hover:bg-[#0B8860]/5 transition-colors cursor-pointer"
@@ -3398,7 +3535,15 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                               </div>
                               <button
                                 type="button"
-                                onClick={() => setShowReceiverDetails(!showReceiverDetails)}
+                                onClick={() => {
+                                  const next = !showReceiverDetails
+                                  setShowReceiverDetails(next)
+                                  if (!next) {
+                                    setReceiverName("")
+                                    setReceiverPhone("")
+                                    setReceiverPhoneError("")
+                                  }
+                                }}
                                 className="text-xs font-bold text-[#0B8860] hover:underline cursor-pointer"
                               >
                                 {showReceiverDetails ? "Remove" : "+ Add Receiver"}
@@ -3521,6 +3666,17 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                         </div>
                         <p className="text-[12px] text-slate-700 font-medium leading-relaxed pt-0.5">{pickup || `${currentCityName || "Hosur"} Origin`}</p>
                       </div>
+                      {intermediateStops.filter((s) => s.address && s.address.trim()).map((stop, sIdx) => (
+                        <div key={stop.id || sIdx} className="flex items-start gap-4 relative bg-white" data-testid="summary-stop">
+                          <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
+                            <MapPin className="w-3.5 h-3.5 text-blue-500" />
+                          </div>
+                          <div className="pt-0.5">
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-700 block">Stop {sIdx + 1}</span>
+                            <p className="text-[12px] text-slate-700 font-medium leading-relaxed">{stop.address}</p>
+                          </div>
+                        </div>
+                      ))}
                       <div className="flex items-start gap-4 relative bg-white">
                         <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
                           <MapPin className="w-3.5 h-3.5 text-rose-500" />
@@ -3587,7 +3743,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                         <div className="mt-1 w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0" />
                         <div className="min-w-0 flex-1">
                           <p className="text-[11px] font-bold text-blue-900 truncate">
-                            {stop.contact_name ? `${stop.contact_name} • ${stop.contact_phone || ""}` : `Waypoint ${sIdx + 1}`}
+                            {stop.contact_name ? `${stop.contact_name} • ${stop.contact_phone || ""}` : `Stop ${sIdx + 1}`}
                           </p>
                           <p className="text-xs text-slate-500 leading-snug mt-0.5">{stop.address}</p>
                         </div>
@@ -3608,7 +3764,15 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                     <div className="flex items-center gap-2 shrink-0">
                       <button
                         type="button"
-                        onClick={() => setShowReceiverDetails(!showReceiverDetails)}
+                        onClick={() => {
+                          const next = !showReceiverDetails
+                          setShowReceiverDetails(next)
+                          if (!next) {
+                            setReceiverName("")
+                            setReceiverPhone("")
+                            setReceiverPhoneError("")
+                          }
+                        }}
                         className="text-xs font-bold text-blue-700 hover:underline cursor-pointer"
                       >
                         {showReceiverDetails ? "Hide" : "+ Receiver"}

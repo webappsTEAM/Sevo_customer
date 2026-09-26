@@ -3527,7 +3527,12 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             const isLogisticsCat = Boolean(liveData?.logistics?.leg) || ["goods", "truck", "two_wheeler", "packers", "transport"].some(k => cat.includes(k))
             const pickup = liveData?.pickup_location || successData?.pickup_location
             const drop = liveData?.drop_location || successData?.drop_location
-            return isLogisticsCat && (pickup || drop) ? { pickup, drop } : null
+            // Bug found: intermediate TripStop waypoints were never passed
+            // through here either (same gap as CustomerTrackingPage.jsx),
+            // so a multi-stop GT trip never showed its stop markers on this
+            // map. logistics.stops is already fetched into liveData.
+            const stops = liveData?.logistics?.stops || successData?.logistics?.stops
+            return isLogisticsCat && (pickup || drop) ? { pickup, drop, stops } : null
           })()}
         />
       </div>

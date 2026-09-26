@@ -482,11 +482,13 @@ class ServiceZoneCheckView(APIView):
                 drop_lat=raw_drop_lat, drop_lng=raw_drop_lng,
                 service_slug=service_slug, company=company,
                 vehicle_class=vehicle_class,
+                stops=data.get("stops") or data.get("waypoints"),
             )
             return Response({
                 "in_zone": route.allowed,
                 "service_allowed": route.allowed,
                 "failed_point": route.failed_point,
+                "failed_stop_index": route.failed_stop_index,
                 "error_code": route.error_code,
                 "message": route.message,
                 "coming_soon_zone": route.coming_soon_zone,

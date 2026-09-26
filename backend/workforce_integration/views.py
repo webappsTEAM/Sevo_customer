@@ -357,8 +357,13 @@ class WorkforceWebhookView(APIView):
                     sr.technician_photo = ""
                     sr.technician_rating = None
 
-                    # Move booking back to confirmed for redispatch
-                    if sr.status in ["assigned", "accepted"]:
+                    # Move booking back to confirmed for redispatch. on_the_way
+                    # is included: a technician can withdraw while en route
+                    # (inside the vendor's free-cancel window) and
+                    # ON_THE_WAY -> CONFIRMED is a legal move in this app's
+                    # state machine, so leaving it out stranded the booking
+                    # on "on the way" with no technician.
+                    if sr.status in ["assigned", "accepted", "on_the_way"]:
                         safe_apply_transition(sr, "confirmed")
                     sr.save()
 
@@ -769,20 +774,19 @@ class WorkforceWebhookView(APIView):
 
                         transaction.on_commit(lambda: self._broadcast_event(sr, "job_rescheduled"))
 
-                # ── 14. DISPATCH DELAYED NOTIFICATION (GT Phase 23) ──────────────────
-                elif event_type in ["booking.dispatch_delayed", "job.dispatch_delayed"]:
-                    failed_cycles = payload.get("failed_offer_cycles", 0)
-                    delay_note = f"High demand: Dispatch matching taking longer than usual ({failed_cycles} search cycles completed)."
-                    if hasattr(sr, "notes") and sr.notes:
-                        if "Dispatch matching taking longer" not in sr.notes:
-                            sr.notes = f"{sr.notes}\n{delay_note}"
-                    elif hasattr(sr, "notes"):
-                        sr.notes = delay_note
-                    try:
-                        sr.save(update_fields=["updated_at"] + (["notes"] if hasattr(sr, "notes") else []))
-                    except Exception as note_err:
-                        logger.warning("Could not update notes on booking %s for dispatch_delayed: %s", sr.id, note_err)
-                    transaction.on_commit(lambda: self._broadcast_event(sr, "booking_dispatch_delayed"))
+                # ── 14. (removed -- see GT audit fix note below) ─────────────────────
+                # This branch used to duplicate case 3's "booking.dispatch_delayed"/
+                # "job.dispatch_delayed" handling with an older, less complete
+                # implementation (GT Phase 23: wrote a note onto sr.notes and
+                # broadcast via the bare _broadcast_event() helper). Because this
+                # is an if/elif ladder on the same event_type and case 3 sits
+                # earlier in it, this branch was already 100% unreachable --
+                # case 3's elif always claims both event strings first, via
+                # _broadcast_delay_event(), which sends a richer payload
+                # (dispatch_delay_message, dispatch_failed_offer_cycles) under
+                # the same "booking_dispatch_delayed" broadcast event name.
+                # Removed as dead/conflicting duplicate logic rather than left
+                # in place to confuse a future reader into thinking it runs.
 
                 # ── 15. QUOTATION ISSUED / SENT (Canonical Event: quote.sent) ────────
                 elif event_type in ["quote.sent", "quote_sent", "quotation.sent"]:

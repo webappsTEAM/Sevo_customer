@@ -88,7 +88,7 @@ const ADMIN_NAV_ITEMS = [
       { label: "Vendor Approvals", to: routes.catalog_vendor_approvals, icon: <UserCheck size={16} />, color: "#3B82F6" },
       { label: "Painting Rate Card", to: routes.catalog_painting_rates, icon: <Palette size={16} />, color: "#3B82F6" },
       { label: "AC Inspection & Rates", to: routes.catalog_ac_inspection_rates, icon: <Wrench size={16} />, color: "#F59E0B" },
-      { label: "Goods & Transport Rates", to: routes.catalog_gt_pricing, icon: <Truck size={16} />, color: "#3B82F6", module: "pricing" },
+      { label: "Goods & Transport Rate Card (reference)", to: routes.catalog_gt_pricing, icon: <Truck size={16} />, color: "#3B82F6", module: "pricing" },
       { label: "Time Slot Management", to: routes.time_slot_management, icon: <Clock size={16} />, color: "#F59E0B", module: "time_slots" },
     ]
   },
