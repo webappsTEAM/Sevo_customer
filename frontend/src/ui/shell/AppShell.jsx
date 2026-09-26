@@ -9,7 +9,7 @@ import { ThemeToggle } from "./ThemeToggle.jsx"
 import ThemeSwitch from "@/components/ui/theme-switch"
 import { CommandPalette } from "./CommandPalette.jsx"
 import { NotificationCenter } from "./NotificationCenter.jsx"
-import { SevoLogo, sevoLogo } from "../components/sevoLogo.jsx"
+import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
 import { apiRequest, unwrapResults } from "../../api/client.js"
 import { NotificationService } from "../../utils/notifications.js"
 import { useWebSocket } from "../../hooks/useWebSocket.js"
@@ -64,7 +64,6 @@ const ADMIN_NAV_ITEMS = [
       { label: "Dashboard", to: "/customers/dashboard", icon: <BarChart3 size={16} />, color: "#6366F1" },
       { label: "Customers", to: "/customers/list", icon: <Users size={16} />, color: "#4F46E5" },
       { label: "Bookings", to: "/customers/bookings", icon: <CalendarDays size={16} />, color: "#38BDF8" },
-      { label: "AC Inspection Bookings", to: "/customers/ac-inspections", icon: <Wrench size={16} />, color: "#0EA5E9" },
       { label: "Reschedule Requests", to: "/customers/reschedules", icon: <Repeat2 size={16} />, color: "#F59E0B" },
       { label: "Refund Requests", to: "/customers/refunds", icon: <Banknote size={16} />, color: "#10B981" },
       { label: "Payments", to: "/customers/payments", icon: <Banknote size={16} />, color: "#10B981" },
@@ -87,17 +86,8 @@ const ADMIN_NAV_ITEMS = [
       { label: "Change Log", to: routes.catalog_change_log, icon: <FileText size={16} />, color: "#3B82F6" },
       { label: "Vendor Approvals", to: routes.catalog_vendor_approvals, icon: <UserCheck size={16} />, color: "#3B82F6" },
       { label: "Painting Rate Card", to: routes.catalog_painting_rates, icon: <Palette size={16} />, color: "#3B82F6" },
-      { label: "AC Inspection & Rates", to: routes.catalog_ac_inspection_rates, icon: <Wrench size={16} />, color: "#F59E0B" },
       { label: "Goods & Transport Rates", to: routes.catalog_gt_pricing, icon: <Truck size={16} />, color: "#3B82F6", module: "pricing" },
-      { label: "Time Slot Management", to: routes.time_slot_management, icon: <Clock size={16} />, color: "#F59E0B", module: "time_slots" },
     ]
-  },
-  {
-    label: "Time Slot Management",
-    to: routes.time_slot_management,
-    icon: <Clock size={20} />,
-    color: "#F59E0B",
-    module: "time_slots",
   },
   {
     label: "Marketing",
@@ -387,7 +377,7 @@ export function AppShell() {
   const items = useMemo(() => {
     if (!user) return []
     const isAdminUser = user.role === "admin" || user.role === "manager" || isSuper
-
+    
     if (isSuper) {
       return [
         ...SUPER_ADMIN_NAV_ITEMS,
@@ -417,7 +407,7 @@ export function AppShell() {
   }, [user, isSuper])
 
   useEffect(() => {
-    localStorage.setItem("sevo.sidebarCollapsed", sidebarCollapsed)
+    localStorage.setItem("caltrack.sidebarCollapsed", sidebarCollapsed)
   }, [sidebarCollapsed])
 
   useEffect(() => {
@@ -478,12 +468,12 @@ export function AppShell() {
   useEffect(() => {
     // Use native browser events instead of polling — fires instantly on network change,
     // zero CPU overhead when network is stable
-    const handleOnline = () => setOffline(false)
+    const handleOnline  = () => setOffline(false)
     const handleOffline = () => setOffline(true)
-    window.addEventListener("online", handleOnline)
+    window.addEventListener("online",  handleOnline)
     window.addEventListener("offline", handleOffline)
     return () => {
-      window.removeEventListener("online", handleOnline)
+      window.removeEventListener("online",  handleOnline)
       window.removeEventListener("offline", handleOffline)
     }
   }, [])
@@ -561,7 +551,7 @@ export function AppShell() {
       <header className="flex items-center justify-between h-[var(--header-height)] px-8 bg-[var(--sevo-surface)]/90 backdrop-blur-xl border-b border-[var(--sevo-border)] z-50 shrink-0 shadow-xs">
         <div className="flex items-center gap-8">
           <div className="flex items-center gap-3.5">
-            <SevoLogo size="sm" className="hover:scale-105 transition-transform" />
+            <CalTrackLogo size="sm" className="hover:scale-105 transition-transform" />
             <div className="h-6 w-px bg-[var(--sevo-border)] hidden sm:block" />
             <div className="flex flex-col">
               <span className="font-bold text-[var(--sevo-text-primary)] text-xs tracking-tight truncate max-w-[200px]" title={orgName && orgName !== "Sevo" ? orgName : "Operations Hub"}>
@@ -624,21 +614,21 @@ export function AppShell() {
                       user?.role === "manager"
                         ? { color: "#0ea5e9", background: "#e0f2fe" }
                         : user?.role === "support" || user?.isCareAgent
-                          ? { color: "#10b981", background: "#d1fae5" }
-                          : user?.role === "customer"
-                            ? { color: "#f59e0b", background: "#fef3c7" }
-                            : { color: "#4f46e5", background: "#ede9fe" }
+                        ? { color: "#10b981", background: "#d1fae5" }
+                        : user?.role === "customer"
+                        ? { color: "#f59e0b", background: "#fef3c7" }
+                        : { color: "#4f46e5", background: "#ede9fe" }
                     }
                   >
                     {user?.role === "admin"
                       ? "Administrator"
                       : user?.role === "manager"
-                        ? "Manager"
-                        : user?.role === "support" || user?.isCareAgent
-                          ? "Support"
-                          : user?.role === "customer"
-                            ? "Customer"
-                            : user?.role || "Staff"}
+                      ? "Manager"
+                      : user?.role === "support" || user?.isCareAgent
+                      ? "Support"
+                      : user?.role === "customer"
+                      ? "Customer"
+                      : user?.role || "Staff"}
                   </span>
                 </div>
               )}
@@ -666,21 +656,21 @@ export function AppShell() {
                             user?.role === "manager"
                               ? { color: "#0ea5e9", background: "#e0f2fe", border: "1px solid #bae6fd" }
                               : user?.role === "support" || user?.isCareAgent
-                                ? { color: "#10b981", background: "#d1fae5", border: "1px solid #a7f3d0" }
-                                : user?.role === "customer"
-                                  ? { color: "#f59e0b", background: "#fef3c7", border: "1px solid #fde68a" }
-                                  : { color: "#4f46e5", background: "#ede9fe", border: "1px solid #c4b5fd" }
+                              ? { color: "#10b981", background: "#d1fae5", border: "1px solid #a7f3d0" }
+                              : user?.role === "customer"
+                              ? { color: "#f59e0b", background: "#fef3c7", border: "1px solid #fde68a" }
+                              : { color: "#4f46e5", background: "#ede9fe", border: "1px solid #c4b5fd" }
                           }
                         >
                           {user?.role === "admin"
                             ? "Administrator"
                             : user?.role === "manager"
-                              ? "Manager"
-                              : user?.role === "support" || user?.isCareAgent
-                                ? "Support"
-                                : user?.role === "customer"
-                                  ? "Customer"
-                                  : user?.title || user?.role || "Staff"}
+                            ? "Manager"
+                            : user?.role === "support" || user?.isCareAgent
+                            ? "Support"
+                            : user?.role === "customer"
+                            ? "Customer"
+                            : user?.title || user?.role || "Staff"}
                         </span>
                       </div>
                     </div>

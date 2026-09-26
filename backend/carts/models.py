@@ -30,7 +30,7 @@ class Cart(models.Model):
     )
     cart_type = models.CharField(max_length=20, choices=CartType.choices)
     status = models.CharField(max_length=12, choices=CartStatus.choices, default=CartStatus.ACTIVE)
-
+    
     # Marketplace-specific single-seller binding
     seller_id = models.IntegerField(null=True, blank=True, db_index=True)
     seller_name = models.CharField(max_length=255, blank=True, default="")
@@ -55,7 +55,7 @@ class Cart(models.Model):
 
 class CartItem(models.Model):
     cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name="items")
-    # For Services / Daily Essentials (package-backed):
+    # For Services / Daily Essentials:
     package = models.ForeignKey(
         "service_requests.Package",
         on_delete=models.CASCADE,
@@ -63,15 +63,7 @@ class CartItem(models.Model):
         blank=True,
         related_name="cart_items",
     )
-    # Variant selection (e.g. 500g vs 1kg pack of a vegetable package) -- Swathi inventory
-    variant = models.ForeignKey(
-        "service_requests.PackageVariant",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="cart_items",
-    )
-
+    
     # For Marketplace (Vendor-approved Seller Hub items):
     seller_product_id = models.IntegerField(null=True, blank=True, db_index=True)
     product_title = models.CharField(max_length=255, blank=True, default="")

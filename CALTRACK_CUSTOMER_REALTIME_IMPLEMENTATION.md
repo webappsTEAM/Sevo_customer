@@ -1,7 +1,7 @@
-# sevo — Customer Web App Realtime Implementation Report
+# CalTrack — Customer Web App Realtime Implementation Report
 
 **Document Version:** 1.0.0  
-**Target:** sevo Customer Web Application (`calservices`)  
+**Target:** CalTrack Customer Web Application (`calservices`)  
 **Core Architecture:** Single Source of Truth via Shared PostgreSQL Database & Real-Time Telemetry Stream.
 
 ---
@@ -46,7 +46,7 @@ All identified hardcoded values were purged completely:
 
 ## 4. Real API Data Connected
 
-The customer web application connects directly to authoritative sevo backend endpoints:
+The customer web application connects directly to authoritative CalTrack backend endpoints:
 
 | Endpoint | Method | Purpose |
 | :--- | :---: | :--- |
@@ -238,13 +238,13 @@ GPS freshness is evaluated on the backend based on `sr.technician_last_seen_at`:
 
 | File | Purpose |
 | :--- | :--- |
-| `sevo_CUSTOMER_REALTIME_IMPLEMENTATION.md` | Authoritative 19-section audit and architecture report. |
+| `CALTRACK_CUSTOMER_REALTIME_IMPLEMENTATION.md` | Authoritative 19-section audit and architecture report. |
 
 ---
 
 ## 20. 10-Chain End-to-End Architectural Verification Results
 
-The 10 core integration chains between the Customer Web App, Technician Web App, and Shared PostgreSQL Backend were rigorously validated via automated test execution ([`scratch/test_sevo_10_chains_reconciliation.py`](file:///c:/Users/USER/Desktop/calservice/calservices/backend/scratch/test_sevo_10_chains_reconciliation.py)):
+The 10 core integration chains between the Customer Web App, Technician Web App, and Shared PostgreSQL Backend were rigorously validated via automated test execution ([`scratch/test_caltrack_10_chains_reconciliation.py`](file:///c:/Users/USER/Desktop/calservice/calservices/backend/scratch/test_caltrack_10_chains_reconciliation.py)):
 
 | # | Integration Chain | Validation Result | Verification Evidence |
 | :---: | :--- | :---: | :--- |

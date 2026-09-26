@@ -1,7 +1,7 @@
 {
   "venvPath": ".",
-  "venv": "venv",
-  "pythonPath": "venv/Scripts/python.exe",
+  "venv": ".venv",
+  "pythonPath": ".venv/Scripts/python.exe",
   "extraPaths": [
     "."
   ],
@@ -17,6 +17,5 @@
   "reportOperatorIssue": "none",
   "reportCallIssue": "none",
   "reportArgumentType": "none",
-  "reportIndexIssue": "none",
-  "reportAssignmentType": "none"
+  "reportIndexIssue": "none"
 }

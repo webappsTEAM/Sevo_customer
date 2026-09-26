@@ -1,4 +1,4 @@
-# sevo — Danger Zone: Technical & Product Documentation
+# CalTrack — Danger Zone: Technical & Product Documentation
 
 > **Section:** Settings → Danger Zone  
 > **File:** `frontend/src/ui/pages/settings/DangerZoneSection.jsx`  
@@ -24,7 +24,7 @@ Under **GDPR Article 17 — Right to Erasure ("Right to be Forgotten")**, any cu
 
 > If you refuse or have no mechanism to comply, you are exposed to fines of up to **€20,000,000 or 4% of global annual revenue**, whichever is higher.
 
-Since sevo targets both **US and UK organisations**, the following regulations apply:
+Since CalTrack targets both **US and UK organisations**, the following regulations apply:
 
 | Regulation | Jurisdiction | Requirement |
 |:---|:---|:---|
@@ -315,4 +315,4 @@ Every Danger Zone action should be written to the immutable `AuditLog`:
 
 ---
 
-*This document was prepared by the development team to describe the Danger Zone module, its legal context, current implementation state, risk analysis, and recommended enhancements for the sevo application.*
+*This document was prepared by the development team to describe the Danger Zone module, its legal context, current implementation state, risk analysis, and recommended enhancements for the CalTrack application.*

@@ -1141,7 +1141,7 @@ class SendOTPView(APIView):
             if account_sid and auth_token and from_number and not account_sid.startswith("your_"):
                 client = TwilioClient(account_sid, auth_token)
                 client.messages.create(
-                    body=f"sevo security verification code: {code}. Expires in 5 minutes.",
+                    body=f"Caltrack security verification code: {code}. Expires in 5 minutes.",
                     from_=from_number,
                     to=normalized_phone
                 )
@@ -1453,18 +1453,18 @@ class SendEmailOTPView(APIView):
         cache.set(email_cache_key, email_count + 1, timeout=3600)
 
         # Premium HTML Email Content
-        subject = "sevo Verification Code"
+        subject = "CALtrack Verification Code"
         body_text = (
             "━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "sevo SECURITY HUB\n"
+            "CALTRACK SECURITY HUB\n"
             "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"Hello {user.first_name or user.username},\n\n"
-            "Your sevo security verification code is:\n\n"
+            "Your CALtrack security verification code is:\n\n"
             f"{code}\n\n"
             "This code is valid for 5 minutes.\n"
             "If you did not request this code, please change your password immediately.\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "sevo Security Intelligence\n"
+            "CALtrack Security Intelligence\n"
             "━━━━━━━━━━━━━━━━━━━━━━━"
         )
         
@@ -1472,7 +1472,7 @@ class SendEmailOTPView(APIView):
         <div style="background-color: #03050d; color: #f1f5f9; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px 20px; max-width: 600px; margin: 0 auto; border: 1px solid #1e293b; border-radius: 24px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);">
             <div style="text-align: center; border-bottom: 2px solid #1e293b; padding-bottom: 20px; margin-bottom: 25px;">
                 <div style="color: #6366f1; font-weight: 900; font-size: 20px; letter-spacing: 0.25em; text-transform: uppercase;">
-                    sevo SECURITY HUB
+                    CALTRACK SECURITY HUB
                 </div>
             </div>
             <div style="padding: 0 10px;">
@@ -1493,7 +1493,7 @@ class SendEmailOTPView(APIView):
                 </p>
             </div>
             <div style="text-align: center; border-top: 2px solid #1e293b; padding-top: 20px; margin-top: 35px; color: #475569; font-size: 10px; font-family: monospace; letter-spacing: 0.15em; text-transform: uppercase;">
-                sevo Security Intelligence
+                CALtrack Security Intelligence
             </div>
         </div>
         """
@@ -1838,15 +1838,7 @@ class CustomerAddressDetailView(APIView):
             return _cs(_serialize_address(addr), message="Address updated.")
         except Exception as exc:
             detail = getattr(exc, "detail", str(exc))
-            if isinstance(detail, dict) and "detail" in detail:
-                detail = detail["detail"]
-            # _get_address_or_404 (called by update_saved_address) raises DRF's
-            # NotFound for a cross-customer/missing address, which carries its
-            # own status_code=404 -- this was previously discarded in favor of
-            # _ce's hardcoded 400 default, so attempting to PATCH another
-            # customer's address returned 400 instead of the 404 that get()
-            # already returns for the same address, one line up.
-            return _ce(str(detail), getattr(exc, "status_code", 400))
+            return _ce(str(detail))
 
     def delete(self, request, pk):
         try:
@@ -1856,9 +1848,7 @@ class CustomerAddressDetailView(APIView):
             detail = getattr(exc, "detail", str(exc))
             if isinstance(detail, dict) and "detail" in detail:
                 detail = detail["detail"]
-            # Same fix as patch() above: respect the real status_code (404 for
-            # a cross-customer/missing address) instead of always forcing 400.
-            return _ce(str(detail), getattr(exc, "status_code", 400))
+            return _ce(str(detail), 400)
 
 
 class CustomerAddressSetDefaultView(APIView):
@@ -1871,12 +1861,7 @@ class CustomerAddressSetDefaultView(APIView):
             return _cs(_serialize_address(addr), message="Default address updated.")
         except Exception as exc:
             detail = getattr(exc, "detail", str(exc))
-            if isinstance(detail, dict) and "detail" in detail:
-                detail = detail["detail"]
-            # Same fix as CustomerAddressDetailView.patch()/delete(): respect
-            # the real status_code (404 for a cross-customer/missing address)
-            # instead of always forcing 400.
-            return _ce(str(detail), getattr(exc, "status_code", 400))
+            return _ce(str(detail))
 
 
 class CustomerAddressServiceabilityView(APIView):

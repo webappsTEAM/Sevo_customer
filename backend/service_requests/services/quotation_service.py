@@ -162,7 +162,6 @@ class QuotationService:
                     elif str(service_id).isdigit():
                         service_instance = Service.objects.filter(pk=int(service_id)).first()
 
-
                 items_to_create.append(
                     EstimationQuotationItem(
                         quotation=quotation,
@@ -240,6 +239,7 @@ class QuotationService:
         with transaction.atomic():
             sr = (
                 ServiceRequest.objects.select_for_update()
+                .select_related("estimation")
                 .filter(pk=service_request_id)
                 .first()
             )
@@ -269,25 +269,15 @@ class QuotationService:
             if quote.status == EstimationQuotation.Status.APPROVED:
                 raise EstimationStateConflictError("This quotation has already been approved.")
 
-            if str(quote.status).upper() not in (EstimationQuotation.Status.SENT, EstimationQuotation.Status.ADMIN_APPROVED, "SENT_TO_CUSTOMER"):
-                raise EstimationStateConflictError(f"Quotation cannot be approved in '{quote.status}' status. Only Vendor Admin approved quotations can be decided.")
+            if quote.status != EstimationQuotation.Status.SENT:
+                raise EstimationStateConflictError(f"Quotation cannot be approved in '{quote.status}' status.")
 
             # Mark quotation APPROVED
             quote.status = EstimationQuotation.Status.APPROVED
             quote.customer_approved_at = timezone.now()
             quote.save(update_fields=["status", "customer_approved_at", "updated_at"])
 
-            # Diagnostic fee credited / waived towards repair
-            if hasattr(est, "fee") and est.fee:
-                try:
-                    est.fee.status = "WAIVED"
-                    est.fee.waived_at = timezone.now()
-                    est.fee.waived_reason = "Diagnostic fee credited towards approved repair work"
-                    est.fee.save(update_fields=["status", "waived_at", "waived_reason", "updated_at"])
-                except Exception as fee_err:
-                    logger.warning(f"Could not waive estimation fee: {fee_err}")
-
-            # Mark estimation CUSTOMER_APPROVED / REPAIR_AUTHORIZED
+            # Mark estimation CUSTOMER_APPROVED / CONVERTED_TO_SERVICE
             est.status = Estimation.Status.CUSTOMER_APPROVED
             est.save(update_fields=["status", "updated_at"])
 
@@ -302,22 +292,6 @@ class QuotationService:
             # Preserve vendor, technician, schedule, address, customer
             sr.save(update_fields=["job_type", "request_kind", "status", "total_amount", "updated_at"])
 
-            # Synchronize companion workforce_quote record in PostgreSQL
-            try:
-                from django.db import connection
-                with connection.cursor() as cursor:
-                    cursor.execute("""
-                        UPDATE workforce_quote
-                        SET status = 'CUSTOMER_ACCEPTED',
-                            customer_decision = 'ACCEPT',
-                            customer_decided_at = NOW(),
-                            updated_at = NOW()
-                        WHERE (job_id = %s OR quote_number = %s OR quote_number = %s)
-                          AND status NOT IN ('CONVERTED')
-                    """, [sr.id, quote.quote_ref, quote.quote_ref.split('-V')[0]])
-            except Exception as wf_err:
-                logger.warning(f"Could not synchronize workforce_quote on approve: {wf_err}")
-
             # Record history
             from customer_analytics.models import BookingStatusEvent
             BookingStatusEvent.objects.create(
@@ -329,7 +303,7 @@ class QuotationService:
                 actor=customer if (customer and customer.is_authenticated) else None,
                 actor_persona=BookingStatusEvent.ActorPersona.CUSTOMER,
                 reason_code="QUOTATION_APPROVED",
-                reason_note=f"Customer approved quotation {quote.quote_ref} (₹{quote.total_amount}). Repair authorized.",
+                reason_note=f"Customer approved quotation {quote.quote_ref} (₹{quote.total_amount}). Converted to CHANGE_REQUEST.",
                 occurred_at=timezone.now(),
             )
 
@@ -351,20 +325,9 @@ class QuotationService:
                 version=quote.version + 10,
             )
 
-            # Broadcast tracking event to customer and technician channels after commit
-            def _broadcast_approval():
-                try:
-                    from service_requests.notifications import broadcast_tracking_event
-                    broadcast_tracking_event(sr, event_type="quote_decision_updated")
-                    broadcast_tracking_event(sr, event_type="repair_authorized")
-                except Exception as notify_err:
-                    logger.debug(f"Could not broadcast tracking events on approve: {notify_err}")
-
-            transaction.on_commit(_broadcast_approval)
-
             logger.info(
                 f"[Quotation] Approved {quote.quote_ref} for SR #{sr.request_id}. "
-                f"Preserved ID. Converted {old_job_type} -> {sr.job_type}. Repair authorized."
+                f"Preserved ID. Converted {old_job_type} -> {sr.job_type}."
             )
             return sr
 
@@ -379,11 +342,12 @@ class QuotationService:
     ) -> ServiceRequest:
         """
         Customer rejects quotation. Closes estimation, leaves job_type as ESTIMATION,
-        does not create a repair job, charges only inspection fee if unpaid.
+        and does not create a new booking.
         """
         with transaction.atomic():
             sr = (
                 ServiceRequest.objects.select_for_update()
+                .select_related("estimation")
                 .filter(pk=service_request_id)
                 .first()
             )
@@ -414,8 +378,8 @@ class QuotationService:
             if quote.status == EstimationQuotation.Status.REJECTED:
                 raise EstimationStateConflictError("This quotation has already been rejected.")
 
-            if str(quote.status).upper() not in (EstimationQuotation.Status.SENT, EstimationQuotation.Status.ADMIN_APPROVED, "SENT_TO_CUSTOMER"):
-                raise EstimationStateConflictError(f"Quotation cannot be rejected in '{quote.status}' status. Only Vendor Admin approved quotations can be decided.")
+            if quote.status != EstimationQuotation.Status.SENT:
+                raise EstimationStateConflictError(f"Quotation cannot be rejected in '{quote.status}' status.")
 
             quote.status = EstimationQuotation.Status.REJECTED
             quote.customer_rejected_at = timezone.now()
@@ -423,50 +387,13 @@ class QuotationService:
             quote.rejection_note = reason_note
             quote.save(update_fields=["status", "customer_rejected_at", "rejection_reason", "rejection_note", "updated_at"])
 
-            # Check inspection fee status
-            fee_amount = Decimal("199.00")
-            fee_paid = False
-            if hasattr(est, "fee") and est.fee:
-                fee_amount = est.fee.amount
-                fee_paid = est.fee.status in ["COLLECTED", "PAID"] or sr.payment_status in ["paid", "collected"]
-                if fee_paid:
-                    est.fee.status = "COLLECTED"
-                    est.fee.collected_at = est.fee.collected_at or timezone.now()
-                    est.fee.save(update_fields=["status", "collected_at", "updated_at"])
-
-            if fee_paid:
-                est.status = Estimation.Status.CLOSED
-                sr.status = ServiceRequest.Status.ESTIMATION_CLOSED
-            else:
-                est.status = Estimation.Status.CUSTOMER_REJECTED
-                sr.status = ServiceRequest.Status.CUSTOMER_REJECTED
-
+            est.status = Estimation.Status.CUSTOMER_REJECTED
             est.save(update_fields=["status", "updated_at"])
 
             old_status = sr.status
-            # Remains job_type = ESTIMATION, request_kind = ESTIMATION
-            sr.job_type = ServiceRequest.JobType.ESTIMATION
-            sr.request_kind = "ESTIMATION"
-            sr.total_amount = fee_amount
-            sr.save(update_fields=["job_type", "request_kind", "status", "total_amount", "updated_at"])
-
-            # Synchronize companion workforce_quote record in PostgreSQL
-            try:
-                from django.db import connection
-                with connection.cursor() as cursor:
-                    cursor.execute("""
-                        UPDATE workforce_quote
-                        SET status = 'DECLINED',
-                            customer_decision = 'DECLINE',
-                            customer_decided_at = NOW(),
-                            customer_decline_reason = %s,
-                            customer_notes = %s,
-                            updated_at = NOW()
-                        WHERE (job_id = %s OR quote_number = %s OR quote_number = %s)
-                          AND status NOT IN ('CONVERTED', 'CUSTOMER_ACCEPTED')
-                    """, [reason_code, reason_note, sr.id, quote.quote_ref, quote.quote_ref.split('-V')[0]])
-            except Exception as wf_err:
-                logger.warning(f"Could not synchronize workforce_quote on reject: {wf_err}")
+            sr.status = ServiceRequest.Status.CUSTOMER_REJECTED
+            # Remains job_type = ESTIMATION
+            sr.save(update_fields=["status", "updated_at"])
 
             from customer_analytics.models import BookingStatusEvent
             BookingStatusEvent.objects.create(
@@ -497,125 +424,3 @@ class QuotationService:
             )
 
             return sr
-
-    @classmethod
-    def admin_approve_quotation(
-        cls,
-        service_request_id: int,
-        quotation_id: Optional[int] = None,
-        admin_user = None,
-        admin_note: str = "",
-    ) -> ServiceRequest:
-        """
-        Customer Admin reviews and approves technician estimation quotation.
-        Sets status to ADMIN_APPROVED and advances customer-facing state to CUSTOMER_PENDING (QUOTATION_SENT).
-        """
-        with transaction.atomic():
-            sr = (
-                ServiceRequest.objects.select_for_update()
-                .filter(pk=service_request_id)
-                .first()
-            )
-            if not sr:
-                raise ValidationError({"detail": "ServiceRequest not found."})
-            if not hasattr(sr, "estimation"):
-                raise EstimationStateConflictError("No estimation found for this booking.")
-
-            est = sr.estimation
-            q_query = EstimationQuotation.objects.select_for_update().filter(estimation=est)
-            quote = q_query.filter(pk=quotation_id).first() if quotation_id else q_query.order_by("-version").first()
-            if not quote:
-                raise ValidationError({"detail": "Quotation not found."})
-
-            if quote.status == EstimationQuotation.Status.APPROVED:
-                raise EstimationStateConflictError("Quotation is already approved.")
-
-            quote.status = EstimationQuotation.Status.ADMIN_APPROVED
-            quote.admin_notes = admin_note
-            quote.admin_reviewed_at = timezone.now()
-            if admin_user and getattr(admin_user, "is_authenticated", False):
-                quote.admin_reviewed_by = admin_user
-            quote.save(update_fields=["status", "admin_notes", "admin_reviewed_at", "admin_reviewed_by", "updated_at"])
-
-            est.status = Estimation.Status.ADMIN_APPROVED
-            est.save(update_fields=["status", "updated_at"])
-
-            sr.status = ServiceRequest.Status.QUOTATION_SENT
-            sr.save(update_fields=["status", "updated_at"])
-
-            from customer_analytics.models import BookingStatusEvent
-            BookingStatusEvent.objects.create(
-                service_request=sr,
-                customer=sr.customer,
-                company=sr.company,
-                from_status=sr.status,
-                to_status=ServiceRequest.Status.QUOTATION_SENT,
-                actor=admin_user if (admin_user and getattr(admin_user, "is_authenticated", False)) else None,
-                actor_persona=BookingStatusEvent.ActorPersona.ADMIN,
-                reason_code="ADMIN_APPROVED_ESTIMATION",
-                reason_note=f"Admin approved quotation {quote.quote_ref} (₹{quote.total_amount}). Note: {admin_note}",
-                occurred_at=timezone.now(),
-            )
-            return sr
-
-    @classmethod
-    def admin_send_back_quotation(
-        cls,
-        service_request_id: int,
-        quotation_id: Optional[int] = None,
-        admin_user = None,
-        admin_note: str = "",
-    ) -> ServiceRequest:
-        """
-        Customer Admin sends estimation back to technician with mandatory revision comments.
-        Sets status to SENT_BACK_TO_TECHNICIAN so the technician can revise it in the technician app.
-        Does NOT create a new booking.
-        """
-        if not admin_note or not admin_note.strip():
-            raise ValidationError({"admin_note": "A comment is required when sending an estimation back to the technician."})
-
-        with transaction.atomic():
-            sr = (
-                ServiceRequest.objects.select_for_update()
-                .filter(pk=service_request_id)
-                .first()
-            )
-            if not sr:
-                raise ValidationError({"detail": "ServiceRequest not found."})
-            if not hasattr(sr, "estimation"):
-                raise EstimationStateConflictError("No estimation found for this booking.")
-
-            est = sr.estimation
-            q_query = EstimationQuotation.objects.select_for_update().filter(estimation=est)
-            quote = q_query.filter(pk=quotation_id).first() if quotation_id else q_query.order_by("-version").first()
-            if not quote:
-                raise ValidationError({"detail": "Quotation not found."})
-
-            if quote.status == EstimationQuotation.Status.APPROVED:
-                raise EstimationStateConflictError("Cannot send back an already approved quotation.")
-
-            quote.status = EstimationQuotation.Status.SENT_BACK_TO_TECHNICIAN
-            quote.admin_notes = admin_note.strip()
-            quote.admin_reviewed_at = timezone.now()
-            if admin_user and getattr(admin_user, "is_authenticated", False):
-                quote.admin_reviewed_by = admin_user
-            quote.save(update_fields=["status", "admin_notes", "admin_reviewed_at", "admin_reviewed_by", "updated_at"])
-
-            est.status = Estimation.Status.SENT_BACK_TO_TECHNICIAN
-            est.save(update_fields=["status", "updated_at"])
-
-            from customer_analytics.models import BookingStatusEvent
-            BookingStatusEvent.objects.create(
-                service_request=sr,
-                customer=sr.customer,
-                company=sr.company,
-                from_status=sr.status,
-                to_status="SENT_BACK_TO_TECHNICIAN",
-                actor=admin_user if (admin_user and getattr(admin_user, "is_authenticated", False)) else None,
-                actor_persona=BookingStatusEvent.ActorPersona.ADMIN,
-                reason_code="ESTIMATION_SENT_BACK",
-                reason_note=f"Admin sent quotation {quote.quote_ref} back to technician: {admin_note.strip()}",
-                occurred_at=timezone.now(),
-            )
-            return sr
-

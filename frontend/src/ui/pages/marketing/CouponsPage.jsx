@@ -372,7 +372,7 @@ export default function CouponsPage() {
       setIsModalOpen(false);
     } catch (e) {
       console.error("Failed to save coupon", e);
-      setStepError(e.message || "Failed to save coupon.");
+      setStepError(e.message || "Failed to save coupon to database.");
     } finally {
       setIsSubmitting(false);
     }
@@ -512,14 +512,14 @@ export default function CouponsPage() {
                   <td colSpan={8} className="py-12 text-center text-slate-400 font-bold">
                     <div className="flex items-center justify-center gap-2">
                       <div className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
-                      Loading coupons...
+                      Loading coupons from database...
                     </div>
                   </td>
                 </tr>
               ) : filteredCoupons.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-slate-400 font-semibold">
-                    No coupons found for the active filter.
+                    No coupons found in database for active filter.
                   </td>
                 </tr>
               ) : (

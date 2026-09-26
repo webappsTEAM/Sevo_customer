@@ -81,7 +81,7 @@ export default function PlatformRBACPage() {
             <Shield className="w-6 h-6 text-indigo-600" /> Centralized RBAC Permission Matrix
           </h1>
           <p className="text-slate-500 text-sm mt-1">
-            Global module access toggles and domain-level CRUD permission control across all sevo modules.
+            Global module access toggles and domain-level CRUD permission control across all CalTrack modules.
           </p>
         </div>
 
@@ -124,10 +124,11 @@ export default function PlatformRBACPage() {
           <button
             key={role}
             onClick={() => setSelectedRole(role)}
-            className={`px-4 py-2 rounded-xl text-sm font-semibold capitalize transition-all ${selectedRole === role
+            className={`px-4 py-2 rounded-xl text-sm font-semibold capitalize transition-all ${
+              selectedRole === role
                 ? "bg-slate-900 text-white shadow-sm"
                 : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
-              }`}
+            }`}
           >
             {role.replace("_", " ")}
           </button>
@@ -163,10 +164,11 @@ export default function PlatformRBACPage() {
                         <td key={action} className="px-4 py-4 text-center">
                           <button
                             onClick={() => handleToggleAction(mod, action)}
-                            className={`w-6 h-6 rounded-md border flex items-center justify-center mx-auto transition-all ${enabled
+                            className={`w-6 h-6 rounded-md border flex items-center justify-center mx-auto transition-all ${
+                              enabled
                                 ? "bg-indigo-600 border-indigo-600 text-white shadow-sm"
                                 : "bg-white border-slate-300 text-transparent hover:border-slate-400"
-                              }`}
+                            }`}
                           >
                             <Check className="w-4 h-4 stroke-[3]" />
                           </button>

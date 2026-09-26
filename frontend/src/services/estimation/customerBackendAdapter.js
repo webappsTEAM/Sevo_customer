@@ -13,13 +13,7 @@
 
 import { apiRequest } from "../../api/client.js";
 import {
-  getCustomerSelectedAddress,
-  getCustomerCoordinates,
-} from "../../utils/customerLocationStorage.js";
-import {
   ESTIMATION_FEE,
-  getDynamicEstimationFee,
-  setDynamicEstimationFee,
   ESTIMATION_DURATION,
   ESTIMATION_TITLE,
   ESTIMATION_SUBTITLE,
@@ -59,22 +53,13 @@ function saveStoredEstimations(list) {
 export const customerBackendAdapter = {
   /**
    * Returns AC Inspection service metadata for cards and detail modal.
-   * Dynamically loads fee from PostgreSQL single source of truth.
    */
   async fetchEstimationService() {
-    let fee = getDynamicEstimationFee();
-    try {
-      const res = await apiRequest("/service-requests/ac-inspection/rate-card/");
-      if (res?.data?.diagnostic_fee != null) {
-        fee = setDynamicEstimationFee(res.data.diagnostic_fee);
-      }
-    } catch (_) {}
-
     return {
       id: "ac-inspection",
       name: ESTIMATION_TITLE,
       subtitle: ESTIMATION_SUBTITLE,
-      price: fee,
+      price: ESTIMATION_FEE,
       duration: ESTIMATION_DURATION,
       badge: "Diagnosis & Inspection",
       badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-200",
@@ -99,89 +84,19 @@ export const customerBackendAdapter = {
     const symptom = data.customerReportedIssue || "Inspection required";
     const notes = data.notes || "";
 
-    let resolvedLat = data.latitude ? parseFloat(data.latitude) : null;
-    let resolvedLng = data.longitude ? parseFloat(data.longitude) : null;
-    if (resolvedLat == null || resolvedLng == null) {
-      try {
-        const savedCoords = getCustomerCoordinates(data.userId || data.customer_id);
-        if (savedCoords?.lat != null && savedCoords?.lng != null) {
-          resolvedLat = parseFloat(savedCoords.lat);
-          resolvedLng = parseFloat(savedCoords.lng);
-        } else {
-          const savedAddr = getCustomerSelectedAddress(data.userId || data.customer_id);
-          if (savedAddr?.latitude && savedAddr?.longitude) {
-            resolvedLat = parseFloat(savedAddr.latitude);
-            resolvedLng = parseFloat(savedAddr.longitude);
-          }
-        }
-      } catch (_) {}
-    }
-    // Fallback to default Hosur center coordinates if not set, preventing zone-gate drop
-    if (resolvedLat == null || resolvedLng == null) {
-      resolvedLat = 12.7409;
-      resolvedLng = 77.8253;
-    }
-
-    const customerName = (data.customer_name || "").trim() || "Customer User";
-
-    let cleanEmail = (data.email || "").trim();
-    if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      cleanEmail = "";
-    }
-
-    let prefDate = data.preferred_date || data.scheduledDate;
-    let prefTime = data.preferred_time || data.scheduledTime || "10:00 AM - 12:00 PM";
-
-    // Auto-adjust date/time if a passed slot on today's date was submitted
-    try {
-      const d = new Date();
-      const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-      if (prefDate === todayStr) {
-        const match = String(prefTime).match(/^(\d{1,2}):(\d{2})\s*(AM|PM)/i);
-        if (match) {
-          let h = parseInt(match[1], 10);
-          const m = parseInt(match[2], 10);
-          const ampm = match[3].toUpperCase();
-          if (ampm === "PM" && h < 12) h += 12;
-          if (ampm === "AM" && h === 12) h = 0;
-          const slotMins = h * 60 + m;
-          const curMins = d.getHours() * 60 + d.getMinutes();
-          if (slotMins < curMins + 60) {
-            const remaining = [
-              { label: "11:00 AM - 01:00 PM", mins: 11 * 60 },
-              { label: "02:00 PM - 04:00 PM", mins: 14 * 60 },
-              { label: "04:00 PM - 06:00 PM", mins: 16 * 60 },
-            ].filter((s) => s.mins >= curMins + 60);
-
-            if (remaining.length > 0) {
-              prefTime = remaining[0].label;
-            } else {
-              const tomorrow = new Date();
-              tomorrow.setDate(tomorrow.getDate() + 1);
-              prefDate = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
-              prefTime = "09:00 AM - 11:00 AM";
-            }
-          }
-        }
-      }
-    } catch (_) {}
-
-    const activeFee = data.estimationFee || getDynamicEstimationFee() || 199;
-
     const payload = {
-      customer_name: customerName,
+      customer_name: data.customer_name || "Customer",
       phone: data.phone || "",
-      email: cleanEmail,
-      service_category: "ac_appliance",
+      email: data.email || "",
+      service_category: "hvac",
       issue_title: `AC Inspection & Estimation (${acBrand} ${data.acDetails?.type || "Split"})`,
       description: symptom,
       address: data.landmark ? `${data.address} | ${data.landmark}` : (data.address || "Hosur, Tamil Nadu"),
-      latitude: resolvedLat,
-      longitude: resolvedLng,
-      preferred_date: prefDate,
-      preferred_time: prefTime,
+      latitude: data.latitude ? parseFloat(data.latitude) : null,
+      longitude: data.longitude ? parseFloat(data.longitude) : null,
+      preferred_date: data.preferred_date || data.scheduledDate,
+      preferred_time: data.preferred_time || data.scheduledTime || "10:00 AM - 12:00 PM",
       payment_method: data.paymentMethod || "COD",
-      total_amount: activeFee,
       job_type: "ESTIMATION",
       request_kind: "ESTIMATION",
       catalog_service_id: String(data.catalog_service_id || data.serviceId || data.service_id || data.acDetails?.service_id || "ac-inspection"),
@@ -191,15 +106,6 @@ export const customerBackendAdapter = {
       ac_quantity: acQuantity,
       customer_symptom: symptom,
       customer_notes: notes,
-      cart_data: [
-        {
-          id: "ac-inspection",
-          name: ESTIMATION_TITLE,
-          price: activeFee,
-          quantity: acQuantity,
-          jobType: "ESTIMATION",
-        },
-      ],
     };
 
     try {
@@ -227,8 +133,8 @@ export const customerBackendAdapter = {
         status_display: "Estimation Requested",
         payment_status: responseData.payment_status || "pending",
         payment_status_display: "Pending Inspection",
-        total_amount: responseData.total_amount || activeFee,
-        estimationFee: responseData.estimation?.fee_amount || activeFee,
+        total_amount: responseData.total_amount || data.estimationFee || ESTIMATION_FEE,
+        estimationFee: responseData.estimation?.fee_amount || data.estimationFee || ESTIMATION_FEE,
         preferred_date: payload.preferred_date,
         preferred_time: payload.preferred_time,
         scheduledDate: payload.preferred_date,
@@ -254,7 +160,7 @@ export const customerBackendAdapter = {
           {
             id: "ac-inspection",
             name: ESTIMATION_TITLE,
-            price: activeFee,
+            price: data.estimationFee || ESTIMATION_FEE,
             quantity: acQuantity,
             jobType: "ESTIMATION",
           },

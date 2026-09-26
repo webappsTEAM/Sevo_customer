@@ -92,46 +92,7 @@ class VegetableOrderItem(models.Model):
         related_name="vegetable_order_items",
     )
 
-    variant = models.ForeignKey(
-        "service_requests.PackageVariant",
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True,
-        related_name="vegetable_order_items",
-    )
-
-    variant_name_snapshot = models.CharField(
-        max_length=120,
-        blank=True,
-        default="",
-        help_text="Snapshot of the chosen variant name at order creation (e.g. '500 g', '2 kg')."
-    )
-
-    pack_value_snapshot = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        help_text="Snapshot of the pack size value at order creation."
-    )
-
-    unit_basis = models.CharField(
-        max_length=10,
-        choices=[("WEIGHT", "Weight"), ("COUNT", "Count")],
-        default="WEIGHT",
-        help_text="Measurement basis of this line item."
-    )
-
-    unit_label = models.CharField(
-        max_length=20,
-        blank=True,
-        default="g",
-        help_text="Unit string (e.g. g, kg, pcs, bunch)."
-    )
-
-    quantity_grams = models.PositiveIntegerField(
-        help_text="Exact base units ordered and deducted (grams for WEIGHT, pieces for COUNT)."
-    )
+    quantity_grams = models.PositiveIntegerField()
 
     unit_price_snapshot = models.DecimalField(max_digits=10, decimal_places=2)
 
@@ -144,21 +105,8 @@ class VegetableOrderItem(models.Model):
         db_table = "vegetable_orders_vegetableorderitem"
         ordering = ["id"]
 
-    @property
-    def quantity_base_units(self):
-        return self.quantity_grams
-
-    @quantity_base_units.setter
-    def quantity_base_units(self, val):
-        self.quantity_grams = val
-
-    @property
-    def quantity_display(self):
-        from inventory.utils.unit_conversion import format_stock_for_display
-        return format_stock_for_display(self.quantity_grams, unit_basis=self.unit_basis, unit=self.unit_label)
-
     def __str__(self):
-        return f"VegetableOrderItem #{self.id} of {self.order.order_number} ({self.quantity_display})"
+        return f"VegetableOrderItem #{self.id} of {self.order.order_number}"
 
 
 def _generate_vegetable_return_number():
@@ -229,13 +177,6 @@ class VegetableReturn(models.Model):
         null=True,
         blank=True,
         related_name="handled_vegetable_returns",
-    )
-    stock_movement = models.OneToOneField(
-        "inventory.VegetableStockMovement",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="linked_return",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     resolved_at = models.DateTimeField(null=True, blank=True)

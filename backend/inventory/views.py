@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db import transaction
 from accounts.permissions import IsAdminRole, RequireModuleAccess
 from common.drf import VisibilityQuerysetMixin
-from inventory.models import InventoryItem, InventoryAlert, InventoryTransfer, StockMovement, Vegetable
+from inventory.models import InventoryItem, InventoryAlert, InventoryTransfer, StockMovement
 from inventory.serializers import (
     InventoryItemSerializer, InventoryAlertSerializer, InventoryTransferSerializer
 )
@@ -116,7 +116,7 @@ from inventory.serializers import (
 )
 from inventory.services import vegetable_stock_service
 from inventory.selectors import vegetable_stock_selectors
-from inventory.utils.unit_conversion import to_grams, to_base_units, unit_basis_for_unit, format_stock_for_display
+from inventory.utils.unit_conversion import to_grams
 
 
 def _get_request_company(request):
@@ -241,79 +241,15 @@ class VegetableDetailsUpdateView(APIView):
     """
     PATCH /api/inventory/vegetable-stock/<product_id>/update-details/
 
-    Stock quantities and pricing writes remain locked here (configured from Vendor app).
-    Image and visual catalog metadata updates are persisted directly to both Vegetable.image
-    and linked Package.image.
+    Locked (VENDOR_STOCK_MANAGEMENT_IMPLEMENTATION_PLAN.md Phase 2): price,
+    offer price, and reorder/restock levels are now configured exclusively
+    from the Vendor app -- see vendor/backend/inventory/views.py's
+    VendorStockUpdateDetailsView for the equivalent, company-scoped endpoint.
     """
     permission_classes = [IsAuthenticated, IsAdminRole]
 
-    @transaction.atomic
     def patch(self, request, product_id):
-        product = get_object_or_404(Package.objects.select_related("stock_item"), id=product_id)
-        basis = getattr(product.stock_item, "unit_basis", "WEIGHT") if product.stock_item else "WEIGHT"
-        serializer = VegetableDetailsUpdateSerializer(data=request.data, partial=True, context={"unit_basis": basis})
-        if not serializer.is_valid():
-            return Response({"success": False, "message": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
-
-        validated_data = serializer.validated_data
-
-        # If only stock / pricing writes are attempted with no image, return the locked response
-        if "image" not in validated_data and any(k in validated_data for k in ["price", "mrp", "offer_price", "offer_percentage", "opening_stock_quantity", "current_stock_quantity", "restock_level_quantity", "reorder_level_quantity"]):
-            return _stock_writes_locked_response()
-
-        company = _get_request_company(request)
-        item = product.stock_item
-        if not item:
-            item = Vegetable.objects.filter(package=product).first()
-            if item:
-                product.stock_item = item
-                product.save(update_fields=["stock_item"])
-
-        if not item:
-            item = Vegetable.objects.create(
-                org=company,
-                package=product,
-                name=f"{product.name} (Produce)",
-                sku=f"VEG-{product.slug.upper()[:20]}",
-                unit="g",
-                stock_quantity_grams=None,
-                default_daily_quantity_grams=None,
-            )
-            product.stock_item = item
-            product.save(update_fields=["stock_item"])
-        else:
-            item = Vegetable.objects.select_for_update().get(id=item.id)
-
-        if "image" in validated_data:
-            new_image = (validated_data["image"] or "").strip()
-            item.image = new_image
-            item.save(update_fields=["image"])
-            if product.image != new_image:
-                product.image = new_image
-                product.save(update_fields=["image"])
-
-        if "vegetable_gram" in validated_data and validated_data["vegetable_gram"]:
-            v_gram = validated_data["vegetable_gram"].strip()
-            if v_gram and product.duration != v_gram:
-                product.duration = v_gram
-                product.save(update_fields=["duration"])
-
-        # Invalidate catalog cache so customer storefront updates immediately
-        try:
-            from django.core.cache import cache
-            cache.clear()
-        except Exception:
-            pass
-
-        return Response({
-            "success": True,
-            "data": {
-                "product_id": product.id,
-                "name": product.name,
-                "image": item.image,
-            },
-            "message": "Vegetable details updated successfully."
-        })
+        return _stock_writes_locked_response()
 
 
 # ── Vegetable Category & Catalog Upload Management ──────────────────────────
@@ -555,68 +491,33 @@ class VegetableCategoryApprovalActionView(APIView):
 class VegetableApprovalListView(APIView):
     """
     GET /api/inventory/vegetables/approval-queue/?status=PENDING|APPROVED|REJECTED|ALL
-    Returns vegetable produce items and variant requests that originated from vendors.
+    Only returns vegetable produce items that originated as vendor requests (source=REQUEST).
     Supports ?my_requests=true to filter by currently logged-in user.
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        from service_requests.models import PackageVariant
-        from inventory.serializers import VegetableVariantApprovalItemSerializer
-
         status_param = request.GET.get("status", "ALL").upper()
         my_requests = request.GET.get("my_requests", "false").lower() == "true"
 
-        # 1. Base Produce Requests
-        veg_qs = Vegetable.objects.filter(source=ItemSource.REQUEST).select_related("category", "package", "requested_by", "reviewed_by").order_by("-requested_at", "name")
+        qs = Vegetable.objects.filter(source=ItemSource.REQUEST).select_related("category", "package", "requested_by", "reviewed_by").order_by("-requested_at", "name")
         if my_requests and request.user.is_authenticated:
-            veg_qs = veg_qs.filter(requested_by=request.user)
+            qs = qs.filter(requested_by=request.user)
         if status_param != "ALL":
-            veg_qs = veg_qs.filter(status=status_param)
+            qs = qs.filter(status=status_param)
 
-        # 2. Add-on Variant Requests (is_default=False, source=REQUEST)
-        var_qs = PackageVariant.objects.filter(source=ItemSource.REQUEST, is_default=False).select_related(
-            "package", "vegetable", "vegetable__category", "requested_by", "reviewed_by"
-        ).order_by("-requested_at", "-id")
-        if my_requests and request.user.is_authenticated:
-            var_qs = var_qs.filter(requested_by=request.user)
-        if status_param != "ALL":
-            var_qs = var_qs.filter(status=status_param)
-
-        veg_data = VegetableApprovalItemSerializer(veg_qs, many=True).data
-        for v in veg_data:
-            v["item_type"] = "VEGETABLE"
-
-        var_data = VegetableVariantApprovalItemSerializer(var_qs, many=True).data
-        for v in var_data:
-            v["item_type"] = "VARIANT"
-
-        combined = sorted(
-            veg_data + var_data,
-            key=lambda x: str(x.get("requested_at") or ""),
-            reverse=True
-        )
-
-        return Response({
-            "success": True,
-            "data": combined,
-            "products": veg_data,
-            "variants": var_data,
-            "count": len(combined)
-        })
+        serializer = VegetableApprovalItemSerializer(qs, many=True)
+        return Response({"success": True, "data": serializer.data, "count": len(serializer.data)})
 
 
 class VegetableMyRequestsListView(APIView):
     """
     GET /api/inventory/vegetables/my-requests/?status=PENDING|APPROVED|REJECTED|ALL
-    Returns all product requests, variant requests, and category requests submitted by the logged-in user.
+    Returns all product requests and category requests submitted by the logged-in user.
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        from service_requests.models import PackageVariant
-        from inventory.serializers import VegetableVariantApprovalItemSerializer
-
         status_param = request.GET.get("status", "ALL").upper()
 
         veg_base_qs = Vegetable.objects.filter(
@@ -627,38 +528,29 @@ class VegetableMyRequestsListView(APIView):
             requested_by=request.user,
             source=ItemSource.REQUEST,
         )
-        var_base_qs = PackageVariant.objects.filter(
-            requested_by=request.user,
-            source=ItemSource.REQUEST,
-            is_default=False,
-        )
 
         counts = {
-            "all": veg_base_qs.count() + cat_base_qs.count() + var_base_qs.count(),
-            "pending": veg_base_qs.filter(status=ApprovalStatus.PENDING).count() + cat_base_qs.filter(status=ApprovalStatus.PENDING).count() + var_base_qs.filter(status=ApprovalStatus.PENDING).count(),
-            "approved": veg_base_qs.filter(status=ApprovalStatus.APPROVED).count() + cat_base_qs.filter(status=ApprovalStatus.APPROVED).count() + var_base_qs.filter(status=ApprovalStatus.APPROVED).count(),
-            "rejected": veg_base_qs.filter(status=ApprovalStatus.REJECTED).count() + cat_base_qs.filter(status=ApprovalStatus.REJECTED).count() + var_base_qs.filter(status=ApprovalStatus.REJECTED).count(),
+            "all": veg_base_qs.count() + cat_base_qs.count(),
+            "pending": veg_base_qs.filter(status=ApprovalStatus.PENDING).count() + cat_base_qs.filter(status=ApprovalStatus.PENDING).count(),
+            "approved": veg_base_qs.filter(status=ApprovalStatus.APPROVED).count() + cat_base_qs.filter(status=ApprovalStatus.APPROVED).count(),
+            "rejected": veg_base_qs.filter(status=ApprovalStatus.REJECTED).count() + cat_base_qs.filter(status=ApprovalStatus.REJECTED).count(),
         }
 
         veg_qs = veg_base_qs.select_related("category", "package", "requested_by", "reviewed_by").order_by("-requested_at", "-id")
         cat_qs = cat_base_qs.select_related("parent", "requested_by", "reviewed_by").prefetch_related("vegetables", "vegetables__package").order_by("-requested_at", "-id")
-        var_qs = var_base_qs.select_related("package", "vegetable", "vegetable__category", "requested_by", "reviewed_by").order_by("-requested_at", "-id")
 
         if status_param != "ALL":
             veg_qs = veg_qs.filter(status=status_param)
             cat_qs = cat_qs.filter(status=status_param)
-            var_qs = var_qs.filter(status=status_param)
 
         veg_data = VegetableApprovalItemSerializer(veg_qs, many=True).data
         cat_data = VegetableCategorySerializer(cat_qs, many=True).data
-        var_data = VegetableVariantApprovalItemSerializer(var_qs, many=True).data
 
         return Response({
             "success": True,
             "data": {
                 "products": veg_data,
                 "categories": cat_data,
-                "variants": var_data,
             },
             "counts": counts,
         })
@@ -707,12 +599,6 @@ class VegetableApprovalActionView(APIView):
                 if veg.package:
                     veg.package.status = PackageStatus.ACTIVE
                     veg.package.save(update_fields=["status"])
-                    veg.package.variants.filter(status=ApprovalStatus.PENDING).update(
-                        status=ApprovalStatus.APPROVED,
-                        is_active=True,
-                        reviewed_by=request.user,
-                        reviewed_at=timezone.now(),
-                    )
 
                 msg = f"Vegetable '{veg.name}' has been approved and activated."
                 if veg.category and veg.category.status == ApprovalStatus.APPROVED:
@@ -720,6 +606,7 @@ class VegetableApprovalActionView(APIView):
             else:
                 # Auto-reject bundled pending category if applicable
                 if veg.category and veg.category.status == ApprovalStatus.PENDING:
+                    # Check if any other approved vegetables exist in this category
                     if not veg.category.vegetables.filter(status=ApprovalStatus.APPROVED).exclude(id=veg.id).exists():
                         veg.category.status = ApprovalStatus.REJECTED
                         veg.category.rejection_reason = rejection_reason
@@ -736,13 +623,6 @@ class VegetableApprovalActionView(APIView):
                 if veg.package:
                     veg.package.status = PackageStatus.DRAFT
                     veg.package.save(update_fields=["status"])
-                    veg.package.variants.filter(status=ApprovalStatus.PENDING).update(
-                        status=ApprovalStatus.REJECTED,
-                        is_active=False,
-                        rejection_reason=rejection_reason,
-                        reviewed_by=request.user,
-                        reviewed_at=timezone.now(),
-                    )
 
                 msg = f"Vegetable '{veg.name}' rejected. Rejection reason recorded."
 
@@ -755,59 +635,6 @@ class VegetableApprovalActionView(APIView):
             })
         except Exception as e:
             logger.exception("Error reviewing Vegetable ID %s: %s", pk, e)
-            return Response({
-                "success": False,
-                "message": f"Failed to submit decision: {str(e)}"
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-
-class VegetableVariantApprovalActionView(APIView):
-    """
-    POST /api/inventory/vegetables/variants/<pk>/review/
-    Payload: { "action": "APPROVE" | "REJECT", "rejection_reason": "..." }
-    """
-    permission_classes = [IsAuthenticated]
-
-    @transaction.atomic
-    def post(self, request, pk):
-        from service_requests.models import PackageVariant
-        from inventory.serializers import VegetableVariantApprovalItemSerializer
-        var_obj = get_object_or_404(PackageVariant.objects.select_related("package", "vegetable", "vegetable__category"), pk=pk)
-        serializer = ApprovalActionSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response({"success": False, "errors": serializer.errors, "message": "Invalid decision payload."}, status=status.HTTP_400_BAD_REQUEST)
-
-        action = serializer.validated_data["action"]
-        rejection_reason = serializer.validated_data.get("rejection_reason", "").strip()
-
-        try:
-            if action == "APPROVE":
-                var_obj.status = ApprovalStatus.APPROVED
-                var_obj.is_active = True
-                var_obj.rejection_reason = ""
-                var_obj.reviewed_by = request.user
-                var_obj.reviewed_at = timezone.now()
-                var_obj.save()
-                veg_title = var_obj.vegetable.name if var_obj.vegetable else var_obj.package.name
-                msg = f"Variant '{var_obj.display_name}' for '{veg_title}' has been approved."
-            else:
-                var_obj.status = ApprovalStatus.REJECTED
-                var_obj.is_active = False
-                var_obj.rejection_reason = rejection_reason
-                var_obj.reviewed_by = request.user
-                var_obj.reviewed_at = timezone.now()
-                var_obj.save()
-                msg = f"Variant '{var_obj.display_name}' rejected. Rejection reason recorded."
-
-            _clear_catalog_cache()
-
-            return Response({
-                "success": True,
-                "data": VegetableVariantApprovalItemSerializer(var_obj).data,
-                "message": msg
-            })
-        except Exception as e:
-            logger.exception("Error reviewing PackageVariant ID %s: %s", pk, e)
             return Response({
                 "success": False,
                 "message": f"Failed to submit decision: {str(e)}"
@@ -832,11 +659,9 @@ class VegetableSingleRequestView(APIView):
         d = serializer.validated_data
         resubmit_id = d.get("resubmit_id")
         resubmit_type = d.get("resubmit_type")
-        from service_requests.models import PackageVariant
-        from inventory.serializers import VegetableVariantApprovalItemSerializer
 
         # ── RESUBMISSION WORKFLOW ──
-        if resubmit_id and resubmit_type:
+        if resubmit_id:
             if resubmit_type == "category":
                 cat = get_object_or_404(VegetableCategory, id=resubmit_id)
                 if d.get("category_name"):
@@ -845,6 +670,8 @@ class VegetableSingleRequestView(APIView):
                     cat.description = d["category_description"]
                 if d.get("category_image"):
                     cat.image = d["category_image"]
+                if d.get("category_unit") is not None:
+                    cat.unit_of_measurement = d.get("category_unit") or None
                 cat.status = ApprovalStatus.PENDING
                 cat.rejection_reason = ""
                 cat.is_resubmission = True
@@ -907,124 +734,8 @@ class VegetableSingleRequestView(APIView):
                     "message": f"Vegetable '{veg.name}' resubmitted for approval."
                 })
 
-            elif resubmit_type == "variant":
-                var_obj = get_object_or_404(PackageVariant.objects.select_related("package", "vegetable"), id=resubmit_id)
-                if d.get("price") is not None:
-                    var_obj.base_price = d["price"]
-                if d.get("mrp") is not None:
-                    var_obj.mrp = d["mrp"]
-                if d.get("pack_value"):
-                    try:
-                        var_obj.pack_value = Decimal(str(d["pack_value"]))
-                    except Exception:
-                        pass
-                if d.get("vegetable_unit"):
-                    var_obj.unit = d["vegetable_unit"]
-                if d.get("vegetable_sku"):
-                    var_obj.sku = d["vegetable_sku"]
-                var_obj.name = f"{var_obj.pack_value:g} {var_obj.unit}".strip()
-                var_obj.status = ApprovalStatus.PENDING
-                var_obj.rejection_reason = ""
-                var_obj.is_resubmission = True
-                var_obj.requested_at = timezone.now()
-                var_obj.save()
-
-                return Response({
-                    "success": True,
-                    "data": VegetableVariantApprovalItemSerializer(var_obj).data,
-                    "message": f"Variant '{var_obj.display_name}' resubmitted for approval."
-                })
-
-        # ── FRESH VARIANT REQUEST (ENTRY POINT B) ──
-        req_type = d.get("request_type", "vegetable")
-        if req_type == "variant":
-            target_veg_id = d.get("target_vegetable_id") or d.get("category_id")
-            if not target_veg_id:
-                return Response({"success": False, "message": "Target product is required for variant submission."}, status=status.HTTP_400_BAD_REQUEST)
-            target_veg = get_object_or_404(Vegetable.objects.select_related("package", "category"), id=target_veg_id)
-            target_pkg = target_veg.package or getattr(target_veg, "vegetable_stock", None) or Package.objects.filter(stock_item=target_veg).first()
-            if not target_pkg:
-                return Response({"success": False, "message": "Target product does not have a linked catalog package."}, status=status.HTTP_400_BAD_REQUEST)
-
-            variants_payload = d.get("variants") or []
-            if isinstance(variants_payload, list) and len(variants_payload) > 0:
-                created_variants = []
-                for idx, vdata in enumerate(variants_payload):
-                    try:
-                        val = Decimal(str(vdata.get("pack_value") or "1"))
-                    except Exception:
-                        val = Decimal("1.00")
-                    u = vdata.get("unit") or target_veg.unit or "kg"
-                    vbasis = vdata.get("unit_basis") or target_veg.unit_basis or "WEIGHT"
-                    vname = vdata.get("name") or vdata.get("variant_name") or f"{val:g} {u}".strip()
-                    try:
-                        vprice = Decimal(str(vdata.get("price") or "0.00"))
-                    except Exception:
-                        vprice = Decimal("0.00")
-                    vmrp = Decimal(str(vdata["mrp"])) if vdata.get("mrp") else None
-                    vsku = vdata.get("sku") or vdata.get("vegetable_sku") or f"{target_veg.sku}-{val:g}{u}"
-
-                    cv = PackageVariant.objects.create(
-                        package=target_pkg,
-                        vegetable=target_veg,
-                        name=vname,
-                        pack_value=val,
-                        unit=u,
-                        unit_basis=vbasis,
-                        base_price=vprice,
-                        mrp=vmrp,
-                        sku=vsku,
-                        is_default=False,
-                        is_active=False,
-                        status=ApprovalStatus.PENDING,
-                        source=ItemSource.REQUEST,
-                        requested_by=request.user,
-                    )
-                    created_variants.append(cv)
-
-                count_str = f"{len(created_variants)} variant(s)"
-                return Response({
-                    "success": True,
-                    "variants": VegetableVariantApprovalItemSerializer(created_variants, many=True).data,
-                    "message": f"{count_str} for '{target_veg.name}' submitted successfully and pending admin approval."
-                }, status=status.HTTP_201_CREATED)
-            else:
-                try:
-                    val = Decimal(str(d.get("pack_value") or "1"))
-                except Exception:
-                    val = Decimal("1.00")
-
-                u = d.get("unit") or d.get("vegetable_unit") or target_veg.unit or "kg"
-                vbasis = d.get("unit_basis") or target_veg.unit_basis or "WEIGHT"
-                vname = d.get("variant_name") or f"{val:g} {u}".strip()
-                vprice = d.get("price") or Decimal("0.00")
-                vmrp = d.get("mrp")
-                vsku = d.get("sku") or d.get("vegetable_sku") or f"{target_veg.sku}-{val:g}{u}"
-
-                created_variant = PackageVariant.objects.create(
-                    package=target_pkg,
-                    vegetable=target_veg,
-                    name=vname,
-                    pack_value=val,
-                    unit=u,
-                    unit_basis=vbasis,
-                    base_price=vprice,
-                    mrp=vmrp,
-                    sku=vsku,
-                    is_default=False,
-                    is_active=False,
-                    status=ApprovalStatus.PENDING,
-                    source=ItemSource.REQUEST,
-                    requested_by=request.user,
-                )
-
-                return Response({
-                    "success": True,
-                    "variant": VegetableVariantApprovalItemSerializer(created_variant).data,
-                    "message": f"Variant request for {val:g} {u} ({target_veg.name}) submitted successfully and is pending admin approval."
-                }, status=status.HTTP_201_CREATED)
-
         # ── FRESH REQUEST WORKFLOW ──
+        req_type = d.get("request_type", "vegetable")
         created_cat = None
         created_veg = None
 
@@ -1050,6 +761,7 @@ class VegetableSingleRequestView(APIView):
                 slug=slug,
                 description=d.get("category_description", ""),
                 image=d.get("category_image", ""),
+                unit_of_measurement=d.get("category_unit") or None,
                 status=ApprovalStatus.PENDING,
                 source=ItemSource.REQUEST,
                 requested_by=request.user,
@@ -1086,7 +798,7 @@ class VegetableSingleRequestView(APIView):
                 pcounter += 1
 
             image_url = (d.get("image_url") or "").strip()
-            veg_unit = d.get("vegetable_unit") or "kg"
+            veg_unit = d.get("vegetable_unit") or (created_cat.unit_of_measurement if created_cat and created_cat.unit_of_measurement else "kg")
 
             raw_pack = str(d.get("pack_size") or d.get("pack_value") or "").strip()
             if raw_pack:
@@ -1131,64 +843,6 @@ class VegetableSingleRequestView(APIView):
             )
             pkg.stock_item = created_veg
             pkg.save(update_fields=["stock_item"])
-
-            # 3. Create PackageVariants (Entry Point A - Multi-variant repeater support)
-            variants_list = d.get("variants") or []
-            if isinstance(variants_list, list) and len(variants_list) > 0:
-                first = True
-                for idx, vdata in enumerate(variants_list):
-                    try:
-                        v_val = Decimal(str(vdata.get("pack_value") or "1"))
-                    except Exception:
-                        v_val = Decimal("1.00")
-                    v_unit = str(vdata.get("unit") or veg_unit)
-                    try:
-                        v_price = Decimal(str(vdata.get("price") or proposed_price))
-                    except Exception:
-                        v_price = proposed_price
-                    v_mrp = Decimal(str(vdata["mrp"])) if vdata.get("mrp") else proposed_mrp
-                    v_sku = str(vdata.get("sku") or f"{created_veg.sku}-{v_val:g}{v_unit}")
-                    is_def = bool(vdata.get("is_default", False)) or (first and not any(v.get("is_default") for v in variants_list))
-                    first = False
-
-                    PackageVariant.objects.create(
-                        package=pkg,
-                        vegetable=created_veg,
-                        name=f"{v_val:g} {v_unit}".strip(),
-                        pack_value=v_val,
-                        unit=v_unit,
-                        base_price=v_price,
-                        mrp=v_mrp,
-                        sku=v_sku,
-                        is_default=is_def,
-                        is_active=True,
-                        sort_order=idx,
-                        status=ApprovalStatus.PENDING,
-                        source=ItemSource.REQUEST,
-                        requested_by=request.user,
-                    )
-            else:
-                # Default single variant
-                try:
-                    val = Decimal(str(d.get("pack_value") or "1"))
-                except Exception:
-                    val = Decimal("1.00")
-                PackageVariant.objects.create(
-                    package=pkg,
-                    vegetable=created_veg,
-                    name=duration_str,
-                    pack_value=val,
-                    unit=veg_unit,
-                    base_price=proposed_price,
-                    mrp=proposed_mrp,
-                    sku=created_veg.sku,
-                    is_default=True,
-                    is_active=True,
-                    sort_order=0,
-                    status=ApprovalStatus.PENDING,
-                    source=ItemSource.REQUEST,
-                    requested_by=request.user,
-                )
 
         return Response({
             "success": True,
@@ -1328,16 +982,9 @@ class VegetableClaimListCreateView(APIView):
         vegetable = get_object_or_404(Vegetable, pk=veg_id)
 
         quantity = serializer.validated_data["quantity"]
-        unit = serializer.validated_data.get("unit", vegetable.unit or "kg")
-        unit_basis = unit_basis_for_unit(unit)
-        if vegetable.unit_basis and unit_basis != vegetable.unit_basis:
-            return Response(
-                {"success": False, "message": f"Unit '{unit}' ({unit_basis}) is not compatible with vegetable '{vegetable.name}' ({vegetable.unit_basis})."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
+        unit = serializer.validated_data.get("unit", "kg")
         try:
-            quantity_units = to_base_units(quantity, unit, unit_basis=unit_basis)
+            quantity_grams = to_grams(quantity, unit)
         except ValueError as e:
             return Response(
                 {"success": False, "message": str(e)},
@@ -1352,7 +999,7 @@ class VegetableClaimListCreateView(APIView):
             org=company,
             vegetable=vegetable,
             reason=reason,
-            quantity_grams=quantity_units,
+            quantity_grams=quantity_grams,
             estimated_loss_amount=estimated_loss_amount,
             notes=notes,
             status=VegetableClaim.Status.OPEN,
@@ -1432,8 +1079,6 @@ class VegetableClaimActionView(APIView):
                     org=claim.org,
                     vegetable=veg,
                     movement_type=VegetableStockMovement.MovementType.CLAIM_WRITEOFF,
-                    unit_basis=veg.unit_basis,
-                    unit_label=veg.unit,
                     delta_grams=-claim.quantity_grams,
                     balance_after_grams=balance_after,
                     reason=reason_desc,
@@ -1447,10 +1092,9 @@ class VegetableClaimActionView(APIView):
                     claim.notes = f"{claim.notes}\nApproval note: {notes}".strip()
                 claim.save()
 
-            display_qty = format_stock_for_display(claim.quantity_grams, unit_basis=veg.unit_basis, unit=veg.unit)
             return Response({
                 "success": True,
-                "message": f"Claim #{claim.claim_number} approved and {display_qty} written off from stock.",
+                "message": f"Claim #{claim.claim_number} approved and {claim.quantity_grams}g written off from stock.",
                 "data": VegetableClaimDetailSerializer(claim).data,
             })
 

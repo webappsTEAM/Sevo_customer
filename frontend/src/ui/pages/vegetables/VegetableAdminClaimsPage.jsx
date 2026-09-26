@@ -455,11 +455,7 @@ export default function VegetableAdminClaimsPage() {
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">Select Vegetable Product *</label>
                   <select
                     value={createForm.vegetable_id}
-                    onChange={(e) => {
-                      const selVeg = vegetables.find(v => v.id?.toString() === e.target.value?.toString())
-                      const autoUnit = selVeg?.unit || (selVeg?.unit_basis === "COUNT" ? "pcs" : "kg")
-                      setCreateForm(prev => ({ ...prev, vegetable_id: e.target.value, unit: autoUnit }))
-                    }}
+                    onChange={(e) => setCreateForm({ ...createForm, vegetable_id: e.target.value })}
                     required
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold text-xs focus:ring-2 focus:ring-emerald-500"
                   >
@@ -512,10 +508,6 @@ export default function VegetableAdminClaimsPage() {
                     >
                       <option value="kg">kg (Kilograms)</option>
                       <option value="g">g (Grams)</option>
-                      <option value="pcs">pcs (Pieces)</option>
-                      <option value="bunch">bunch (Bunch)</option>
-                      <option value="packet">packet (Packet)</option>
-                      <option value="dozen">dozen (Dozen)</option>
                     </select>
                   </div>
                 </div>

@@ -113,7 +113,7 @@ export function CustomerMergesPage() {
                 <Check className="mx-auto text-emerald-600 dark:text-emerald-400 mb-2" size={24} />
                 <p className="text-xs font-extrabold text-emerald-800 dark:text-emerald-300">All Identities Clean</p>
                 <p className="text-[11px] font-medium text-emerald-600/80 dark:text-emerald-400/80 mt-1">
-                  No duplicate phone numbers or accounts found.
+                  No duplicate phone numbers or accounts found in database.
                 </p>
               </div>
             )}

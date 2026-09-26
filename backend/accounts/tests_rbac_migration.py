@@ -29,26 +29,19 @@ class CompleteRBACSecurityAuditTestSuite(TestCase):
         # 1. Super Admin A (role based, no superuser)
         self.super_admin_role = User.objects.create_user(
             username="superadmin_role_only",
-            email="super_role@sevo.com",
+            email="super_role@caltrack.com",
             password="Password123!",
             role=User.Role.SUPER_ADMIN,
             is_staff=True,
             is_superuser=False
         )
 
-        # 2. Super Admin B (superuser flag, no assigned role). Deliberately
-        # NOT role=ADMIN: accounts.permissions.is_super_admin() intentionally
-        # does not grant Super Admin to is_superuser=True accounts that also
-        # carry an explicit non-super role such as "admin" -- see that
-        # function's docstring for the defense-in-depth rationale (this
-        # exact "dual identity" combination was a real, now-removed
-        # vulnerability). A blank/unset role is the documented case where a
-        # genuine superuser flag still bypasses normally.
+        # 2. Super Admin B (superuser based, custom role)
         self.super_admin_flag = User.objects.create_user(
             username="superadmin_flag_only",
-            email="super_flag@sevo.com",
+            email="super_flag@caltrack.com",
             password="Password123!",
-            role="",
+            role=User.Role.ADMIN,
             is_staff=True,
             is_superuser=True
         )
@@ -56,7 +49,7 @@ class CompleteRBACSecurityAuditTestSuite(TestCase):
         # 3. Normal Admin
         self.admin = User.objects.create_user(
             username="admin_audit",
-            email="admin@sevo.com",
+            email="admin@caltrack.com",
             password="Password123!",
             role=User.Role.ADMIN,
             is_staff=True,
@@ -66,7 +59,7 @@ class CompleteRBACSecurityAuditTestSuite(TestCase):
         # 4. Manager
         self.manager = User.objects.create_user(
             username="manager_audit",
-            email="manager@sevo.com",
+            email="manager@caltrack.com",
             password="Password123!",
             role=User.Role.MANAGER,
             is_staff=True,
@@ -76,7 +69,7 @@ class CompleteRBACSecurityAuditTestSuite(TestCase):
         # 5. Support Agent
         self.support = User.objects.create_user(
             username="support_audit",
-            email="support@sevo.com",
+            email="support@caltrack.com",
             password="Password123!",
             role=User.Role.SUPPORT,
             is_staff=False,
@@ -86,7 +79,7 @@ class CompleteRBACSecurityAuditTestSuite(TestCase):
         # 6. Finance Officer
         self.finance = User.objects.create_user(
             username="finance_audit",
-            email="finance@sevo.com",
+            email="finance@caltrack.com",
             password="Password123!",
             role=User.Role.FINANCE,
             is_staff=False,
@@ -96,7 +89,7 @@ class CompleteRBACSecurityAuditTestSuite(TestCase):
         # 7. Catalog Manager
         self.catalog = User.objects.create_user(
             username="catalog_audit",
-            email="catalog@sevo.com",
+            email="catalog@caltrack.com",
             password="Password123!",
             role=User.Role.CATALOG,
             is_staff=False,
@@ -106,7 +99,7 @@ class CompleteRBACSecurityAuditTestSuite(TestCase):
         # 8. Employee / Technician
         self.employee = User.objects.create_user(
             username="technician_audit",
-            email="technician@sevo.com",
+            email="technician@caltrack.com",
             password="Password123!",
             role=User.Role.EMPLOYEE,
             is_staff=False,

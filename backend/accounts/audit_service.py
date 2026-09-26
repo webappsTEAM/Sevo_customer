@@ -1,5 +1,5 @@
 """
-Audit Logging Service for sevo Platform.
+Audit Logging Service for CalTrack Platform.
 Records privileged actions to PlatformAuditEvent.
 """
 from customer_analytics.models import PlatformAuditEvent

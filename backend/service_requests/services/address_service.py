@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 REVERSE_GEOCODE_CACHE_TTL = 3600
 FORWARD_GEOCODE_CACHE_TTL = 86400
 _COORD_PRECISION = 4
-USER_AGENT = "sevo-Services/2.0 (support@sevo.co.in)"
+USER_AGENT = "CalTrack-Services/2.0 (support@caldimproducts.com)"
 
 # India Geographic Bounding Box
 INDIA_LAT_MIN = 6.0
@@ -47,7 +47,7 @@ class AddressService:
         """Checks if a pincode is a valid 6-digit Indian postal code."""
         if not pincode:
             return False
-        clean = pincode.strip()
+        clean = str(pincode).strip()
         return bool(re.match(r"^\d{6}$", clean))
 
     @classmethod
@@ -88,12 +88,12 @@ class AddressService:
         Geocodes a customer address using a strict multi-tier fallback hierarchy.
         Returns a normalized dict with verified or approximate coordinates, or failed status.
         """
-        street = (street_address or "").strip()
-        lmark = (landmark or "").strip()
-        c_city = (city or "").strip()
-        c_state = (state or "").strip()
-        c_pincode = (pincode or "").strip()
-        c_country = (country or "India").strip()
+        street = str(street_address or "").strip()
+        lmark = str(landmark or "").strip()
+        c_city = str(city or "").strip()
+        c_state = str(state or "").strip()
+        c_pincode = str(pincode or "").strip()
+        c_country = str(country or "India").strip()
 
         # Build clean normalized formatted address
         addr_parts = [street]

@@ -148,6 +148,14 @@ class VegetableCategory(models.Model):
     image = models.CharField(max_length=500, blank=True, default="")
     sort_order = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
+    unit_of_measurement = models.CharField(
+        max_length=20,
+        choices=UnitOfMeasurement.choices,
+        blank=True,
+        null=True,
+        default=None,
+        help_text="Default unit of measurement for products under this category (e.g. kg, g, pcs, bunch)."
+    )
     status = models.CharField(
         max_length=20,
         choices=ApprovalStatus.choices,
@@ -268,22 +276,9 @@ class Vegetable(models.Model):
     )
     name = models.CharField(max_length=255)
     sku = models.CharField(max_length=100, blank=True)
-    unit_basis = models.CharField(
-        max_length=10,
-        choices=[("WEIGHT", "Weight (g/kg)"), ("COUNT", "Count (pcs/bunch/dozen)")],
-        default="WEIGHT",
-        db_index=True,
-        help_text="Base measurement basis: WEIGHT (tracked in grams) or COUNT (tracked in integer pieces)."
-    )
-    unit = models.CharField(max_length=20, blank=True, default="g")
-    stock_quantity_grams = models.PositiveIntegerField(
-        null=True, blank=True, default=None,
-        help_text="Live stock balance in base units (grams for WEIGHT, integer count for COUNT)."
-    )
-    default_daily_quantity_grams = models.PositiveIntegerField(
-        null=True, blank=True, default=None,
-        help_text="Default daily reset quota in base units (grams for WEIGHT, integer count for COUNT)."
-    )
+    unit = models.CharField(max_length=20, blank=True, default="")
+    stock_quantity_grams = models.PositiveIntegerField(null=True, blank=True, default=None)
+    default_daily_quantity_grams = models.PositiveIntegerField(null=True, blank=True, default=None)
     last_reset_date = models.DateField(null=True, blank=True)
     image = models.CharField(max_length=500, blank=True, default="")
     status = models.CharField(
@@ -320,22 +315,6 @@ class Vegetable(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    @property
-    def stock_quantity_base_units(self):
-        return self.stock_quantity_grams
-
-    @stock_quantity_base_units.setter
-    def stock_quantity_base_units(self, val):
-        self.stock_quantity_grams = val
-
-    @property
-    def default_daily_quantity_base_units(self):
-        return self.default_daily_quantity_grams
-
-    @default_daily_quantity_base_units.setter
-    def default_daily_quantity_base_units(self, val):
-        self.default_daily_quantity_grams = val
-
     def clean(self):
         super().clean()
         if self.category_id and not self.category.is_leaf:
@@ -344,9 +323,6 @@ class Vegetable(models.Model):
             })
 
     def save(self, *args, **kwargs):
-        from inventory.utils.unit_conversion import unit_basis_for_unit
-        if self.unit:
-            self.unit_basis = unit_basis_for_unit(self.unit)
         self.full_clean()
         super().save(*args, **kwargs)
 
@@ -362,29 +338,14 @@ class VegetableStockMovement(models.Model):
         SOLD = "SOLD", "Sold"
         RESTOCKED_ON_CANCELLATION = "RESTOCKED_ON_CANCELLATION", "Restocked on Cancellation"
         CLAIM_WRITEOFF = "CLAIM_WRITEOFF", "Claim Write-off"
-        RESTOCKED_ON_RETURN = "RESTOCKED_ON_RETURN", "Restocked on Return"
-        RETURN_REPLACEMENT = "RETURN_REPLACEMENT", "Return Replacement"
-        RETURN_WRITEOFF = "RETURN_WRITEOFF", "Return Write-off"
 
     objects = CompanyScopedManager(company_field="org")
 
     org = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="vegetable_stock_movements")
     vegetable = models.ForeignKey(Vegetable, on_delete=models.CASCADE, related_name="stock_movements")
     movement_type = models.CharField(max_length=30, choices=MovementType.choices)
-    unit_basis = models.CharField(
-        max_length=10,
-        choices=[("WEIGHT", "Weight"), ("COUNT", "Count")],
-        default="WEIGHT",
-        help_text="Measurement basis of this movement."
-    )
-    unit_label = models.CharField(
-        max_length=20,
-        blank=True,
-        default="g",
-        help_text="Unit string at movement time (e.g. g, kg, pcs, bunch)."
-    )
-    delta_grams = models.IntegerField(help_text="Change in base units (positive for addition, negative for deduction)")
-    balance_after_grams = models.PositiveIntegerField(help_text="Stock quantity in base units immediately after this movement")
+    delta_grams = models.IntegerField(help_text="Change in grams (positive for addition, negative for deduction)")
+    balance_after_grams = models.PositiveIntegerField(help_text="Stock quantity in grams immediately after this movement")
     reason = models.TextField(blank=True, default="")
     booking_ref = models.CharField(max_length=100, blank=True, default="")
     entered_by = models.ForeignKey(
@@ -399,32 +360,8 @@ class VegetableStockMovement(models.Model):
     class Meta:
         ordering = ["-created_at"]
 
-    @property
-    def delta_units(self):
-        return self.delta_grams
-
-    @delta_units.setter
-    def delta_units(self, val):
-        self.delta_grams = val
-
-    @property
-    def balance_after_units(self):
-        return self.balance_after_grams
-
-    @balance_after_units.setter
-    def balance_after_units(self, val):
-        self.balance_after_grams = val
-
-    @property
-    def delta_display(self):
-        from inventory.utils.unit_conversion import format_stock_for_display
-        sign = "+" if self.delta_grams > 0 else "-" if self.delta_grams < 0 else ""
-        formatted = format_stock_for_display(abs(self.delta_grams), unit_basis=self.unit_basis, unit=self.unit_label)
-        return f"{sign}{formatted}" if sign else formatted
-
     def __str__(self):
-        unit_suffix = "pcs" if self.unit_basis == "COUNT" else "g"
-        return f"{self.vegetable.name} | {self.movement_type} | {self.delta_display} -> {self.balance_after_grams}{unit_suffix}"
+        return f"{self.vegetable.name} | {self.movement_type} | {self.delta_grams:+d}g -> {self.balance_after_grams}g"
 
 
 def _generate_vegetable_claim_number():

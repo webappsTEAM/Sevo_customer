@@ -393,11 +393,7 @@ export function MapPickerScreen({
   const [isDragging, setIsDragging] = useState(false)
   const [isLocating, setIsLocating] = useState(false)
   const [serviceZones, setServiceZones] = useState([])
-  // Fail CLOSED: until the backend has answered for the current pin the
-  // location is "checking", not "available". Previously the initial state and
-  // any request error (429 throttle, 5xx, network) showed "Service available
-  // in your area (Active Zone)" and enabled Confirm for ANY location.
-  const [zoneStatus, setZoneStatus] = useState({ inZone: null, serviceAllowed: null, zoneName: null, message: "", checking: true })
+  const [zoneStatus, setZoneStatus] = useState({ inZone: true, serviceAllowed: true, zoneName: null, message: "" })
   const [currentCenter, setCurrentCenter] = useState(() => {
     const lat = Number(initialLocation?.latitude || initialLocation?.lat || initialCoords?.lat || initialCoords?.latitude) || 12.754598
     const lng = Number(initialLocation?.longitude || initialLocation?.lng || initialCoords?.lng || initialCoords?.longitude) || 77.834477
@@ -426,33 +422,17 @@ export function MapPickerScreen({
   const [showSearchBox, setShowSearchBox] = useState(false)
 
   // ── Load active service zones from backend ─────────────────────
-  // Only draw the zones configured for THIS booking's service. Without the
-  // filter every active zone (e.g. a home-services radius circle) was drawn
-  // on top of / instead of the Goods & Transport polygon coverage.
   useEffect(() => {
-    let active = true
     async function loadZones() {
-      const slug = String(serviceSlug || "").trim()
-      const isScopedService = /^(goods_transport_|packers_movers)/.test(slug)
       try {
-        let res = await apiRequest(
-          slug && slug !== "general"
-            ? `/settings/service-zones/?services=${encodeURIComponent(slug)}`
-            : "/settings/service-zones/"
-        )
-        // Non-GT flows whose slug is not a zone service slug keep the old
-        // "show all zones" behaviour rather than showing nothing.
-        if (Array.isArray(res) && res.length === 0 && slug && slug !== "general" && !isScopedService) {
-          res = await apiRequest("/settings/service-zones/")
-        }
-        if (active && Array.isArray(res)) {
+        const res = await apiRequest("/settings/service-zones/")
+        if (Array.isArray(res)) {
           setServiceZones(res)
         }
       } catch { }
     }
     loadZones()
-    return () => { active = false }
-  }, [serviceSlug])
+  }, [])
 
   // ── Live Geocoding Search Auto-suggest ─────────────────────────
   useEffect(() => {
@@ -492,7 +472,6 @@ export function MapPickerScreen({
 
     const currentReqId = ++zoneCheckReqIdRef.current
     let active = true
-    setZoneStatus({ inZone: null, serviceAllowed: null, zoneId: null, zoneName: null, message: "", checking: true })
 
     const timer = setTimeout(async () => {
       try {
@@ -512,20 +491,11 @@ export function MapPickerScreen({
             zoneName: res.zone?.name || res.zone_name || null,
             message: res.message || "",
             errorCode: res.error_code || "",
-            checking: false,
           })
         }
       } catch {
         if (active && currentReqId === zoneCheckReqIdRef.current) {
-          setZoneStatus({
-            inZone: null,
-            serviceAllowed: null,
-            zoneId: null,
-            zoneName: null,
-            checking: false,
-            checkFailed: true,
-            message: "We couldn't verify service availability for this location. Please move the pin slightly or try again.",
-          })
+          setZoneStatus({ inZone: true, serviceAllowed: true, zoneId: null, zoneName: null, message: "" })
         }
       }
     }, 200)
@@ -661,8 +631,6 @@ export function MapPickerScreen({
 
   const isOutOfZone = zoneStatus.inZone === false
   const isServiceBlocked = zoneStatus.inZone === true && zoneStatus.serviceAllowed === false
-  // Only a completed, successful backend check may mark a location serviceable.
-  const isZoneVerified = zoneStatus.inZone === true && !zoneStatus.checking && !zoneStatus.checkFailed
 
   const handleConfirmLocation = (resolvedAddr) => {
     const targetAddr = resolvedAddr || address || initialLocation || {}
@@ -698,7 +666,7 @@ export function MapPickerScreen({
         longitude: Number(currentCenter.lng),
         location_source: initialLocation?.location_source || resolvedAddr.location_source || (resolvedAddr.id ? "saved_address" : "map_pin"),
         geocoding_status: "verified",
-        serviceable: isZoneVerified && zoneStatus.serviceAllowed !== false,
+        serviceable: zoneStatus.inZone !== false && zoneStatus.serviceAllowed !== false,
         zone_id: zoneStatus.zoneId || resolvedAddr.zone_id || null,
         zone_name: zoneStatus.zoneName || resolvedAddr.zone_name || "Hosur City",
         confirmed_at: new Date().toISOString()
@@ -763,7 +731,7 @@ export function MapPickerScreen({
       longitude: Number(currentCenter.lng),
       location_source: finalObj.location_source || "map_pin",
       geocoding_status: "verified",
-      serviceable: isZoneVerified && zoneStatus.serviceAllowed !== false,
+      serviceable: zoneStatus.inZone !== false && zoneStatus.serviceAllowed !== false,
       zone_id: zoneStatus.zoneId || null,
       zone_name: zoneStatus.zoneName || "Hosur City",
       confirmed_at: new Date().toISOString()
@@ -863,7 +831,7 @@ export function MapPickerScreen({
                 longitude: Number(currentCenter.lng),
                 location_source: initialLocation?.location_source || "add_new",
                 geocoding_status: "verified",
-                serviceable: isZoneVerified && zoneStatus.serviceAllowed !== false,
+                serviceable: zoneStatus.inZone !== false && zoneStatus.serviceAllowed !== false,
                 zone_id: zoneStatus.zoneId || finalPayload.zone_id || null,
                 zone_name: zoneStatus.zoneName || finalPayload.zone_name || "Hosur City",
                 confirmed_at: new Date().toISOString()

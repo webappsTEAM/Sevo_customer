@@ -1,6 +1,6 @@
-# sevo Hardcode Removal & Dynamic Refactoring Final Report
+# CalTrack Hardcode Removal & Dynamic Refactoring Final Report
 
-This report documents the repository-wide scanning, classification, remediation, and verification carried out across **sevo / calservices**.
+This report documents the repository-wide scanning, classification, remediation, and verification carried out across **CalTrack / calservices**.
 
 ---
 

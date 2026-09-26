@@ -4,7 +4,6 @@ backend/vegetable_orders/views.py
 API Views for Vegetable Orders Administration, State Transitions, and Home Dashboard KPIs.
 """
 from decimal import Decimal
-from django.db import transaction
 from django.db.models import Q, Sum, Count
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
@@ -16,7 +15,7 @@ from rest_framework.exceptions import ValidationError
 
 from accounts.permissions import IsAdminRole
 from inventory.models import Vegetable, VegetableCategory
-from inventory.utils.unit_conversion import format_grams_for_display, format_stock_for_display
+from inventory.utils.unit_conversion import format_grams_for_display
 from service_requests.models import Package, PackageStatus
 from .models import VegetableOrder, VegetableOrderItem, VegetableReturn
 from .serializers import (
@@ -40,25 +39,13 @@ def serialize_admin_order_detail(order: VegetableOrder) -> dict:
         customer_email = getattr(customer, "email", "") or ""
 
     items_data = []
-    for item in order.items.all().select_related("package", "package__stock_item", "package__stock_item__category"):
+    for item in order.items.all().select_related("package"):
         pkg = item.package
-        img = ""
-        if pkg:
-            if pkg.image and str(pkg.image).strip():
-                img = str(pkg.image).strip()
-            elif hasattr(pkg, 'stock_item') and pkg.stock_item:
-                if pkg.stock_item.image and str(pkg.stock_item.image).strip():
-                    img = str(pkg.stock_item.image).strip()
-                elif pkg.stock_item.category and pkg.stock_item.category.image and str(pkg.stock_item.category.image).strip():
-                    img = str(pkg.stock_item.category.image).strip()
-        if not img:
-            img = "/mockups/vegetables_realistic.png"
-
         items_data.append({
             "id": item.id,
             "package_id": pkg.id if pkg else None,
             "name": pkg.name if pkg else "Vegetable Item",
-            "image": img,
+            "image": pkg.image if pkg else "/mockups/vegetables_realistic.png",
             "pack_size": getattr(pkg, "duration", "") or "500g",
             "quantity_grams": item.quantity_grams,
             "quantity_display": format_grams_for_display(item.quantity_grams),
@@ -251,29 +238,17 @@ class VegetableAdminDashboardStatsView(APIView):
                 threshold = int(default_daily * 0.25)
                 if stock <= threshold:
                     pct = round((stock / default_daily) * 100, 1)
-                    img = ""
-                    if veg.image and str(veg.image).strip():
-                        img = str(veg.image).strip()
-                    elif veg.package and veg.package.image and str(veg.package.image).strip():
-                        img = str(veg.package.image).strip()
-                    elif veg.category and veg.category.image and str(veg.category.image).strip():
-                        img = str(veg.category.image).strip()
-                    if not img:
-                        img = "/mockups/vegetables_realistic.png"
-
                     low_stock_items.append({
                         "id": veg.id,
                         "product_id": veg.package_id,
                         "name": veg.package.name if veg.package else veg.name,
                         "sku": veg.sku,
                         "category_name": veg.category.name if veg.category else "Uncategorized",
-                        "image": img,
-                        "unit_basis": veg.unit_basis,
-                        "unit": veg.unit,
+                        "image": veg.image or (veg.package.image if veg.package else "/mockups/vegetables_realistic.png"),
                         "current_stock_grams": stock,
-                        "current_stock_display": format_stock_for_display(stock, unit_basis=veg.unit_basis, unit=veg.unit),
+                        "current_stock_display": format_grams_for_display(stock),
                         "default_daily_grams": default_daily,
-                        "default_daily_display": format_stock_for_display(default_daily, unit_basis=veg.unit_basis, unit=veg.unit),
+                        "default_daily_display": format_grams_for_display(default_daily),
                         "percentage_left": pct,
                         "is_out_of_stock": stock == 0,
                     })
@@ -448,13 +423,13 @@ class AdminVegetableReturnDetailView(APIView):
 class AdminVegetableReturnActionView(APIView):
     """
     POST /api/vegetable-orders/admin/returns/<pk>/action/
-    Admin actions: approve, reject, or resolve return with resolution action, refund amount, restock choice, admin notes.
+    Admin actions: approve, reject, or resolve return with resolution action, refund amount, admin notes.
     """
     permission_classes = [IsAuthenticated, IsAdminRole]
 
     def post(self, request, pk):
         ret = get_object_or_404(
-            VegetableReturn.objects.select_related("order", "item__package", "customer", "stock_movement"),
+            VegetableReturn.objects.select_related("order", "item__package", "customer"),
             pk=pk,
         )
 
@@ -468,7 +443,6 @@ class AdminVegetableReturnActionView(APIView):
         target_status = serializer.validated_data["status"]
         resolution_action = serializer.validated_data.get("resolution_action", VegetableReturn.ResolutionAction.NONE)
         refund_amount = serializer.validated_data.get("refund_amount", Decimal("0.00"))
-        restock_item = serializer.validated_data.get("restock_item", False)
         admin_notes = serializer.validated_data.get("admin_notes", "")
 
         ret.status = target_status
@@ -481,35 +455,7 @@ class AdminVegetableReturnActionView(APIView):
         if target_status in [VegetableReturn.Status.RESOLVED, VegetableReturn.Status.REJECTED]:
             ret.resolved_at = timezone.now()
 
-        # If resolving return, process inventory stock adjustments atomically
-        if target_status == VegetableReturn.Status.RESOLVED:
-            from inventory.services.vegetable_stock_service import process_return_stock_resolution
-            try:
-                with transaction.atomic():
-                    ret.save()
-                    process_return_stock_resolution(
-                        vegetable_return=ret,
-                        restock_item=restock_item,
-                        entered_by=request.user,
-                    )
-            except ValidationError as e:
-                msg = e.detail if hasattr(e, "detail") else str(e)
-                if isinstance(msg, list):
-                    msg = msg[0]
-                return Response(
-                    {"success": False, "message": str(msg)},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            except Exception as e:
-                return Response(
-                    {"success": False, "message": f"Error updating inventory: {str(e)}"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-        else:
-            ret.save()
-
-        # Refresh from db to ensure linked stock movement is populated
-        ret.refresh_from_db()
+        ret.save()
 
         return Response({
             "success": True,

@@ -7,20 +7,13 @@ from .models import Cart, CartItem
 class CartItemSerializer(serializers.ModelSerializer):
     package_name = serializers.SerializerMethodField()
     package_slug = serializers.CharField(source="package.slug", read_only=True)
-    # SerializerMethodField so it can fall back to product_image for Marketplace items
     package_image = serializers.SerializerMethodField()
-    # Variant fields (Swathi inventory: pack-level selection)
-    variant_id = serializers.IntegerField(source="variant.id", read_only=True, default=None, allow_null=True)
-    variant_name = serializers.CharField(source="variant.display_name", read_only=True, default=None, allow_null=True)
-    variant_pack_value = serializers.DecimalField(source="variant.pack_value", max_digits=10, decimal_places=2, read_only=True, default=None, allow_null=True)
-    variant_unit = serializers.CharField(source="variant.unit", read_only=True, default=None, allow_null=True)
     line_amount = serializers.SerializerMethodField()
 
     class Meta:
         model = CartItem
         fields = [
             "id", "package", "package_name", "package_slug", "package_image",
-            "variant", "variant_id", "variant_name", "variant_pack_value", "variant_unit",
             "seller_product_id", "product_title", "product_sku", "product_brand",
             "unit", "pack_size", "product_image", "mrp_snapshot",
             "quantity", "unit_price_snapshot", "customization",
@@ -59,11 +52,7 @@ class CartSerializer(serializers.ModelSerializer):
 
 
 class CartItemCreateSerializer(serializers.Serializer):
-    # package_id is optional to support Marketplace (seller_product_id) items
     package_id = serializers.IntegerField(required=False, allow_null=True)
-    # Variant selection (Swathi inventory: pack size variants)
-    variant_id = serializers.IntegerField(required=False, allow_null=True)
-    # Marketplace (Seller Hub) item fields
     seller_product_id = serializers.IntegerField(required=False, allow_null=True)
     seller_id = serializers.IntegerField(required=False, allow_null=True)
     seller_name = serializers.CharField(required=False, allow_blank=True, default="")

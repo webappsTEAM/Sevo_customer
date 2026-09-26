@@ -22,8 +22,6 @@ const STATUS_COLORS = {
 
 function statusColor(loc) {
   if (!loc.is_active) return STATUS_COLORS.inactive
-  // Optional per-item colour (e.g. admin-configured ServiceZone.color).
-  if (typeof loc.color === "string" && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(loc.color)) return loc.color
   return STATUS_COLORS.active
 }
 
@@ -50,9 +48,7 @@ function makePin(color, size = 30) {
 function MapClickHandler({ onMapClick, enabled }) {
   useMapEvents({
     click(e) {
-      // Guard: drawMode can enable this without a click callback (polygon
-      // drawing is handled by leaflet-draw), which used to throw on click.
-      if (enabled && typeof onMapClick === "function") onMapClick(e.latlng.lat, e.latlng.lng)
+      if (enabled) onMapClick(e.latlng.lat, e.latlng.lng)
     },
   })
   return null
@@ -66,13 +62,8 @@ function DrawControl({ onDrawComplete, onDrawDelete, geofenceType, active }) {
 
   useEffect(() => {
     if (!active) return
-    // Lazy-load leaflet-draw. The cleanup MUST be returned from the effect
-    // itself (it used to be returned from inside .then(), so it never ran:
-    // listeners and draw controls piled up on every re-run).
-    let cancelled = false
-    let teardown = null
+    // Lazy-load leaflet-draw
     import("leaflet-draw").then(() => {
-      if (cancelled) return
       if (!featureGroupRef.current) {
         featureGroupRef.current = new L.FeatureGroup()
         map.addLayer(featureGroupRef.current)
@@ -121,7 +112,7 @@ function DrawControl({ onDrawComplete, onDrawDelete, geofenceType, active }) {
       }
       map.on(L.Draw.Event.DELETED, onDelete)
 
-      teardown = () => {
+      return () => {
         map.off(L.Draw.Event.CREATED, onCreate)
         map.off(L.Draw.Event.DELETED, onDelete)
         if (drawControlRef.current) {
@@ -134,10 +125,6 @@ function DrawControl({ onDrawComplete, onDrawDelete, geofenceType, active }) {
         }
       }
     })
-    return () => {
-      cancelled = true
-      if (teardown) teardown()
-    }
   }, [map, active, geofenceType, onDrawComplete, onDrawDelete])
 
   return null
@@ -224,14 +211,14 @@ function CustomMarker({ loc, color, onSelect }) {
 }
 
 // ── Preview marker + circle while adding ─────────────────────────────────────
-function PreviewLayer({ lat, lng, radius, geofenceType, color = "#4F46E5" }) {
+function PreviewLayer({ lat, lng, radius, geofenceType }) {
   if (!lat || !lng) return null
   if (geofenceType === "circle") {
     return (
       <Circle
         center={[lat, lng]}
         radius={radius || 300}
-        pathOptions={{ color, fillColor: color, fillOpacity: 0.12, weight: 2, dashArray: "6 4" }}
+        pathOptions={{ color: "#4F46E5", fillColor: "#4F46E5", fillOpacity: 0.12, weight: 2, dashArray: "6 4" }}
       />
     )
   }
@@ -256,7 +243,6 @@ export function DrawableMap({
 
   // New location being added
   newLat, newLng, newRadius = 300,
-  newColor = "#4F46E5",           // preview colour for the shape being edited
   geofenceType = "circle",        // "circle" | "polygon"
   drawMode = false,                // show the draw toolbar?
   onMapClick,                      // (lat, lng) → void
@@ -299,7 +285,7 @@ export function DrawableMap({
       />
 
       {/* Preview of new location being added */}
-      <PreviewLayer lat={newLat} lng={newLng} radius={newRadius} geofenceType={geofenceType} color={newColor} />
+      <PreviewLayer lat={newLat} lng={newLng} radius={newRadius} geofenceType={geofenceType} />
 
       {/* Fly to new location pin */}
       {newLat && newLng && <MapFlyTo lat={newLat} lng={newLng} />}

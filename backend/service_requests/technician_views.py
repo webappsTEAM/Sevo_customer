@@ -140,80 +140,27 @@ class TechnicianAvailableBookingsView(APIView):
         ).distinct()
 
         def serialize_item(sr):
-            # Build cart items with safe float conversion on price.
-            # Three different schemas exist in cart_data:
-            #   (a) booking frontend: {name, price, quantity, categoryName, ...}
-            #   (b) AC quotation: {title, unit_price, quantity, type, line_total, ...}
-            #   (c) logistics: {name, price, quantity, ...}
-            cart_items = []
-            for item in (sr.cart_data or []):
-                if isinstance(item, dict):
-                    raw_price = item.get("price") or item.get("unit_price") or item.get("line_total") or 0
-                    try:
-                        price = float(raw_price)
-                    except (TypeError, ValueError):
-                        price = 0.0
-                    cart_items.append({
-                        "id": item.get("id") or item.get("serviceId") or "",
-                        "name": item.get("name") or item.get("serviceName") or item.get("title") or "",
-                        "category": item.get("categoryName") or item.get("category") or item.get("type") or "",
-                        "quantity": item.get("quantity") or item.get("qty") or 1,
-                        "price": price,
-                        "unit": item.get("unit") or item.get("priceUnit") or "",
-                        "description": item.get("description") or "",
-                        "selected_area": item.get("selectedArea") or item.get("area") or None,
-                        "ac_type": item.get("acType") or item.get("ac_type") or "",
-                    })
-
             return {
                 "id": sr.id,
                 "request_id": sr.request_id,
-                "workforce_job_id": getattr(sr, "workforce_job_id", "") or "",
-                "job_type": getattr(sr, "job_type", "") or "",
                 "service_category": sr.service_category,
                 "issue_title": sr.issue_title,
                 "description": sr.description,
                 "customer_name": sr.customer_name,
                 "customer_phone": sr.phone,
-                "customer_email": sr.email or "",
-                # Pickup / service address
                 "address": sr.address,
                 "latitude": float(sr.latitude) if sr.latitude else None,
                 "longitude": float(sr.longitude) if sr.longitude else None,
-                # Drop-off address (Goods & Transport / logistics bookings)
-                "drop_address": getattr(sr, "drop_address", "") or "",
-                "drop_latitude": float(sr.drop_latitude) if getattr(sr, "drop_latitude", None) else None,
-                "drop_longitude": float(sr.drop_longitude) if getattr(sr, "drop_longitude", None) else None,
-                "drop_contact_name": getattr(sr, "drop_contact_name", "") or "",
-                "drop_contact_phone": getattr(sr, "drop_contact_phone", "") or "",
-                # Schedule
                 "preferred_date": str(sr.preferred_date) if sr.preferred_date else "",
                 "preferred_time": sr.preferred_time or "",
-                # Payment
                 "total_amount": float(sr.total_amount) if sr.total_amount else 0.0,
-                "subtotal_amount": float(sr.subtotal_amount) if getattr(sr, "subtotal_amount", None) else None,
-                "discount_amount": float(sr.discount_amount) if getattr(sr, "discount_amount", None) else 0.0,
                 "payment_method": sr.payment_method or "COD",
                 "payment_status": sr.payment_status or "pending",
-                "fare_breakdown": sr.fare_breakdown if getattr(sr, "fare_breakdown", None) else {},
-                # Service line items booked by the customer
-                "cart_data": sr.cart_data or [],
-                "cart_items": cart_items,
-                # Status
                 "status": sr.status,
-                "dispatch_status": getattr(sr, "dispatch_status", "") or "",
                 "created_at": sr.created_at.isoformat() if sr.created_at else None,
-                "updated_at": sr.updated_at.isoformat() if sr.updated_at else None,
-                # Technician snapshot (meaningful when booking is active/accepted)
                 "technician_name": sr.technician_name,
                 "technician_phone": sr.technician_phone,
-                "technician_photo": sr.technician_photo or "",
-                "technician_rating": float(sr.technician_rating) if sr.technician_rating else None,
-                "technician_latitude": float(sr.technician_latitude) if getattr(sr, "technician_latitude", None) else None,
-                "technician_longitude": float(sr.technician_longitude) if getattr(sr, "technician_longitude", None) else None,
-                # OTP & tracking
                 "start_otp": sr.start_otp,
-                "otp_verified": getattr(sr, "otp_verified", False),
                 "tracking_token": str(sr.tracking_token) if sr.tracking_token else None,
             }
 
@@ -600,132 +547,3 @@ class TechnicianVerifyStartOTPView(APIView):
             "message": "Service Start OTP verified successfully. Work has begun!",
             "data": payload
         }, status=status.HTTP_200_OK)
-
-
-class TechnicianBookingDetailView(APIView):
-    """
-    GET /api/technician/bookings/<id>/
-    Returns the full detail of a single booking for the technician app,
-    including all cart line items, fare breakdown, trip stops, and the
-    technician's own assignment status on this booking.
-    """
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request, pk=None, identifier=None):
-        sr = _resolve_sr(pk, identifier)
-        if not sr:
-            return Response({"success": False, "error": "Booking not found"}, status=status.HTTP_404_NOT_FOUND)
-
-        user, _, _, _, _, tech_id = _get_technician_identity(request)
-
-        # Resolve this technician's own assignment record (if any)
-        my_assignment = sr.assignments.filter(
-            technician_id=tech_id
-        ).order_by("-id").first()
-
-        # Cart items — normalised view of raw cart_data JSON.
-        # Three different schemas exist in cart_data:
-        #   (a) booking frontend: {name, price, quantity, categoryName, ...}
-        #   (b) AC quotation: {title, unit_price, quantity, type, line_total, ...}
-        #   (c) logistics: {name, price, quantity, ...}
-        cart_items = []
-        for item in (sr.cart_data or []):
-            if isinstance(item, dict):
-                raw_price = item.get("price") or item.get("unit_price") or item.get("line_total") or 0
-                try:
-                    price = float(raw_price)
-                except (TypeError, ValueError):
-                    price = 0.0
-                cart_items.append({
-                    "id": item.get("id") or item.get("serviceId") or "",
-                    "name": item.get("name") or item.get("serviceName") or item.get("title") or "",
-                    "category": item.get("categoryName") or item.get("category") or item.get("type") or "",
-                    "quantity": item.get("quantity") or item.get("qty") or 1,
-                    "price": price,
-                    "unit": item.get("unit") or item.get("priceUnit") or "",
-                    "description": item.get("description") or "",
-                    "selected_area": item.get("selectedArea") or item.get("area") or None,
-                    "ac_type": item.get("acType") or item.get("ac_type") or "",
-                    "ac_brand": item.get("acBrand") or item.get("ac_brand") or "",
-                    "ac_capacity": item.get("acCapacity") or item.get("ac_capacity") or "",
-                })
-
-        # Trip stops (for logistics / Goods & Transport bookings)
-        trip_stops = []
-        try:
-            for stop in sr.trip_stops.all().order_by("sequence"):
-                trip_stops.append({
-                    "id": stop.id,
-                    "sequence": stop.sequence,
-                    "address": stop.address,
-                    "contact_name": stop.contact_name or "",
-                    "contact_phone": stop.contact_phone or "",
-                    "latitude": float(stop.latitude) if stop.latitude else None,
-                    "longitude": float(stop.longitude) if stop.longitude else None,
-                    "stop_type": getattr(stop, "stop_type", "") or "",
-                    "status": getattr(stop, "status", "") or "",
-                })
-        except Exception:
-            pass
-
-        data = {
-            "id": sr.id,
-            "request_id": sr.request_id,
-            "workforce_job_id": getattr(sr, "workforce_job_id", "") or "",
-            "job_type": getattr(sr, "job_type", "") or "",
-            "service_category": sr.service_category,
-            "issue_title": sr.issue_title,
-            "description": sr.description,
-            # Customer contact
-            "customer_name": sr.customer_name,
-            "customer_phone": sr.phone,
-            "customer_email": sr.email or "",
-            # Pickup / service address
-            "address": sr.address,
-            "latitude": float(sr.latitude) if sr.latitude else None,
-            "longitude": float(sr.longitude) if sr.longitude else None,
-            # Drop-off (logistics)
-            "drop_address": getattr(sr, "drop_address", "") or "",
-            "drop_latitude": float(sr.drop_latitude) if getattr(sr, "drop_latitude", None) else None,
-            "drop_longitude": float(sr.drop_longitude) if getattr(sr, "drop_longitude", None) else None,
-            "drop_contact_name": getattr(sr, "drop_contact_name", "") or "",
-            "drop_contact_phone": getattr(sr, "drop_contact_phone", "") or "",
-            "trip_stops": trip_stops,
-            # Schedule
-            "preferred_date": str(sr.preferred_date) if sr.preferred_date else "",
-            "preferred_time": sr.preferred_time or "",
-            # Payment
-            "total_amount": float(sr.total_amount) if sr.total_amount else 0.0,
-            "subtotal_amount": float(sr.subtotal_amount) if getattr(sr, "subtotal_amount", None) else None,
-            "discount_amount": float(sr.discount_amount) if getattr(sr, "discount_amount", None) else 0.0,
-            "payment_method": sr.payment_method or "COD",
-            "payment_status": sr.payment_status or "pending",
-            "fare_breakdown": sr.fare_breakdown if getattr(sr, "fare_breakdown", None) else {},
-            # Service line items booked by the customer
-            "cart_data": sr.cart_data or [],
-            "cart_items": cart_items,
-            # Status
-            "status": sr.status,
-            "dispatch_status": getattr(sr, "dispatch_status", "") or "",
-            "created_at": sr.created_at.isoformat() if sr.created_at else None,
-            "updated_at": sr.updated_at.isoformat() if sr.updated_at else None,
-            # Technician snapshot
-            "technician_name": sr.technician_name,
-            "technician_phone": sr.technician_phone,
-            "technician_photo": sr.technician_photo or "",
-            "technician_rating": float(sr.technician_rating) if sr.technician_rating else None,
-            "technician_latitude": float(sr.technician_latitude) if getattr(sr, "technician_latitude", None) else None,
-            "technician_longitude": float(sr.technician_longitude) if getattr(sr, "technician_longitude", None) else None,
-            # OTP & tracking
-            "start_otp": sr.start_otp,
-            "otp_verified": getattr(sr, "otp_verified", False),
-            "tracking_token": str(sr.tracking_token) if sr.tracking_token else None,
-            # This technician's assignment state on this booking
-            "my_assignment": {
-                "status": my_assignment.status if my_assignment else None,
-                "offered_at": my_assignment.offered_at.isoformat() if my_assignment and my_assignment.offered_at else None,
-                "accepted_at": my_assignment.accepted_at.isoformat() if my_assignment and my_assignment.accepted_at else None,
-            } if my_assignment else None,
-        }
-
-        return Response({"success": True, "data": data})

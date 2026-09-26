@@ -31,16 +31,9 @@ class EstimationService:
     @staticmethod
     def get_configured_fee_amount() -> Decimal:
         """
-        Retrieves the authoritative backend estimation fee from ACInspectionConfiguration.
+        Retrieves the authoritative backend estimation fee.
+        Can be dynamically extended to read from Package/Service catalog or settings.
         """
-        try:
-            from service_requests.models import ACInspectionConfiguration
-            config = ACInspectionConfiguration.get_solo()
-            if config and config.diagnostic_fee is not None and config.diagnostic_fee >= 0:
-                return config.diagnostic_fee
-        except Exception:
-            pass
-
         from service_requests.models import Package
         pkg = Package.objects.filter(slug="ac-inspection", status="ACTIVE").first()
         if pkg and pkg.base_price and pkg.base_price > 0:
@@ -61,28 +54,15 @@ class EstimationService:
         and EstimationFee in a single transaction with idempotency protection.
         """
         # 1. Server-side validation of AC parameters
-        raw_ac_type = str(ac_details.get("ac_type") or ac_details.get("type") or "").strip().upper()
-        if "WINDOW" in raw_ac_type:
-            ac_type = "WINDOW"
-        elif "SPLIT" in raw_ac_type:
-            ac_type = "SPLIT"
-        elif "CASSETTE" in raw_ac_type:
-            ac_type = "CASSETTE"
-        elif "TOWER" in raw_ac_type:
-            ac_type = "TOWER"
-        elif "OTHER" in raw_ac_type:
-            ac_type = "OTHER"
-        else:
-            ac_type = raw_ac_type
-
+        ac_type = str(ac_details.get("ac_type") or ac_details.get("type") or "").strip().upper()
         if ac_type not in ALLOWED_AC_TYPES:
-            raise ValidationError({"ac_type": f"Invalid AC type '{raw_ac_type}'. Allowed: {', '.join(sorted(ALLOWED_AC_TYPES))}."})
+            raise ValidationError({"ac_type": f"Invalid AC type '{ac_type}'. Allowed: {', '.join(sorted(ALLOWED_AC_TYPES))}."})
 
-        raw_cap = str(ac_details.get("ac_capacity") or ac_details.get("capacity") or "").strip().upper().replace(" ", "_")
-        if raw_cap in ALLOWED_AC_CAPACITIES:
-            ac_capacity = raw_cap
-        else:
-            ac_capacity = "1.5_TON"
+        ac_capacity = str(ac_details.get("ac_capacity") or ac_details.get("capacity") or "").strip().upper()
+        # Normalize e.g. "1.5 TON" -> "1.5_TON"
+        ac_capacity = ac_capacity.replace(" ", "_")
+        if ac_capacity not in ALLOWED_AC_CAPACITIES:
+            raise ValidationError({"ac_capacity": f"Invalid AC capacity '{ac_capacity}'. Allowed: {', '.join(sorted(ALLOWED_AC_CAPACITIES))}."})
 
         raw_qty = ac_details.get("ac_quantity")
         if raw_qty is None:
@@ -163,15 +143,6 @@ class EstimationService:
                     amount=fee_amount,
                     currency="INR",
                     status=EstimationFee.Status.PENDING,
-                )
-
-
-                # Atomically create CustomerInspection and snapshot all active rate card items
-                from service_requests.services.customer_inspection_service import CustomerInspectionService
-                CustomerInspectionService.create_inspection_and_rate_snapshots(
-                    service_request=sr,
-                    quantity=ac_quantity,
-                    inspection_name="AC Inspection & Diagnostic Visit",
                 )
 
                 # Record status event for analytics and audit

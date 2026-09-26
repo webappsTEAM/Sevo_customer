@@ -225,24 +225,11 @@ class LogisticsFareBreakdown(dict):
         free_km             Decimal -- the allowance this quote used
         distance_source     str -- "google_maps" | "straight_line_estimate"
         currency            str
-        vehicle_class       str -- ServiceTier.VehicleClass at quote time
-                            (two_wheeler/three_wheeler/truck/pickup/heavy_truck)
-        weight_class        str -- ServiceTier.WeightClass at quote time
-                            (light/heavy, blank where not applicable)
 
     The four `rate_*`/`free_km` keys exist so that reconciliation can
     re-price a delivered trip entirely from the quote, without reading the
     tier again. A tier's rates are administrator-editable; a booking's
     are not.
-
-    GT audit Update 14: vehicle_class/weight_class exist for the same
-    reason -- the purchased tier's vehicle classification must not be
-    reconstructed later from the (mutable, admin-editable) ServiceTier row,
-    since that could change after the booking was made. Snapshotting it
-    here, alongside the rate fields that already follow this rule, is what
-    lets the Vendor-side dispatch engine (automatic_dispatch.py) validate
-    the ACTUAL purchased requirement instead of only the coarse
-    service_category string it used before this fix.
     """
 
 
@@ -259,7 +246,7 @@ def quote_logistics_fare(
 ):
     """
     Compute a real, itemised, distance-based fare for one goods-transport
-    booking, per sevo_PHASE_14 H.1. Supports multi-stop ordered routes
+    booking, per CALTRACK_PHASE_14 H.1. Supports multi-stop ordered routes
     via waypoints=[(lat, lng), ...].
     """
     if tier is None:
@@ -409,8 +396,6 @@ def quote_logistics_fare(
         "tier_id": getattr(tier, "id", None),
         "tier_name": getattr(tier, "name", ""),
         "tier_slug": getattr(tier, "slug", ""),
-        "vehicle_class": getattr(tier, "vehicle_class", "") or "",
-        "weight_class": getattr(tier, "weight_class", "") or "",
         "pickup_lat": float(pickup_lat) if pickup_lat is not None else None,
         "pickup_lng": float(pickup_lng) if pickup_lng is not None else None,
         "drop_lat": float(drop_lat) if drop_lat is not None else None,
@@ -423,8 +408,12 @@ def quote_logistics_fare(
         "stops": stops,
         "cargo_hash": cargo_hash_str,
     }
+    try:
+        cache.set(f"gt_quote_{quote_id}", cached_data, timeout=900)
+    except Exception as cache_err:
+        logger.warning("Could not cache logistics quote %s: %s", quote_id, cache_err)
 
-    breakdown = LogisticsFareBreakdown(
+    return LogisticsFareBreakdown(
         quote_id=quote_id,
         quote_hash=quote_hash,
         created_at=created_at,
@@ -432,8 +421,6 @@ def quote_logistics_fare(
         expires_at=expires_at,
         tier_id=getattr(tier, "id", None),
         tier_name=getattr(tier, "name", ""),
-        vehicle_class=getattr(tier, "vehicle_class", "") or "",
-        weight_class=getattr(tier, "weight_class", "") or "",
         pickup_lat=str(pickup_lat) if pickup_lat is not None else None,
         pickup_lng=str(pickup_lng) if pickup_lng is not None else None,
         drop_lat=str(drop_lat) if drop_lat is not None else None,
@@ -465,164 +452,6 @@ def quote_logistics_fare(
         estimate_notice=estimate_notice,
         currency=getattr(tier, "currency", "INR") or "INR",
     )
-    cached_data["breakdown"] = dict(breakdown)
-    try:
-        cache.set(f"gt_quote_{quote_id}", cached_data, timeout=900)
-    except Exception as cache_err:
-        logger.warning("Could not cache logistics quote %s: %s", quote_id, cache_err)
-
-    return breakdown
-
-
-# GT audit Update 18 -- which vehicle classes a booking can actually be
-# fulfilled with.
-#
-# Mirrored here rather than imported: the Vendor app is a separate Django
-# project sharing only a database, exactly as with the rank tables in its
-# automatic_dispatch.py. This set is the Customer-side statement of the
-# Vendor's _EMPLOYEE_VEHICLE_TYPE_RANK keys -- the vehicle types a
-# technician can actually have on file.
-#
-# ServiceTier.VehicleClass also offers "heavy_truck", and Vendor's
-# Vehicle.VehicleType has no member that satisfies it: no rank, no
-# equivalence, nothing. A heavy_truck booking would be accepted, charged,
-# and then never dispatchable to anyone. Inventing a mapping (equating it
-# with "truck", say) would mean a customer who paid for a heavy truck gets
-# a smaller vehicle, which is the precise failure the compatibility work
-# exists to prevent. So it is refused at booking time instead.
-#
-# If a heavy-truck fleet is onboarded later, the fix is to add the vehicle
-# type on the Vendor side and add it here -- not to widen an equivalence.
-DISPATCHABLE_VEHICLE_CLASSES = {
-    "two_wheeler",
-    "three_wheeler",
-    "pickup",
-    "truck",
-}
-
-# The goods-transport categories whose compatibility is decided by vehicle
-# CLASS. Packers & Movers is deliberately absent: its tiers are relocation
-# packages (1BHK, Villa) that legitimately carry no vehicle_class, and its
-# compatibility runs on payload_kg instead -- see packers_movers_pricing.
-_CLASS_CLASSIFIED_CATEGORIES = {
-    "goods_transport_truck",
-    "goods_transport_two_wheeler",
-    "goods_transport",
-}
-
-
-def assert_gt_booking_is_classifiable(service_category, tier):
-    """
-    GT audit Update 18 -- a new goods-transport booking must know which
-    vehicle it needs before it can be taken.
-
-    Two ways a booking could previously reach the Vendor side with nothing
-    to dispatch against:
-
-      1. Lane-only. A Lane models a route and a fare; it has no tier, no
-         vehicle and no class. A booking carrying only a lane left the
-         Vendor's Gate 3 with no vehicle_class to enforce, so the
-         fine-grained compatibility check skipped and any vehicle in the
-         coarse category bucket could take the job. Resolving a lane to
-         "some" tier would be inventing a vehicle the customer never chose,
-         so the booking is refused instead and the customer picks a vehicle.
-
-      2. A tier whose vehicle_class is blank, or is a class no vendor
-         vehicle can satisfy (see DISPATCHABLE_VEHICLE_CLASSES).
-
-    Fails CLOSED in both cases, and only for NEW bookings -- this runs in
-    the booking-time fare resolver, so bookings already in the database are
-    untouched and keep their existing backward-compatible handling on the
-    Vendor side.
-    """
-    if service_category not in _CLASS_CLASSIFIED_CATEGORIES:
-        return
-
-    if tier is None:
-        raise UnresolvedLogisticsFareError(
-            "Please choose a vehicle for this trip. A goods-transport booking "
-            "has to record which vehicle class it needs before it can be "
-            "assigned to a driver."
-        )
-
-    vehicle_class = str(getattr(tier, "vehicle_class", "") or "").strip().lower()
-    if not vehicle_class:
-        raise UnresolvedLogisticsFareError(
-            f"The selected vehicle ('{getattr(tier, 'name', '')}') has no vehicle "
-            "classification configured, so this booking could not be matched to a "
-            "driver. Please choose another vehicle or contact support."
-        )
-
-    if vehicle_class not in DISPATCHABLE_VEHICLE_CLASSES:
-        raise UnresolvedLogisticsFareError(
-            f"'{getattr(tier, 'name', '') or vehicle_class}' is not available for "
-            "booking right now -- no driver currently operates a vehicle of this "
-            "class, so the trip could not be fulfilled. Please choose another "
-            "vehicle."
-        )
-
-
-def classification_only_snapshot(*, service_category, tier, total, source):
-    """
-    GT audit Update 16 -- the classification-only fare snapshot.
-
-    quote_logistics_fare() returns a full LogisticsFareBreakdown, which
-    since Update 14 carries the purchased tier's vehicle_class/weight_class
-    so the Vendor dispatch engine can validate the ACTUAL purchased
-    requirement instead of only the coarse service_category string.
-
-    But two live goods-transport paths never reach that function and
-    previously returned a bare fare with NO breakdown at all:
-
-      1. a distance-priced tier whose route could not be measured (no
-         coordinates, or the routing provider returned nothing) where a
-         configured Lane fare exists, and
-      2. a goods-transport tier that is not distance-priced at all
-         (per_km_rate unset), plus the bare "goods_transport" slug, which
-         resolve through the flat lane/tier lookup at the bottom of
-         resolve_logistics_fare_v2().
-
-    A booking made through either path was written to the database with an
-    empty fare_breakdown, so the Vendor side's fine-grained Gate 3 check
-    found no vehicle_class key and -- by its documented
-    do-not-strand-legacy-bookings rule -- silently skipped, leaving only
-    the coarse category check. That made the Update 14/15 fix bypassable by
-    booking a configured route rather than a measured trip.
-
-    This returns the SAME immutable classification keys the full breakdown
-    carries, for the flat-priced paths, WITHOUT inventing any pricing: the
-    total is the fare the existing resolvers already decided, and the
-    classification is copied off the tier that was actually purchased, at
-    purchase time.
-
-    Returns None when no ServiceTier is in scope (a lane-only booking).
-    There is no vehicle classification anywhere in the system for such a
-    booking -- Lane models a route and a fare, not a vehicle -- so this
-    fabricates nothing; see the audit notes for that residual.
-    """
-    if service_category not in LOGISTICS_CATEGORIES:
-        return None
-    if tier is None:
-        return None
-    vehicle_class = getattr(tier, "vehicle_class", "") or ""
-    weight_class = getattr(tier, "weight_class", "") or ""
-    if not vehicle_class:
-        # The tier exists but carries no classification. Returning a
-        # snapshot with an empty vehicle_class would be indistinguishable
-        # from "absent" to the Vendor gate, so return None and let the
-        # pre-existing coarse check stand, exactly as before this fix --
-        # never a fabricated class.
-        return None
-    return LogisticsFareBreakdown(
-        total=total,
-        vehicle_class=vehicle_class,
-        weight_class=weight_class,
-        tier_id=getattr(tier, "id", None),
-        capacity_label=getattr(tier, "capacity_label", "") or "",
-        pricing_mode=source,
-        distance_source=source,
-        currency=getattr(tier, "currency", "INR") or "INR",
-    )
 
 
 def resolve_logistics_fare_v2(
@@ -648,11 +477,6 @@ def resolve_logistics_fare_v2(
     assert_catalog_matches_category(
         service_category, tier=logistics_tier, lane=logistics_lane
     )
-    # Update 18: refuse a new goods-transport booking that could not be
-    # dispatched to anyone. Runs before any pricing so a refused booking
-    # never produces a fare, and before the flat paths too, which is where
-    # the lane-only case lives.
-    assert_gt_booking_is_classifiable(service_category, logistics_tier)
 
     if service_category in DISTANCE_PRICED_CATEGORIES:
         submitted_quote_id = None
@@ -702,7 +526,6 @@ def resolve_logistics_fare_v2(
             except (ValueError, TypeError):
                 raise UnresolvedLogisticsFareError("Submitted quote expiry timestamp is invalid or malformed.")
 
-        cached_quote = None
         if submitted_quote_id:
             cached_quote = cache.get(f"gt_quote_{submitted_quote_id}")
             if not cached_quote:
@@ -817,39 +640,6 @@ def resolve_logistics_fare_v2(
         if cargo_summary and cargo_summary.get("has_prohibited", False):
             raise UnresolvedLogisticsFareError(cargo_summary.get("prohibited_reason") or "Prohibited cargo cannot be transported.")
 
-        if submitted_quote_id and cached_quote:
-            # Verified quote price lock: use the authoritative locked quote snapshot
-            if cached_quote.get("breakdown") and isinstance(cached_quote["breakdown"], dict):
-                locked_breakdown = LogisticsFareBreakdown(cached_quote["breakdown"])
-            else:
-                locked_breakdown = LogisticsFareBreakdown(
-                    quote_id=submitted_quote_id,
-                    quote_hash=cached_quote.get("quote_hash"),
-                    created_at=cached_quote.get("created_at"),
-                    quoted_at=cached_quote.get("created_at"),
-                    expires_at=cached_quote.get("expires_at"),
-                    tier_id=cached_quote.get("tier_id") or getattr(logistics_tier, "id", None),
-                    tier_name=cached_quote.get("tier_name") or getattr(logistics_tier, "name", ""),
-                    vehicle_class=cached_quote.get("vehicle_class") or getattr(logistics_tier, "vehicle_class", ""),
-                    weight_class=cached_quote.get("weight_class") or getattr(logistics_tier, "weight_class", ""),
-                    pickup_lat=str(pickup_lat) if pickup_lat is not None else None,
-                    pickup_lng=str(pickup_lng) if pickup_lng is not None else None,
-                    drop_lat=str(drop_lat) if drop_lat is not None else None,
-                    drop_lng=str(drop_lng) if drop_lng is not None else None,
-                    total=_money(cached_quote["total"]),
-                    distance_km=_money(cached_quote.get("distance_km", "0")),
-                    chargeable_km=_money(cached_quote.get("chargeable_km", "0")),
-                    stops=cached_quote.get("stops", stop_count),
-                    currency=getattr(logistics_tier, "currency", "INR") or "INR",
-                    is_authoritative=cached_quote.get("is_authoritative", True),
-                    is_estimate=cached_quote.get("is_estimate", False),
-                    distance_source=cached_quote.get("distance_source", "google_maps"),
-                )
-            if not locked_breakdown.get("is_cargo_fit", True):
-                reason = locked_breakdown.get("cargo_fit_reason") or "Selected vehicle cannot safely carry this cargo."
-                raise UnresolvedLogisticsFareError(f"VEHICLE_CAPACITY_EXCEEDED: {reason}")
-            return _money(cached_quote["total"]), locked_breakdown
-
         breakdown = quote_logistics_fare(
             tier=logistics_tier,
             pickup_lat=pickup_lat,
@@ -876,15 +666,7 @@ def resolve_logistics_fare_v2(
         # 3. For distance-priced tiers, never fall back to starting_price as a final payable fare.
         if getattr(logistics_tier, "per_km_rate", None) is not None:
             if logistics_lane is not None:
-                # Update 16: the fare is the lane's, unchanged, but the
-                # booking still records WHICH vehicle class was purchased so
-                # Vendor dispatch can enforce it.
-                return logistics_lane.fare, classification_only_snapshot(
-                    service_category=service_category,
-                    tier=logistics_tier,
-                    total=logistics_lane.fare,
-                    source="configured_lane_fare",
-                )
+                return logistics_lane.fare, None
             raise UnresolvedLogisticsFareError(
                 f"Coordinates required to calculate authoritative distance-based fare for '{service_category}'."
             )
@@ -1055,18 +837,9 @@ def resolve_logistics_fare_v2(
     # "raise rather than trust the client" guarantee in two places. That
     # function stays the single definition of flat logistics pricing and
     # keeps its own test coverage.
-    flat_fare = resolve_logistics_fare(
+    return resolve_logistics_fare(
         service_category=service_category,
         logistics_tier=logistics_tier,
         logistics_lane=logistics_lane,
         submitted_amount=submitted_amount,
-    )
-    # Update 16: same reasoning as the lane branch above -- a flat-priced
-    # goods-transport booking must still snapshot the purchased vehicle
-    # class, or the Vendor-side compatibility gate has nothing to enforce.
-    return flat_fare, classification_only_snapshot(
-        service_category=service_category,
-        tier=logistics_tier,
-        total=flat_fare,
-        source="flat_tier_or_lane_fare",
-    )
+    ), None

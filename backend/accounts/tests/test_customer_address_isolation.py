@@ -56,7 +56,7 @@ class CustomerAddressIsolationTests(TestCase):
     def test_complete_two_customer_address_lifecycle_and_isolation(self):
         # 1. Surya creates Address A (Home)
         surya_home_payload = {
-            "address_line1": "45, Bagalur Rd",
+            "street_address": "45, Bagalur Rd",
             "landmark": "Near Bus Stand",
             "locality": "Thillai Nagar",
             "city": "Hosur",
@@ -74,7 +74,7 @@ class CustomerAddressIsolationTests(TestCase):
 
         # Surya creates Address B (Office)
         surya_office_payload = {
-            "address_line1": "12, SIPCOT Phase 1",
+            "street_address": "12, SIPCOT Phase 1",
             "landmark": "Tech Park",
             "locality": "SIPCOT",
             "city": "Hosur",
@@ -106,7 +106,7 @@ class CustomerAddressIsolationTests(TestCase):
 
         # 4. Arya creates Arya Address (Home)
         arya_home_payload = {
-            "address_line1": "100, Palace Road",
+            "street_address": "100, Palace Road",
             "landmark": "Near Fort",
             "locality": "Central",
             "city": "Hosur",
@@ -128,19 +128,19 @@ class CustomerAddressIsolationTests(TestCase):
         arya_addrs = res.data["data"]
         self.assertEqual(len(arya_addrs), 1)
         self.assertEqual(arya_addrs[0]["id"], arya_home_id)
-        self.assertEqual(arya_addrs[0]["address_line1"], "100, Palace Road")
+        self.assertEqual(arya_addrs[0]["street_address"], "100, Palace Road")
 
         # 6. Arya tries to access Surya's address directly -> BLOCKED (404/403)
         res = self.arya_client.get(f"/api/auth/customer/addresses/{surya_home_id}/")
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
-        res = self.arya_client.patch(f"/api/auth/customer/addresses/{surya_home_id}/", {"address_line1": "Hacked Address"}, format="json")
+        res = self.arya_client.patch(f"/api/auth/customer/addresses/{surya_home_id}/", {"street_address": "Hacked Address"}, format="json")
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
         res = self.arya_client.delete(f"/api/auth/customer/addresses/{surya_home_id}/")
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
-        res = self.arya_client.post(f"/api/auth/customer/addresses/{surya_home_id}/set-default/")
+        res = self.arya_client.post(f"/api/auth/customer/addresses/{surya_home_id}/default/")
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
         # 7. Surya queries addresses again -> Still exactly 2 addresses, unaffected by Arya

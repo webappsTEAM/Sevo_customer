@@ -90,7 +90,7 @@ export async function searchPlaces(query, opts = {}) {
     try {
       const res = await fetch(
         `https://nominatim.openstreetmap.org/search?q=${encoded}&countrycodes=in&format=json&addressdetails=1&limit=6`,
-        { headers: { "Accept-Language": "en", "User-Agent": "sevo-Delivery/1.0" } }
+        { headers: { "Accept-Language": "en", "User-Agent": "CalTrack-Delivery/1.0" } }
       );
       if (res.ok) {
         const data = await res.json();

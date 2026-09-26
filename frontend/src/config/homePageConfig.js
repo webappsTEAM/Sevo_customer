@@ -12,25 +12,25 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
     heroImage: "/assets/hero_illustration.jpg",
     heroIllustration: "/assets/hero_illustration.jpg",
     // Optional click-through for the banner image above, and an optional
-    // small "Starting from â‚¹XXX" price sticker overlaid on it. Both blank
+    // small "Starting from ₹XXX" price sticker overlaid on it. Both blank
     // by default -- the banner itself is just the image.
     link: "",
     priceBadge: "",
     trustBadges: [
       { id: "tb-1", title: "Verified Experts", subtitle: "Background Checked", icon: "ShieldCheck", color: "teal" },
-      { id: "tb-2", title: "Service Warranty", subtitle: "Satisfaction Guaranteed", icon: "Award", color: "amber" },
+      { id: "tb-2", title: "4.8+ Rated", subtitle: "By 10K+ Customers", icon: "Star", color: "amber" },
       { id: "tb-3", title: "On-Time Service", subtitle: "Punctual & Reliable", icon: "Clock", color: "emerald" },
       { id: "tb-4", title: "Upfront Pricing", subtitle: "No Hidden Charges", icon: "IndianRupee", color: "blue" },
       { id: "tb-5", title: "Easy Booking", subtitle: "In Just 2 Minutes", icon: "CheckCircle2", color: "purple" },
-      { id: "tb-6", title: "Customer Support", subtitle: "Direct Assistance", icon: "Headphones", color: "rose" }
+      { id: "tb-6", title: "24/7 Support", subtitle: "We're Here Anytime", icon: "Headphones", color: "rose" }
     ],
     quickBadges: [
       { id: "b-1", text: "Verified Experts", title: "Verified Experts", subtitle: "Background Checked", icon: "ShieldCheck" },
-      { id: "b-2", text: "Service Warranty", title: "Service Warranty", subtitle: "Satisfaction Guaranteed", icon: "Award" },
+      { id: "b-2", text: "4.8★ Rated", title: "4.8+ Rated", subtitle: "By 10K+ Customers", icon: "Star" },
       { id: "b-3", text: "On-Time Service", title: "On-Time Service", subtitle: "Punctual & Reliable", icon: "Clock" },
       { id: "b-4", text: "Upfront Pricing", title: "Upfront Pricing", subtitle: "No Hidden Charges", icon: "IndianRupee" },
       { id: "b-5", text: "Easy Booking", title: "Easy Booking", subtitle: "In Just 2 Minutes", icon: "CheckCircle2" },
-      { id: "b-6", text: "Customer Support", title: "Customer Support", subtitle: "Direct Assistance", icon: "Headphones" }
+      { id: "b-6", text: "24/7 Support", title: "24/7 Support", subtitle: "We're Here Anytime", icon: "Headphones" }
     ],
     collageImages: [
       "/mockups/hero_plumber_thumbsup.jpg",
@@ -68,10 +68,11 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
     { id: "cat-8", name: "Painting", image: "/mockups/category_home_repair_3d.jpg", link: "?category=paintings&subtab=interior-painting", enabled: true },
     { id: "cat-9", name: "Mason", image: "/mockups/service_building.png", link: "?category=mason", enabled: true },
     { id: "cat-10", name: "Groceries & Veggies", image: "/assets/cat_food_health.jpg", link: "/vegetables", enabled: true },
-    { id: "cat-11", name: "Goods & Transport", image: "/assets/cat_goods_transport.jpg", link: "?category=goods_transports", enabled: true }
+    { id: "cat-11", name: "Goods & Transport", image: "/assets/cat_goods_transport.jpg", link: "?category=goods_transports", enabled: true },
+    { id: "cat-12", name: "Groceries", image: "/mockups/groceries_realistic.png", link: "/marketplace", enabled: true }
   ],
   pillarModal: {
-    badge: "âš¡Core Specialized Pillars",
+    badge: "⚡Core Specialized Pillars",
     title: "Home & Repair Services",
     subtitle: "Select any service below to explore specific options, verified technicians, and transparent pricing.",
     pillars: [
@@ -100,7 +101,7 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
   vendorBanner: {
     enabled: true,
     badgeText: "We're Looking for Professionals",
-    badgeIcon: "ðŸ¤",
+    badgeIcon: "🤝",
     titlePrefix: "We Hire",
     titleHighlight: "Technicians, Employees",
     titleSuffix: "& Vendors",
@@ -111,15 +112,15 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
     learnMoreUrl: "https://calservices-vendor.vercel.app",
     image: "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?w=320&h=420&q=90&fit=crop&crop=top",
     features: [
-      { id: "vf-1", icon: "ðŸ“…", label: "Flexible Timings" },
-      { id: "vf-2", icon: "ðŸ’¼", label: "Stable Work" },
-      { id: "vf-3", icon: "ðŸ¤", label: "Team Support" }
+      { id: "vf-1", icon: "📅", label: "Flexible Timings" },
+      { id: "vf-2", icon: "💼", label: "Stable Work" },
+      { id: "vf-3", icon: "🤝", label: "Team Support" }
     ],
     benefits: [
-      { id: "vb-1", icon: "âœ…", text: "Verified & trusted customers" },
-      { id: "vb-2", icon: "ðŸ•", text: "On-time service & support" },
-      { id: "vb-3", icon: "ðŸ“", text: "Work close to your area" },
-      { id: "vb-4", icon: "ðŸŒŸ", text: "Recognition for quality work" }
+      { id: "vb-1", icon: "✅", text: "Verified & trusted customers" },
+      { id: "vb-2", icon: "🕐", text: "On-time service & support" },
+      { id: "vb-3", icon: "📍", text: "Work close to your area" },
+      { id: "vb-4", icon: "🌟", text: "Recognition for quality work" }
     ]
   },
   offers: {
@@ -233,11 +234,11 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
     ]
   },
   statsBar: [
-    { id: "st-1", number: "100%", label: "Verified Professionals" },
-    { id: "st-2", number: "Upfront", label: "Transparent Pricing" },
-    { id: "st-3", number: "Standard", label: "Service Warranty" },
-    { id: "st-4", number: "Hosur Hub", label: "Doorstep Coverage" },
-    { id: "st-5", number: "Direct", label: "Customer Support" }
+    { id: "st-1", number: "45K+", label: "Happy Customers" },
+    { id: "st-2", number: "1200+", label: "Verified Experts" },
+    { id: "st-3", number: "85K+", label: "Services Completed" },
+    { id: "st-4", number: "30 min", label: "Average Response" },
+    { id: "st-5", number: "4.8/5", label: "Average Rating" }
   ],
   featuredPros: {
     title: "Featured Professionals",
@@ -245,37 +246,41 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
     pros: [
       {
         id: "p-1",
-        name: "Electrical Services",
-        title: "Wiring, MCB & Installations",
-        badge: "Verified Expert",
+        name: "Sarah J.",
+        title: "Licensed Electrician",
+        rating: 4.9,
+        jobs: "620+",
         image: "/mockups/service_electrical.png"
       },
       {
         id: "p-2",
-        name: "Plumbing Services",
-        title: "Fixtures, Leakages & Drainage",
-        badge: "Verified Expert",
+        name: "Elite Plumbing",
+        title: "Plumbing Specialist",
+        rating: 4.8,
+        jobs: "540+",
         image: "/mockups/service_plumbing.png"
       },
       {
         id: "p-3",
-        name: "AC & Cooling Services",
-        title: "Jet Clean, Gas & Diagnostics",
-        badge: "Verified Expert",
+        name: "Advanced Climate",
+        title: "AC & Appliance Tech",
+        rating: 4.9,
+        jobs: "410+",
         image: "/mockups/service_hvac.png"
       },
       {
         id: "p-4",
-        name: "Deep Cleaning Services",
-        title: "Full Home & Sanitization",
-        badge: "Verified Expert",
+        name: "Eco Shine",
+        title: "Home Cleaning Pro",
+        rating: 4.7,
+        jobs: "780+",
         image: "/mockups/service_cleaning.png"
       }
     ]
   },
   testimonials: {
     title: "What Our Customers Say",
-    viewAllText: "View all reviews â†’",
+    viewAllText: "View all reviews →",
     reviews: [
       {
         id: "rev-1",
@@ -321,8 +326,37 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
     helpColTitle: "Need Help?",
     phone: "+91 98765 43210",
     email: "support@caldimengg.com",
-    workingHours: "Mon â€“ Sun (8 AM â€“ 8 PM)",
-    copyrightText: "Â© 2026 CALDIM ENGINEERING PRIVATE LIMITED. All rights reserved."
+    workingHours: "Mon – Sun (8 AM – 8 PM)",
+    copyrightText: "© 2026 CALDIM ENGINEERING PRIVATE LIMITED. All rights reserved."
+  },
+  // Added 2026-09-17 per explicit request ("add a side section 'Mobile' ...
+  // give the access to upload the banners, advertisement, top cards
+  // [Groceries, Services] images"). Kept as its own top-level key, separate
+  // from "hero"/"offers"/"categories" above, so an admin can upload
+  // different creative for the mobile app without touching the website —
+  // and so the app never accidentally shows a web-only asset. Consumed by
+  // the customer app's homepage_repository.dart / home_screen.dart via
+  // GET /api/settings/homepage/'s "mobile" key.
+  mobile: {
+    // Home-screen banner carousel -- same shape as offers.items (a single
+    // admin-uploaded image + an optional click-through link, no
+    // code-drawn text on top of it).
+    banners: [],
+    // In-app advertisement card(s) -- same shape as banners.
+    ads: [],
+    // The quick-access card row at the top of the app's Home screen.
+    // Fixed 2026-09-18 per explicit request ("Top cards 'Groceries' and
+    // 'Services' could be editable like add new, delete and make text also
+    // editable from admin panel"): this used to be a fixed { groceries,
+    // services } pair with only an image+link each and no editable label.
+    // Now a plain list -- any number of cards, each with its own id, label,
+    // image and link -- so the admin can add, delete and relabel cards, not
+    // just swap their photo. Falls back to the matching catalog category's
+    // own image on the app side when a card's image is left empty here.
+    topCards: [
+      { id: "groceries", label: "Groceries", image: "", link: "", enabled: true },
+      { id: "services", label: "Services", image: "", link: "", enabled: true }
+    ]
   }
 }
 
@@ -503,6 +537,23 @@ export function mergeWithDefaultConfig(parsed) {
     }
   })
 
+  // A published config (saved earlier, e.g. via the Home Page Customizer)
+  // fully replaces the code defaults above -- so a category tile added to
+  // DEFAULT_HOME_PAGE_CONFIG after that config was last saved would never
+  // reach real users even though it's live in code. Backfill any default
+  // tile whose id isn't already present in the saved list (by id, falling
+  // back to link so a renamed default doesn't duplicate), appended at the
+  // end so existing admin ordering/edits are untouched.
+  const existingCategoryKeys = new Set(
+    mergedCategories.flatMap((cat) => [cat.id, cat.link].filter(Boolean))
+  )
+  const backfilledCategories = defaultCategories.filter(
+    (defCat) => defCat.enabled !== false && !existingCategoryKeys.has(defCat.id) && !existingCategoryKeys.has(defCat.link)
+  )
+  if (backfilledCategories.length > 0) {
+    mergedCategories.push(...backfilledCategories)
+  }
+
   const defaultOffers = DEFAULT_HOME_PAGE_CONFIG.offers
   const rawOffers = parsed.offers || {}
   const rawOfferItems = Array.isArray(rawOffers.items) && rawOffers.items.length > 0
@@ -575,9 +626,52 @@ export function mergeWithDefaultConfig(parsed) {
     pestItems: mergedPestItems
   }
 
+  // Mobile section merge -- banners/ads/topCards are all plain lists (no
+  // per-index default fallback needed, unlike offers/categories, since an
+  // empty list is a perfectly valid "nothing configured yet" state).
+  //
+  // Fixed 2026-09-18: topCards used to be a fixed { groceries, services }
+  // object -- now an admin-managed list, any length, each item carrying its
+  // own editable label. A config saved before this change (or the very
+  // first default) may still have that old object shape; upgrade it to the
+  // equivalent 2-item list in memory here so nothing already published is
+  // lost -- the next Publish click saves it back as a real list.
+  const parsedMobile = parsed.mobile || {}
+  const rawTopCards = parsedMobile.topCards
+  const topCardsList = Array.isArray(rawTopCards)
+    ? rawTopCards
+    : (rawTopCards && typeof rawTopCards === "object"
+        ? [
+            { id: "groceries", label: "Groceries", ...(rawTopCards.groceries || {}) },
+            { id: "services", label: "Services", ...(rawTopCards.services || {}) }
+          ]
+        : DEFAULT_HOME_PAGE_CONFIG.mobile.topCards)
+
+  const mergedMobile = {
+    ...DEFAULT_HOME_PAGE_CONFIG.mobile,
+    ...parsedMobile,
+    banners: (Array.isArray(parsedMobile.banners) ? parsedMobile.banners : []).map((b) => ({
+      ...b,
+      image: resolveDisplayImageUrl(b.image, "")
+    })),
+    ads: (Array.isArray(parsedMobile.ads) ? parsedMobile.ads : []).map((a) => ({
+      ...a,
+      image: resolveDisplayImageUrl(a.image, "")
+    })),
+    topCards: topCardsList.map((card, idx) => ({
+      id: card.id || `tc-${idx}`,
+      label: card.label || "",
+      link: card.link || "",
+      enabled: card.enabled !== undefined ? card.enabled : true,
+      ...card,
+      image: resolveDisplayImageUrl(card.image, "")
+    }))
+  }
+
   return {
     ...DEFAULT_HOME_PAGE_CONFIG,
     ...parsed,
+    mobile: mergedMobile,
     hero: {
       ...DEFAULT_HOME_PAGE_CONFIG.hero,
       ...parsedHero,

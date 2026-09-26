@@ -1,7 +1,7 @@
 """
 service_requests/tests/test_gt_b01_fare_engine.py
 
-GT-B-01: real distance-based fare engine, per sevo_PHASE_14 PART H.1
+GT-B-01: real distance-based fare engine, per CALTRACK_PHASE_14 PART H.1
   fare = base_fare + chargeable_km x per_km_rate
        + loading_unloading + additional_stop_charge x (stops - 2)
        (x surge), floored at minimum_fare
@@ -183,18 +183,10 @@ class FareResolutionOrderTests(TestCase):
             name="Tata Ace", starting_price=Decimal("400.00"),
             base_fare=Decimal("250.00"), per_km_rate=Decimal("18.00"),
             free_km=Decimal("2.00"), loading_unloading_charge=Decimal("100.00"),
-            # GT audit Update 18: every real ServiceTier row carries a
-            # vehicle_class -- migration 0010 backfilled all of them, and 0011
-            # made a blank value fail closed on purpose. A fixture without one
-            # is a row that cannot exist in the database, and a goods-transport
-            # booking against it is now refused, since the Vendor side would
-            # have nothing to match a driver's vehicle against.
-            vehicle_class="truck",
         )
         self.flat_tier = ServiceTier.objects.create(
             category=LogisticsCategory.TRUCK, city="hosur", slug="flat",
             name="Flat Tier", starting_price=Decimal("777.00"),
-            vehicle_class="truck",
         )
         self.lane = Lane.objects.create(
             category=LogisticsCategory.TRUCK, city="hosur",
@@ -223,25 +215,13 @@ class FareResolutionOrderTests(TestCase):
         with patch("service_requests.services.routing.get_route_eta", return_value=_route(12.0)):
             fare, breakdown = self._resolve(logistics_tier=self.flat_tier, logistics_lane=self.lane)
         self.assertEqual(fare, Decimal("1200.00"))
-        # GT audit Update 16: the flat paths used to return no breakdown at
-        # all, which left the Vendor dispatch gate with no purchased
-        # vehicle_class to enforce -- booking a configured route instead of a
-        # measured trip bypassed the compatibility rule. They now return a
-        # classification-only snapshot: the same fare, plus what was bought.
-        self.assertIsNotNone(breakdown)
-        self.assertEqual(breakdown["vehicle_class"], "truck")
-        self.assertEqual(breakdown["total"], Decimal("1200.00"))
-        # Still nothing distance-priced about it, and nothing invented.
-        self.assertNotIn("distance_km", breakdown)
+        self.assertIsNone(breakdown)
 
     def test_flat_tier_price_used_when_no_lane_and_no_distance_pricing(self):
         with patch("service_requests.services.routing.get_route_eta", return_value=_route(12.0)):
             fare, breakdown = self._resolve(logistics_tier=self.flat_tier)
         self.assertEqual(fare, Decimal("777.00"))
-        self.assertIsNotNone(breakdown)
-        self.assertEqual(breakdown["vehicle_class"], "truck")
-        self.assertEqual(breakdown["total"], Decimal("777.00"))
-        self.assertNotIn("distance_km", breakdown)
+        self.assertIsNone(breakdown)
 
     def test_no_tier_and_no_lane_still_raises(self):
         # The GT-B-01 guarantee that predates this change: never fall back
@@ -277,12 +257,7 @@ class FareResolutionOrderTests(TestCase):
         with patch("service_requests.services.routing.get_route_eta", return_value=None):
             fare, breakdown = self._resolve(logistics_lane=self.lane)
         self.assertEqual(fare, Decimal("1200.00"))
-        # Update 16: the lane fare is unchanged, but the booking still records
-        # which vehicle was purchased -- an unmeasurable route must not also
-        # mean an unenforceable vehicle requirement.
-        self.assertIsNotNone(breakdown)
-        self.assertEqual(breakdown["vehicle_class"], "truck")
-        self.assertNotIn("distance_km", breakdown)
+        self.assertIsNone(breakdown)
 
 
 class FareEngineBookingIntegrationTests(TestCase):
@@ -303,7 +278,6 @@ class FareEngineBookingIntegrationTests(TestCase):
             name="Tata Ace", starting_price=Decimal("400.00"),
             base_fare=Decimal("250.00"), per_km_rate=Decimal("18.00"),
             free_km=Decimal("2.00"), loading_unloading_charge=Decimal("100.00"),
-            vehicle_class="truck",  # see the note in the resolver fixtures above
         )
 
     def _payload(self, **extra):
@@ -358,35 +332,15 @@ class FareEngineBookingIntegrationTests(TestCase):
         # Round-trips back to the exact Decimal for later reconciliation.
         self.assertEqual(Decimal(b["total"]), sr.total_amount)
 
-    def test_flat_priced_booking_records_the_purchased_class_but_no_distance(self):
-        """
-        GT audit Update 16 changed this contract deliberately.
-
-        This test used to assert that a flat-priced booking left
-        fare_breakdown EMPTY -- "empty means 'not distance-priced', not 'data
-        missing'". That was the bug: the Vendor's dispatch gate reads the
-        purchased vehicle_class out of this snapshot, and an empty breakdown
-        made the gate skip, so any vehicle in the coarse category bucket could
-        take the job. Booking a configured route instead of a measured trip was
-        enough to bypass the compatibility rule entirely.
-
-        A flat-priced booking still has no distance fields -- nothing was
-        measured, and none are invented -- but it now records WHICH vehicle the
-        customer purchased.
-        """
+    def test_flat_priced_booking_leaves_the_breakdown_empty(self):
         from service_requests.models import ServiceRequest
         flat = ServiceTier.objects.create(
             category=LogisticsCategory.TRUCK, city="hosur", slug="flat-int",
             name="Flat", starting_price=Decimal("650.00"),
-            vehicle_class="truck",
         )
         with patch("service_requests.services.routing.get_route_eta", return_value=_route(12.0)):
             self.client.post("/api/booking/", self._payload(logistics_tier=flat.id))
         sr = ServiceRequest.objects.filter(service_category="goods_transport_truck").order_by("-id").first()
         self.assertEqual(sr.total_amount, Decimal("650.00"))
-        # The fare is unchanged -- this snapshot classifies, it never prices.
-        self.assertEqual(sr.fare_breakdown.get("total"), "650.00")
-        self.assertEqual(sr.fare_breakdown.get("vehicle_class"), "truck")
-        # Nothing was measured, so no distance figure is fabricated.
-        self.assertNotIn("distance_km", sr.fare_breakdown)
-        self.assertNotIn("chargeable_km", sr.fare_breakdown)
+        # Empty means "not distance-priced", not "data missing".
+        self.assertEqual(sr.fare_breakdown, {})

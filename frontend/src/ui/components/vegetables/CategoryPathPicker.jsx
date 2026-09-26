@@ -419,15 +419,29 @@ export default function CategoryPathPicker({
                               <ChevronRight size={13} />
                             </div>
                           ) : (
-                            <span
-                              className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md ${
-                                isSelected
-                                  ? "bg-white/20 text-white"
-                                  : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-                              }`}
-                            >
-                              Leaf
-                            </span>
+                            <>
+                              {cat.unit_of_measurement && (
+                                <span
+                                  className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
+                                    isSelected
+                                      ? "bg-white/20 text-white"
+                                      : "bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20"
+                                  }`}
+                                  title={`Default Unit: ${cat.unit_of_measurement_display || cat.unit_of_measurement}`}
+                                >
+                                  {cat.unit_of_measurement}
+                                </span>
+                              )}
+                              <span
+                                className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md ${
+                                  isSelected
+                                    ? "bg-white/20 text-white"
+                                    : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                                }`}
+                              >
+                                Leaf
+                              </span>
+                            </>
                           )}
                         </div>
                       </button>

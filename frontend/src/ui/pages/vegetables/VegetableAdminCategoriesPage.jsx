@@ -9,7 +9,6 @@ import {
 } from "lucide-react"
 import { apiRequest, extractApiErrorMessage } from "../../../api/client.js"
 import { routes } from "../../routes.js"
-import ImageUploader from "../../components/ImageUploader.jsx"
 
 export default function VegetableAdminCategoriesPage() {
   const [categories, setCategories] = useState([])
@@ -20,6 +19,7 @@ export default function VegetableAdminCategoriesPage() {
 
   // Tree Expand/Collapse State
   const [expandedIds, setExpandedIds] = useState(new Set())
+  const [unitChoices, setUnitChoices] = useState([])
 
   // Modals
   const [modalOpen, setModalOpen] = useState(false)
@@ -35,6 +35,7 @@ export default function VegetableAdminCategoriesPage() {
     slug: "",
     description: "",
     image: "",
+    unit_of_measurement: "",
     sort_order: 1,
     is_active: true,
   })
@@ -46,6 +47,11 @@ export default function VegetableAdminCategoriesPage() {
       const res = await apiRequest("/inventory/vegetable-categories/?status=APPROVED")
       const list = res?.data?.data || (Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []))
       setCategories(list)
+
+      const uChoices = res?.data?.unit_choices || res?.unit_choices || []
+      if (Array.isArray(uChoices) && uChoices.length > 0) {
+        setUnitChoices(uChoices)
+      }
 
       // Default expand all top-level categories that have subcategories
       const topLevelsWithSubs = list.filter(c => !c.parent && ((c.subcategories_count || 0) > 0 || (c.subcategories && c.subcategories.length > 0)))
@@ -78,6 +84,7 @@ export default function VegetableAdminCategoriesPage() {
       slug: "",
       description: "",
       image: "",
+      unit_of_measurement: "",
       sort_order: (categories.length || 0) + 1,
       is_active: true,
     })
@@ -93,6 +100,7 @@ export default function VegetableAdminCategoriesPage() {
       slug: cat.slug || "",
       description: cat.description || "",
       image: cat.image || "",
+      unit_of_measurement: cat.unit_of_measurement || "",
       sort_order: cat.sort_order || 1,
       is_active: cat.is_active !== false,
     })
@@ -113,6 +121,7 @@ export default function VegetableAdminCategoriesPage() {
       const payload = {
         ...formData,
         parent: formData.parent ? parseInt(formData.parent) : null,
+        unit_of_measurement: formData.unit_of_measurement || null,
       }
 
       if (editingCategory) {
@@ -296,6 +305,14 @@ export default function VegetableAdminCategoriesPage() {
                   ) : (
                     <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-slate-500/10 text-slate-700 dark:text-slate-300 border border-slate-500/20">
                       Leaf Category
+                    </span>
+                  )}
+                  {cat.unit_of_measurement && (
+                    <span
+                      className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20"
+                      title={`Default Unit: ${cat.unit_of_measurement_display || cat.unit_of_measurement}`}
+                    >
+                      ⚖️ Unit: {cat.unit_of_measurement}
                     </span>
                   )}
                   {depth > 0 && (
@@ -675,26 +692,45 @@ export default function VegetableAdminCategoriesPage() {
                   />
                 </div>
 
-                <div>
-                  <label className="text-slate-700 dark:text-slate-300 block mb-1">Sort Order #</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={formData.sort_order}
-                    onChange={(e) => setFormData({ ...formData, sort_order: parseInt(e.target.value) || 1 })}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:border-teal-500 text-xs font-normal shadow-2xs"
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-slate-700 dark:text-slate-300 block mb-1">
+                      Unit of Measurement
+                    </label>
+                    <select
+                      value={formData.unit_of_measurement || ""}
+                      onChange={(e) => setFormData({ ...formData, unit_of_measurement: e.target.value })}
+                      className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:border-teal-500 text-xs font-normal shadow-2xs cursor-pointer"
+                    >
+                      <option value="">None / Unspecified</option>
+                      {unitChoices.map((u) => (
+                        <option key={u.value} value={u.value}>
+                          {u.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-slate-700 dark:text-slate-300 block mb-1">Sort Order #</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={formData.sort_order}
+                      onChange={(e) => setFormData({ ...formData, sort_order: parseInt(e.target.value) || 1 })}
+                      className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:border-teal-500 text-xs font-normal shadow-2xs"
+                    />
+                  </div>
                 </div>
 
                 <div>
-                  <ImageUploader
-                    label="Category Image"
-                    description="Upload a custom category image or paste an image URL."
+                  <label className="text-slate-700 dark:text-slate-300 block mb-1">Image URL</label>
+                  <input
+                    type="text"
                     value={formData.image}
-                    assetType="catalog"
-                    fallbackSrc="/mockups/vegetables_realistic.png"
-                    aspectRatio="aspect-square"
-                    onChange={(url) => setFormData(prev => ({ ...prev, image: url }))}
+                    onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                    placeholder="/mockups/veg_onion.png"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:border-teal-500 text-xs font-normal shadow-2xs"
                   />
                 </div>
 

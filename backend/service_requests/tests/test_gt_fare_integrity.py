@@ -45,11 +45,6 @@ def _tier(category, name, **extra):
         free_km=Decimal("2.00"), minimum_fare=Decimal("300.00"),
         loading_unloading_charge=Decimal("50.00"),
         additional_stop_charge=Decimal("40.00"),
-        # GT audit Update 18: real ServiceTier rows always carry a
-        # vehicle_class (migration 0010 backfilled every row; 0011 made a
-        # blank value fail closed), and a goods-transport booking against a
-        # tier without one is now refused. Callers override it via **extra.
-        vehicle_class="truck",
     )
     defaults.update(extra)
     return ServiceTier.objects.create(**defaults)

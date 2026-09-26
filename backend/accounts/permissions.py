@@ -1,5 +1,5 @@
 """
-Centralized Global Authorization & RBAC Engine for sevo.
+Centralized Global Authorization & RBAC Engine for CalTrack.
 
 Architectural Principles:
 1. is_super_admin(user) is the single canonical global bypass across all modules and records.
@@ -85,40 +85,6 @@ DEFAULT_GLOBAL_RBAC = {
         "catalog": ["view", "create", "edit", "delete", "publish", "modify_price", "export"],
         "support": ["view"],
         "finance": ["view"],
-    },
-    "time_slots": {
-        "admin": [
-            "view", "create", "edit", "delete",
-            "view_time_slot_management", "create_time_slot_configuration",
-            "edit_time_slot_configuration", "manage_weekly_schedule", "manage_date_override"
-        ],
-        "manager": [
-            "view", "edit", "view_time_slot_management",
-            "edit_time_slot_configuration", "manage_weekly_schedule", "manage_date_override"
-        ],
-        "catalog": [
-            "view", "edit", "view_time_slot_management",
-            "edit_time_slot_configuration", "manage_weekly_schedule", "manage_date_override"
-        ],
-        "support": ["view", "view_time_slot_management"],
-        "finance": [],
-    },
-    "time_slot_management": {
-        "admin": [
-            "view", "create", "edit", "delete",
-            "view_time_slot_management", "create_time_slot_configuration",
-            "edit_time_slot_configuration", "manage_weekly_schedule", "manage_date_override"
-        ],
-        "manager": [
-            "view", "edit", "view_time_slot_management",
-            "edit_time_slot_configuration", "manage_weekly_schedule", "manage_date_override"
-        ],
-        "catalog": [
-            "view", "edit", "view_time_slot_management",
-            "edit_time_slot_configuration", "manage_weekly_schedule", "manage_date_override"
-        ],
-        "support": ["view", "view_time_slot_management"],
-        "finance": [],
     },
     "pricing": {
         "admin": ["view", "create", "edit", "delete", "publish", "modify_price", "export"],
@@ -290,7 +256,7 @@ DEFAULT_GLOBAL_RBAC = {
     },
 }
 
-GLOBAL_RBAC_CACHE_KEY = "sevo_global_rbac_matrix"
+GLOBAL_RBAC_CACHE_KEY = "caltrack_global_rbac_matrix"
 
 
 def get_global_rbac_permissions() -> dict:

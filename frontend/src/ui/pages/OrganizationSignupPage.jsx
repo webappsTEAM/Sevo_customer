@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { ShieldCheck, User, Lock, Mail, ArrowRight, Check } from "lucide-react"
-import { SevoLogo, sevoLogo } from "../components/sevoLogo.jsx"
+import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
 import { routes } from "../routes.js"
 import { apiRegisterAdmin } from "../../api/authService.js"
 import { useAuth } from "../../state/auth/useAuth.js"
@@ -61,7 +61,7 @@ export function OrganizationSignupPage() {
     <div className="flex min-h-screen bg-slate-50 font-body items-center justify-center p-4">
       <div className="w-full max-w-md bg-white border border-slate-200 p-8 sm:p-10 rounded-3xl shadow-xl">
         <div className="flex justify-center mb-8">
-          <SevoLogo size="md" />
+          <CalTrackLogo size="md" />
         </div>
 
         <div className="text-center mb-8 space-y-2">

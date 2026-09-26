@@ -1,13 +1,13 @@
 import React from 'react'
 import { motion } from 'framer-motion'
-import {
-  Download,
-  Printer,
-  Share2,
-  CheckCircle2,
-  MapPin,
-  Phone,
-  Globe,
+import { 
+  Download, 
+  Printer, 
+  Share2, 
+  CheckCircle2, 
+  MapPin, 
+  Phone, 
+  Globe, 
   Mail,
   Zap
 } from 'lucide-react'
@@ -41,14 +41,14 @@ export function InvoicePreview({ invoice, company, themeKey = 'modern', setTheme
   const isDark = themeKey === 'midnight'
 
   return (
-    <motion.div
+    <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-md"
       onClick={onClose}
     >
-      <motion.div
+      <motion.div 
         initial={{ scale: 0.95, y: 20 }}
         animate={{ scale: 1, y: 0 }}
         className="w-full max-w-4xl bg-white dark:bg-slate-950 rounded-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
@@ -81,7 +81,7 @@ export function InvoicePreview({ invoice, company, themeKey = 'modern', setTheme
         {/* Invoice Body */}
         <div className="flex-1 overflow-y-auto p-12 bg-slate-50 dark:bg-slate-900/50">
           <div className={`mx-auto max-w-3xl ${theme.bg} rounded-[32px] shadow-xl border ${theme.border} overflow-hidden font-sans`}>
-
+            
             {/* Top Branding */}
             <div className="p-12 pb-0 flex justify-between items-start">
               <div>
@@ -91,7 +91,7 @@ export function InvoicePreview({ invoice, company, themeKey = 'modern', setTheme
                 </div>
               </div>
               <div className="text-right">
-                <div className={`text-xl font-black ${theme.text}`}>sevo</div>
+                <div className={`text-xl font-black ${theme.text}`}>CALTRACK</div>
                 <div className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Workforce Systems</div>
               </div>
             </div>
@@ -182,10 +182,10 @@ export function InvoicePreview({ invoice, company, themeKey = 'modern', setTheme
             <div className={`p-12 ${isDark ? 'bg-slate-900' : 'bg-slate-50'} flex justify-between items-center`}>
               <div className="flex gap-6">
                 <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  <Mail size={12} className="text-indigo-500" /> support@sevo.com
+                  <Mail size={12} className="text-indigo-500" /> support@caltrack.com
                 </div>
                 <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  <Globe size={12} className="text-indigo-500" /> sevo.com
+                  <Globe size={12} className="text-indigo-500" /> caltrack.com
                 </div>
               </div>
               <div className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
@@ -200,7 +200,7 @@ export function InvoicePreview({ invoice, company, themeKey = 'modern', setTheme
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Select Template Theme:</p>
           <div className="flex gap-3">
             {Object.keys(THEMES).map(k => (
-              <button
+              <button 
                 key={k}
                 onClick={() => setTheme(k)}
                 className={`w-6 h-6 rounded-full border-2 ${themeKey === k ? 'border-indigo-600 scale-125' : 'border-transparent'} transition-all`}

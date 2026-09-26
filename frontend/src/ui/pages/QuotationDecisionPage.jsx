@@ -84,29 +84,15 @@ export function QuotationDecisionPage() {
     if (!token) return
     setLoading(true)
     try {
-      let res = await fetch(`${WORKFORCE_API_BASE}/workforce/quotes/decision/${token}/`)
-      let data = await res.json().catch(() => null)
-      
-      if (!res.ok || !data) {
-        // Fallback to customer quote endpoint
-        const fallbackRes = await fetch(`/api/booking/quote/${token}/`).catch(() => null)
-        if (fallbackRes && fallbackRes.ok) {
-          const fallbackData = await fallbackRes.json().catch(() => null)
-          if (fallbackData) {
-            res = fallbackRes
-            data = fallbackData
-          }
-        }
-      }
-
+      const res = await fetch(`${WORKFORCE_API_BASE}/workforce/quotes/decision/${token}/`)
+      const data = await res.json().catch(() => null)
       if (!res.ok || !data) {
         // No fabricated fallback. A visitor being asked to approve money must
         // never be shown invented figures because a request failed.
-        setError((data && (data.error || data.message)) || "This quotation link is not valid or has expired.")
+        setError((data && data.error) || "This quotation link is not valid or has expired.")
         setQuote(null)
       } else {
-        const actualQuote = (data && (data.quote || data.data)) ? (data.quote || data.data) : data
-        setQuote(actualQuote)
+        setQuote(data)
         setError(null)
       }
     } catch {
@@ -123,33 +109,17 @@ export function QuotationDecisionPage() {
     setSubmitting(true)
     setError(null)
     try {
-      let res = await fetch(`${WORKFORCE_API_BASE}/workforce/quotes/decision/${token}/`, {
+      const res = await fetch(`${WORKFORCE_API_BASE}/workforce/quotes/decision/${token}/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, ...payload }),
       })
-      let data = await res.json().catch(() => null)
-      if (!res.ok || !data || data.success === false) {
-        // Fallback to booking decide endpoint
-        const fallbackRes = await fetch(`/api/booking/quote/${token}/decide/`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action, decision: action, ...payload }),
-        }).catch(() => null)
-        if (fallbackRes && fallbackRes.ok) {
-          const fallbackData = await fallbackRes.json().catch(() => null)
-          if (fallbackData && fallbackData.success !== false) {
-            res = fallbackRes
-            data = fallbackData
-          }
-        }
-      }
-
+      const data = await res.json().catch(() => null)
       if (!res.ok || !data || data.success === false) {
         // Reporting success on a failed decision is worse than reporting
         // nothing: the customer walks away believing they approved work that
         // was never recorded.
-        setError((data && (data.error || data.message)) || "We could not record your decision. Please try again.")
+        setError((data && data.error) || "We could not record your decision. Please try again.")
         return
       }
       setOutcome(data)
@@ -190,11 +160,9 @@ export function QuotationDecisionPage() {
 
   const items = quote?.items || []
   const invoice = quote?.invoice
-  const totalPayable = Number(quote?.net_payable || quote?.total_amount || 0)
-  const advance = Number(invoice?.advance_amount ?? quote?.advance_amount ?? 0)
-  const balance = Number(invoice?.balance_amount ?? quote?.balance_amount ?? totalPayable)
-  const advancePercent = Number(invoice?.advance_percent ?? quote?.advance_percent ?? (totalPayable > 0 ? (advance / totalPayable) * 100 : 0))
-  const splitPayment = advance > 0 && balance > 0
+  const advance = invoice?.advance_amount
+  const balance = invoice?.balance_amount
+  const splitPayment = Number(balance || 0) > 0
   const [statusLabel, statusClass] =
     STATUS_LABELS[quote.status] || [quote.status_display || quote.status, "bg-slate-100 text-slate-600"]
 
@@ -306,12 +274,12 @@ export function QuotationDecisionPage() {
           </div>
         </div>
 
-        {splitPayment && (
+        {invoice && splitPayment && (
           <div className="bg-white rounded-2xl border border-slate-200 p-6">
             <h2 className="text-sm font-medium text-slate-900 mb-4">Payment schedule</h2>
             <div className="space-y-2">
               <Row
-                label={`Advance (${Number.isFinite(advancePercent) ? Math.round(advancePercent) : 0}%)`}
+                label={`Advance (${Number(invoice.advance_percent)}%)`}
                 value={money(advance)}
                 emphasis
               />
@@ -324,7 +292,7 @@ export function QuotationDecisionPage() {
           </div>
         )}
 
-        {invoice && invoice.id && (
+        {invoice && (
           <a
             href={`${WORKFORCE_API_BASE}/workforce/invoices/${invoice.id}/pdf/?token=${token}`}
             target="_blank"

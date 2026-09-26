@@ -3,7 +3,7 @@
 # service_requests migration 0064's header for that setup).
 #
 # GT-B-01: adds the distance-based pricing inputs to ServiceTier, per
-# sevo_PHASE_14 PART H.1. Purely additive and entirely
+# CALTRACK_PHASE_14 PART H.1. Purely additive and entirely
 # nullable/zero-default, so applying it changes NO existing behaviour:
 # with per_km_rate left unset on a tier, resolve_logistics_fare_v2()
 # falls straight through to the previous flat lane/tier lookup for that

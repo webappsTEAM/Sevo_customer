@@ -29,27 +29,27 @@ export function AuthProvider({ children }) {
   const formatUser = (data) => {
     if (!data?.username) return null
     return {
-      id: data.id ?? null,
+      id:        data.id         ?? null,
       customer_id: data.customer_id ?? data.customer_code ?? "",
       customerId: data.customer_id ?? data.customer_code ?? "",
-      username: data.username,
-      email: data.email ?? "",
+      username:  data.username,
+      email:     data.email      ?? "",
       firstName: data.first_name ?? "",
-      lastName: data.last_name ?? "",
-      fullName: `${data.first_name || ""} ${data.last_name || ""}`.trim() || data.username,
+      lastName:  data.last_name  ?? "",
+      fullName:  `${data.first_name || ""} ${data.last_name || ""}`.trim() || data.username,
       full_name: `${data.first_name || ""} ${data.last_name || ""}`.trim() || data.username,
-      role: data.role,
-      is_staff: data.is_staff ?? false,
+      role:      data.role,
+      is_staff:  data.is_staff ?? false,
       is_superuser: data.is_superuser ?? false,
       is_super_admin: Boolean(data.is_super_admin || data.is_superuser || data.role === "super_admin" || data.role === "superadmin"),
       isSuperAdmin: Boolean(data.is_super_admin || data.is_superuser || data.role === "super_admin" || data.role === "superadmin"),
       permissions: data.permissions ?? {},
       companyId: data.company,
-      bio: data.bio ?? "",
-      phone: data.phone ?? data.mobile_number ?? "",
-      timezone: data.timezone ?? "Asia/Kolkata",
-      language: data.language ?? "en",
-      avatar_url: data.avatar_url ?? null,
+      bio:       data.bio        ?? "",
+      phone:     data.phone      ?? data.mobile_number ?? "",
+      timezone:  data.timezone   ?? "Asia/Kolkata",
+      language:  data.language   ?? "en",
+      avatar_url:data.avatar_url ?? null,
       two_fa_enabled: data.two_fa_enabled ?? false,
       isCareAgent: data.is_care_agent ?? false,
       careRole: data.care_role ?? null,
@@ -64,12 +64,12 @@ export function AuthProvider({ children }) {
 
   const [user, setUser] = useState(() => {
     try {
-      const raw = localStorage.getItem("sevo_user")
+      const raw = localStorage.getItem("caltrack_user")
       if (raw) {
         const parsed = JSON.parse(raw)
         return formatUser(parsed)
       }
-    } catch (_) { }
+    } catch (_) {}
     return null
   })
   const [isReady, setIsReady] = useState(false)
@@ -89,11 +89,11 @@ export function AuthProvider({ children }) {
     if (u) {
       setUser(u)
       try {
-        localStorage.setItem("sevo_user", JSON.stringify(me))
+        localStorage.setItem("caltrack_user", JSON.stringify(me))
         if (me?.phone || me?.mobile_number) {
-          localStorage.setItem("sevo_customer_phone", me.phone || me.mobile_number)
+          localStorage.setItem("caltrack_customer_phone", me.phone || me.mobile_number)
         }
-      } catch (_) { }
+      } catch (_) {}
       if (me?.company_name) {
         localStorage.setItem("quicktims.orgName", me.company_name)
         window.dispatchEvent(new CustomEvent("quicktims:orgName"))
@@ -101,12 +101,12 @@ export function AuthProvider({ children }) {
       return u
     } else {
       try {
-        const hasToken = localStorage.getItem("sevo_access_token") || localStorage.getItem("qt_access")
+        const hasToken = localStorage.getItem("caltrack_access_token") || localStorage.getItem("qt_access")
         if (!hasToken) {
-          localStorage.removeItem("sevo_user")
+          localStorage.removeItem("caltrack_user")
           setUser(null)
         }
-      } catch (_) { }
+      } catch (_) {}
       return null
     }
   }, [])
@@ -118,17 +118,17 @@ export function AuthProvider({ children }) {
       if (res?.requires_2fa) return { requires2FA: true }
       if (res?.access) {
         try {
-          localStorage.setItem("sevo_access_token", res.access)
+          localStorage.setItem("caltrack_access_token", res.access)
           localStorage.setItem("qt_access", res.access)
-        } catch (_) { }
+        } catch (_) {}
       }
       if (res?.user) {
         const u = formatUser(res.user)
         if (u) {
           setUser(u)
           try {
-            localStorage.setItem("sevo_user", JSON.stringify(res.user))
-          } catch (_) { }
+            localStorage.setItem("caltrack_user", JSON.stringify(res.user))
+          } catch (_) {}
           if (res.user.company_name) {
             localStorage.setItem("quicktims.orgName", res.user.company_name)
             window.dispatchEvent(new CustomEvent("quicktims:orgName"))
@@ -167,17 +167,17 @@ export function AuthProvider({ children }) {
       const res = await apiGoogleLogin(googleAccessToken)
       if (res?.access) {
         try {
-          localStorage.setItem("sevo_access_token", res.access)
+          localStorage.setItem("caltrack_access_token", res.access)
           localStorage.setItem("qt_access", res.access)
-        } catch (_) { }
+        } catch (_) {}
       }
       if (res?.user) {
         const u = formatUser(res.user)
         if (u) {
           setUser(u)
           try {
-            localStorage.setItem("sevo_user", JSON.stringify(res.user))
-          } catch (_) { }
+            localStorage.setItem("caltrack_user", JSON.stringify(res.user))
+          } catch (_) {}
           if (res.user.company_name) {
             localStorage.setItem("quicktims.orgName", res.user.company_name)
             window.dispatchEvent(new CustomEvent("quicktims:orgName"))
@@ -196,17 +196,17 @@ export function AuthProvider({ children }) {
       const res = await apiCustomerGoogleLogin(googleAccessToken)
       if (res?.access) {
         try {
-          localStorage.setItem("sevo_access_token", res.access)
+          localStorage.setItem("caltrack_access_token", res.access)
           localStorage.setItem("qt_access", res.access)
-        } catch (_) { }
+        } catch (_) {}
       }
       if (res?.user) {
         const u = formatUser(res.user)
         if (u) {
           setUser(u)
           try {
-            localStorage.setItem("sevo_user", JSON.stringify(res.user))
-          } catch (_) { }
+            localStorage.setItem("caltrack_user", JSON.stringify(res.user))
+          } catch (_) {}
           return u
         }
       }
@@ -219,14 +219,14 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     try {
       await apiLogout()
-    } catch (_) { }
+    } catch (_) {}
     clearLegacyLocationStorage()
     localStorage.removeItem("quicktims.orgName")
-    localStorage.removeItem("sevo_activation_dossier")
-    localStorage.removeItem("sevo_access_token")
+    localStorage.removeItem("caltrack_activation_dossier")
+    localStorage.removeItem("caltrack_access_token")
     localStorage.removeItem("qt_access")
-    localStorage.removeItem("sevo_user")
-    localStorage.removeItem("sevo_customer_phone")
+    localStorage.removeItem("caltrack_user")
+    localStorage.removeItem("caltrack_customer_phone")
     setUser(null)
     window.dispatchEvent(new CustomEvent("calservice_auth_changed", { detail: { user: null } }))
     window.dispatchEvent(new Event("calservice_address_changed"))
@@ -282,11 +282,11 @@ export function AuthProvider({ children }) {
         if (u) {
           setUser(u)
           try {
-            localStorage.setItem("sevo_user", JSON.stringify(payload.user))
-          } catch (_) { }
+            localStorage.setItem("caltrack_user", JSON.stringify(payload.user))
+          } catch (_) {}
         }
       }
-      refreshMe().catch(() => { })
+      refreshMe().catch(() => {})
     }
     window.addEventListener("calservices:customer_login", handleCustomerLogin)
     return () => window.removeEventListener("calservices:customer_login", handleCustomerLogin)
@@ -297,14 +297,14 @@ export function AuthProvider({ children }) {
     const handle = async () => {
       try {
         await apiLogout()
-      } catch (_) { }
+      } catch (_) {}
       clearLegacyLocationStorage()
       localStorage.removeItem("quicktims.orgName")
-      localStorage.removeItem("sevo_activation_dossier")
-      localStorage.removeItem("sevo_access_token")
+      localStorage.removeItem("caltrack_activation_dossier")
+      localStorage.removeItem("caltrack_access_token")
       localStorage.removeItem("qt_access")
-      localStorage.removeItem("sevo_user")
-      localStorage.removeItem("sevo_customer_phone")
+      localStorage.removeItem("caltrack_user")
+      localStorage.removeItem("caltrack_customer_phone")
       setUser(null)
       window.dispatchEvent(new CustomEvent("calservice_auth_changed", { detail: { user: null } }))
       window.dispatchEvent(new Event("calservice_address_changed"))

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Lane, ServiceArea, ServiceTier, GoodsCategory, GoodsItem, PackersMoversConfig, GTFaq, LogisticsSlot
+from .models import Lane, ServiceArea, ServiceTier, GoodsCategory, GoodsItem, PackersMoversConfig
 
 
 @admin.register(ServiceTier)
@@ -15,7 +15,7 @@ class ServiceTierAdmin(admin.ModelAdmin):
     ordering = ["category", "city", "order"]
     fieldsets = (
         ("Tier Identity", {
-            "fields": ("name", "slug", "category", "vehicle_class", "city", "weight_class", "order", "is_active", "description", "image", "includes")
+            "fields": ("name", "slug", "category", "vehicle_class", "city", "weight_class", "order", "is_active", "description", "image")
         }),
         ("Rate Card & Pricing", {
             "fields": ("starting_price", "base_fare", "per_km_rate", "free_km", "minimum_fare", "loading_unloading_charge", "additional_stop_charge", "surge_multiplier", "currency")
@@ -24,6 +24,15 @@ class ServiceTierAdmin(admin.ModelAdmin):
             "fields": ("max_weight_kg", "max_cft", "capacity_label", "dimensions_label")
         }),
     )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Lane)
@@ -49,7 +58,7 @@ class GoodsCategoryAdmin(admin.ModelAdmin):
     ordering = ["order", "name"]
     fieldsets = (
         ("Category Details", {
-            "fields": ("name", "slug", "icon", "description", "info_banner", "order", "is_active")
+            "fields": ("name", "slug", "icon", "description", "order", "is_active")
         }),
         ("Transport Restrictions & Fitment", {
             "fields": ("allows_two_wheeler", "min_vehicle_class", "is_prohibited")
@@ -60,16 +69,16 @@ class GoodsCategoryAdmin(admin.ModelAdmin):
 @admin.register(GoodsItem)
 class GoodsItemAdmin(admin.ModelAdmin):
     list_display = [
-        "name", "category", "subcategory", "default_weight_kg", "default_cft",
+        "name", "category", "default_weight_kg", "default_cft",
         "is_two_wheeler_compatible", "is_fragile", "requires_special_handling",
         "special_handling_charge", "is_prohibited", "is_active"
     ]
-    list_filter = ["category", "subcategory", "is_two_wheeler_compatible", "is_fragile", "requires_special_handling", "is_prohibited", "is_active"]
-    search_fields = ["name", "slug", "subcategory"]
-    ordering = ["category", "subcategory", "order", "name"]
+    list_filter = ["category", "is_two_wheeler_compatible", "is_fragile", "requires_special_handling", "is_prohibited", "is_active"]
+    search_fields = ["name", "slug"]
+    ordering = ["category", "order", "name"]
     fieldsets = (
         ("Item Identity", {
-            "fields": ("category", "name", "slug", "subcategory", "unit", "order", "is_active")
+            "fields": ("category", "name", "slug", "unit", "order", "is_active")
         }),
         ("Physical Specifications", {
             "fields": ("default_weight_kg", "default_cft", "is_two_wheeler_compatible")
@@ -89,21 +98,4 @@ class PackersMoversConfigAdmin(admin.ModelAdmin):
     ]
     list_filter = ["city", "is_active"]
     search_fields = ["city"]
-
-
-@admin.register(GTFaq)
-class GTFaqAdmin(admin.ModelAdmin):
-    list_display = ["question", "category", "city", "order", "is_active"]
-    list_filter = ["category", "city", "is_active"]
-    search_fields = ["question", "answer"]
-    ordering = ["category", "city", "order"]
-
-
-@admin.register(LogisticsSlot)
-class LogisticsSlotAdmin(admin.ModelAdmin):
-    list_display = ["slot_label", "group", "category", "city", "start_time", "end_time", "capacity", "order", "is_active"]
-    list_filter = ["category", "city", "group", "is_active"]
-    search_fields = ["slot_label"]
-    ordering = ["category", "city", "order", "start_time"]
-
 

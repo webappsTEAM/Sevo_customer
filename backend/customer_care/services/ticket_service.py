@@ -38,17 +38,9 @@ def create_ticket(company, created_by, category, priority, channel, customer=Non
         priority=priority,
         channel=channel,
         customer=customer,
-        # customer.phone/email can themselves be None (not just absent), in
-        # which case `phone or (getattr(...) if customer else "")` still
-        # evaluates to None -- `getattr` returns the real (None) attribute
-        # value here, it only falls back to its default when the attribute
-        # doesn't exist at all. CustomerCareTicket.phone is NOT NULL, so an
-        # unwrapped None reaching .create() raises IntegrityError. Coercing
-        # each fallback to "" if it's falsy closes that gap without changing
-        # behavior for the common case (a real phone/email/name present).
-        customer_name=customer_name or ((customer.get_full_name() if customer else "") or ""),
-        phone=phone or ((getattr(customer, "phone", "") if customer else "") or ""),
-        email=email or ((getattr(customer, "email", "") if customer else "") or ""),
+        customer_name=customer_name or (customer.get_full_name() if customer else ""),
+        phone=phone or (getattr(customer, "phone", "") if customer else ""),
+        email=email or (getattr(customer, "email", "") if customer else ""),
         booking=booking,
         linked_complaint=linked_complaint,
         sla_due_at=sla_due_at,

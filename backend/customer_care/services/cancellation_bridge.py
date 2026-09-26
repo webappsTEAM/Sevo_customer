@@ -65,10 +65,10 @@ def request_cancellation_via_ticket(ticket, actor, reason, reason_note="", reten
         if customer:
             ref_type = "FULL" if late_fee == Decimal("0.00") else "PARTIAL"
             refund_req = create_refund_request(
-                booking=booking,
                 customer=customer,
-                amount=refund_amount,
+                booking_id=booking.id,
                 refund_type=ref_type,
+                requested_amount=refund_amount,
                 reason=f"Auto-generated draft refund from cancellation ticket {ticket.ticket_number}. Reason: {reason}",
                 additional_notes=reason_note
             )

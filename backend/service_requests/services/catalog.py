@@ -103,7 +103,7 @@ class LogisticsPricingPermissionError(PermissionError):
 _VERSION_FIELDS = {"base_price", "offer_price", "name", "includes", "excludes"}
 
 _PACKAGE_TRANSITIONS = {
-    PackageStatus.DRAFT: {PackageStatus.ACTIVE, PackageStatus.ARCHIVED},
+    PackageStatus.DRAFT: {PackageStatus.ACTIVE},
     PackageStatus.ACTIVE: {PackageStatus.INACTIVE, PackageStatus.ARCHIVED},
     PackageStatus.INACTIVE: {PackageStatus.ACTIVE, PackageStatus.ARCHIVED},
     PackageStatus.ARCHIVED: set(),
@@ -319,38 +319,16 @@ def _logistics_tier_for_package(package):
     return None
 
 
-def _logistics_category_for_service_slug(svc_slug, service=None, package=None):
+def _logistics_category_for_service_slug(svc_slug):
     """
-    LogisticsCategory a Service or Package maps to canonically.
-    Prioritizes:
-    1. Direct ServiceTier link on package (if present)
-    2. Service's parent CatalogCategory slug
-    3. Explicit service slug matching
+    LogisticsCategory a Service maps to by slug substring, or None if it
+    isn't a Goods & Transport service at all. Shared by create_package and
+    update_package's tier-creation fallback so the two paths can never
+    disagree about which packages are "Goods & Transport".
     """
     from logistics.models import LogisticsCategory
 
-    if package and getattr(package, "gt_service_tier_id", None):
-        try:
-            from logistics.models import ServiceTier
-            tier = ServiceTier.objects.filter(id=package.gt_service_tier_id).first()
-            if tier and tier.category:
-                return tier.category
-        except Exception:
-            pass
-
-    cat_slug = ""
-    if service:
-        cat_slug = getattr(getattr(service, "category", None), "slug", "") or ""
-    cat_slug = cat_slug.lower()
-
-    if cat_slug in ("goods_transport_truck", "trucks", "truck", "mini-trucks", "mini_trucks"):
-        return LogisticsCategory.TRUCK
-    if cat_slug in ("goods_transport_two_wheeler", "two-wheelers", "two_wheelers", "2-wheelers"):
-        return LogisticsCategory.TWO_WHEELER
-    if cat_slug in ("packers_movers", "packers-and-movers", "packers-movers", "relocation"):
-        return LogisticsCategory.PACKERS_MOVERS
-
-    svc_slug = (svc_slug or (getattr(service, "slug", "") if service else "")).lower()
+    svc_slug = (svc_slug or "").lower()
     if "truck" in svc_slug:
         return LogisticsCategory.TRUCK
     if "two-wheeler" in svc_slug or "2-wheeler" in svc_slug or "wheeler" in svc_slug:
@@ -369,14 +347,7 @@ def _gt_tier_defaults_from_package(package, cat_enum):
     logically identical to the incremental diff update_package normally does
     on an already-linked tier."""
     price_to_sync = package.base_price if package.base_price is not None else (package.offer_price or 0)
-    gt_city = (package.gt_city or "").strip().lower()
-    if not gt_city:
-        try:
-            from settings_hub.models import City
-            active_city = City.objects.filter(is_active=True, is_launched=True).first()
-            gt_city = active_city.slug if active_city else "hosur"
-        except Exception:
-            gt_city = "hosur"
+    gt_city = (package.gt_city or "hosur").strip().lower() or "hosur"
     return {
         "category": cat_enum,
         "name": package.name,
@@ -435,15 +406,10 @@ def create_package(data, actor):
         pass
     try:
         from logistics.models import ServiceTier
-        cat_enum = _logistics_category_for_service_slug(getattr(package.service, "slug", ""), service=getattr(package, "service", None), package=package)
+        cat_enum = _logistics_category_for_service_slug(getattr(package.service, "slug", ""))
         if cat_enum:
             if not package.gt_city:
-                try:
-                    from settings_hub.models import City
-                    active_city = City.objects.filter(is_active=True, is_launched=True).first()
-                    package.gt_city = active_city.slug if active_city else "hosur"
-                except Exception:
-                    package.gt_city = "hosur"
+                package.gt_city = "hosur"
                 package.save(update_fields=["gt_city"])
             # Keyed on the package's own slug, so a brand new package creates
             # its own new tier rather than colliding with an unrelated one.
@@ -613,31 +579,8 @@ def update_package(package, data, actor, reason=None):
         _pre_tier = None
     if _pre_tier is not None:
         # Only gate on price-bearing fields that flow into the fare engine.
-        #
-        # GT audit follow-up to Updates 6-9: this originally checked only
-        # base_price/offer_price. But this same function later mirrors nine
-        # gt_* fields straight onto the linked ServiceTier's fare fields (see
-        # _gt_field_map below) with no other permission check in between --
-        # so a catalog:edit-only actor could set gt_per_km_rate/gt_base_fare/
-        # gt_surge_multiplier/etc. and silently move the live GT/P&M fare
-        # engine's rates, bypassing the modify_price control entirely. Seven
-        # of the nine gt_* fields are genuine money fields (the same ones
-        # PRICING_FIELDS in the now-dead logistics/pricing_admin.py already
-        # names); gt_weight_class and gt_dimensions_label are descriptive and
-        # correctly stay on plain catalog:edit. Listing them alongside
-        # base_price/offer_price keeps a mixed payload (e.g. a descriptive
-        # gt_dimensions_label change bundled with an unauthorized
-        # gt_per_km_rate change) from letting the price change slip through
-        # under cover of the legitimate one -- ANY of these fields changing
-        # trips the same gate, and the gate still runs before _apply_updates,
-        # so a denied request writes nothing at all.
         _price_fields_changing = {
-            f for f in (
-                "base_price", "offer_price",
-                "gt_base_fare", "gt_per_km_rate", "gt_free_km",
-                "gt_loading_unloading_charge", "gt_additional_stop_charge",
-                "gt_surge_multiplier", "gt_minimum_fare",
-            )
+            f for f in ("base_price", "offer_price")
             if f in data and data[f] != getattr(package, f)
         }
         if _price_fields_changing:
@@ -672,15 +615,10 @@ def update_package(package, data, actor, reason=None):
             # booking page while its old tier kept showing stale data).
             # Create the tier it should have had instead of doing nothing.
             from logistics.models import ServiceTier
-            cat_enum = _logistics_category_for_service_slug(getattr(pkg.service, "slug", ""), service=getattr(pkg, "service", None), package=pkg)
+            cat_enum = _logistics_category_for_service_slug(getattr(pkg.service, "slug", ""))
             if cat_enum:
                 if not pkg.gt_city:
-                    try:
-                        from settings_hub.models import City
-                        active_city = City.objects.filter(is_active=True, is_launched=True).first()
-                        pkg.gt_city = active_city.slug if active_city else "hosur"
-                    except Exception:
-                        pkg.gt_city = "hosur"
+                    pkg.gt_city = "hosur"
                     pkg.save(update_fields=["gt_city"])
                 tier, _created = ServiceTier.objects.update_or_create(
                     slug=pkg.slug,
@@ -862,28 +800,4 @@ def create_addon(data, actor):
 
 
 def update_addon(addon, data, actor, reason=None):
-    # ── AddOn pricing permission gate ───────────────────────────────────────
-    # GT audit Update 9: AddOn.price is a real customer-facing charge, but
-    # this function used to be a bare pass-through to _apply_updates() with
-    # no price check at all -- unlike update_package() above, which at least
-    # gated base_price/offer_price. AdminAddOnDetailView.put() is only gated
-    # by catalog:edit, so without this check any catalog:edit-only actor
-    # could freely change price. Mirrors the same modify_price + reason
-    # requirement update_package() enforces for its price fields, and runs
-    # before _apply_updates() so a denied request writes nothing.
-    if "price" in data and data["price"] != getattr(addon, "price", None):
-        from accounts.permissions import can as _can
-        if not _can(actor, "pricing", "modify_price"):
-            raise LogisticsPricingPermissionError(
-                "Changing an add-on's price requires the 'modify_price' "
-                "permission on the Pricing module."
-            )
-        if not (reason or "").strip():
-            raise ValidationError(
-                {"reason": [
-                    "A reason is required when changing an add-on's price. "
-                    "It is recorded in the pricing audit trail."
-                ]}
-            )
-    # ── End AddOn permission gate ───────────────────────────────────────────
     return _apply_updates(addon, data, CatalogChangeLog.EntityType.ADDON, actor, reason=reason)

@@ -30,7 +30,6 @@ export function ACInspectionSummaryModal({
   onClose,
   onConfirm,
   isSubmitting = false,
-  errorMsg = "",
   estimationAcDetails = {},
   estimationSymptom = "Not cooling",
   estimationNotes = "",
@@ -210,13 +209,6 @@ export function ACInspectionSummaryModal({
               </p>
             </div>
           </div>
-
-          {errorMsg && (
-            <div className="mx-4 mb-2 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-semibold flex items-center gap-2 shrink-0">
-              <AlertCircle size={15} className="shrink-0 text-rose-600" />
-              <span>{errorMsg}</span>
-            </div>
-          )}
 
           {/* Footer Actions with [ Cancel ] and [ Confirm Booking ] */}
           <div className="p-4 bg-slate-50/90 border-t border-slate-200 flex items-center gap-3 shrink-0">

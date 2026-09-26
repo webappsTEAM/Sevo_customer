@@ -1,11 +1,16 @@
-// Fallback static categories reference for offline or initial hydration
-// The authoritative source of truth is the live database via GET /api/catalog/categories/
 export const CATEGORIES = [
-  { id: "home_pest_control", slug: "home_pest_control", name: "Cleaning & Pest Control", image: "/mockups/hero_pro_cleaning_rect.jpg", desc: "Deep clean & pest sanitization" },
-  { id: "paintings", slug: "paintings", name: "Painting & Waterproofing", image: "/assets/Painting/Interior.webp", desc: "Walls, ceilings & textures" },
-  { id: "electrician_plumbing_carpentry", slug: "electrician_plumbing_carpentry", name: "Electrician, Plumber & Carpenter", image: "/mockups/hero_pro_electrical_rect.jpg", desc: "Repairs, wiring, plumbing & woodwork" },
-  { id: "ac_appliance", slug: "ac_appliance", name: "AC & Appliance Repair", image: "/mockups/hero_pro_ac_rect.jpg", desc: "AC service, cooling & appliance fixes" },
-  { id: "mason", slug: "mason", name: "Masonry & Civil Work", image: "/mockups/brick_wall_construction_red.jpg", desc: "Brick, plaster & civil repair" },
-  { id: "goods_transports", slug: "goods_transports", name: "Goods & Transport", image: "/assets/cat_goods_transport.jpg", desc: "Mini trucks, 2-wheelers & movers" },
-  { id: "vegetables_groceries", slug: "vegetables_groceries", name: "Farm-Fresh Vegetables & Groceries", image: "/assets/cat_food_health.jpg", desc: "Daily farm-harvested produce" },
+  { id: "cleaning", name: "Home Cleaning", image: "/mockups/hero_pro_cleaning_rect.jpg", desc: "Deep clean & sanitization", rating: "4.8", jobs: "50K+" },
+  { id: "sofa_cleaning", name: "Sofa Cleaning", image: "/mockups/sofa_cleaning.png", desc: "Sofa, mattress & carpet", rating: "4.8", jobs: "15K+" },
+  { id: "kitchen_cleaning", name: "Kitchen Cleaning", image: "/mockups/kitchen_cleaning_hero.png", desc: "Complete kitchen & appliance clean", rating: "4.8", jobs: "20K+" },
+  { id: "bathroom_cleaning", name: "Bathroom Cleaning", image: "/mockups/bathroom_cleaning.png", desc: "Bathroom deep cleaning & subscriptions", rating: "4.8", jobs: "25K+" },
+  { id: "plumbing", name: "Plumbing", image: "/mockups/hero_pro_plumbing_rect.jpg", desc: "Leaks, pipes & fixtures", rating: "4.7", jobs: "30K+" },
+  { id: "electrical", name: "Electrical", image: "/mockups/hero_pro_electrical_rect.jpg", desc: "Wiring, panels & lighting", rating: "4.8", jobs: "40K+" },
+  { id: "carpentry", name: "Carpentry", image: "/mockups/hero_cleaning_office.jpg", desc: "Furniture & wood repairs", rating: "4.6", jobs: "15K+" },
+  { id: "hvac", name: "AC & Heating", image: "/mockups/hero_pro_ac_rect.jpg", desc: "AC service & installation", rating: "4.9", jobs: "60K+" },
+  { id: "pest_control", name: "Pest Control", image: "/mockups/pest_control_header.jpg", desc: "Termites, cockroaches & more", rating: "4.7", jobs: "25K+" },
+  { id: "painting", name: "Painting", image: "/assets/Painting/Interior.webp", desc: "Walls, ceilings & textures", rating: "4.6", jobs: "20K+" },
+  { id: "mason", name: "Mason", image: "/mockups/brick_wall_construction_red.jpg", desc: "Brick, plaster & civil work", rating: "4.8", jobs: "12K+" },
+  { id: "appliance_repair", name: "Appliances", image: "/mockups/hero_pro_appliance_rect.jpg", desc: "Fridge, washer & oven repairs", rating: "4.8", jobs: "35K+" },
+  { id: "security", name: "Security Systems", image: "/mockups/service_inspection.png", desc: "CCTV & alarm systems", rating: "4.7", jobs: "10K+" },
+  { id: "general", name: "General Repair", image: "/mockups/service_maintenance.png", desc: "Handyman & misc tasks", rating: "4.5", jobs: "45K+" },
 ];

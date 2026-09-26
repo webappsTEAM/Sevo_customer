@@ -1,4 +1,4 @@
-# sevo REST & WebSocket API Documentation
+# CalTrack REST & WebSocket API Documentation
 
 ## API Versioning & Endpoints Architecture
 

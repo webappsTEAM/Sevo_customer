@@ -181,15 +181,8 @@ class SupabaseStorageServiceTestCase(TestCase):
             SupabaseStorageService.get_public_url("mockups/ants_control.jpg"),
             "/mockups/ants_control.jpg"
         )
-        # Storage path -- get_public_url() falls back to a local /media/ URL
-        # whenever SUPABASE_URL isn't configured (correct behavior, and the
-        # default in this test environment: SUPABASE_URL is "" per
-        # quicktims/settings.py). To exercise the actual Supabase-backed
-        # branch (which is what asserts the "admin-media" bucket name), a
-        # non-empty SUPABASE_URL must be configured for the duration of this
-        # check, same as a real environment with Supabase actually wired up.
-        with override_settings(SUPABASE_URL="https://example.supabase.co", SUPABASE_SERVICE_ROLE_KEY="test-service-role-key"):
-            storage_url = SupabaseStorageService.get_public_url("catalog/packages/abc123.webp")
+        # Storage path
+        storage_url = SupabaseStorageService.get_public_url("catalog/packages/abc123.webp")
         self.assertIn("admin-media", storage_url)
         self.assertTrue(storage_url.endswith("catalog/packages/abc123.webp"))
 
@@ -203,7 +196,7 @@ class ImageUploadEndpointTestCase(TestCase):
         self.client = APIClient()
         self.user = User.objects.create_user(
             username="admin_test_user",
-            email="admin_test@sevo.com",
+            email="admin_test@caltrack.com",
             password="TestPassword@123",
             role="admin",
             is_staff=True,
@@ -274,7 +267,7 @@ class ImageUploadEndpointTestCase(TestCase):
         """Non-admin user is rejected with 403 Forbidden."""
         customer_user = User.objects.create_user(
             username="regular_customer",
-            email="cust@sevo.com",
+            email="cust@caltrack.com",
             password="Password@123",
             role="customer",
             is_staff=False,
@@ -431,7 +424,7 @@ class ImagePipelineSizeAndQualityMatrixTestCase(TestCase):
 
         admin_user = User.objects.create_user(
             username="pkg_admin_tester",
-            email="pkg_admin@sevo.com",
+            email="pkg_admin@caltrack.com",
             password="Password@123",
             role="admin",
             is_staff=True,

@@ -19,8 +19,6 @@ from .models import (
     DeliveryProof,
     Estimation, EstimationFee, Inspection, InspectionFinding, InspectionPhoto,
     EstimationQuotation, EstimationQuotationItem,
-    ACInspectionRateCategory, ACInspectionRateItem, ACInspectionConfiguration,
-    CustomerInspection, CustomerInspectionRateSnapshot,
     BookingSeries,
     BookingMessage,
     VendorCapabilityRequest,
@@ -50,10 +48,8 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
     vegetable_category_slug = serializers.CharField(source="stock_item.category.slug", read_only=True, default=None)
     vegetable_category_parent_name = serializers.CharField(source="stock_item.category.parent.name", read_only=True, default=None)
     vegetable_category_full_path = serializers.CharField(source="stock_item.category.full_path", read_only=True, default=None)
-    image = serializers.SerializerMethodField()
     in_stock = serializers.SerializerMethodField()
     max_quantity = serializers.SerializerMethodField()
-    variants = serializers.SerializerMethodField()
 
     class Meta:
         model = Package
@@ -62,21 +58,11 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
             "vegetable_category_name", "vegetable_category_slug", "vegetable_category_parent_name", "vegetable_category_full_path",
             "name", "slug", "description", "price", "base_price", "offer_price", "platform_fee", "gst_rate", "duration",
             "image", "popular", "tag", "includes", "excludes", "payment_policy",
-            "faqs", "sort_order", "tools", "ready", "custom_packs", "customization", "sub_service_key",
+            "faqs", "sort_order", "tools", "ready", "custom_packs", "customization",
             "service_id", "service_name", "service_slug", "service_description",
             "service_customization", "service_sort_order", "service_image",
-            "in_stock", "max_quantity", "variants",
+            "in_stock", "max_quantity",
         ]
-
-    def get_image(self, obj):
-        if obj.image and str(obj.image).strip():
-            return str(obj.image).strip()
-        if hasattr(obj, 'stock_item') and obj.stock_item:
-            if obj.stock_item.image and str(obj.stock_item.image).strip():
-                return str(obj.stock_item.image).strip()
-            if obj.stock_item.category and obj.stock_item.category.image and str(obj.stock_item.category.image).strip():
-                return str(obj.stock_item.category.image).strip()
-        return ""
 
     def get_category(self, obj):
         if obj.service_id and obj.service:
@@ -96,22 +82,6 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
 
     def get_max_quantity(self, obj):
         return self.get_stock_status(obj)["max_quantity"]
-
-    def get_variants(self, obj):
-        variants_qs = obj.variants.filter(is_active=True, status="APPROVED").order_by("sort_order", "pack_value", "id")
-        return [{
-            "id": v.id,
-            "name": v.display_name,
-            "pack_value": str(v.pack_value),
-            "unit": v.unit,
-            "unit_basis": v.unit_basis,
-            "base_price": str(v.base_price),
-            "mrp": str(v.mrp) if v.mrp else None,
-            "sku": v.sku,
-            "is_default": v.is_default,
-            "is_active": v.is_active,
-            "sort_order": v.sort_order,
-        } for v in variants_qs]
 
 
 class CatalogCategorySerializer(serializers.ModelSerializer):
@@ -171,7 +141,6 @@ class CatalogCategorySerializer(serializers.ModelSerializer):
 
 class ServiceSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source="category.name", read_only=True)
-    category_slug = serializers.CharField(source="category.slug", read_only=True)
 
     class Meta:
         model = Service
@@ -203,30 +172,6 @@ class AddOnSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class PackageVariantSerializer(serializers.ModelSerializer):
-    package_name = serializers.CharField(source="package.name", read_only=True)
-    vegetable_name = serializers.CharField(source="vegetable.name", read_only=True, default=None)
-    display_name = serializers.CharField(read_only=True)
-    base_unit_deduction = serializers.DecimalField(max_digits=12, decimal_places=3, read_only=True)
-    requested_by_name = serializers.SerializerMethodField()
-    reviewed_by_name = serializers.SerializerMethodField()
-
-    class Meta:
-        from service_requests.models import PackageVariant
-        model = PackageVariant
-        fields = '__all__'
-
-    def get_requested_by_name(self, obj):
-        if obj.requested_by:
-            return obj.requested_by.get_full_name() or obj.requested_by.username or obj.requested_by.email
-        return "Admin"
-
-    def get_reviewed_by_name(self, obj):
-        if obj.reviewed_by:
-            return obj.reviewed_by.get_full_name() or obj.reviewed_by.username or obj.reviewed_by.email
-        return None
-
-
 class PackageSerializer(serializers.ModelSerializer):
     service_name = serializers.CharField(source="service.name", read_only=True)
     service_slug = serializers.CharField(source="service.slug", read_only=True)
@@ -237,9 +182,6 @@ class PackageSerializer(serializers.ModelSerializer):
     max_quantity = serializers.SerializerMethodField()
     vegetable_category = serializers.SerializerMethodField()
     add_ons = AddOnSerializer(many=True, read_only=True)
-    rating = serializers.SerializerMethodField()
-    reviews_count = serializers.SerializerMethodField()
-    variants = serializers.SerializerMethodField()
 
     class Meta:
         model = Package
@@ -262,22 +204,6 @@ class PackageSerializer(serializers.ModelSerializer):
     def get_max_quantity(self, obj):
         return self.get_stock_status(obj).get("max_quantity", 99)
 
-    def get_variants(self, obj):
-        variants_qs = obj.variants.filter(is_active=True, status="APPROVED").order_by("sort_order", "pack_value", "id")
-        return [{
-            "id": v.id,
-            "name": v.display_name,
-            "pack_value": str(v.pack_value),
-            "unit": v.unit,
-            "unit_basis": v.unit_basis,
-            "base_price": str(v.base_price),
-            "mrp": str(v.mrp) if v.mrp else None,
-            "sku": v.sku,
-            "is_default": v.is_default,
-            "is_active": v.is_active,
-            "sort_order": v.sort_order,
-        } for v in variants_qs]
-
     def get_vegetable_category(self, obj):
         item = getattr(obj, "stock_item", None)
         if item and item.category:
@@ -288,24 +214,6 @@ class PackageSerializer(serializers.ModelSerializer):
                 "image": item.category.image,
             }
         return None
-
-    def get_rating(self, obj):
-        if obj.reviews and isinstance(obj.reviews, list) and len(obj.reviews) > 0:
-            ratings = []
-            for r in obj.reviews:
-                if isinstance(r, dict) and "rating" in r:
-                    try:
-                        ratings.append(float(r["rating"]))
-                    except (ValueError, TypeError):
-                        pass
-            if ratings:
-                return round(sum(ratings) / len(ratings), 2)
-        return None
-
-    def get_reviews_count(self, obj):
-        if obj.reviews and isinstance(obj.reviews, list):
-            return len(obj.reviews)
-        return 0
 
 
 class CatalogChangeLogSerializer(serializers.ModelSerializer):
@@ -762,20 +670,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
                     cursor.execute(sql, params)
                     rows = cursor.fetchall()
 
-                    priority = {
-                        "CUSTOMER_ACCEPTED": 1,
-                        "APPROVED": 1,
-                        "CONVERTED": 1,
-                        "ADMIN_APPROVED": 1,
-                        "SENT_TO_CUSTOMER": 2,
-                        "SENT": 2,
-                        "CHANGES_REQUESTED": 3,
-                        "CHANGE_REQUESTED": 3,
-                        "DECLINED": 4,
-                        "DRAFT": 5,
-                        "SUPERSEDED": 6,
-                        "CANCELLED": 7,
-                    }
+                    priority = {"SENT_TO_CUSTOMER": 1, "CUSTOMER_ACCEPTED": 2, "APPROVED": 2, "CONVERTED": 2, "CHANGES_REQUESTED": 3, "DECLINED": 4, "DRAFT": 5}
                     for r in rows:
                         qid, jid, qnum, st = r[0], r[1], r[2], r[3]
                         q_dict = WorkforceIntegrationService._build_quote_dict_from_db(qid)
@@ -794,10 +689,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
                                 else:
                                     cur_st = str(cur_active.get("status") or "").upper()
                                     new_st = str(st or "").upper()
-                                    cur_p = priority.get(cur_st, 9)
-                                    new_p = priority.get(new_st, 9)
-                                    cur_id = int(cur_active.get("id") or cur_active.get("quote_id") or 0)
-                                    if new_p < cur_p or (new_p == cur_p and qid >= cur_id):
+                                    if priority.get(new_st, 9) <= priority.get(cur_st, 9):
                                         active_map[k] = q_dict
             except Exception as e:
                 import logging
@@ -884,11 +776,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         return []
 
     def get_payment_confirmation_otp(self, obj):
-        # N+1 fix: only query workforce_notification for COD-specific OTP states.
-        # "pending" is the default online-payment status and never has a
-        # PAYMENT_CONFIRMATION_OTP — querying for it caused one raw SQL call
-        # per booking in every listing endpoint (active, my-bookings, admin, etc.).
-        if getattr(obj, "payment_status", None) not in ("cash_pending", "cash_collected"):
+        if getattr(obj, "payment_status", None) not in ("cash_pending", "pending", "cash_collected"):
             return None
         try:
             import re
@@ -989,8 +877,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         return None
 
     def get_payment_confirmation_otp(self, obj):
-        # N+1 fix: only query for COD OTP states, not the default online-payment "pending".
-        if getattr(obj, "payment_status", None) not in ("cash_pending", "cash_collected"):
+        if getattr(obj, "payment_status", None) not in ("cash_pending", "pending", "cash_collected"):
             return None
         try:
             import re
@@ -1269,16 +1156,11 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
 
     job_type               = serializers.CharField(read_only=True)
     estimation             = serializers.SerializerMethodField()
-    customer_inspection    = serializers.SerializerMethodField()
 
     def get_estimation(self, obj):
         if hasattr(obj, "estimation") and obj.estimation is not None:
             return EstimationSerializer(obj.estimation, context=self.context).data
         return None
-
-    def get_customer_inspection(self, obj):
-        from service_requests.services.customer_inspection_service import CustomerInspectionService
-        return CustomerInspectionService.get_booking_inspection_snapshot(obj)
 
     class Meta:
         model = ServiceRequest
@@ -1296,37 +1178,15 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
             "photo_url", "status", "status_display", "priority", "priority_display",
             "technician", "workforce_job_id", "external_assignment_id",
             "logistics_leg", "logistics_leg_updated_at",
-            # GT Mini Truck audit fix: an admin opening a booking's detail
-            # view could see the CURRENT leg but not the trip's full history
-            # (logistics_leg_history is on the model and already returned to
-            # the customer's own tracking payload, just never to admin), how
-            # many times dispatch was attempted, or where the trip was
-            # actually headed (drop_address/lat/lng) -- all present on the
-            # model, none previously serialized here.
-            "logistics_leg_history", "dispatch_attempts",
-            "drop_address", "drop_latitude", "drop_longitude",
-            # P&M audit fix: these sibling fields were added in the same
-            # GT-A-03/GT-C-03/GT-D-03 pass as drop_address/lat/lng above
-            # (declared-value/insurance for high-value consignments,
-            # delivery-recipient contact info) but were missed from this
-            # serializer -- an admin opening a booking's detail view
-            # (P&M and goods-transport alike) still couldn't see who the
-            # goods were declared to, their stated value, insurance status,
-            # or the drop-off recipient's contact, despite it being
-            # captured and validated at booking time.
-            "drop_contact_name", "drop_contact_phone", "drop_contact_email",
-            "declared_value", "consignee_relationship",
-            "insurance_opted_in", "insurance_premium", "insurance_liability_cap",
             "start_otp", "payment_confirmation_otp", "active_extension", "latest_reschedule", "allowed_transitions", "available_actions",
             "has_feedback", "feedback_token", "feedback",
-            "job_type", "request_kind", "catalog_service_id", "quote_number", "parent_request", "estimation", "customer_inspection",
+            "job_type", "request_kind", "catalog_service_id", "quote_number", "parent_request", "estimation",
             "created_at", "updated_at",
             "is_search_expired", "cancellation_reason", "cancellation_note", "cancelled_at",
         )
 
     def get_payment_confirmation_otp(self, obj):
-        # N+1 fix: only query for COD OTP states, not the default online-payment "pending".
-        if getattr(obj, "payment_status", None) not in ("cash_pending", "cash_collected"):
+        if getattr(obj, "payment_status", None) not in ("cash_pending", "pending", "cash_collected"):
             return None
         try:
             import re
@@ -2107,9 +1967,9 @@ class EstimationQuotationItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = EstimationQuotationItem
         fields = (
-            "id", "catalog_service_id", "service_name", "category_name_snapshot", "item_name_snapshot",
-            "description", "quantity", "unit", "unit_price", "unit_price_snapshot",
-            "tax_rate", "tax_amount", "discount_amount", "line_total", "sort_order", "rate_item",
+            "id", "catalog_service_id", "service_name", "description",
+            "quantity", "unit", "unit_price", "tax_rate",
+            "tax_amount", "discount_amount", "line_total", "sort_order",
         )
 
 
@@ -2121,7 +1981,7 @@ class EstimationQuotationSerializer(serializers.ModelSerializer):
         fields = (
             "id", "version", "quote_ref", "status",
             "subtotal", "tax_amount", "discount_amount", "total_amount",
-            "currency", "notes", "admin_notes", "admin_reviewed_at", "valid_until",
+            "currency", "notes", "valid_until",
             "customer_approved_at", "customer_rejected_at",
             "rejection_reason", "rejection_note",
             "created_at", "updated_at", "items",
@@ -2143,14 +2003,14 @@ class EstimationSerializer(serializers.ModelSerializer):
         )
 
     def get_active_quotation(self, obj):
-        latest = obj.quotations.order_by("-version", "-id").first()
+        latest = obj.quotations.order_by("-version").first()
         if latest:
             return EstimationQuotationSerializer(latest, context=self.context).data
         return None
 
 
 class EstimationSummarySerializer(serializers.ModelSerializer):
-    fee_amount = serializers.FloatField(source="fee.amount", read_only=True)
+    fee_amount = serializers.DecimalField(source="fee.amount", max_digits=10, decimal_places=2, read_only=True)
     fee_status = serializers.CharField(source="fee.status", read_only=True)
 
     class Meta:
@@ -2160,542 +2020,3 @@ class EstimationSummarySerializer(serializers.ModelSerializer):
             "customer_symptom", "status", "fee_amount", "fee_status",
             "created_at",
         )
-
-
-class ACInspectionConfigurationSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ACInspectionConfiguration
-        fields = ("id", "diagnostic_fee", "currency", "is_active", "updated_at")
-
-
-class ACInspectionRateItemSerializer(serializers.ModelSerializer):
-    category_name = serializers.CharField(source="category.name", read_only=True)
-    category_slug = serializers.CharField(source="category.slug", read_only=True)
-
-    class Meta:
-        model = ACInspectionRateItem
-        fields = (
-            "id", "category", "category_name", "category_slug",
-            "name", "description", "price", "unit",
-            "service_type", "display_order", "is_active",
-            "created_at", "updated_at",
-        )
-
-    def validate_price(self, value):
-        if value < 0:
-            raise serializers.ValidationError("Price must be >= 0.")
-        return value
-
-
-class ACInspectionRateCategorySerializer(serializers.ModelSerializer):
-    items_count = serializers.SerializerMethodField()
-    active_items_count = serializers.SerializerMethodField()
-
-    class Meta:
-        model = ACInspectionRateCategory
-        fields = (
-            "id", "name", "slug", "description",
-            "display_order", "is_active",
-            "items_count", "active_items_count",
-            "created_at", "updated_at",
-        )
-
-    def get_items_count(self, obj):
-        return obj.items.count()
-
-    def get_active_items_count(self, obj):
-        return obj.items.filter(is_active=True).count()
-
-
-class ACRateCardPublicItemSerializer(serializers.ModelSerializer):
-    price_formatted = serializers.SerializerMethodField()
-
-    class Meta:
-        model = ACInspectionRateItem
-        fields = (
-            "id", "name", "description", "price",
-            "price_formatted", "unit", "service_type",
-            "display_order",
-        )
-
-    def get_price_formatted(self, obj):
-        if obj.price == 0:
-            return "Free"
-        return f"₹{int(obj.price):,}" if obj.price == int(obj.price) else f"₹{obj.price:,.2f}"
-
-
-class ACRateCardPublicCategorySerializer(serializers.ModelSerializer):
-    items = serializers.SerializerMethodField()
-
-    class Meta:
-        model = ACInspectionRateCategory
-        fields = ("id", "name", "slug", "description", "display_order", "items")
-
-    def get_items(self, obj):
-        active_items = obj.items.filter(is_active=True).order_by("display_order", "id")
-        return ACRateCardPublicItemSerializer(active_items, many=True).data
-
-
-# ==============================================================================
-# CUSTOMER INSPECTION & ADMIN AC INSPECTION SERIALIZERS
-# ==============================================================================
-
-class CustomerInspectionRateSnapshotSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CustomerInspectionRateSnapshot
-        fields = (
-            "id", "customer_inspection_id", "rate_item_id", "category_name_snapshot",
-            "item_name_snapshot", "description_snapshot", "price_snapshot", "unit_snapshot",
-            "service_type_snapshot", "display_order_snapshot", "created_at"
-        )
-
-
-class CustomerInspectionSerializer(serializers.ModelSerializer):
-    rate_snapshots = CustomerInspectionRateSnapshotSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = CustomerInspection
-        fields = (
-            "id", "service_request_id", "inspection_configuration_id",
-            "inspection_name_snapshot", "diagnostic_fee_snapshot", "currency",
-            "quantity", "status", "created_at", "updated_at", "rate_snapshots"
-        )
-
-
-class AdminACInspectionListSerializer(serializers.ModelSerializer):
-    """
-    Listing serializer for Admin AC Inspection Bookings module.
-    Provides: Booking ID, Customer, Booking date, Technician, Assignment status,
-    Inspection status, Diagnosis status, Estimation status, Customer approval status,
-    Overall booking status.
-    """
-    booking_id = serializers.CharField(source="request_id", read_only=True)
-    customer_phone = serializers.CharField(source="phone", read_only=True)
-    overall_status = serializers.CharField(source="status", read_only=True)
-    overall_status_display = serializers.CharField(source="get_status_display", read_only=True)
-    technician_name = serializers.SerializerMethodField()
-    technician_phone = serializers.SerializerMethodField()
-    assignment_status = serializers.SerializerMethodField()
-    acceptance_status = serializers.SerializerMethodField()
-    inspection_status = serializers.SerializerMethodField()
-    diagnosis_status = serializers.SerializerMethodField()
-    estimation_status = serializers.SerializerMethodField()
-    customer_approval_status = serializers.SerializerMethodField()
-    diagnostic_fee = serializers.SerializerMethodField()
-    quotation_total = serializers.SerializerMethodField()
-
-    class Meta:
-        model = ServiceRequest
-        fields = (
-            "id", "booking_id", "request_id", "customer_name", "customer_phone", "email",
-            "address", "preferred_date", "preferred_time", "created_at", "updated_at",
-            "overall_status", "overall_status_display",
-            "technician_name", "technician_phone",
-            "assignment_status", "acceptance_status",
-            "inspection_status", "diagnosis_status",
-            "estimation_status", "customer_approval_status",
-            "diagnostic_fee", "quotation_total", "total_amount",
-        )
-
-    def get_technician_name(self, obj):
-        if obj.technician_name:
-            return obj.technician_name
-        if getattr(obj, "assigned_employee", None):
-            emp = obj.assigned_employee
-            return getattr(emp, "full_name", "") or (emp.user.get_full_name() if getattr(emp, "user", None) else "")
-        return ""
-
-    def get_technician_phone(self, obj):
-        if obj.technician_phone:
-            return obj.technician_phone
-        if getattr(obj, "assigned_employee", None):
-            emp = obj.assigned_employee
-            return getattr(emp, "phone", "") or (emp.user.phone if getattr(emp, "user", None) and hasattr(emp.user, "phone") else "")
-        return ""
-
-    def get_assignment_status(self, obj):
-        name = self.get_technician_name(obj)
-        if name or getattr(obj, "assigned_employee_id", None) or getattr(obj, "workforce_job_id", None):
-            return "Assigned"
-        if obj.status in [ServiceRequest.Status.UNASSIGNED, ServiceRequest.Status.NEW_REQUEST, ServiceRequest.Status.CONFIRMED]:
-            return "Waiting for Technician Assignment"
-        return obj.get_status_display()
-
-    def get_acceptance_status(self, obj):
-        if obj.status in ["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]:
-            return "Accepted"
-        if obj.status in ["assigned"]:
-            return "Pending Acceptance"
-        if obj.status in ["rejected", "cancelled"]:
-            return "Declined / Cancelled"
-        return "Pending"
-
-    def get_inspection_status(self, obj):
-        if hasattr(obj, "estimation") and obj.estimation:
-            if hasattr(obj.estimation, "inspection") and obj.estimation.inspection:
-                return obj.estimation.inspection.status
-            return obj.estimation.status
-        if hasattr(obj, "customer_inspection") and obj.customer_inspection:
-            return obj.customer_inspection.status
-        return "NOT_STARTED"
-
-    def get_diagnosis_status(self, obj):
-        if hasattr(obj, "estimation") and obj.estimation:
-            if hasattr(obj.estimation, "inspection") and obj.estimation.inspection and obj.estimation.inspection.diagnosis:
-                return obj.estimation.inspection.diagnosis
-            if obj.estimation.customer_symptom:
-                return obj.estimation.customer_symptom
-        return "Pending Diagnosis"
-
-    def get_estimation_status(self, obj):
-        if hasattr(obj, "estimation") and obj.estimation:
-            latest_quote = obj.estimation.quotations.order_by("-version", "-id").first()
-            if latest_quote:
-                return latest_quote.status
-            return obj.estimation.status
-        return "NOT_SUBMITTED"
-
-    def get_customer_approval_status(self, obj):
-        if hasattr(obj, "estimation") and obj.estimation:
-            latest_quote = obj.estimation.quotations.order_by("-version", "-id").first()
-            if latest_quote:
-                if latest_quote.status in [EstimationQuotation.Status.APPROVED, "APPROVED", "CUSTOMER_APPROVED"]:
-                    return "APPROVED"
-                if latest_quote.status in [EstimationQuotation.Status.REJECTED, "REJECTED", "CUSTOMER_REJECTED"]:
-                    return "REJECTED"
-                if latest_quote.status in [EstimationQuotation.Status.ADMIN_APPROVED, EstimationQuotation.Status.SENT, "ADMIN_APPROVED", "SENT"]:
-                    return "PENDING"
-                return latest_quote.status
-        return "NONE"
-
-    def get_diagnostic_fee(self, obj):
-        if hasattr(obj, "customer_inspection") and obj.customer_inspection:
-            return float(obj.customer_inspection.diagnostic_fee_snapshot)
-        if hasattr(obj, "estimation") and obj.estimation and hasattr(obj.estimation, "fee") and obj.estimation.fee:
-            return float(obj.estimation.fee.amount)
-        return 199.0
-
-    def get_quotation_total(self, obj):
-        if hasattr(obj, "estimation") and obj.estimation:
-            latest_quote = obj.estimation.quotations.order_by("-version", "-id").first()
-            if latest_quote:
-                return float(latest_quote.total_amount)
-        return float(obj.total_amount or 0)
-
-
-class AdminACInspectionDetailSerializer(serializers.ModelSerializer):
-    """
-    Complete 9-section view of AC Inspection Booking for Customer Admin.
-    1. Customer: Name, Phone, Email, Address
-    2. Booking: ID, Service, Date, Time, Quantity, Status
-    3. Inspection: Name, Fee, Status, Created time, Rate Snapshot
-    4. Technician: Technician details, Assignment status, Acceptance status, Current job status
-    5. Diagnosis: Problem/Symptom, Technician notes, Diagnosis, Inspection result, Findings
-    6. Evidence: Inspection photos & captions
-    7. Estimation: Repair items, Quantity, Unit price, Labour, Inspection fee, Total
-    8. Approval: Admin approval status, Admin notes, Customer approval status, Timestamps
-    9. Final: Repair status, Testing status, Completion status
-    """
-    customer_section = serializers.SerializerMethodField()
-    booking_section = serializers.SerializerMethodField()
-    inspection_section = serializers.SerializerMethodField()
-    technician_section = serializers.SerializerMethodField()
-    diagnosis_section = serializers.SerializerMethodField()
-    evidence_section = serializers.SerializerMethodField()
-    estimation_section = serializers.SerializerMethodField()
-    approval_section = serializers.SerializerMethodField()
-    final_section = serializers.SerializerMethodField()
-
-    class Meta:
-        model = ServiceRequest
-        fields = (
-            "id", "request_id", "status",
-            "customer_section",
-            "booking_section",
-            "inspection_section",
-            "technician_section",
-            "diagnosis_section",
-            "evidence_section",
-            "estimation_section",
-            "approval_section",
-            "final_section",
-        )
-
-    def get_customer_section(self, obj):
-        return {
-            "name": obj.customer_name or (obj.customer.get_full_name() if obj.customer else ""),
-            "phone": obj.phone or "",
-            "email": obj.email or "",
-            "address": obj.address or "",
-            "latitude": float(obj.latitude) if obj.latitude is not None else None,
-            "longitude": float(obj.longitude) if obj.longitude is not None else None,
-        }
-
-    def get_booking_section(self, obj):
-        qty = 1
-        if hasattr(obj, "customer_inspection") and obj.customer_inspection:
-            qty = obj.customer_inspection.quantity
-        elif hasattr(obj, "estimation") and obj.estimation:
-            qty = obj.estimation.ac_quantity
-        return {
-            "booking_id": obj.request_id,
-            "id": obj.id,
-            "service": "AC Inspection & Diagnostic Visit",
-            "service_category": obj.service_category,
-            "service_category_display": obj.get_service_category_display(),
-            "date": str(obj.preferred_date) if obj.preferred_date else "",
-            "time": str(obj.preferred_time) if obj.preferred_time else "",
-            "quantity": qty,
-            "status": obj.status,
-            "status_display": obj.get_status_display(),
-            "created_at": obj.created_at.isoformat() if obj.created_at else None,
-        }
-
-    def get_inspection_section(self, obj):
-        from service_requests.services.customer_inspection_service import CustomerInspectionService
-        ci_snapshot = CustomerInspectionService.get_booking_inspection_snapshot(obj)
-        ci_model = getattr(obj, "customer_inspection", None)
-        return {
-            "inspection_name": ci_snapshot.get("inspection_name") if ci_snapshot else "AC Inspection & Diagnostic Visit",
-            "diagnostic_fee": float(ci_snapshot.get("diagnostic_fee", 199.0)) if ci_snapshot else 199.0,
-            "currency": ci_snapshot.get("currency", "INR") if ci_snapshot else "INR",
-            "inspection_status": ci_model.status if ci_model else "BOOKED",
-            "quantity": ci_snapshot.get("quantity", 1) if ci_snapshot else 1,
-            "created_at": ci_snapshot.get("created_at") if ci_snapshot else (obj.created_at.isoformat() if obj.created_at else None),
-            "rate_card_snapshot": ci_snapshot,
-        }
-
-    def get_technician_section(self, obj):
-        name = obj.technician_name
-        phone = obj.technician_phone
-        photo = obj.technician_photo
-        rating = float(obj.technician_rating) if obj.technician_rating else None
-        if not name and getattr(obj, "assigned_employee", None):
-            emp = obj.assigned_employee
-            name = getattr(emp, "full_name", "") or (emp.user.get_full_name() if getattr(emp, "user", None) else "")
-            phone = getattr(emp, "phone", "") or phone
-            photo = getattr(emp, "photo", "") or photo
-
-        assignment_status = "Waiting for Technician Assignment"
-        if name or getattr(obj, "assigned_employee_id", None) or getattr(obj, "workforce_job_id", None):
-            assignment_status = "Technician Assigned"
-
-        acceptance_status = "Pending"
-        if obj.status in ["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]:
-            acceptance_status = "Accepted"
-        elif obj.status == "assigned":
-            acceptance_status = "Waiting for Acceptance"
-        elif obj.status in ["rejected", "cancelled"]:
-            acceptance_status = "Declined"
-
-        current_job_status = obj.get_status_display()
-        if obj.status == "on_the_way":
-            current_job_status = "On The Way"
-        elif obj.status == "arrived":
-            current_job_status = "Arrived at Customer Location"
-        elif obj.status == "in_progress":
-            current_job_status = "Inspection In Progress"
-
-        return {
-            "technician": name or "None",
-            "phone": phone or "N/A",
-            "photo": photo or None,
-            "rating": rating,
-            "assignment_status": assignment_status,
-            "acceptance_status": acceptance_status,
-            "current_job_status": current_job_status,
-            "workforce_job_id": obj.workforce_job_id or obj.external_assignment_id or "",
-        }
-
-    def get_diagnosis_section(self, obj):
-        est = getattr(obj, "estimation", None)
-        inspection = getattr(est, "inspection", None) if est else None
-        problem = (est.customer_symptom if est else "") or obj.issue_title or ""
-        notes = (inspection.notes if inspection else "") or (est.customer_notes if est else "")
-        diagnosis = (inspection.diagnosis if inspection else "") or "Pending technician inspection"
-        result = inspection.status if inspection else "PENDING"
-        findings = []
-        if inspection:
-            for f in inspection.findings.all():
-                findings.append({
-                    "id": f.id,
-                    "title": f.title,
-                    "diagnosis": f.diagnosis,
-                    "severity": f.severity,
-                    "description": f.description,
-                    "recommended_action": f.recommended_action,
-                })
-
-        return {
-            "problem": problem,
-            "technician_notes": notes,
-            "inspection_result": result,
-            "diagnosis": diagnosis,
-            "ac_type": est.ac_type if est else "SPLIT",
-            "ac_brand": est.ac_brand if est else "",
-            "ac_capacity": est.ac_capacity if est else "",
-            "findings": findings,
-        }
-
-    def get_evidence_section(self, obj):
-        est = getattr(obj, "estimation", None)
-        inspection = getattr(est, "inspection", None) if est else None
-        photos = []
-        if inspection:
-            for p in inspection.photos.all():
-                photo_url = p.photo.url if p.photo else ""
-                photos.append({
-                    "id": p.id,
-                    "photo_url": photo_url,
-                    "caption": p.caption or "Inspection Evidence",
-                    "uploaded_at": p.uploaded_at.isoformat() if p.uploaded_at else None,
-                })
-        return {
-            "photos": photos,
-            "count": len(photos),
-        }
-
-    def get_estimation_section(self, obj):
-        est = getattr(obj, "estimation", None)
-        quote = est.quotations.order_by("-version", "-id").first() if est else None
-        fee_amount = 199.0
-        if hasattr(obj, "customer_inspection") and obj.customer_inspection:
-            fee_amount = float(obj.customer_inspection.diagnostic_fee_snapshot)
-        elif est and hasattr(est, "fee") and est.fee:
-            fee_amount = float(est.fee.amount)
-
-        if not quote:
-            return {
-                "has_quotation": False,
-                "inspection_fee": fee_amount,
-                "repair_items": [],
-                "subtotal": 0.0,
-                "labour": 0.0,
-                "total": fee_amount,
-                "status": "NOT_CREATED",
-            }
-
-        repair_items = []
-        labour_total = 0.0
-        for it in quote.items.all():
-            line_tot = float(it.line_total)
-            svc_type = "SPARE_PART"
-            if it.rate_item and getattr(it.rate_item, "service_type", None):
-                svc_type = it.rate_item.service_type
-            if "LABOUR" in svc_type.upper() or "LABOR" in svc_type.upper():
-                labour_total += line_tot
-
-            repair_items.append({
-                "id": it.id,
-                "name": it.item_name_snapshot or it.service_name,
-                "category": it.category_name_snapshot or "",
-                "description": it.description or "",
-                "quantity": it.quantity,
-                "unit": it.unit,
-                "unit_price": float(it.unit_price_snapshot or it.unit_price),
-                "line_total": line_tot,
-                "tax_amount": float(it.tax_amount),
-                "service_type": svc_type,
-            })
-
-        return {
-            "has_quotation": True,
-            "quotation_id": quote.id,
-            "quote_ref": quote.quote_ref,
-            "version": quote.version,
-            "status": quote.status,
-            "status_display": quote.get_status_display(),
-            "repair_items": repair_items,
-            "labour": labour_total,
-            "inspection_fee": fee_amount,
-            "subtotal": float(quote.subtotal),
-            "tax_amount": float(quote.tax_amount),
-            "discount_amount": float(quote.discount_amount),
-            "total": float(quote.total_amount),
-            "currency": quote.currency or "INR",
-            "notes": quote.notes or "",
-            "admin_notes": quote.admin_notes or "",
-            "created_at": quote.created_at.isoformat() if quote.created_at else None,
-        }
-
-    def get_approval_section(self, obj):
-        est = getattr(obj, "estimation", None)
-        quote = est.quotations.order_by("-version", "-id").first() if est else None
-        admin_status = "PENDING_REVIEW"
-        admin_notes = ""
-        admin_reviewed_at = None
-        customer_status = "PENDING"
-        customer_approved_at = None
-        customer_rejected_at = None
-        rejection_reason = ""
-        rejection_note = ""
-
-        if quote:
-            if quote.status in [EstimationQuotation.Status.ADMIN_APPROVED, EstimationQuotation.Status.APPROVED, "ADMIN_APPROVED", "APPROVED", "CUSTOMER_APPROVED"]:
-                admin_status = "ADMIN_APPROVED"
-            elif quote.status == EstimationQuotation.Status.SENT_BACK_TO_TECHNICIAN:
-                admin_status = "SENT_BACK_TO_TECHNICIAN"
-            elif quote.status == EstimationQuotation.Status.SUBMITTED_FOR_REVIEW:
-                admin_status = "PENDING_ADMIN_REVIEW"
-
-            admin_notes = quote.admin_notes or ""
-            admin_reviewed_at = quote.admin_reviewed_at.isoformat() if quote.admin_reviewed_at else None
-
-            if quote.status in [EstimationQuotation.Status.APPROVED, "APPROVED", "CUSTOMER_APPROVED"]:
-                customer_status = "CUSTOMER_APPROVED"
-            elif quote.status in [EstimationQuotation.Status.REJECTED, "REJECTED", "CUSTOMER_REJECTED"]:
-                customer_status = "CUSTOMER_REJECTED"
-            elif quote.status in [EstimationQuotation.Status.ADMIN_APPROVED, EstimationQuotation.Status.SENT, "ADMIN_APPROVED", "SENT"]:
-                customer_status = "CUSTOMER_PENDING"
-            else:
-                customer_status = "NOT_PRESENTED"
-
-            customer_approved_at = quote.customer_approved_at.isoformat() if quote.customer_approved_at else None
-            customer_rejected_at = quote.customer_rejected_at.isoformat() if quote.customer_rejected_at else None
-            rejection_reason = quote.rejection_reason or ""
-            rejection_note = quote.rejection_note or ""
-
-        return {
-            "admin_approval_status": admin_status,
-            "admin_notes": admin_notes,
-            "admin_reviewed_at": admin_reviewed_at,
-            "customer_approval_status": customer_status,
-            "customer_approved_at": customer_approved_at,
-            "customer_rejected_at": customer_rejected_at,
-            "rejection_reason": rejection_reason,
-            "rejection_note": rejection_note,
-        }
-
-    def get_final_section(self, obj):
-        est = getattr(obj, "estimation", None)
-        quote = est.quotations.order_by("-version", "-id").first() if est else None
-        customer_rejected = quote and quote.status in [EstimationQuotation.Status.REJECTED, "REJECTED", "CUSTOMER_REJECTED"]
-
-        repair_status = "NOT_STARTED"
-        testing_status = "NOT_STARTED"
-        completion_status = "IN_PROGRESS"
-
-        if customer_rejected:
-            repair_status = "NO_REPAIR_CUSTOMER_REJECTED"
-            testing_status = "NOT_APPLICABLE"
-            completion_status = "INSPECTION_ONLY_CLOSED"
-        elif obj.status in [ServiceRequest.Status.COMPLETED, ServiceRequest.Status.CLOSED, ServiceRequest.Status.VERIFIED]:
-            repair_status = "COMPLETED"
-            testing_status = "PASSED"
-            completion_status = "COMPLETED"
-        elif est and est.status in [Estimation.Status.TESTING, "TESTING"]:
-            repair_status = "COMPLETED"
-            testing_status = "IN_PROGRESS"
-        elif est and est.status in [Estimation.Status.TECHNICIAN_REPAIR, "TECHNICIAN_REPAIR"]:
-            repair_status = "IN_PROGRESS"
-        elif est and est.status in [Estimation.Status.REPAIR_AUTHORIZED, "REPAIR_AUTHORIZED"]:
-            repair_status = "AUTHORIZED"
-
-        return {
-            "repair_status": repair_status,
-            "testing_status": testing_status,
-            "completion_status": completion_status,
-            "invoice_id": obj.invoice_id or "",
-            "payment_status": obj.payment_status or "PAID",
-        }
-

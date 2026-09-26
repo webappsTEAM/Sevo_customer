@@ -266,7 +266,6 @@ export function VegetableFullScreenPage() {
                 description: pkg.description || "",
                 in_stock: pkg.in_stock !== false,
                 max_quantity: typeof pkg.max_quantity === "number" ? pkg.max_quantity : null,
-                variants: Array.isArray(pkg.variants) ? pkg.variants : [],
                 custom_packs: Array.isArray(pkg.custom_packs) ? pkg.custom_packs : [],
                 customization: pkg.customization || {},
                 tag: pkg.tag || "",
@@ -344,10 +343,10 @@ export function VegetableFullScreenPage() {
     showStockToast._t = window.setTimeout(() => setToastMessage(""), 2800)
   }
 
-  // Cart actions with stock limit enforcement and variant awareness
-  const handleUpdateQty = (name, delta, meta = {}) => {
+  // Cart actions with stock limit enforcement
+  const handleUpdateQty = (name, delta) => {
     // Find matching vegetable product to inspect stock
-    const matchedVeg = vegetables.find((v) => v.name === name || name.startsWith(v.name) || (meta.packageId && v.id === meta.packageId))
+    const matchedVeg = vegetables.find((v) => v.name === name || name.startsWith(v.name))
     
     if (matchedVeg) {
       if (matchedVeg.in_stock === false || matchedVeg.max_quantity === 0) {
@@ -358,9 +357,12 @@ export function VegetableFullScreenPage() {
         // Calculate units in cart for this vegetable
         let unitsInCart = 0
         Object.entries(foodCart).forEach(([k, qty]) => {
-          if (k === matchedVeg.name || k.startsWith(matchedVeg.name)) {
-            const multiplier = k.includes(" (2 x ") ? 2 : 1
-            unitsInCart += qty * multiplier
+          if (k === matchedVeg.name) {
+            unitsInCart += qty
+          } else if (k.includes(" (2 x ") && k.startsWith(matchedVeg.name)) {
+            unitsInCart += qty * 2
+          } else if (k.startsWith(matchedVeg.name)) {
+            unitsInCart += qty
           }
         })
         const multiplier = name.includes(" (2 x ") ? 2 : 1
@@ -381,28 +383,28 @@ export function VegetableFullScreenPage() {
         copy[name] = next
       }
 
-      // Mirror to backend Cart
+      // Mirror to the backend Cart (Phase 1 of the frontend plan) -- keyed
+      // by package_id, not by this foodCart key, since a "2 x" saver-pack
+      // key and its plain-unit key are the same Package, just a quantity
+      // multiplier. Total the real unit count for this package across
+      // every key in the *new* cart so the backend always gets the true
+      // total, not a per-key delta.
       if (matchedVeg) {
-        const variantId = meta.variant?.id || (matchedVeg.variants?.find(v => name.includes(v.name) || name === matchedVeg.name)?.id)
-        if (variantId) {
-          syncPackageQuantity(matchedVeg.id, next, { variantId }).then((result) => {
-            if (!result.ok) {
-              showStockToast(result.message || "Couldn't update your cart — check your connection")
-            }
-          })
-        } else {
-          let totalUnitsForPackage = 0
-          Object.entries(copy).forEach(([k, q]) => {
-            if (k === matchedVeg.name || k.startsWith(matchedVeg.name)) {
-              totalUnitsForPackage += q * (k.includes(" (2 x ") ? 2 : 1)
-            }
-          })
-          syncPackageQuantity(matchedVeg.id, totalUnitsForPackage).then((result) => {
-            if (!result.ok) {
-              showStockToast(result.message || "Couldn't update your cart — check your connection")
-            }
-          })
-        }
+        let totalUnitsForPackage = 0
+        Object.entries(copy).forEach(([k, q]) => {
+          if (k === matchedVeg.name) {
+            totalUnitsForPackage += q
+          } else if (k.includes(" (2 x ") && k.startsWith(matchedVeg.name)) {
+            totalUnitsForPackage += q * 2
+          } else if (k.startsWith(matchedVeg.name)) {
+            totalUnitsForPackage += q
+          }
+        })
+        syncPackageQuantity(matchedVeg.id, totalUnitsForPackage).then((result) => {
+          if (!result.ok) {
+            showStockToast(result.message || "Couldn't update your cart — check your connection")
+          }
+        })
       }
 
       return copy

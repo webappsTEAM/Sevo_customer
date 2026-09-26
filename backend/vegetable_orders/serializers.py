@@ -1,19 +1,13 @@
 from rest_framework import serializers
 from .models import VegetableOrder, VegetableOrderItem, VegetableReturn
-from inventory.utils.unit_conversion import format_stock_for_display
 
 
 class VegetableOrderItemSerializer(serializers.ModelSerializer):
     package_name = serializers.CharField(source="package.name", read_only=True)
-    quantity_display = serializers.CharField(read_only=True)
 
     class Meta:
         model = VegetableOrderItem
-        fields = [
-            "id", "package", "package_name", "quantity_grams",
-            "quantity_display", "unit_basis", "unit_label",
-            "unit_price_snapshot", "line_amount"
-        ]
+        fields = ["id", "package", "package_name", "quantity_grams", "unit_price_snapshot", "line_amount"]
 
 
 class VegetableOrderSerializer(serializers.ModelSerializer):
@@ -48,9 +42,6 @@ def serialize_vegetable_order(order):
                     "package_id": item.package_id,
                     "package_name": item.package.name,
                     "quantity_grams": item.quantity_grams,
-                    "quantity_display": item.quantity_display,
-                    "unit_basis": item.unit_basis,
-                    "unit_label": item.unit_label,
                     "unit_price_snapshot": item.unit_price_snapshot,
                     "line_amount": item.line_amount,
                 }
@@ -75,7 +66,7 @@ class VegetableReturnListSerializer(serializers.ModelSerializer):
             "id", "return_number", "order", "order_number", "item", "item_name",
             "customer", "customer_name", "customer_phone", "reason", "reason_label",
             "status", "status_label", "resolution_action", "resolution_action_label",
-            "refund_amount", "stock_movement", "created_at", "resolved_at",
+            "refund_amount", "created_at", "resolved_at",
         ]
 
     def get_customer_name(self, obj):
@@ -99,25 +90,22 @@ class VegetableReturnDetailSerializer(serializers.ModelSerializer):
     customer_email = serializers.CharField(source="customer.email", read_only=True)
     item_name = serializers.SerializerMethodField()
     item_quantity_grams = serializers.IntegerField(source="item.quantity_grams", read_only=True)
-    item_quantity_display = serializers.CharField(source="item.quantity_display", read_only=True)
     item_amount = serializers.DecimalField(source="item.line_amount", max_digits=10, decimal_places=2, read_only=True)
     reason_label = serializers.CharField(source="get_reason_display", read_only=True)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     resolution_action_label = serializers.CharField(source="get_resolution_action_display", read_only=True)
     handled_by_name = serializers.SerializerMethodField()
     order_items = serializers.SerializerMethodField()
-    stock_movement_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = VegetableReturn
         fields = [
             "id", "return_number", "order", "order_number", "order_total", "order_status",
-            "item", "item_name", "item_quantity_grams", "item_quantity_display", "item_amount",
+            "item", "item_name", "item_quantity_grams", "item_amount",
             "customer", "customer_name", "customer_phone", "customer_email",
             "reason", "reason_label", "customer_notes", "status", "status_label",
             "resolution_action", "resolution_action_label", "refund_amount", "admin_notes",
-            "handled_by", "handled_by_name", "stock_movement", "stock_movement_detail",
-            "created_at", "resolved_at", "order_items",
+            "handled_by", "handled_by_name", "created_at", "resolved_at", "order_items",
         ]
 
     def get_customer_name(self, obj):
@@ -142,32 +130,11 @@ class VegetableReturnDetailSerializer(serializers.ModelSerializer):
                 "id": it.id,
                 "package_name": it.package.name,
                 "quantity_grams": it.quantity_grams,
-                "quantity_display": it.quantity_display,
-                "unit_basis": it.unit_basis,
-                "unit_label": it.unit_label,
                 "unit_price_snapshot": str(it.unit_price_snapshot),
                 "line_amount": str(it.line_amount),
             }
             for it in obj.order.items.all()
         ]
-
-    def get_stock_movement_detail(self, obj):
-        sm = obj.stock_movement
-        if not sm:
-            return None
-        return {
-            "id": sm.id,
-            "type": sm.movement_type,
-            "type_display": sm.get_movement_type_display(),
-            "delta_grams": sm.delta_grams,
-            "delta_display": sm.delta_display,
-            "balance_after_grams": sm.balance_after_grams,
-            "unit_basis": sm.unit_basis,
-            "unit_label": sm.unit_label,
-            "reason": sm.reason,
-            "booking_ref": sm.booking_ref,
-            "created_at": sm.created_at,
-        }
 
 
 class CustomerVegetableReturnCreateSerializer(serializers.Serializer):
@@ -181,5 +148,5 @@ class AdminVegetableReturnActionSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=VegetableReturn.Status.choices)
     resolution_action = serializers.ChoiceField(choices=VegetableReturn.ResolutionAction.choices, required=False, default=VegetableReturn.ResolutionAction.NONE)
     refund_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
-    restock_item = serializers.BooleanField(required=False, default=False)
     admin_notes = serializers.CharField(required=False, allow_blank=True, default="")
+

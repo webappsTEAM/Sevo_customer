@@ -27,7 +27,7 @@ from inventory.services.vegetable_stock_service import (
     reserve_stock_for_booking_items,
     InsufficientStockError,
 )
-from inventory.utils.unit_conversion import parse_pack_size_grams, parse_pack_size
+from inventory.utils.unit_conversion import parse_pack_size_grams
 
 from .models import Order, GroceryOrder, GroceryOrderItem, MarketplaceOrder
 from .serializers import (
@@ -103,38 +103,12 @@ class GroceryCheckoutView(APIView):
         total_amount = sum((ci.unit_price_snapshot * ci.quantity for ci in cart_items))
 
         stock_request_items = []
-        variant_snapshots = []
         for ci in cart_items:
-            if ci.variant:
-                basis = ci.variant.unit_basis
-                item_unit = ci.variant.unit
-                units_per_pack = ci.variant.base_unit_deduction
-                var_obj = ci.variant
-                var_name = ci.variant.display_name
-                pack_val = ci.variant.pack_value
-            else:
-                stock_item = getattr(ci.package, "stock_item", None)
-                basis = getattr(stock_item, "unit_basis", "WEIGHT") if stock_item else "WEIGHT"
-                item_unit = getattr(stock_item, "unit", "g") if stock_item else "g"
-                pack_info = parse_pack_size(ci.package.duration, default_val=1 if basis == "COUNT" else 500, default_basis=basis)
-                units_per_pack = pack_info["base_units"]
-                var_obj = None
-                var_name = ci.package.duration or ""
-                pack_val = pack_info.get("value")
-
-            total_units = ci.quantity * units_per_pack
-            base_unit_str = "pcs" if basis == "COUNT" else "g"
+            grams_per_pack = parse_pack_size_grams(ci.package.duration)
             stock_request_items.append({
                 "product": ci.package,
-                "quantity": total_units,
-                "unit": base_unit_str,
-                "unit_basis": basis,
-                "display_unit": item_unit,
-            })
-            variant_snapshots.append({
-                "variant": var_obj,
-                "variant_name": var_name,
-                "pack_value": pack_val,
+                "quantity": ci.quantity * grams_per_pack,
+                "unit": "g",
             })
 
         try:
@@ -150,11 +124,6 @@ class GroceryCheckoutView(APIView):
                     VegetableOrderItem(
                         order=order,
                         package=ci.package,
-                        variant=variant_snapshots[i]["variant"],
-                        variant_name_snapshot=variant_snapshots[i]["variant_name"],
-                        pack_value_snapshot=variant_snapshots[i]["pack_value"],
-                        unit_basis=stock_request_items[i]["unit_basis"],
-                        unit_label=stock_request_items[i]["display_unit"],
                         quantity_grams=stock_request_items[i]["quantity"],
                         unit_price_snapshot=ci.unit_price_snapshot,
                         line_amount=ci.unit_price_snapshot * ci.quantity,

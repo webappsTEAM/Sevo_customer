@@ -478,9 +478,9 @@ class TeamInviteListCreateView(APIView):
         error_message = None
         try:
             send_mail(
-                subject=f"Invitation to join {request.user.company.company_name} on sevo",
+                subject=f"Invitation to join {request.user.company.company_name} on Caltrack",
                 message=plain_message,
-                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@sevo.com'),
+                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@caltrack.com'),
                 recipient_list=[email],
                 html_message=html_message,
                 fail_silently=False,
