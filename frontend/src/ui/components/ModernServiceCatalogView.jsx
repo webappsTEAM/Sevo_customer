@@ -285,6 +285,36 @@ export function ModernServiceCatalogView({
   // display name) all normalize to the same "acappliance" key.
   const normKey = (v) => (v || "").toString().toLowerCase().replace(/[^a-z0-9]/g, "")
 
+  const SUBTAB_ALIASES = {
+    fridge: "refrigerator",
+    refrigerator: "refrigerator",
+    ac: "ac-service-cleaning",
+    ac_service: "ac-service-cleaning",
+    ac_repair: "ac-repair",
+    ac_gas: "ac-gas-refill",
+    ac_install: "ac-installation",
+    ro: "water-purifier-ro",
+    geyser: "geyser-water-heater",
+    water_purifier: "water-purifier-ro",
+    wm: "washing-machine",
+    washing: "washing-machine",
+    tv: "tv-display",
+    sofa: "sofa-upholstery-cleaning",
+    carpet: "sofa-upholstery-cleaning",
+    fullhome: "full-house-cleaning",
+    deepcleaning: "full-house-cleaning",
+    pest: "pest-control",
+    bathroom: "bathroom-cleaning",
+    kitchen: "kitchen-cleaning",
+    paint: "interior-painting",
+    exterior: "exterior-painting",
+    interior: "interior-painting",
+    truck: "mini-truck",
+    bike: "2-wheeler",
+    two_wheeler: "2-wheeler",
+    packers: "packers-movers",
+  }
+
   const CATEGORY_ALIASES = {
     hvac: "ac_appliance",
     ac: "ac_appliance",
@@ -470,15 +500,29 @@ export function ModernServiceCatalogView({
 
         // Set initial active sub-service, respecting url subtab if provided
         const urlSubTab = searchParams.get("subtab") || searchParams.get("subTab")
-        let initialSub = initialSubFromCatKey || matchedSubs[0]
+        const aliasSubTab = urlSubTab ? (SUBTAB_ALIASES[normKey(urlSubTab)] || normKey(urlSubTab)) : ""
+        let initialSub = initialSubFromCatKey || null
         if (urlSubTab) {
-          const found = matchedSubs.find(s =>
-            normKey(s.name) === normKey(urlSubTab) ||
-            normKey(s.slug) === normKey(urlSubTab) ||
-            normKey(s.name).includes(normKey(urlSubTab)) ||
-            normKey(urlSubTab).includes(normKey(s.slug))
-          )
+          const found = matchedSubs.find(s => {
+            const sNormName = normKey(s.name)
+            const sNormSlug = normKey(s.slug)
+            return (
+              sNormName === normKey(urlSubTab) ||
+              sNormSlug === normKey(urlSubTab) ||
+              sNormName === aliasSubTab ||
+              sNormSlug === aliasSubTab ||
+              sNormName.includes(aliasSubTab) ||
+              sNormSlug.includes(aliasSubTab) ||
+              aliasSubTab.includes(sNormSlug) ||
+              (sNormSlug.length > 3 && aliasSubTab.includes(sNormSlug))
+            )
+          })
           if (found) initialSub = found
+        }
+        if (!initialSub) {
+          // Default to first subservice that actually has packages, otherwise fallback to first
+          const withPkgs = matchedSubs.find(s => allPkgs.some(p => String(p.service_id) === String(s.id) || p.service_name?.toLowerCase() === s.name?.toLowerCase() || p.service_slug?.toLowerCase() === s.slug?.toLowerCase()))
+          initialSub = withPkgs || matchedSubs[0]
         }
         setActiveSubService(initialSub)
 
@@ -507,6 +551,29 @@ export function ModernServiceCatalogView({
     // once when liveCategory resolves inside this same effect, which would
     // otherwise immediately re-trigger a second, redundant fetch cycle.
   }, [categoryProp?.id, categoryProp?.slug, categoryProp?.name])
+
+  // Keep activeSubService dynamically in sync when url subtab search param changes
+  useEffect(() => {
+    const urlSubTab = searchParams.get("subtab") || searchParams.get("subTab")
+    if (!urlSubTab || services.length === 0) return
+    const aliasSubTab = SUBTAB_ALIASES[normKey(urlSubTab)] || normKey(urlSubTab)
+    const found = services.find(s => {
+      const sNormName = normKey(s.name)
+      const sNormSlug = normKey(s.slug)
+      return (
+        sNormName === normKey(urlSubTab) ||
+        sNormSlug === normKey(urlSubTab) ||
+        sNormName === aliasSubTab ||
+        sNormSlug === aliasSubTab ||
+        sNormName.includes(aliasSubTab) ||
+        sNormSlug.includes(aliasSubTab) ||
+        aliasSubTab.includes(sNormSlug)
+      )
+    })
+    if (found && (!activeSubService || activeSubService.id !== found.id)) {
+      setActiveSubService(found)
+    }
+  }, [searchParams, services])
 
   // 2. Compute packages for the active sub-service
   const currentServicePackages = useMemo(() => {
