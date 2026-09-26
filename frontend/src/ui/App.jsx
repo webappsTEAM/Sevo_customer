@@ -8,6 +8,7 @@ import { AppShell } from "./shell/AppShell.jsx"
 import { SessionToast } from "./components/SessionToast.jsx"
 import { GlobalEditModeToggle } from "./components/GlobalEditModeToggle.jsx"
 import { MobileBottomNav } from "./components/common/MobileBottomNav.jsx"
+import { AIChatWidget } from "./components/ai/AIChatWidget.jsx"
 import { LoginPage } from "./pages/LoginPage.jsx"
 
 // Lazy-loaded Pages
@@ -629,6 +630,8 @@ export function App() {
           instead of each page needing to wire in its own toggle bar. Renders
           nothing for anyone who isn't a Super Admin. */}
       <GlobalEditModeToggle />
+      {/* Centralized AI Assistant Widget */}
+      <AIChatWidget />
       {/* App-Wide Shared Mobile Bottom Navigation with safe area support */}
       <MobileBottomNav />
     </>

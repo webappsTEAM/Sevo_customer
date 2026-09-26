@@ -7,8 +7,7 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment settings from .env (reloaded with correct DB password)
-_dotenv_override = os.getenv("SEVO_DOTENV_OVERRIDE", "1").strip() != "0"
-load_dotenv(BASE_DIR / ".env", override=_dotenv_override)
+load_dotenv(BASE_DIR / ".env", override=True)
 
 _SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 if not _SECRET_KEY:
@@ -72,6 +71,7 @@ INSTALLED_APPS = [
     "workforce_integration",
     "customer_analytics",
     "platform_control",
+    "ai_assistant",
 ]
 
 ASGI_APPLICATION = "quicktims.asgi.application"
@@ -102,21 +102,9 @@ SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
 # ---------------------------------------------------------------------------
 
 USE_POSTGRES = os.getenv("DB_NAME") or os.getenv("DB_HOST")
-_argv_str = " ".join(sys.argv).lower()
-IS_TESTING = (
-    "test" in sys.argv
-    or "pytest" in sys.modules
-    or "pytest" in _argv_str
-    or "unittest" in _argv_str
-    or os.getenv("DJANGO_TEST_SQLITE") == "1"
-    or os.getenv("SEVO_TESTING") == "1"
-)
+IS_TESTING = "test" in sys.argv or os.getenv("DJANGO_TEST_SQLITE") == "1"
 
 if IS_TESTING:
-    TESTING = True
-    PASSWORD_HASHERS = [
-        "django.contrib.auth.hashers.MD5PasswordHasher",
-    ]
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
@@ -168,19 +156,6 @@ else:
             "NAME": BASE_DIR / "db.sqlite3",
         }
     }
-
-_e2e_sqlite_path = os.getenv("SEVO_E2E_SQLITE_PATH")
-if _e2e_sqlite_path:
-    if DEBUG or IS_TESTING:
-        DATABASES["default"] = {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": Path(_e2e_sqlite_path),
-        }
-    else:
-        import logging
-        logging.getLogger(__name__).warning(
-            "SEVO_E2E_SQLITE_PATH is ignored because DEBUG is False and IS_TESTING is False."
-        )
 
 
 
