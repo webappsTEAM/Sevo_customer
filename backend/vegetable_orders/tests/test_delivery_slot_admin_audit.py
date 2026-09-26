@@ -317,3 +317,117 @@ class DeliverySlotAdminAuditTests(TestCase):
             format="json",
         )
         self.assertEqual(restore_res.status_code, 200)
+
+    def test_slot_cutoff_base_edit_and_never_overwritten_by_seed_or_restart(self):
+        """
+        Audit that editing a slot's base cutoff time persists and is NEVER reverted
+        by ensure_default_slots_and_template() on server restarts or slot queries.
+        """
+        evening_slot = VegetableDeliverySlotConfig.objects.get(code="evening")
+        self.assertEqual(evening_slot.cutoff_time, datetime.time(17, 45))
+
+        # Admin edits base cutoff to 20:00
+        edit_res = self.admin_client.post(
+            "/api/vegetable-orders/admin/slots/",
+            {
+                "action": "save_slot",
+                "id": evening_slot.id,
+                "name": evening_slot.name,
+                "slot_label": evening_slot.slot_label,
+                "cutoff_time": "20:00",
+                "start_time": "18:00",
+                "end_time": "21:00",
+                "is_same_day_available": True,
+                "is_active": True,
+            },
+            format="json",
+        )
+        self.assertEqual(edit_res.status_code, 200)
+        self.assertTrue(edit_res.data["success"])
+
+        # Reload from DB
+        evening_slot.refresh_from_db()
+        self.assertEqual(evening_slot.cutoff_time, datetime.time(20, 0))
+
+        # Simulate multiple server restarts / API calls that trigger ensure_default_slots_and_template()
+        ensure_default_slots_and_template()
+        ensure_default_slots_and_template()
+        evening_slot.refresh_from_db()
+        self.assertEqual(evening_slot.cutoff_time, datetime.time(20, 0))
+
+        # Customer view returns the new 20:00 cutoff
+        cust_res = self.customer_client.get("/api/vegetable-orders/slots/")
+        self.assertEqual(cust_res.status_code, 200)
+        first_date = cust_res.data["dates"][0]
+        evening_item = next(s for s in first_date["slots"] if s["code"] == "evening")
+        self.assertEqual(evening_item["cutoff_time"], "20:00")
+
+    def test_cutoff_precedence_hierarchy_weekday_and_date_overrides(self):
+        """
+        Audit full precedence hierarchy:
+        1. Base cutoff = 20:00
+        2. Weekday override (e.g. Saturday) = 19:15
+        3. Date override (e.g. specific date) = 18:30
+        Verify: Date override > Weekday override > Base slot cutoff.
+        """
+        evening_slot = VegetableDeliverySlotConfig.objects.get(code="evening")
+
+        # 1. Base cutoff set to 20:00
+        self.admin_client.post(
+            "/api/vegetable-orders/admin/slots/",
+            {
+                "action": "save_slot",
+                "id": evening_slot.id,
+                "name": evening_slot.name,
+                "slot_label": evening_slot.slot_label,
+                "cutoff_time": "20:00",
+            },
+            format="json",
+        )
+
+        # 2. Weekday override for Saturday (weekday=6) set to 19:15
+        self.admin_client.post(
+            "/api/vegetable-orders/admin/slots/",
+            {
+                "action": "save_weekday_template",
+                "template": [
+                    {
+                        "weekday": 6,
+                        "slot_config_id": evening_slot.id,
+                        "is_enabled": True,
+                        "cutoff_time_override": "19:15",
+                    }
+                ]
+            },
+            format="json",
+        )
+
+        # Check customer slots: Saturday uses 19:15, other weekdays use 20:00
+        cust_res = self.customer_client.get("/api/vegetable-orders/slots/")
+        for d in cust_res.data["dates"]:
+            slot = next(s for s in d["slots"] if s["code"] == "evening")
+            if d["weekday"] == 6:
+                self.assertEqual(slot["cutoff_time"], "19:15", "Saturday should use weekday override 19:15")
+            else:
+                self.assertEqual(slot["cutoff_time"], "20:00", "Other weekdays should use base cutoff 20:00")
+
+        # 3. Add Date override for a specific date (e.g. 3 days ahead) set to 18:30
+        target_date = (timezone.localdate() + datetime.timedelta(days=3)).isoformat()
+        self.admin_client.post(
+            "/api/vegetable-orders/admin/slots/",
+            {
+                "action": "add_date_override",
+                "date": target_date,
+                "slot_config_id": evening_slot.id,
+                "is_closed": False,
+                "cutoff_time_override": "18:30",
+                "reason": "Special early harvest cutoff",
+            },
+            format="json",
+        )
+
+        # Check customer slots: target_date uses 18:30
+        cust_res_after = self.customer_client.get("/api/vegetable-orders/slots/")
+        target_date_obj = next(d for d in cust_res_after.data["dates"] if d["date"] == target_date)
+        evening_target = next(s for s in target_date_obj["slots"] if s["code"] == "evening")
+        self.assertEqual(evening_target["cutoff_time"], "18:30", "Date override 18:30 must take precedence over weekday and base cutoff")

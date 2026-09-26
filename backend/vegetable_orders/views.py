@@ -545,37 +545,33 @@ class AdminVegetableReturnActionView(APIView):
 
 def ensure_default_slots_and_template():
     """
-    Initializes default quick-commerce delivery slots and 7-day template if not yet created.
+    Initializes default quick-commerce delivery slots and 7-day template on a fresh database.
+    Guarantees that once slots exist, admin modifications (e.g. cutoff times, names,
+    labels, availability) are NEVER overwritten by seeds, migrations, or server restarts.
     """
-    morning, _ = VegetableDeliverySlotConfig.objects.get_or_create(
-        code="morning",
-        defaults={
-            "name": "Morning Delivery",
-            "slot_label": "6:30 AM – 9:30 AM",
-            "start_time": datetime.time(6, 30),
-            "end_time": datetime.time(9, 30),
-            "cutoff_time": datetime.time(6, 0),
-            "is_same_day_available": False,
-            "is_active": True,
-            "sort_order": 1,
-        }
-    )
-    evening, created = VegetableDeliverySlotConfig.objects.get_or_create(
-        code="evening",
-        defaults={
-            "name": "Evening Delivery",
-            "slot_label": "6:00 PM – 8:00 PM",
-            "start_time": datetime.time(18, 0),
-            "end_time": datetime.time(20, 0),
-            "cutoff_time": datetime.time(17, 45),
-            "is_same_day_available": True,
-            "is_active": True,
-            "sort_order": 2,
-        }
-    )
-    if not created and evening.cutoff_time in [datetime.time(12, 0), datetime.time(17, 30)]:
-        evening.cutoff_time = datetime.time(17, 45)
-        evening.save(update_fields=["cutoff_time"])
+    if not VegetableDeliverySlotConfig.objects.exists():
+        VegetableDeliverySlotConfig.objects.create(
+            code="morning",
+            name="Morning Delivery",
+            slot_label="6:30 AM – 9:30 AM",
+            start_time=datetime.time(6, 30),
+            end_time=datetime.time(9, 30),
+            cutoff_time=datetime.time(6, 0),
+            is_same_day_available=False,
+            is_active=True,
+            sort_order=1,
+        )
+        VegetableDeliverySlotConfig.objects.create(
+            code="evening",
+            name="Evening Delivery",
+            slot_label="6:00 PM – 8:00 PM",
+            start_time=datetime.time(18, 0),
+            end_time=datetime.time(20, 0),
+            cutoff_time=datetime.time(17, 45),
+            is_same_day_available=True,
+            is_active=True,
+            sort_order=2,
+        )
 
     all_slots = list(VegetableDeliverySlotConfig.objects.all())
     for weekday in range(7):
@@ -691,18 +687,19 @@ class CustomerVegetableSlotsView(APIView):
                     })
                     continue
 
-                # Effective cutoff time
+                # Effective cutoff time hierarchy:
+                # 1. Date-specific override (VegetableSlotDateOverride)
+                # 2. Weekday-specific override (VegetableWeekdaySlotConfig)
+                # 3. Base slot cutoff time (VegetableDeliverySlotConfig)
+                # 4. Fallback (18:00) if no cutoff is configured
                 if slot_override and slot_override.cutoff_time_override:
                     effective_cutoff = slot_override.cutoff_time_override
                 elif wc.cutoff_time_override:
                     effective_cutoff = wc.cutoff_time_override
-                # Effective cutoff time
-                if slot_override and slot_override.cutoff_time_override:
-                    effective_cutoff = slot_override.cutoff_time_override
-                elif wc.cutoff_time_override:
-                    effective_cutoff = wc.cutoff_time_override
+                elif slot.cutoff_time:
+                    effective_cutoff = slot.cutoff_time
                 else:
-                    effective_cutoff = slot.cutoff_time or datetime.time(17, 45)
+                    effective_cutoff = datetime.time(18, 0)
 
                 # Same-day live cutoff check
                 if days_ahead == 0:

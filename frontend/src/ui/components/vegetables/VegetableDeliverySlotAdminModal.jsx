@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
-  Clock, Calendar, Check, X, Plus, Trash2, Save,
+  Clock, Calendar, Check, X, Plus, Trash2, Save, Edit3,
   AlertCircle, ShieldCheck, Sun, Moon, Sparkles, RefreshCw, CalendarOff,
   IndianRupee, Tag, Sliders
 } from "lucide-react"
@@ -60,6 +60,31 @@ export default function VegetableDeliverySlotAdminModal({ isOpen, onClose }) {
   const [newSlotEndTime, setNewSlotEndTime] = useState("09:30")
   const [newSlotCutoff, setNewSlotCutoff] = useState("06:00")
   const [newSlotSameDay, setNewSlotSameDay] = useState(false)
+
+  // Form state for editing existing Slot definition
+  const [editingSlotId, setEditingSlotId] = useState(null)
+  const [editSlotName, setEditSlotName] = useState("")
+  const [editSlotLabel, setEditSlotLabel] = useState("")
+  const [editSlotStartTime, setEditSlotStartTime] = useState("06:30")
+  const [editSlotEndTime, setEditSlotEndTime] = useState("09:30")
+  const [editSlotCutoff, setEditSlotCutoff] = useState("18:00")
+  const [editSlotSameDay, setEditSlotSameDay] = useState(true)
+  const [editSlotIsActive, setEditSlotIsActive] = useState(true)
+
+  const handleStartEditSlot = (slot) => {
+    setEditingSlotId(slot.id)
+    setEditSlotName(slot.name || "")
+    setEditSlotLabel(slot.slot_label || "")
+    setEditSlotStartTime(slot.start_time ? slot.start_time.slice(0, 5) : "06:30")
+    setEditSlotEndTime(slot.end_time ? slot.end_time.slice(0, 5) : "09:30")
+    setEditSlotCutoff(slot.cutoff_time ? slot.cutoff_time.slice(0, 5) : "18:00")
+    setEditSlotSameDay(Boolean(slot.is_same_day_available))
+    setEditSlotIsActive(slot.is_active !== false)
+  }
+
+  const handleCancelEditSlot = () => {
+    setEditingSlotId(null)
+  }
 
   const fetchSlotAdminData = async (showSpinner = true) => {
     try {
@@ -342,6 +367,46 @@ export default function VegetableDeliverySlotAdminModal({ isOpen, onClose }) {
       }
     } catch (err) {
       setError(extractApiErrorMessage(err, "Failed to create slot window."))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleUpdateSlotDefinition = async (e) => {
+    e?.preventDefault()
+    if (!editSlotName.trim() || !editSlotLabel.trim()) {
+      setError("Slot name and time label are required.")
+      return
+    }
+
+    try {
+      setSaving(true)
+      setError(null)
+      const res = await apiRequest("/vegetable-orders/admin/slots/", {
+        method: "POST",
+        json: {
+          action: "save_slot",
+          id: editingSlotId,
+          name: editSlotName.trim(),
+          slot_label: editSlotLabel.trim(),
+          start_time: editSlotStartTime,
+          end_time: editSlotEndTime,
+          cutoff_time: editSlotCutoff,
+          is_same_day_available: editSlotSameDay,
+          is_active: editSlotIsActive,
+        },
+      })
+
+      if (res && res.success) {
+        setSuccessMsg(`Delivery slot window '${editSlotName}' updated successfully!`)
+        setEditingSlotId(null)
+        setTimeout(() => setSuccessMsg(""), 4000)
+        fetchSlotAdminData()
+      } else {
+        setError(res?.message || "Failed to update slot window.")
+      }
+    } catch (err) {
+      setError(extractApiErrorMessage(err, "Failed to update slot window."))
     } finally {
       setSaving(false)
     }
@@ -764,32 +829,176 @@ export default function VegetableDeliverySlotAdminModal({ isOpen, onClose }) {
 
               {/* Slot Definitions Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {slotDefinitions.map((slot) => (
-                  <div
-                    key={slot.id}
-                    className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-3xs flex items-center justify-between gap-3"
-                  >
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">{slot.name}</h4>
-                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                          {slot.code || `ID: ${slot.id}`}
-                        </span>
-                      </div>
-                      <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400">{slot.slot_label}</p>
-                      <p className="text-[10px] text-slate-400 font-medium">
-                        Cutoff: {slot.cutoff_time || "12:00"} • {slot.is_same_day_available ? "Same-day enabled" : "Next-day only"}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteSlotDefinition(slot.id, slot.name)}
-                      className="p-2 rounded-xl hover:bg-rose-50 text-rose-600 transition-colors cursor-pointer shrink-0"
+                {slotDefinitions.map((slot) => {
+                  const isEditing = editingSlotId === slot.id
+
+                  if (isEditing) {
+                    return (
+                      <form
+                        key={slot.id}
+                        onSubmit={handleUpdateSlotDefinition}
+                        className="p-5 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border-2 border-emerald-500 shadow-md space-y-3 sm:col-span-2"
+                      >
+                        <div className="flex items-center justify-between pb-1 border-b border-emerald-200 dark:border-emerald-800">
+                          <div className="flex items-center gap-2">
+                            <Edit3 className="w-4 h-4 text-emerald-600" />
+                            <h4 className="text-xs font-black uppercase text-emerald-800 dark:text-emerald-300">
+                              Edit Slot Window: {slot.name}
+                            </h4>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleCancelEditSlot}
+                            className="text-xs font-bold text-slate-400 hover:text-slate-600"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-500 block mb-1">Name *</label>
+                            <input
+                              type="text"
+                              required
+                              value={editSlotName}
+                              onChange={(e) => setEditSlotName(e.target.value)}
+                              className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-500 block mb-1">Time Label *</label>
+                            <input
+                              type="text"
+                              required
+                              value={editSlotLabel}
+                              onChange={(e) => setEditSlotLabel(e.target.value)}
+                              className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-500 block mb-1">Default Cutoff Time *</label>
+                            <input
+                              type="time"
+                              required
+                              value={editSlotCutoff}
+                              onChange={(e) => setEditSlotCutoff(e.target.value)}
+                              className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-mono font-bold text-emerald-600"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-500 block mb-1">Window Start Time</label>
+                            <input
+                              type="time"
+                              value={editSlotStartTime}
+                              onChange={(e) => setEditSlotStartTime(e.target.value)}
+                              className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-500 block mb-1">Window End Time</label>
+                            <input
+                              type="time"
+                              value={editSlotEndTime}
+                              onChange={(e) => setEditSlotEndTime(e.target.value)}
+                              className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-white"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                          <div className="flex items-center gap-4">
+                            <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={editSlotSameDay}
+                                onChange={(e) => setEditSlotSameDay(e.target.checked)}
+                                className="rounded text-emerald-600"
+                              />
+                              <span>Allow Same-Day Booking</span>
+                            </label>
+                            <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={editSlotIsActive}
+                                onChange={(e) => setEditSlotIsActive(e.target.checked)}
+                                className="rounded text-emerald-600"
+                              />
+                              <span>Active</span>
+                            </label>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={handleCancelEditSlot}
+                              className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold hover:bg-slate-200 cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={saving}
+                              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-md cursor-pointer flex items-center gap-1.5"
+                            >
+                              <Save className="w-3.5 h-3.5" />
+                              <span>{saving ? "Saving..." : "Save Changes"}</span>
+                            </button>
+                          </div>
+                        </div>
+                      </form>
+                    )
+                  }
+
+                  const cutoffDisplay = slot.cutoff_time ? slot.cutoff_time.slice(0, 5) : "18:00"
+
+                  return (
+                    <div
+                      key={slot.id}
+                      className="p-4.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-3xs flex items-center justify-between gap-3 hover:border-slate-300 dark:hover:border-slate-700 transition-all"
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+                      <div className="min-w-0 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">{slot.name}</h4>
+                          <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                            {slot.code || `ID: ${slot.id}`}
+                          </span>
+                          {!slot.is_active && (
+                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
+                              Inactive
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400">{slot.slot_label}</p>
+                        <div className="flex flex-wrap items-center gap-x-2 text-[10px] text-slate-500 font-medium">
+                          <span>
+                            Cutoff: <strong className="text-slate-700 dark:text-slate-200 font-mono font-bold">{cutoffDisplay}</strong>
+                          </span>
+                          <span>•</span>
+                          <span>{slot.is_same_day_available ? "Same-day enabled" : "Next-day only"}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleStartEditSlot(slot)}
+                          className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Edit slot window"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSlotDefinition(slot.id, slot.name)}
+                          className="p-1.5 rounded-xl hover:bg-rose-50 text-rose-600 transition-colors cursor-pointer"
+                          title="Delete slot window"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           ) : (
