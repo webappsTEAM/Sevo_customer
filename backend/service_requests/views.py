@@ -514,6 +514,8 @@ class BookingCreateView(APIView):
                 drop_lng=serializer.validated_data.get("drop_longitude"),
                 cart_data=serializer.validated_data.get("cart_data"),
                 waypoints=req_waypoints,
+                move_date=serializer.validated_data.get("preferred_date"),
+                move_time=serializer.validated_data.get("preferred_time"),
             )
         except UnresolvedLogisticsFareError as err:
             # Fixes GT-B-01: a logistics booking with neither a resolvable
@@ -557,6 +559,24 @@ class BookingCreateView(APIView):
                         code="ZERO_DISTANCE_ROUTE",
                     )
 
+        # Logistics coupons are checked against the Admin-set coupon rules BEFORE the
+        # booking exists, so an invalid / expired / exhausted / ineligible code is
+        # refused with a reason instead of being silently dropped (which would leave
+        # the customer with a price they did not expect) or wrongly honoured.
+        if _service_slug in LOGISTICS_CATEGORIES:
+            _gt_coupon_code = str(request.data.get("coupon_code") or request.data.get("coupon_code_snapshot") or "").strip().upper()
+            if _gt_coupon_code:
+                from service_requests.services.coupon_rules import check_logistics_coupon
+                _gt_cpn = Coupon.objects.filter(code__iexact=_gt_coupon_code).first()
+                _ok, _ccode, _cmsg = check_logistics_coupon(
+                    _gt_cpn, user=request.user, amount=corrected_fare, service_category=_service_slug,
+                )
+                if not _ok:
+                    if idem_cache_key:
+                        from django.core.cache import cache
+                        cache.delete(idem_cache_key)
+                    return _error(_cmsg, 400, error=_cmsg, code=_ccode)
+
         # Fixes HS-B-01: Full server-side price authority for Home Services bookings.
         # Browser-submitted prices in cart_data or total_amount are NEVER trusted.
         # resolve_home_services_fare looks up authoritative Package/AddOn prices from
@@ -587,6 +607,19 @@ class BookingCreateView(APIView):
         else:
             cart_data = _cart_for_check
         payment_method = (request.data.get("payment_method") or "COD").upper()
+        # Transit insurance is billed on top of the fare and the premium belongs to the platform, so
+        # it can only be taken when SEVO collects the money (online / wallet), never as driver cash.
+        _premium = Decimal("0.00")
+        if serializer.validated_data.get("insurance_opted_in"):
+            if payment_method != "ONLINE":
+                if idem_cache_key:
+                    from django.core.cache import cache
+                    cache.delete(idem_cache_key)
+                return _error(
+                    "Transit insurance is available with online or wallet payment only.",
+                    400, errors={"insurance_opted_in": ["Choose online or wallet payment to add insurance."]},
+                )
+            _premium = Decimal(str(serializer.validated_data.get("insurance_premium") or 0))
         if payment_method == "ONLINE":
             initial_status = ServiceRequest.Status.WAITING_FOR_PAYMENT
             initial_payment_status = ServiceRequest.PaymentStatus.PROCESSING
@@ -786,7 +819,7 @@ class BookingCreateView(APIView):
             "status": initial_status,
             "payment_method": payment_method,
             "payment_status": initial_payment_status,
-            "total_amount": corrected_fare,
+            "total_amount": Decimal(str(corrected_fare)) + _premium,
             # GT-B-01: the itemised quote behind total_amount, when the
             # fare was distance-computed. Empty for flat-priced bookings.
             "fare_breakdown": _jsonable_fare_breakdown(fare_breakdown),
@@ -967,6 +1000,7 @@ class BookingCreateView(APIView):
 
                     disc = min(subtotal, disc)
                     final_tot = max(0.0, subtotal - disc)
+                final_tot += float(_premium)          # insurance is not discountable
 
                 sr.coupon = cpn
                 sr.coupon_code_snapshot = cpn.code
@@ -994,8 +1028,8 @@ class BookingCreateView(APIView):
                 sr.save(update_fields=["coupon", "coupon_code_snapshot", "subtotal_amount", "discount_amount", "final_amount", "total_amount"])
 
                 with atomic_transaction():
-                    cpn.current_usage += 1
-                    cpn.save(update_fields=["current_usage"])
+                    # Atomic increment: two simultaneous redemptions must both be counted.
+                    Coupon.objects.filter(pk=cpn.pk).update(current_usage=F("current_usage") + 1)
                     CouponUsage.objects.create(
                         coupon=cpn,
                         customer=sr.customer,
@@ -2246,6 +2280,13 @@ def _build_tracking_payload(sr, has_full_access, include_delivery_otp=False, inc
         from .services.trip_feedback import trip_feedback_summary
         trip_feedback = trip_feedback_summary(sr)
 
+    # Prepaid trip whose final fare rose above what was paid: same customer-only rule.
+    trip_balance_due = None
+    if include_feedback and has_full_access and sr.service_category in LOGISTICS_CATEGORIES:
+        from .services.prepaid_variance import balance_due as _bal
+        _b = _bal(sr)
+        trip_balance_due = str(_b) if _b > 0 else None
+
     created_at_raw = getattr(sr, 'created_at', None) or getattr(sr, 'submitted_at', None)
     if created_at_raw and hasattr(created_at_raw, 'isoformat'):
         created_at_str = created_at_raw.isoformat()
@@ -2346,6 +2387,9 @@ def _build_tracking_payload(sr, has_full_access, include_delivery_otp=False, inc
         "payment_confirmation_otp": payment_confirmation_otp,
         "delivery_otp": delivery_otp,
         "feedback": trip_feedback,
+        "balance_due": trip_balance_due,
+        "extra_charges": [e for e in (sr.extra_charges if isinstance(sr.extra_charges, list) else []) if isinstance(e, dict) and e.get("status") == "APPLIED"],
+        "delivery_exception": (sr.delivery_exception if isinstance(sr.delivery_exception, dict) and sr.delivery_exception.get("status") == "OPEN" else None),
         "tracking_token": str(sr.tracking_token) if (has_full_access and sr.tracking_token) else None,
         "vehicle_number": tracking.get("vehicle_number") if (tracking and isinstance(tracking, dict)) else "",
         "vehicle_type": tracking.get("vehicle_type") if (tracking and isinstance(tracking, dict)) else "",
@@ -3987,6 +4031,13 @@ class CustomerCouponValidateView(APIView):
         if not coupon:
             return _standard_response(success=False, error={"code": "INVALID_COUPON", "message": f"Coupon code '{code}' is not valid."}, status_code=400)
 
+        _cat = str(request.data.get("service_category", "") or "").strip().lower()
+        if _cat in LOGISTICS_CATEGORIES:
+            from service_requests.services.coupon_rules import check_logistics_coupon
+            _ok, _ccode, _cmsg = check_logistics_coupon(coupon, user=request.user, amount=cart_total, service_category=_cat)
+            if not _ok:
+                return _standard_response(success=False, error={"code": _ccode, "message": _cmsg}, status_code=400)
+
         min_req = float(coupon.min_booking)
         if cart_total < min_req:
             diff = min_req - cart_total
@@ -4102,6 +4153,14 @@ class CustomerInsuranceClaimListCreateView(APIView):
             return _standard_response(success=False, error={"code": "CLAIM_FAILED", "message": str(e)}, status_code=400)
 
         return _standard_response(success=True, data=InsuranceClaimSerializer(claim).data, status_code=201)
+
+
+class CustomerClaimableBookingsView(APIView):
+    """GET /api/insurance-claims/eligible-bookings/ -- bookings the customer can claim on now."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        return _standard_response(success=True, data=sr_services.claimable_bookings(request.user))
 
 
 class AdminInsuranceClaimListView(APIView):

@@ -372,6 +372,10 @@ class ServiceRequest(models.Model):
     # INSURANCE_MAX_LIABILITY) -- what "a stated liability cap" in the
     # finding refers to.
     insurance_opted_in = models.BooleanField(default=False)
+    # Customer's own GSTIN, when they are GST-registered and want it on the
+    # invoice (Porter's customer terms: registered customers intimate it at
+    # booking). Optional; validated for format only -- never used to change a fare.
+    customer_gstin = models.CharField(max_length=15, blank=True, default="")
     insurance_premium = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     insurance_liability_cap = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     # GT-B-03: logistics-only sub-phase, independent of Status -- see the
@@ -380,6 +384,10 @@ class ServiceRequest(models.Model):
     logistics_leg = models.CharField(max_length=20, choices=LogisticsLeg.choices, blank=True, default="")
     logistics_leg_updated_at = models.DateTimeField(null=True, blank=True)
     logistics_leg_history = models.JSONField(default=list, blank=True)
+    # Driver-reported trip exception (receiver unavailable ...): {type,label,notes,leg,status,reported_at}.
+    delivery_exception = models.JSONField(default=dict, blank=True)
+    # Driver-reported toll / parking pass-throughs (see services/extra_charges.py).
+    extra_charges = models.JSONField(default=list, blank=True)
     # GT-B-03 (completing it): the three fields above shipped, but nothing
     # in either backend ever wrote them -- the model comment referred to a
     # set_logistics_leg() that did not exist, so logistics_leg was
@@ -4162,3 +4170,106 @@ class ServiceDateOverride(models.Model):
         reason_txt = f" ({self.reason})" if self.reason else ""
         return f"{self.service.name} on {self.date}: {status}{reason_txt}"
 
+
+class GTExtraChargePolicy(models.Model):
+    """
+    Admin control for toll / parking pass-throughs a driver reports with a receipt.
+    is_enabled defaults to False: with no enabled policy no extra charge is ever accepted or billed.
+    The customer pays the actual receipt amount, bounded by the caps below.
+    """
+    service_category = models.CharField(
+        max_length=100, blank=True, default="",
+        help_text="Blank applies to all GT bookings; a category value overrides it.",
+    )
+    is_enabled = models.BooleanField(default=False)
+    allow_toll = models.BooleanField(default=True)
+    allow_parking = models.BooleanField(default=True)
+    max_amount_per_item = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Largest single toll/parking receipt accepted. Blank = no limit.",
+    )
+    max_total_per_booking = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Cap on the total pass-through billed per booking. Blank = no limit.",
+    )
+    require_receipt_photo = models.BooleanField(
+        default=False,
+        help_text="When on, a receipt photo must be uploaded by the driver; a typed reference alone is refused.",
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "GT Extra Charge (Toll/Parking) Policy"
+        verbose_name_plural = "GT Extra Charge (Toll/Parking) Policies"
+
+    def __str__(self):
+        return f"GTExtraChargePolicy({self.service_category or 'platform-wide'}, enabled={self.is_enabled})"
+
+
+def get_gt_extra_charge_policy(category):
+    cat = str(category or "").strip().lower()
+    qs = GTExtraChargePolicy.objects.filter(is_active=True, is_enabled=True)
+    return qs.filter(service_category__iexact=cat).first() or qs.filter(service_category="").first()
+
+
+class GTInsurancePolicy(models.Model):
+    """
+    Admin override for transit-insurance terms. With no active row the INSURANCE_RATE /
+    INSURANCE_MAX_LIABILITY settings apply exactly as before; an active row replaces them.
+    Set is_offered=False to stop offering insurance without a deploy.
+    """
+    is_offered = models.BooleanField(default=True)
+    premium_rate = models.DecimalField(
+        max_digits=6, decimal_places=4, default=0.02,
+        help_text="Premium as a fraction of the declared value (0.02 = 2%).",
+    )
+    max_liability = models.DecimalField(
+        max_digits=12, decimal_places=2, default=500000,
+        help_text="Highest declared value / liability cap.",
+    )
+    is_active = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "GT Insurance Policy"
+        verbose_name_plural = "GT Insurance Policy"
+
+    def __str__(self):
+        return f"GTInsurancePolicy(offered={self.is_offered}, rate={self.premium_rate})"
+
+
+class GTClaimPolicy(models.Model):
+    """
+    Admin control for goods damage/loss claims on goods-transport and packers-and-movers bookings.
+    With no enabled row the behaviour is unchanged: only insurance-opted-in bookings can claim, with
+    no time limit. An enabled row adds Porter-style included liability for every completed booking
+    (capped at the lower of the fare and included_liability_cap) and an optional claim window.
+    """
+    service_category = models.CharField(
+        max_length=100, blank=True, default="",
+        help_text="Blank applies to all GT bookings; a category value overrides it.",
+    )
+    is_enabled = models.BooleanField(default=False)
+    included_liability_cap = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Rupee cap of the liability that comes with every booking, without paid insurance. Blank = uninsured bookings cannot claim.",
+    )
+    cap_at_fare = models.BooleanField(
+        default=True, help_text="Also limit the included liability to the booking's fare (lower of the two).",
+    )
+    claim_window_hours = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Claims must be filed within this many hours of delivery. Blank = no limit.",
+    )
+    require_photo = models.BooleanField(default=False, help_text="Require at least one damage photo.")
+    is_active = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "GT Claim Policy"
+        verbose_name_plural = "GT Claim Policies"
+
+    def __str__(self):
+        return f"GTClaimPolicy({self.service_category or 'platform-wide'}, enabled={self.is_enabled})"

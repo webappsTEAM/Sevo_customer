@@ -259,6 +259,19 @@ def create_reschedule_request(booking, requested_by, persona, new_date, new_time
     if booking.status in ["completed", "closed", "cancelled", "rejected"]:
         raise ValidationError({"detail": f"Cannot reschedule a booking in '{booking.get_status_display()}' status."})
 
+    # A customer cannot move a Packers & Movers booking onto a date/time whose peak-day / off-hours
+    # surcharge differs from the one already priced in -- that would silently under- or over-charge.
+    # (Support can still move it: persona ADMIN skips this.)
+    if persona == "CUSTOMER" and (booking.service_category or "").strip().lower() == "packers_movers":
+        from .pm_surcharge import applicable_rules, rule_signature
+        booked = (booking.fare_breakdown or {}).get("surcharge_applied") or []
+        if rule_signature(applicable_rules((booking.fare_breakdown or {}).get("city"), new_date, new_time_slot)) != booked:
+            raise ValidationError({"detail": (
+                "The new date or time is priced differently for Packers & Movers (peak-day / off-hours "
+                "surcharge). Please choose a date and time with the same pricing, or cancel and book again "
+                "for that date."
+            )})
+
     with transaction.atomic():
         rr = RescheduleRequest.objects.create(
             booking=booking,
@@ -315,6 +328,32 @@ def create_reschedule_request(booking, requested_by, persona, new_date, new_time
     return rr
 
 
+def _record_reschedule_price_lock(booking, actor):
+    """A support-approved reschedule of a Packers & Movers move onto a date/time whose peak-day or
+    off-hours surcharge differs from the one priced in keeps the agreed price. Never silent: the
+    decision is written to the fare breakdown so support, the invoice trail and audits can see it."""
+    try:
+        if booking.service_category != "packers_movers":
+            return
+        from .pm_surcharge import applicable_rules, rule_signature
+        fb = dict(booking.fare_breakdown or {})
+        booked = fb.get("surcharge_applied") or []
+        now = rule_signature(applicable_rules(fb.get("city"), booking.preferred_date, booking.preferred_time))
+        if now == booked:
+            return
+        fb["reschedule_price_lock"] = {
+            "surcharge_priced": booked,
+            "surcharge_at_new_slot": now,
+            "price_kept": True,
+            "approved_by": getattr(actor, "pk", None),
+            "at": timezone.now().isoformat(),
+        }
+        booking.fare_breakdown = fb
+        booking.save(update_fields=["fare_breakdown", "updated_at"])
+    except Exception:
+        logger.exception("Could not record reschedule price lock for booking %s", getattr(booking, "pk", None))
+
+
 def apply_reschedule_transition(reschedule_request, new_status, actor, note=""):
     current = reschedule_request.status
     allowed = _RESCHEDULE_TRANSITIONS.get(current, set())
@@ -340,6 +379,7 @@ def apply_reschedule_transition(reschedule_request, new_status, actor, note=""):
             booking.preferred_time = reschedule_request.new_time_slot
             booking.status = "rescheduled"
             booking.save(update_fields=["preferred_date", "preferred_time", "status", "updated_at"])
+            _record_reschedule_price_lock(booking, actor)
 
             # Notify workforce.
             # Bug found: this call used to pass booking_id=/new_time_slot=,
@@ -504,7 +544,8 @@ def _execute_gateway_refund(rr):
     raises, so a refund that didn't actually happen can never be recorded
     as if it had.
     """
-    payment = (
+    refund_amount = rr.approved_amount if rr.approved_amount else rr.requested_amount
+    payments = list(
         Payment.objects.filter(
             service_request=rr.booking,
             status=ServiceRequest.PaymentStatus.PAID,
@@ -512,8 +553,10 @@ def _execute_gateway_refund(rr):
         .exclude(razorpay_payment_id__isnull=True)
         .exclude(razorpay_payment_id="")
         .order_by("-created_at")
-        .first()
     )
+    # A booking can hold several payments (the trip plus a balance paid later). Refund against
+    # the newest one that is large enough to carry this refund.
+    payment = next((p for p in payments if refund_amount and p.amount >= refund_amount), None) or (payments[0] if payments else None)
     if not payment:
         raise ValidationError({
             "detail": "No paid, gateway-verified Payment record found for this booking -- "
@@ -528,18 +571,24 @@ def _execute_gateway_refund(rr):
     # re-running this on the SAME request twice, not two separate requests
     # both reaching SENT_TO_FINANCE and each independently calling
     # Razorpay's refund API against the same underlying payment.
+    # Guard against paying the same money back twice: total already refunded by other completed
+    # requests plus this one may never exceed what the booking's payments add up to. (This used to
+    # refuse ANY second refund on a booking, which also blocked a legitimate fare-difference
+    # refund followed by a later one.)
     already_completed = RefundRequest.objects.filter(
         booking=rr.booking,
         status=RefundStatus.COMPLETED,
-    ).exclude(pk=rr.pk).exclude(gateway_reference="").exclude(gateway_reference__isnull=True).first()
-    if already_completed:
-        raise ValidationError({
-            "detail": f"This booking's payment was already refunded by a separate completed "
-                      f"refund request (ref: {already_completed.gateway_reference}). Refusing "
-                      f"to issue a second gateway refund against the same payment."
-        })
+    ).exclude(pk=rr.pk).exclude(gateway_reference="").exclude(gateway_reference__isnull=True)
+    if already_completed.exists():
+        from django.db.models import Sum as _Sum
+        refunded = already_completed.aggregate(t=_Sum("approved_amount"))["t"] or Decimal("0")
+        if not refund_amount or refunded + refund_amount > sum((p.amount for p in payments), Decimal("0")):
+            raise ValidationError({
+                "detail": f"This booking's payment was already refunded by a separate completed "
+                          f"refund request (ref: {already_completed.first().gateway_reference}). Refusing "
+                          f"to refund more than was paid."
+            })
 
-    refund_amount = rr.approved_amount if rr.approved_amount else rr.requested_amount
     if not refund_amount or refund_amount <= 0:
         raise ValidationError({"detail": "Refund amount must be greater than zero."})
     if refund_amount > payment.amount:
@@ -547,6 +596,15 @@ def _execute_gateway_refund(rr):
             "detail": f"Refund amount (Rs. {refund_amount}) exceeds the original payment "
                       f"(Rs. {payment.amount}) -- cannot refund more than was paid."
         })
+
+    if payment.gateway == "wallet":
+        # Paid from the SEVO wallet: the refund goes back to the wallet, not to a card/UPI rail.
+        tx = credit_wallet(
+            rr.booking.customer, refund_amount, WalletTransaction.Reason.REFUND,
+            note=f"Refund for booking {rr.booking.request_id}",
+            reference_type="refund", reference_id=rr.refund_id or rr.id,
+        )
+        return f"wallet_refund_{tx.id}"
 
     gateway_configured = bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
 
@@ -618,7 +676,10 @@ def admin_complete_refund(admin_user, refund_id):
     # cancel/reschedule sync calls elsewhere in this module: never block
     # or roll back a refund that already succeeded at the gateway just
     # because this notification failed.
-    if rr.booking_id:
+    # A partial fare-difference refund (overcharge) is not a reversal of the job: the driver still
+    # did the trip, so their earnings are only clawed back for full-value refunds.
+    _fare_difference = (rr.reason == "OVERCHARGED" and rr.refund_type == "PARTIAL")
+    if rr.booking_id and not _fare_difference:
         WorkforceIntegrationService.clawback_workforce_job(
             rr.booking, reason=f"Refund #{rr.refund_id or rr.id} completed (gateway ref: {gateway_refund_id})."
         )
@@ -812,12 +873,14 @@ def process_referral_completion(booking):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def file_insurance_claim(booking, customer, description, claimed_amount, attachment_files=None):
-    if not booking.insurance_opted_in:
-        raise ValidationError({"detail": "This booking does not have insurance coverage."})
+    from .claims_policy import claim_error
     if booking.customer_id != customer.id:
         raise PermissionDenied("You can only file a claim on your own booking.")
     if booking.status != "completed":
         raise ValidationError({"detail": "A claim can only be filed once the booking is completed."})
+    _why = claim_error(booking, photo_count=len(attachment_files or []))
+    if _why:
+        raise ValidationError({"detail": _why})
 
     claimed_amount = Decimal(str(claimed_amount))
     if claimed_amount <= 0:
@@ -848,10 +911,21 @@ def resolve_insurance_claim(admin_user, claim_id, decision, approved_amount=None
     if decision == InsuranceClaim.Status.APPROVED:
         if claim.status != InsuranceClaim.Status.OPEN:
             raise ValidationError({"detail": f"Claim must be OPEN to approve (currently {claim.status})."})
-        cap = claim.booking.insurance_liability_cap
+        from .claims_policy import claim_cap
+        cap = claim_cap(claim.booking)
         amount = Decimal(str(approved_amount)) if approved_amount is not None else claim.claimed_amount
         if cap is not None:
-            amount = min(amount, cap)  # GT-C-03: never approve above the stated liability cap
+            # GT-C-03: never approve above the stated liability cap -- across ALL of the booking's
+            # claims, so several smaller claims cannot add up to more than the cap.
+            already = sum(
+                (c.approved_amount or Decimal("0") for c in claim.booking.insurance_claims.filter(
+                    status__in=[InsuranceClaim.Status.APPROVED, InsuranceClaim.Status.PAID]).exclude(pk=claim.pk)),
+                Decimal("0"),
+            )
+            remaining = max(Decimal("0"), cap - already)
+            if remaining <= 0:
+                raise ValidationError({"detail": "The liability cap for this booking is already fully used by earlier claims."})
+            amount = min(amount, remaining)
         claim.approved_amount = amount
         claim.status = InsuranceClaim.Status.APPROVED
 
@@ -882,6 +956,25 @@ def resolve_insurance_claim(admin_user, claim_id, decision, approved_amount=None
     claim.resolved_at = timezone.now()
     claim.save(update_fields=["status", "approved_amount", "resolution_notes", "resolved_by", "resolved_at", "updated_at"])
     return claim
+
+
+def claimable_bookings(customer):
+    """Completed goods bookings this customer can still file a claim on (insured, or covered by the
+    Admin GTClaimPolicy), inside the claim window, with the payout cap shown up front."""
+    from .claims_policy import claim_cap, claim_error, window_ends_at, CLAIMABLE_CATEGORIES
+    rows = []
+    qs = ServiceRequest.objects.filter(customer=customer, status="completed", service_category__in=CLAIMABLE_CATEGORIES).order_by("-updated_at")[:50]
+    for b in qs:
+        if claim_error(b, photo_count=1):          # photo requirement is enforced at filing time, not here
+            continue
+        cap = claim_cap(b)
+        end = window_ends_at(b)
+        rows.append({
+            "id": b.id, "request_id": b.request_id, "issue_title": b.issue_title,
+            "max_payout": str(cap) if cap is not None else None,
+            "claim_by": end.isoformat() if end else None,
+        })
+    return rows
 
 
 def list_insurance_claims(actor, persona, filters=None):

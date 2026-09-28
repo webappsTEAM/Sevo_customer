@@ -16,6 +16,7 @@ import { useCustomerTracking } from "./useCustomerTracking.js"
 import { CustomerTrackingMap } from "./CustomerTrackingMap.jsx"
 import { CustomerTrackingHeader } from "./CustomerTrackingHeader.jsx"
 import { CustomerTrackingStatusCard } from "./CustomerTrackingStatusCard.jsx"
+import { settleBookingPayment } from "../../../api/gtPaymentService.js"
 import { getFreshnessBadge } from "./trackingUtils.js"
 import "../../pages/LiveTrackingPage.css"
 
@@ -295,6 +296,8 @@ export function CustomerTrackingPage({
   const techRating = data?.assigned_employee?.rating ?? data?.technician?.rating ?? null
   const techJobs = data?.assigned_employee?.jobs_completed ?? data?.technician?.jobs_completed ?? null
   const startOtp = data?.start_otp || null
+  const [balancePaying, setBalancePaying] = useState(false)
+  const [balanceMsg, setBalanceMsg] = useState("")
 
   const etaMins = data?.technician?.eta_minutes ?? data?.eta_minutes ?? null
   const distKm = data?.technician?.distance_km ?? data?.distance_km ?? null
@@ -812,6 +815,56 @@ export function CustomerTrackingPage({
                   {startOtp}
                   {copiedOtp ? <Check size={13} color="#10b981" /> : <Copy size={13} />}
                 </button>
+              </div>
+            )}
+
+            {/* Prepaid trip whose final fare rose above what was paid */}
+            {isLogistics && data?.balance_due && !isCancelled && (
+              <div className="ltp-card" role="status" style={{ border: "1px solid #93c5fd", background: "#eff6ff" }}>
+                <strong style={{ color: "#1e3a8a" }}>Balance due: ₹{data.balance_due}</strong>
+                <div style={{ fontSize: "0.85rem", color: "#1e40af", margin: "4px 0 8px" }}>
+                  The final fare is higher than what you paid online (extra distance, stops or waiting time).
+                </div>
+                <button type="button" disabled={balancePaying}
+                  style={{ padding: "8px 14px", borderRadius: 10, background: "#1d4ed8", color: "#fff", fontWeight: 700, border: 0 }}
+                  onClick={async () => {
+                    setBalancePaying(true); setBalanceMsg("")
+                    const r = await settleBookingPayment({ bookingId: data.job_id, trackingToken, method: "online" })
+                    setBalanceMsg(r.ok ? "Payment received. Thank you!" : (r.message || "Payment was not completed."))
+                    setBalancePaying(false)
+                  }}>
+                  {balancePaying ? "Processing…" : "Pay balance"}
+                </button>
+                {balanceMsg && <div style={{ fontSize: "0.8rem", marginTop: 6 }}>{balanceMsg}</div>}
+              </div>
+            )}
+
+            {/* Toll / parking receipts the driver added (billed at actuals) */}
+            {isLogistics && Array.isArray(data?.extra_charges) && data.extra_charges.length > 0 && !isCancelled && (
+              <div className="ltp-card" style={{ border: "1px solid #bae6fd", background: "#f0f9ff" }}>
+                <strong style={{ color: "#075985" }}>Toll / parking added by your driver</strong>
+                {data.extra_charges.map((c) => (
+                  <div key={c.charge_id} style={{ fontSize: "0.85rem", color: "#0c4a6e", marginTop: 4 }}>
+                    {c.label}: ₹{c.amount}
+                    {/^https?:\/\//.test(c.receipt_photo_url || "") && (
+                      <> · <a href={c.receipt_photo_url} target="_blank" rel="noopener noreferrer">View receipt</a></>
+                    )}
+                  </div>
+                ))}
+                <div style={{ fontSize: "0.75rem", color: "#0369a1", marginTop: 6 }}>
+                  Charged at the receipt amount and included in your final fare.
+                </div>
+              </div>
+            )}
+
+            {/* Driver-reported trip problem (receiver unavailable, address not found, ...) */}
+            {isLogistics && data?.delivery_exception?.status === "OPEN" && !isCancelled && (
+              <div className="ltp-card" role="alert" style={{ border: "1px solid #fdba74", background: "#fff7ed" }}>
+                <strong style={{ color: "#9a3412" }}>{data.delivery_exception.label}</strong>
+                <div style={{ fontSize: "0.85rem", color: "#7c2d12", marginTop: 4 }}>
+                  Your driver reported this at the {data.delivery_exception.leg === "EN_ROUTE_PICKUP" || data.delivery_exception.leg === "LOADING" ? "pickup" : "drop"} point.
+                  Please reach out to the driver or contact support so the trip can continue.
+                </div>
               </div>
             )}
 

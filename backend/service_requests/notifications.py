@@ -861,10 +861,21 @@ def notify_gt_delivery_completed(service_request, technician_name="") -> None:
     except Exception as fb_err:
         logger.warning("[GTDelivery] Could not prepare rating link for %s: %s", service_request.request_id, fb_err)
 
+    # The final, reconciled fare is set at DELIVERED (Porter finalises the fare after the trip);
+    # tell the customer what they are charged instead of leaving them to find it in the app.
+    _final = getattr(service_request, "total_amount", None)
+    try:
+        fare_text = f"Rs. {float(_final):,.2f}" if _final is not None and float(_final) > 0 else ""
+    except (TypeError, ValueError):
+        fare_text = ""
+
     # 1. SMS delivery-completed notification
     phone = (getattr(service_request, "phone", "") or "").strip()
     if phone:
-        sms_msg = f"SEVO: Your goods for booking {service_request.request_id} have been delivered. Details: {tracking_url}"
+        sms_msg = f"SEVO: Your goods for booking {service_request.request_id} have been delivered."
+        if fare_text:
+            sms_msg += f" Final fare {fare_text}."
+        sms_msg += f" Details: {tracking_url}"
         if feedback_url:
             sms_msg += f" Rate your driver: {feedback_url}"
         event_key = f"booking:{service_request.request_id}:gt-delivered"
@@ -897,6 +908,7 @@ def notify_gt_delivery_completed(service_request, technician_name="") -> None:
             "Pickup": service_request.address or "N/A",
             "Drop-off": getattr(service_request, "drop_address", "") or "N/A",
             "Driver": tech_display,
+            **({"Final fare": fare_text} if fare_text else {}),
             **({"Rate your driver": feedback_url} if feedback_url else {}),
         },
         cta_url=tracking_url,
@@ -1719,3 +1731,23 @@ def broadcast_tracking_event(service_request, event_type="job_updated", custom_d
     except Exception as e:
         logger.warning("[Tracking WS] Failed to broadcast event %s for SR %s: %s", event_type, getattr(service_request, "request_id", None), e)
 
+
+def notify_delivery_exception(service_request) -> None:
+    """Tell the customer the driver reported a problem on the trip (receiver unavailable, ...)."""
+    exc = service_request.delivery_exception if isinstance(service_request.delivery_exception, dict) else {}
+    if exc.get("status") != "OPEN":
+        return
+    tracking_url = build_customer_tracking_url(service_request)
+    label = exc.get("label") or "A problem was reported on your trip"
+    phone = (getattr(service_request, "phone", "") or "").strip()
+    if phone:
+        try:
+            send_sms_notification(
+                mobile_number=phone,
+                message=f"SEVO: Booking {service_request.request_id}: {label}. Please contact your driver or support. Details: {tracking_url}",
+                event_key=f"booking:{service_request.request_id}:gt-exception:{exc.get('type')}:{exc.get('leg')}",
+                service_request=service_request,
+                preference_field="booking_confirmations",
+            )
+        except Exception as sms_err:
+            logger.warning("[GTException] SMS failed for %s: %s", service_request.request_id, sms_err)

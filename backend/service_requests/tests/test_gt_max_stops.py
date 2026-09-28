@@ -88,3 +88,30 @@ class MaxStopsAdminAndApiTests(MaxStopsTests):
         self.assertEqual(r.status_code, 400, r.content)
         self.assertEqual(r.json()["error_code"], "MAX_STOPS_EXCEEDED")
         self.assertEqual(r.json()["max_additional_stops"], 1)
+
+
+class LoadingHelpOptionalTests(MaxStopsTests):
+    def test_loading_charge_only_when_requested(self):
+        t = self._tier(loading_unloading_charge=Decimal("100.00"))
+        with patch("service_requests.services.routing.get_route_eta", return_value=ROUTE):
+            on = quote_logistics_fare(tier=t, pickup_lat=P[0], pickup_lng=P[1], drop_lat=D[0], drop_lng=D[1])
+            off = quote_logistics_fare(tier=t, pickup_lat=P[0], pickup_lng=P[1], drop_lat=D[0], drop_lng=D[1], loading_help=False)
+        self.assertEqual(on["loading_unloading"], Decimal("100.00"))
+        self.assertEqual(off["loading_unloading"], Decimal("0.00"))
+        self.assertEqual(on["total"] - off["total"], Decimal("100.00"))
+        self.assertTrue(on["loading_help"])
+        self.assertFalse(off["loading_help"])
+
+    def test_quote_endpoint_honours_flag_and_defaults_to_on(self):
+        from rest_framework.test import APIClient
+        t = self._tier(loading_unloading_charge=Decimal("100.00"))
+        body = {"category": "goods_transport_truck", "service_category": "goods_transport_truck", "tier_id": t.id,
+                "pickup_lat": str(P[0]), "pickup_lng": str(P[1]), "drop_lat": str(D[0]), "drop_lng": str(D[1])}
+        totals = {}
+        with patch("service_requests.services.routing.get_route_eta", return_value=ROUTE):
+            for label, extra in (("default", {}), ("off", {"loading_help": False}), ("off_str", {"loading_help": "false"})):
+                r = APIClient().post("/api/logistics/quote/", {**body, **extra}, format="json")
+                self.assertEqual(r.status_code, 200, r.content)
+                j = r.json(); totals[label] = Decimal(str((j.get("data") or j)["total"]))
+        self.assertEqual(totals["default"] - totals["off"], Decimal("100.00"))
+        self.assertEqual(totals["off"], totals["off_str"])

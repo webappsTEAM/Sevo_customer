@@ -564,3 +564,105 @@ class LogisticsSlot(models.Model):
         city = self.city or "all"
         return f"[{cat}/{city}] {self.group} — {self.slot_label}"
 
+
+class ProhibitedGoodsRule(models.Model):
+    """
+    Admin-managed prohibited-goods rule for Goods Transport / Packers & Movers.
+
+    The built-in patterns in service_requests/services/prohibited_goods.py cover
+    safety-critical cargo; this table holds the commercial prohibited-items list
+    (Porter publishes one in its customer terms) so Admin can extend or relax it
+    without a code change. `keywords` is one term per line; each is matched as a
+    whole word/phrase, case-insensitively, against the declared cargo text.
+    """
+    label = models.CharField(max_length=80, unique=True)
+    keywords = models.TextField(help_text="One keyword or phrase per line. Whole-word, case-insensitive.")
+    message = models.CharField(max_length=255, blank=True, default="")
+    applies_to_packers_movers = models.BooleanField(
+        default=True,
+        help_text="Untick to let household Packers & Movers inventories through while still blocking it on Goods Transport.",
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["label"]
+
+    def __str__(self):
+        return self.label
+
+    def keyword_list(self):
+        return [k.strip() for k in (self.keywords or "").splitlines() if k.strip()]
+
+
+class PackersMoversSurchargeRule(models.Model):
+    """
+    Admin-configured surcharge for a Packers & Movers move date / time.
+
+    Porter's public customer terms say surcharges apply for services outside normal hours and
+    on peak days (month-end/month-start, weekends, holidays, auspicious days) but publish no
+    amounts and no calendar, so nothing is assumed here: no rule exists until Admin creates one,
+    and a move with no matching rule prices exactly as before.
+
+    rule_type decides which fields matter:
+      WEEKDAY       -- `weekdays` ("5,6" = Saturday, Sunday; Monday is 0)
+      DAY_OF_MONTH  -- `day_from`..`day_to`, wrapping month-end, e.g. 28..3
+      DATE          -- one `on_date` (public holiday, auspicious day, ...)
+      OUTSIDE_HOURS -- `window_start`..`window_end` is the normal service window; a move whose
+                       slot starts outside it is surcharged
+    The surcharge is `percent` of the pre-tax move fare plus `flat_amount`; GST applies on top.
+    """
+    class RuleType(models.TextChoices):
+        WEEKDAY = "WEEKDAY", "Days of the week"
+        DAY_OF_MONTH = "DAY_OF_MONTH", "Days of the month (peak period)"
+        DATE = "DATE", "Specific date (holiday / auspicious day)"
+        OUTSIDE_HOURS = "OUTSIDE_HOURS", "Outside normal service hours"
+
+    name = models.CharField(max_length=100)
+    rule_type = models.CharField(max_length=20, choices=RuleType.choices)
+    city = models.CharField(max_length=50, blank=True, default="", help_text="Blank = every city.")
+    weekdays = models.CharField(max_length=20, blank=True, default="", help_text="Comma-separated, Monday=0 ... Sunday=6.")
+    day_from = models.PositiveSmallIntegerField(null=True, blank=True)
+    day_to = models.PositiveSmallIntegerField(null=True, blank=True)
+    on_date = models.DateField(null=True, blank=True)
+    window_start = models.TimeField(null=True, blank=True)
+    window_end = models.TimeField(null=True, blank=True)
+    percent = models.DecimalField(max_digits=5, decimal_places=2, default=0,
+                                  validators=[MinValueValidator(Decimal("0.00")), MaxValueValidator(Decimal("100.00"))])
+    flat_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0,
+                                      validators=[MinValueValidator(Decimal("0.00"))])
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.get_rule_type_display()})"
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        errors = {}
+        if (self.percent or 0) <= 0 and (self.flat_amount or 0) <= 0:
+            errors["percent"] = "Set a percentage or a flat amount, otherwise this rule charges nothing."
+        t = self.rule_type
+        if t == self.RuleType.WEEKDAY:
+            try:
+                days = [int(x) for x in (self.weekdays or "").split(",") if x.strip() != ""]
+                if not days or any(d < 0 or d > 6 for d in days):
+                    raise ValueError
+            except ValueError:
+                errors["weekdays"] = "Enter weekday numbers 0-6 separated by commas (Monday=0)."
+        elif t == self.RuleType.DAY_OF_MONTH:
+            if not self.day_from or not self.day_to or not (1 <= self.day_from <= 31 and 1 <= self.day_to <= 31):
+                errors["day_from"] = "Enter day-of-month bounds between 1 and 31."
+        elif t == self.RuleType.DATE:
+            if not self.on_date:
+                errors["on_date"] = "Pick the date."
+        elif t == self.RuleType.OUTSIDE_HOURS:
+            if not self.window_start or not self.window_end or self.window_start >= self.window_end:
+                errors["window_start"] = "Enter the normal service window (start before end)."
+        if errors:
+            raise ValidationError(errors)

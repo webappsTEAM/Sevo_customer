@@ -325,6 +325,7 @@ def quote_logistics_fare(
     stop_count=STANDARD_STOP_COUNT,
     cargo_summary=None,
     waypoints=None,
+    loading_help=True,
 ):
     """
     Compute a real, itemised, distance-based fare for one goods-transport
@@ -398,7 +399,9 @@ def quote_logistics_fare(
     base_fare = _money(base_fare)
 
     distance_charge = _money(chargeable_km * _money(per_km_rate))
-    loading = _money(getattr(tier, "loading_unloading_charge", 0) or 0)
+    # Loading / unloading help is an optional, separately charged add-on (Porter's
+    # "Load Assist"); the tier's admin-set charge applies only when it is requested.
+    loading = _money(getattr(tier, "loading_unloading_charge", 0) or 0) if loading_help else Decimal("0.00")
 
     try:
         stops = int(stop_count)
@@ -499,6 +502,7 @@ def quote_logistics_fare(
         "distance_km": str(distance_km),
         "chargeable_km": str(chargeable_km),
         "stops": stops,
+        "loading_help": bool(loading_help),
         "cargo_hash": cargo_hash_str,
     }
 
@@ -522,6 +526,7 @@ def quote_logistics_fare(
         chargeable_km=chargeable_km,
         distance_charge=distance_charge,
         loading_unloading=loading,
+        loading_help=bool(loading_help),
         stops=stops,
         additional_stops=additional_stops,
         additional_stop_charge=stop_charge,
@@ -720,6 +725,8 @@ def resolve_logistics_fare_v2(
     stop_count=STANDARD_STOP_COUNT,
     cart_data=None,
     waypoints=None,
+    move_date=None,
+    move_time=None,
 ):
     """
     GT-B-01. Returns (fare, breakdown_or_None).
@@ -1103,6 +1110,8 @@ def resolve_logistics_fare_v2(
             "drop_floor": drop_floor,
             "drop_has_lift": drop_has_lift,
             "relocation_type": relocation_type,
+            "move_date": move_date,
+            "move_time": move_time,
         }
 
         if quote_id:
@@ -1150,6 +1159,8 @@ def resolve_logistics_fare_v2(
                 city=city,
                 service_tier_id=tier_id,
                 extra_stops=pm_extra_stops,
+                move_date=move_date,
+                move_time=move_time,
             )
             if not computed_quote.get("is_authoritative", False) or computed_quote.get("is_estimate", False):
                 survey_status = computed_quote.get("survey_status") or "SURVEY_REQUIRED"

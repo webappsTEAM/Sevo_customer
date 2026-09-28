@@ -5246,6 +5246,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   const [claimAmount, setClaimAmount] = useState("")
   const [claimSubmitting, setClaimSubmitting] = useState(false)
   const [claimError, setClaimError] = useState("")
+  const [claimPhotos, setClaimPhotos] = useState([])
   // GT-D-02: per-booking multi-stop trip editor, inline in the My
   // Bookings card rather than a separate tab -- a stop list only makes
   // sense in the context of one specific booking.
@@ -5567,7 +5568,16 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
     }
   }, [activeTab, user])
 
-  const eligibleInsuranceBookings = (realBookings || []).filter(b => b.insurance_opted_in && b.status === "completed")
+  // The server decides who can claim (insured, or covered by the Admin claim policy, inside the claim window).
+  const [claimableBookings, setClaimableBookings] = useState([])
+  useEffect(() => {
+    if (activeTab === "Insurance Claims" && user) {
+      apiRequest("/insurance-claims/eligible-bookings/", { method: "GET" })
+        .then(res => setClaimableBookings(Array.isArray(res?.data) ? res.data : []))
+        .catch(() => setClaimableBookings([]))
+    }
+  }, [activeTab, user, insuranceClaims])
+  const eligibleInsuranceBookings = claimableBookings
 
   const handleFileInsuranceClaim = async (e) => {
     e.preventDefault()
@@ -5582,12 +5592,13 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
       form.append("booking_id", claimBookingId)
       form.append("description", claimDescription)
       form.append("claimed_amount", claimAmount)
+      claimPhotos.forEach(f => form.append("attachments", f))
       const res = await apiRequest("/insurance-claims/", { method: "POST", body: form })
       if (res?.success === false) {
         setClaimError(res?.error?.message || "Could not file this claim.")
         return
       }
-      setClaimBookingId(""); setClaimDescription(""); setClaimAmount("")
+      setClaimBookingId(""); setClaimDescription(""); setClaimAmount(""); setClaimPhotos([])
       loadInsuranceClaims()
     } catch (err) {
       setClaimError(err?.body?.error?.message || "Could not file this claim.")
@@ -7754,7 +7765,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
               <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', marginBottom: 12 }}>File a New Claim</div>
               {eligibleInsuranceBookings.length === 0 ? (
                 <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
-                  No completed, insurance-opted-in bookings are eligible for a claim right now.
+                  No completed bookings are eligible for a claim right now.
                 </div>
               ) : (
                 <form onSubmit={handleFileInsuranceClaim}>
@@ -7767,13 +7778,17 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                   <select value={claimBookingId} onChange={e => setClaimBookingId(e.target.value)} style={{ width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: '0.85rem', marginTop: 6, boxSizing: 'border-box' }}>
                     <option value="">Select a booking...</option>
                     {eligibleInsuranceBookings.map(b => (
-                      <option key={b.id} value={b.id}>{b.request_id || b.id} — {b.issue_title}</option>
+                      <option key={b.id} value={b.id}>{b.request_id || b.id} — {b.issue_title}{b.max_payout ? ` (up to ${BOOKING_CURRENCY_SYMBOL}${b.max_payout})` : ""}</option>
                     ))}
                   </select>
                   <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'block', marginTop: 14 }}>What happened?</label>
                   <textarea value={claimDescription} onChange={e => setClaimDescription(e.target.value)} rows={3} style={{ width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: '0.85rem', marginTop: 6, boxSizing: 'border-box' }} placeholder="Describe the damage or loss..." />
                   <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'block', marginTop: 14 }}>Claimed Amount ({BOOKING_CURRENCY_SYMBOL})</label>
                   <input type="number" min="0" step="0.01" value={claimAmount} onChange={e => setClaimAmount(e.target.value)} style={{ width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: '0.85rem', marginTop: 6, boxSizing: 'border-box' }} placeholder="0.00" />
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'block', marginTop: 14 }}>Photos of the damage</label>
+                  <input type="file" accept="image/*" multiple onChange={e => setClaimPhotos(Array.from(e.target.files || []))} style={{ marginTop: 6, fontSize: '0.85rem' }} />
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'block', marginTop: 14 }}>Photos of the damage</label>
+                  <input type="file" accept="image/*" multiple onChange={e => setClaimPhotos(Array.from(e.target.files || []))} style={{ marginTop: 6, fontSize: '0.85rem' }} />
                   <button type="submit" disabled={claimSubmitting} style={{ marginTop: 16, background: '#5d5fef', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontWeight: 700, cursor: claimSubmitting ? 'not-allowed' : 'pointer', opacity: claimSubmitting ? 0.6 : 1 }}>
                     {claimSubmitting ? 'Submitting...' : 'File Claim'}
                   </button>

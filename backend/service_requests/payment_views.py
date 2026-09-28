@@ -90,6 +90,17 @@ def _verify_booking_ownership(request, sr):
     return token_matches or phone_matches
 
 
+_LOGISTICS_CATEGORIES = ("goods_transport_truck", "goods_transport_two_wheeler", "packers_movers")
+
+
+def _has_balance_due(sr):
+    """A prepaid logistics trip whose final fare is now above what was paid."""
+    if (sr.service_category or "").strip().lower() not in _LOGISTICS_CATEGORIES:
+        return False
+    from .services.prepaid_variance import balance_due
+    return balance_due(sr) > 0
+
+
 # ─── Payment Initiation & Verification ────────────────────────────────────────
 
 class PaymentInitiateView(APIView):
@@ -123,7 +134,7 @@ class PaymentInitiateView(APIView):
         if sr.payment_method != ServiceRequest.PaymentMethod.ONLINE:
             return _error("This booking does not require online payment.")
 
-        if sr.payment_status == ServiceRequest.PaymentStatus.PAID:
+        if sr.payment_status == ServiceRequest.PaymentStatus.PAID and not _has_balance_due(sr):
             return _error("This booking is already paid.")
 
         # How much to charge for THIS order.
@@ -374,10 +385,31 @@ class PaymentVerifyView(APIView):
         payment.status = ServiceRequest.PaymentStatus.PAID
         payment.save(update_fields=["razorpay_payment_id", "razorpay_signature", "status", "updated_at"])
 
+        return self._finalize(request, sr, payment)
+
+    def _finalize(self, request, sr, payment):
+        """Everything that follows a payment being recorded PAID (shared with wallet payment)."""
         sr.transaction_id = payment.razorpay_payment_id
         sr.payment_gateway = payment.gateway
         if not sr.invoice_id:
             sr.invoice_id = f"INV-{sr.request_id}-{uuid.uuid4().hex[:6].upper()}"
+
+        # A logistics trip that is already past payment (a balance paid after the final fare
+        # rose) only records the money: it must never re-run the booking confirmation/dispatch.
+        if (sr.service_category or "").strip().lower() in _LOGISTICS_CATEGORIES and \
+                sr.status != ServiceRequest.Status.WAITING_FOR_PAYMENT:
+            sr.payment_status = ServiceRequest.PaymentStatus.PAID
+            sr.save(update_fields=["transaction_id", "payment_gateway", "invoice_id", "payment_status", "updated_at"])
+            return _success(
+                data={
+                    "request_id":     sr.request_id,
+                    "booking_status": sr.status,
+                    "payment_status": sr.payment_status,
+                    "transaction_id": sr.transaction_id,
+                    "invoice_id":     sr.invoice_id,
+                },
+                message="Balance payment received. Thank you!",
+            )
 
         # Special handling for AC Estimation bookings
         has_est = hasattr(sr, "estimation") and sr.estimation is not None
@@ -478,6 +510,91 @@ class PaymentVerifyView(APIView):
             },
             message="Payment confirmed! Your booking is active.",
         )
+
+
+class PaymentConfigView(APIView):
+    """
+    GET /api/payment/config/  -- what the booking pages may offer, decided by the server.
+
+    online: a real gateway is configured, or the local sandbox is explicitly enabled. Without
+    this the page would offer "Pay online" on a deployment where verification returns 503.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        gateway = bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
+        return _success(data={
+            "online_available": gateway or bool(getattr(settings, "PAYMENT_SANDBOX_MODE", False)),
+            "sandbox": (not gateway) and bool(getattr(settings, "PAYMENT_SANDBOX_MODE", False)),
+            "key_id": settings.RAZORPAY_KEY_ID if gateway else "",
+        })
+
+
+class PaymentWalletPayView(APIView):
+    """
+    POST /api/payment/wallet-pay/   {"booking_id": 12}
+
+    Pay a goods-transport / packers-and-movers booking from the customer's SEVO wallet.
+
+    Only the logged-in owner may spend their wallet (the guest phone/token rule that lets
+    someone start a card payment is deliberately NOT enough to spend stored credit). The wallet
+    must cover the whole amount due -- there is no part-wallet/part-card split. The debit and
+    the Payment row are written in one transaction, and the amount is decided server-side by
+    the same _amount_due() the gateway path uses, so the two can never disagree.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "payment"
+
+    def post(self, request):
+        from .services import debit_wallet
+        from .models import CustomerWallet, WalletTransaction
+
+        booking_id = request.data.get("booking_id")
+        if not booking_id:
+            return _error("booking_id is required.")
+        try:
+            with transaction.atomic():
+                sr = ServiceRequest.objects.select_for_update().get(pk=booking_id)
+                if sr.customer_id != request.user.id:
+                    return _error("You are not authorized to pay for this booking.", 403)
+                if (sr.service_category or "").strip().lower() not in _LOGISTICS_CATEGORIES:
+                    return _error("Wallet payment is available for goods transport and packers & movers bookings.")
+                if sr.payment_method != ServiceRequest.PaymentMethod.ONLINE:
+                    return _error("This booking does not require online payment.")
+                if sr.status in (ServiceRequest.Status.CANCELLED, ServiceRequest.Status.REJECTED):
+                    return _error("This booking is cancelled.")
+
+                amount_due, due_error = PaymentInitiateView()._amount_due(sr)
+                if due_error:
+                    return _error(due_error)
+
+                wallet = CustomerWallet.objects.filter(user=request.user).first()
+                balance = wallet.balance if wallet else Decimal("0")
+                if balance < amount_due:
+                    return Response({
+                        "success": False,
+                        "message": f"Your wallet balance (Rs. {balance}) does not cover Rs. {amount_due}.",
+                        "wallet_balance": float(balance),
+                        "amount_due": float(amount_due),
+                    }, status=400)
+
+                ref = f"wallet_{uuid.uuid4().hex[:16]}"
+                tx = debit_wallet(
+                    request.user, amount_due, WalletTransaction.Reason.BOOKING_DEBIT,
+                    note=f"Payment for booking {sr.request_id}", actor=request.user,
+                    reference_type="booking", reference_id=sr.request_id,
+                )
+                payment = Payment.objects.create(
+                    customer=sr.customer, service_request=sr, razorpay_order_id=ref,
+                    razorpay_payment_id=f"WALLET_{tx.id}", amount=amount_due, currency="INR",
+                    status=ServiceRequest.PaymentStatus.PAID, gateway="wallet",
+                )
+                return PaymentVerifyView()._finalize(request, sr, payment)
+        except (ServiceRequest.DoesNotExist, ValueError, TypeError):
+            return _error("Booking not found.", 404)
+        except ValidationError as e:
+            return _error(str(getattr(e, "detail", e)))
 
 
 # ─── Admin Payment Management ─────────────────────────────────────────────────
@@ -755,6 +872,9 @@ class InvoiceDownloadView(APIView):
         c.setFont("Helvetica", 9)
         addr = sr.address[:80] + "..." if len(sr.address) > 80 else sr.address
         _draw_text(c, 35, y - 18, addr, 9)
+        if getattr(sr, "customer_gstin", ""):
+            c.setFont("Helvetica-Bold", 9)
+            c.drawRightString(W - 35, y + 48, f"Customer GSTIN: {sr.customer_gstin}")
 
         # Line items
         y -= 62
@@ -813,6 +933,7 @@ class InvoiceDownloadView(APIView):
                     ("Floor / no-lift labour", _p("floor_labor_charge")),
                     ("Dismantling / reassembly", _p("dismantling_charge")),
                     ("Unpacking", _p("unpacking_charge")),
+                    (f"Peak-day / off-hours surcharge", _p("date_surcharge")),
                 ]
                 rows = [(n, a) for n, a in rows if a > 0]
                 pm_subtotal = _p("subtotal")
@@ -830,9 +951,20 @@ class InvoiceDownloadView(APIView):
                     ("Special handling", _amt("special_handling_charge")),
                 ]
                 rows = [(n, a) for n, a in rows if a > 0]
-                other = total_q - sum((a for _, a in rows), _D("0"))
+                # A coupon and transit-insurance premium are part of what was charged; show them as
+                # their own lines instead of letting them masquerade as a fare adjustment.
+                _prem = _D(str(sr.insurance_premium or 0)) if getattr(sr, "insurance_opted_in", False) else _D("0")
+                _disc = _D(str(sr.discount_amount or 0)) if getattr(sr, "coupon_id", None) else _D("0")
+                from .services.extra_charges import applied_entries
+                _extras = [(f"{e['label']} (receipt)", _D(str(e["amount"]))) for e in applied_entries(sr)]
+                other = total_q - _prem + _disc - sum((a for _, a in _extras), _D("0")) - sum((a for _, a in rows), _D("0"))
                 if abs(other) >= _D("0.01"):
                     rows.append(("Surge / minimum fare adjustment", other))
+                rows.extend(_extras)
+                if _disc > 0:
+                    rows.append(("Coupon discount", -_disc))
+                if _prem > 0:
+                    rows.append(("Transit insurance", _prem))
                 # GST configured on the tier (admin) is already INCLUDED in the fare; show its
                 # component, from the rate recorded on the quote (never the tier's current value).
                 _gst_rate = _amt("gst_rate")
