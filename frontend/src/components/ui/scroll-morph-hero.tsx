@@ -70,6 +70,10 @@ function FlipCard({
                         alt={`hero-${index}`}
                         className="h-full w-full object-cover"
                         draggable={false}
+                        onError={(e: any) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = IMAGES[index % IMAGES.length];
+                        }}
                     />
                     <div className="absolute inset-0 bg-black/10 transition-colors group-hover:bg-transparent" />
                 </div>

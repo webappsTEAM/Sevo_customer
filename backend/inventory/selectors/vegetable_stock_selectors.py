@@ -31,6 +31,7 @@ def _safe_get_stock_item(product) -> Optional[Any]:
         return None
 
 
+
 def get_stock_status(product) -> Dict[str, Any]:
     """
     Customer-facing stock status: in_stock boolean and max_quantity unit cap.
@@ -90,7 +91,6 @@ def get_bulk_admin_stock_status(products: list, for_date: Optional[date] = None)
     """
     if not products:
         return {}
-
     target_date = for_date or timezone.localdate()
 
     # Collect stock items that are present
