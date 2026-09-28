@@ -865,13 +865,6 @@ export function ServiceRequestsPage() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] bg-slate-50 dark:bg-slate-950">
-      <div className="flex bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 pt-3 gap-6 flex-shrink-0">
-        <button onClick={() => setAdminTab('bookings')} className={`font-bold text-sm pb-3 border-b-2 transition-colors ${adminTab === 'bookings' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>Service Bookings</button>
-        <button onClick={() => setAdminTab('reschedules')} className={`font-bold text-sm pb-3 border-b-2 transition-colors ${adminTab === 'reschedules' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>Reschedule Requests</button>
-        <button onClick={() => setAdminTab('refunds')} className={`font-bold text-sm pb-3 border-b-2 transition-colors ${adminTab === 'refunds' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>Refund Requests</button>
-        <button onClick={() => setAdminTab('complaints')} className={`font-bold text-sm pb-3 border-b-2 transition-colors ${adminTab === 'complaints' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>Complaints</button>
-      </div>
-
       <div className="flex-1 overflow-hidden relative bg-slate-50 dark:bg-slate-950">
         <SrStyles />
         {adminTab === 'bookings' && (

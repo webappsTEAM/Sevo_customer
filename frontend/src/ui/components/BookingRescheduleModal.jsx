@@ -40,6 +40,55 @@ export function BookingRescheduleModal({
   const [errorMsg, setErrorMsg] = useState("")
   const [successMsg, setSuccessMsg] = useState("")
 
+  // Dynamic server slot state connected to Time Slot Management
+  const [serverSlots, setServerSlots] = useState(null)
+  const [slotsLoading, setSlotsLoading] = useState(false)
+  const [isDateClosed, setIsDateClosed] = useState(false)
+  const [closedReason, setClosedReason] = useState("")
+
+  useEffect(() => {
+    if (!selectedDate) return
+    let isCancelled = false
+    setSlotsLoading(true)
+
+    apiRequest(`/services/resolve/time-slots/?date=${selectedDate}`)
+      .then((res) => {
+        if (isCancelled) return
+        if (res?.success && res.data) {
+          if (!res.data.is_open) {
+            setIsDateClosed(true)
+            setClosedReason(res.data.reason || "Service is closed on this date.")
+            setServerSlots([])
+            setSelectedSlot("")
+          } else {
+            setIsDateClosed(false)
+            setClosedReason("")
+            const list = (res.data.all_slots || []).map((s) => ({
+              id: s.time,
+              label: s.time,
+              period: !s.available ? (s.reason || "Full") : (s.booked_count > 0 ? "Few slots left" : "Available"),
+              available: s.available,
+            }))
+            setServerSlots(list)
+            const firstAvail = list.find((s) => s.available)
+            if (firstAvail && (!selectedSlot || !list.some((s) => s.id === selectedSlot && s.available))) {
+              setSelectedSlot(firstAvail.id)
+            }
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not load dynamic reschedule slots, using defaults", err)
+      })
+      .finally(() => {
+        if (!isCancelled) setSlotsLoading(false)
+      })
+
+    return () => { isCancelled = true }
+  }, [selectedDate])
+
+  const effectiveSlots = serverSlots !== null ? serverSlots : TIME_SLOTS
+
   // Generate next 7 days for quick date selection
   const upcomingDays = useMemo(() => {
     const days = []
@@ -61,8 +110,12 @@ export function BookingRescheduleModal({
       setErrorMsg("Please select a new date.")
       return
     }
+    if (isDateClosed) {
+      setErrorMsg(closedReason || "Service is closed on the selected date. Please pick another date.")
+      return
+    }
     if (!selectedSlot) {
-      setErrorMsg("Please select a time slot.")
+      setErrorMsg("Please select an available time slot.")
       return
     }
 
@@ -218,32 +271,43 @@ export function BookingRescheduleModal({
 
           {/* Time Slot Selection */}
           <div>
-            <label className="block text-xs font-black text-slate-800 uppercase tracking-wider mb-2">
-              Select Time Slot
+            <label className="block text-xs font-black text-slate-800 uppercase tracking-wider mb-2 flex items-center justify-between">
+              <span>Select Time Slot</span>
+              {slotsLoading && <span className="text-[10px] text-slate-400 font-semibold normal-case">Checking live slots...</span>}
             </label>
-            <div className="grid grid-cols-2 gap-2">
-              {TIME_SLOTS.map((slot) => {
-                const isSelected = selectedSlot === slot.id
-                return (
-                  <button
-                    key={slot.id}
-                    type="button"
-                    onClick={() => setSelectedSlot(slot.id)}
-                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
-                      isSelected
-                        ? "bg-emerald-50 border-emerald-500 text-emerald-950 font-bold ring-1 ring-emerald-500"
-                        : "bg-white border-slate-200 hover:border-slate-300 text-slate-700 font-medium"
-                    }`}
-                  >
-                    <div>
-                      <div className="text-xs font-extrabold">{slot.label}</div>
-                      <div className="text-[10px] text-slate-500">{slot.period}</div>
-                    </div>
-                    {isSelected && <Check className="w-4 h-4 text-emerald-600 shrink-0" />}
-                  </button>
-                )
-              })}
-            </div>
+            {isDateClosed ? (
+              <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-xs font-medium">
+                {closedReason || "This service is closed on the selected date. Please pick another date above."}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+                {effectiveSlots.map((slot) => {
+                  const isSelected = selectedSlot === slot.id
+                  const isAvail = slot.available !== false
+                  return (
+                    <button
+                      key={slot.id}
+                      type="button"
+                      disabled={!isAvail}
+                      onClick={() => setSelectedSlot(slot.id)}
+                      className={`p-2.5 rounded-xl border text-left transition-all flex items-center justify-between ${
+                        !isAvail
+                          ? "bg-slate-50 border-slate-200 text-slate-400 opacity-60 cursor-not-allowed"
+                          : isSelected
+                            ? "bg-emerald-50 border-emerald-500 text-emerald-950 font-bold ring-1 ring-emerald-500 cursor-pointer"
+                            : "bg-white border-slate-200 hover:border-slate-300 text-slate-700 font-medium cursor-pointer"
+                      }`}
+                    >
+                      <div>
+                        <div className="text-xs font-extrabold">{slot.label}</div>
+                        <div className={`text-[10px] ${!isAvail ? "text-rose-500 font-bold" : "text-slate-500"}`}>{slot.period}</div>
+                      </div>
+                      {isSelected && isAvail && <Check className="w-4 h-4 text-emerald-600 shrink-0" />}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
           {/* Reason for Rescheduling */}

@@ -313,10 +313,23 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener("quicktims:session-expired", handle)
   }, [])
 
+  const updateUser = useCallback((userData) => {
+    if (!userData) return null
+    const u = formatUser(userData)
+    if (u) {
+      setUser(u)
+      try {
+        localStorage.setItem("sevo_user", JSON.stringify(userData))
+      } catch (_) { }
+      return u
+    }
+    return null
+  }, [])
+
   // ── Context value ─────────────────────────────────────────────────────────
   const value = useMemo(
-    () => ({ isReady, user, login, verify2FA, register, loginWithGoogle, loginWithCustomerGoogle, logout, refreshMe }),
-    [isReady, user, login, verify2FA, register, loginWithGoogle, loginWithCustomerGoogle, logout, refreshMe]
+    () => ({ isReady, user, login, verify2FA, register, loginWithGoogle, loginWithCustomerGoogle, logout, refreshMe, updateUser }),
+    [isReady, user, login, verify2FA, register, loginWithGoogle, loginWithCustomerGoogle, logout, refreshMe, updateUser]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

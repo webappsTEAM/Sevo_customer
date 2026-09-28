@@ -18,6 +18,7 @@ import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { AllServicesDrawer } from "../components/AllServicesDrawer.jsx"
 import { BkStyles, CustomerAccountModal, CartDrawerModal } from "./BookingPage.jsx"
+import { CATEGORIES as BOOKING_CATEGORIES } from "./categoriesData.js"
 import { ModernServiceCatalogView } from "../components/ModernServiceCatalogView.jsx"
 import { estimationRepository } from "../../services/estimation/estimationRepository.js"
 import { SelectServiceAddressDrawer } from "../components/AddressPicker/index.js"
@@ -2185,14 +2186,20 @@ export function LandingPage() {
         setHomeConfig(e.data.config)
       } else if (e.data?.type === "NAVIGATE_PREVIEW_SCREEN") {
         const screen = e.data.screen
+        const isPrev = searchParams.get("preview") === "true" || window.parent !== window
+        const isEd = searchParams.get("edit") === "true" || homeEditMode
+        const prevParams = isPrev ? `&preview=true${isEd ? "&edit=true" : ""}` : ""
         if (screen === "pillars") {
           setIsAllServicesOpen(true)
         } else if (screen === "homepest" || screen === "subcategories") {
-          navigate("?category=home_pest_control")
+          setIsAllServicesOpen(false)
+          navigate(`?category=home_pest_control${prevParams}`)
         } else if (screen === "kitchen") {
-          navigate("?category=kitchen_cleaning")
+          setIsAllServicesOpen(false)
+          navigate(`?category=kitchen_cleaning${prevParams}`)
         } else if (screen === "home") {
-          navigate("/home?preview=true")
+          setIsAllServicesOpen(false)
+          navigate(`/home?preview=true${isEd ? "&edit=true" : ""}`)
         }
       }
     }
@@ -2598,18 +2605,21 @@ export function LandingPage() {
 
   useEffect(() => {
     const modalParam = searchParams.get("openModal")
+    const isPrev = searchParams.get("preview") === "true" || window.parent !== window
+    const isEd = searchParams.get("edit") === "true" || homeEditMode
+    const prevParams = isPrev ? `&preview=true${isEd ? "&edit=true" : ""}` : ""
     if (modalParam) {
       if (modalParam === "pillars") {
         setIsAllServicesOpen(true)
       } else if (modalParam === "homepest" || modalParam === "subcategories") {
-        navigate("?category=pest_control", { replace: true })
+        navigate(`?category=home_pest_control${prevParams}`, { replace: true })
       } else if (modalParam === "ac") {
-        navigate("?category=hvac", { replace: true })
+        navigate(`?category=ac_appliance${prevParams}`, { replace: true })
       } else if (modalParam === "goods" || modalParam === "transport" || modalParam === "logistics") {
         setIsGoodsModalOpen(true)
       }
     }
-  }, [searchParams, navigate])
+  }, [searchParams, navigate, homeEditMode])
   const [foodHealthSub, setFoodHealthSub] = useState(FOOD_HEALTH_SUB)
   const [selectedFoodSubModuleId, setSelectedFoodSubModuleId] = useState(
     () => location.state?.openFoodSubModuleId || (location.state?.openVegetablesModal ? "vegetables" : null)
@@ -3234,7 +3244,13 @@ export function LandingPage() {
     setIsGoodsModalOpen(false)
     setShowTransportEstimatePicker(false)
     setIsFoodHealthModalOpen(false)
-    navigate("/home", { replace: true, state: {} })
+    const isPreview = searchParams.get("preview") === "true" || (typeof window !== "undefined" && window.parent !== window)
+    const isEdit = searchParams.get("edit") === "true" || homeEditMode
+    const query = isPreview ? `?preview=true${isEdit ? "&edit=true" : ""}` : ""
+    navigate(`/home${query}`, { replace: true, state: {} })
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: "PREVIEW_ROUTE_CHANGE", pathname: "/home", search: query, screen: "home" }, "*")
+    }
   }
 
   const resolveCartArg = (cartArg) => {
@@ -4114,7 +4130,12 @@ export function LandingPage() {
 
         <AllServicesDrawer
           isOpen={isAllServicesOpen}
-          onClose={() => setIsAllServicesOpen(false)}
+          onClose={() => {
+            setIsAllServicesOpen(false)
+            if (window.parent && window.parent !== window) {
+              window.parent.postMessage({ type: "PREVIEW_ROUTE_CHANGE", pathname: location.pathname, search: location.search, screen: "home" }, "*")
+            }
+          }}
           navigate={navigate}
           user={user}
           categories={catalogCategories}
@@ -4980,6 +5001,61 @@ export function LandingPage() {
           </div>
         </section>
 
+        {/* ── Vendor Hire Banner ── */}
+        {(homeConfig.vendorBanner?.enabled !== false) && (
+          <section className="max-w-7xl mx-auto px-4 sm:px-6 my-10">
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 border border-indigo-900/60 p-6 sm:p-10 text-white shadow-xl">
+              <div className="relative z-10 max-w-2xl space-y-4">
+                <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-xs font-bold text-indigo-300">
+                  <span>{homeConfig.vendorBanner?.badgeIcon || "🤝"}</span>
+                  <span>{homeConfig.vendorBanner?.badgeText || "We're Looking for Professionals"}</span>
+                </div>
+                <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight leading-tight">
+                  {homeConfig.vendorBanner?.titlePrefix || "We Hire"}{" "}
+                  <span className="text-indigo-400">{homeConfig.vendorBanner?.titleHighlight || "Technicians, Employees"}</span>{" "}
+                  {homeConfig.vendorBanner?.titleSuffix || "& Vendors"}
+                </h2>
+                <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-xl">
+                  {homeConfig.vendorBanner?.subtitle || "Join our team of skilled professionals and be part of a growing service community that works with trust and quality."}
+                </p>
+
+                {/* Features & Benefits */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
+                  {(homeConfig.vendorBanner?.benefits || DEFAULT_HOME_PAGE_CONFIG.vendorBanner.benefits || []).slice(0, 4).map((b, i) => (
+                    <div key={b.id || i} className="flex items-center gap-2 text-xs sm:text-sm text-slate-200">
+                      <span className="text-emerald-400">{b.icon || "✓"}</span>
+                      <span>{b.text}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 pt-3">
+                  <a
+                    href={homeConfig.vendorBanner?.ctaUrl || "https://vendor.sevo.co.in"}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition-all hover:scale-105 active:scale-95 inline-flex items-center gap-2"
+                  >
+                    <span>{homeConfig.vendorBanner?.ctaText || "Join as a Professional"}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </a>
+                  <a
+                    href={homeConfig.vendorBanner?.learnMoreUrl || "https://vendor.sevo.co.in"}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-5 py-2.5 bg-white/10 hover:bg-white/20 text-white font-semibold text-xs sm:text-sm rounded-xl backdrop-blur-sm transition-colors"
+                  >
+                    {homeConfig.vendorBanner?.learnMoreText || "Learn more"}
+                  </a>
+                </div>
+              </div>
+
+              {/* Decorative background glow */}
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+            </div>
+          </section>
+        )}
+
         {/* ── 11. Comprehensive SEVO Footer (6 Columns Matching Spec) ──────────── */}
         <footer id="about-us" className="hidden md:block bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 pt-12 border-t border-slate-200 dark:border-slate-800 scroll-mt-24 pb-16 lg:pb-0 transition-colors duration-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 pb-10">
@@ -5398,6 +5474,9 @@ export function LandingPage() {
                         setFoodOrderPlaced(false)
                         setVegSearchQuery("")
                         setVegCategoryFilter("All")
+                        if (window.parent && window.parent !== window) {
+                          window.parent.postMessage({ type: "PREVIEW_ROUTE_CHANGE", pathname: location.pathname, search: location.search, screen: "home" }, "*")
+                        }
                       }}
                       className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-600 hover:text-emerald-700 cursor-pointer transition-colors"
                     >
@@ -5604,6 +5683,9 @@ export function LandingPage() {
                             onClick={() => {
                               setSelectedFoodSubModuleId(null)
                               setFoodOrderPlaced(false)
+                              if (window.parent && window.parent !== window) {
+                                window.parent.postMessage({ type: "PREVIEW_ROUTE_CHANGE", pathname: location.pathname, search: location.search, screen: "home" }, "*")
+                              }
                             }}
                             className="px-5 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs sm:text-sm transition-all border border-slate-200 cursor-pointer"
                           >
@@ -5632,6 +5714,9 @@ export function LandingPage() {
                               setFoodCart({})
                               setFoodOrderPlaced(false)
                               setSelectedFoodSubModuleId(null)
+                              if (window.parent && window.parent !== window) {
+                                window.parent.postMessage({ type: "PREVIEW_ROUTE_CHANGE", pathname: location.pathname, search: location.search, screen: "home" }, "*")
+                              }
                             }}
                             className="px-6 py-2.5 rounded-xl bg-emerald-600 text-white font-extrabold text-xs sm:text-sm hover:bg-emerald-700 cursor-pointer shadow-md transition-all"
                           >

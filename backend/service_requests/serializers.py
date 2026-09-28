@@ -2165,7 +2165,11 @@ class EstimationSummarySerializer(serializers.ModelSerializer):
 class ACInspectionConfigurationSerializer(serializers.ModelSerializer):
     class Meta:
         model = ACInspectionConfiguration
-        fields = ("id", "diagnostic_fee", "currency", "is_active", "updated_at")
+        fields = (
+            "id", "diagnostic_fee", "currency", "is_active",
+            "title", "subtitle", "image", "badges", "includes", "ready",
+            "updated_at"
+        )
 
 
 class ACInspectionRateItemSerializer(serializers.ModelSerializer):

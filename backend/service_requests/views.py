@@ -5123,7 +5123,15 @@ class ACRateCardPublicView(APIView):
         cat_serializer = ACRateCardPublicCategorySerializer(categories, many=True)
         return _success(data={
             "diagnostic_fee": float(config.diagnostic_fee),
+            "fee": int(config.diagnostic_fee) if config.diagnostic_fee == int(config.diagnostic_fee) else float(config.diagnostic_fee),
             "currency": config.currency,
+            "title": config.title or "AC Inspection & Diagnostic Visit",
+            "subtitle": config.subtitle or "",
+            "image": config.image or "",
+            "badges": config.badges or [],
+            "includes": config.includes or [],
+            "ready": config.ready or [],
+            "is_active": bool(config.is_active),
             "categories": cat_serializer.data,
             "total_items": ACInspectionRateItem.objects.filter(is_active=True).count(),
         })

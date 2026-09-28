@@ -4512,7 +4512,12 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                   type="button"
                   onClick={() => {
                     setBookingSuccessOpen(false)
-                    navigate(routes.landing)
+                    const isPreview = (typeof window !== "undefined" && window.parent !== window) || window.location.search.includes("preview=true")
+                    if (window.history.length > 1) {
+                      navigate(-1)
+                    } else {
+                      navigate(isPreview ? "/home?preview=true" : routes.landing)
+                    }
                   }}
                   className={`py-3.5 ${lastBookingId ? "flex-1 border border-slate-200 text-slate-700 hover:bg-slate-50" : "w-full bg-emerald-600 text-white"} text-xs font-bold rounded-xl transition-all cursor-pointer`}
                 >

@@ -701,22 +701,35 @@ class ACInspectionConfigAPIView(APIView):
                     "items": items_list,
                 })
 
+            default_badges = [
+                f"₹{int(config.diagnostic_fee)} Diagnostic Fee",
+                "Adjustable Against Repair",
+                "Pay at Doorstep",
+            ]
+            default_includes = [
+                "Comprehensive 21-point system & safety diagnostics",
+                "Cooling delta temp scan & gas pressure test",
+                "Compressor load & capacitor electrical scan",
+                "Itemized quotation before any repair work",
+            ]
+            default_ready = [
+                "Continuous power supply and remote control available for testing",
+                "Clear access to indoor and outdoor AC units",
+                "Area below indoor unit cleared of electronics & valuables",
+                "Outdoor unit safely accessible via balcony, terrace, or window",
+            ]
+
             data = {
                 "fee": int(config.diagnostic_fee) if config.diagnostic_fee == int(config.diagnostic_fee) else float(config.diagnostic_fee),
+                "diagnostic_fee": float(config.diagnostic_fee),
                 "currency": config.currency,
-                "title": "AC Inspection & Diagnostic Visit",
-                "subtitle": "Not sure about the fault? Certified technician visits with diagnostic instruments, inspects cooling, gas pressure & electricals, and provides an itemized quotation before repair.",
-                "badges": [
-                    f"₹{int(config.diagnostic_fee)} Diagnostic Fee",
-                    "Adjustable Against Repair",
-                    "Pay at Doorstep",
-                ],
-                "includes": [
-                    "Comprehensive 21-point system & safety diagnostics",
-                    "Cooling delta temp scan & gas pressure test",
-                    "Compressor load & capacitor electrical scan",
-                    "Itemized quotation before any repair work",
-                ],
+                "is_active": bool(config.is_active),
+                "title": config.title or "AC Inspection & Diagnostic Visit",
+                "subtitle": config.subtitle or "Not sure about the fault? Certified technician visits with diagnostic instruments, inspects cooling, gas pressure & electricals, and provides an itemized quotation before repair.",
+                "image": config.image or "",
+                "badges": config.badges if isinstance(config.badges, list) and len(config.badges) > 0 else default_badges,
+                "includes": config.includes if isinstance(config.includes, list) and len(config.includes) > 0 else default_includes,
+                "ready": config.ready if isinstance(config.ready, list) and len(config.ready) > 0 else default_ready,
                 "rateCardCategories": category_list,
             }
             return Response({"success": True, "data": data})
@@ -738,11 +751,39 @@ class ACInspectionConfigAPIView(APIView):
             if not isinstance(config_data, dict):
                 return Response({"success": False, "error": "Invalid payload, must be a JSON object"}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Update configuration
+            # Update configuration in PostgreSQL
+            config = ACInspectionConfiguration.get_solo()
+            update_fields = ["updated_at"]
             if "fee" in config_data:
-                config = ACInspectionConfiguration.get_solo()
                 config.diagnostic_fee = Decimal(str(config_data["fee"]))
-                config.save(update_fields=["diagnostic_fee", "updated_at"])
+                update_fields.append("diagnostic_fee")
+            elif "diagnostic_fee" in config_data:
+                config.diagnostic_fee = Decimal(str(config_data["diagnostic_fee"]))
+                update_fields.append("diagnostic_fee")
+            if "is_active" in config_data:
+                config.is_active = bool(config_data["is_active"])
+                update_fields.append("is_active")
+            if "title" in config_data:
+                config.title = str(config_data["title"]).strip()
+                update_fields.append("title")
+            if "subtitle" in config_data:
+                config.subtitle = str(config_data["subtitle"]).strip()
+                update_fields.append("subtitle")
+            if "image" in config_data:
+                config.image = str(config_data["image"]).strip()
+                update_fields.append("image")
+            if "badges" in config_data and isinstance(config_data["badges"], list):
+                config.badges = config_data["badges"]
+                update_fields.append("badges")
+            if "includes" in config_data and isinstance(config_data["includes"], list):
+                config.includes = config_data["includes"]
+                update_fields.append("includes")
+            if "ready" in config_data and isinstance(config_data["ready"], list):
+                config.ready = config_data["ready"]
+                update_fields.append("ready")
+
+            if len(update_fields) > 1:
+                config.save(update_fields=update_fields)
 
             # Sync categories & items if provided
             categories = config_data.get("rateCardCategories")
@@ -784,7 +825,22 @@ class ACInspectionConfigAPIView(APIView):
                                 }
                             )
 
-            return Response({"success": True, "message": "AC Inspection & Rate Card stored in PostgreSQL database successfully."})
+            return Response({
+                "success": True,
+                "message": "AC Inspection & Rate Card stored in PostgreSQL database successfully.",
+                "data": {
+                    "fee": int(config.diagnostic_fee) if config.diagnostic_fee == int(config.diagnostic_fee) else float(config.diagnostic_fee),
+                    "diagnostic_fee": float(config.diagnostic_fee),
+                    "currency": config.currency,
+                    "is_active": bool(config.is_active),
+                    "title": config.title,
+                    "subtitle": config.subtitle,
+                    "image": config.image,
+                    "badges": config.badges,
+                    "includes": config.includes,
+                    "ready": config.ready,
+                }
+            })
         except Exception as e:
             logger.exception("Failed to save AC inspection config to database")
             return Response({"success": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

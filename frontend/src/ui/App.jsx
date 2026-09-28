@@ -1,5 +1,5 @@
-import { lazy, Suspense } from "react"
-import { Navigate, Outlet, Route, Routes } from "react-router-dom"
+import { lazy, Suspense, useEffect } from "react"
+import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom"
 import { useAuth } from "../state/auth/useAuth.js"
 import { useRole } from "../state/auth/useRole.js"
 import { isSuperAdmin, can as canAccess } from "../auth/authorization.js"
@@ -9,6 +9,33 @@ import { SessionToast } from "./components/SessionToast.jsx"
 import { GlobalEditModeToggle } from "./components/GlobalEditModeToggle.jsx"
 import { MobileBottomNav } from "./components/common/MobileBottomNav.jsx"
 import { LoginPage } from "./pages/LoginPage.jsx"
+
+// Bridge inside iframe: broadcasts route changes to parent window (Homepage Customizer preview)
+function PreviewNavigationBridge() {
+  const location = useLocation()
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.parent && window.parent !== window) {
+      const params = new URLSearchParams(location.search)
+      const cat = params.get("category")
+      const openModal = params.get("openModal")
+      let screen = "home"
+      if (openModal === "pillars") screen = "pillars"
+      else if (cat === "home_pest_control") screen = "subcategories"
+      else if (cat === "kitchen_cleaning") screen = "kitchen"
+      else if (cat) screen = "category"
+
+      window.parent.postMessage({
+        type: "PREVIEW_ROUTE_CHANGE",
+        pathname: location.pathname,
+        search: location.search,
+        screen: screen,
+      }, "*")
+    }
+  }, [location])
+
+  return null
+}
 
 // Lazy-loaded Pages
 const OrganizationSignupPage = lazy(() =>
@@ -339,6 +366,7 @@ export function App() {
 
   return (
     <>
+      <PreviewNavigationBridge />
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route
@@ -511,8 +539,6 @@ export function App() {
               element={
                 user?.role === "customer" ? (
                   <Navigate to={routes.landing} replace />
-                ) : isSuperAdmin(user) ? (
-                  <Navigate to="/platform/dashboard" replace />
                 ) : user?.role === "support" || (user?.isCareAgent && user?.role !== "admin" && user?.role !== "manager") ? (
                   <Navigate to="/support/tickets" replace />
                 ) : (

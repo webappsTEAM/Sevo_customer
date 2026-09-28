@@ -27,27 +27,41 @@ export function resolveImageUrl(path, fallback = "") {
     return fallback || ""
   }
 
-  // 1. Already fully qualified URL or data URI
-  if (
-    trimmed.startsWith("http://") ||
-    trimmed.startsWith("https://") ||
-    trimmed.startsWith("data:") ||
-    trimmed.startsWith("blob:")
-  ) {
-    // NOTE: this used to blank out (return fallback for) any URL on our
-    // OWN configured Supabase Storage domain (zqghatybqkztzgjmmlpl.supabase.co)
-    // -- i.e. it treated every real, successfully-uploaded image as if it
-    // were broken. Since backend/.env's SUPABASE_URL points at exactly
-    // this project's bucket, that meant any image actually uploaded
-    // through the real upload pipeline (ImageUploadView -> Supabase
-    // Storage) would silently render as the fallback/broken-image
-    // placeholder everywhere this helper is used, even though the upload
-    // itself succeeded. Removed -- a Supabase-hosted URL is resolved the
-    // same as any other fully-qualified URL.
-    return trimmed;
+  // 1. Blob or local object URLs (e.g. from local file preview)
+  if (trimmed.startsWith("blob:") || trimmed.startsWith("data:")) {
+    return trimmed
   }
 
-  // 2. Vite dev server / bundled assets / mockups / media
+  // 2. Local media files (Django /media/ and avatars/)
+  // If the path contains /media/, extract it so it goes through Vite's /media proxy (or same origin).
+  // This prevents CORS, host mismatches (localhost vs 127.0.0.1 vs demo.localhost), and port mismatches.
+  const mediaIdx = trimmed.indexOf("/media/")
+  if (mediaIdx !== -1) {
+    return trimmed.substring(mediaIdx)
+  }
+  if (trimmed.startsWith("media/")) {
+    return `/${trimmed}`
+  }
+  if (
+    trimmed.startsWith("catalog/") ||
+    trimmed.startsWith("packages/") ||
+    trimmed.startsWith("services/") ||
+    trimmed.startsWith("addons/") ||
+    trimmed.startsWith("banners/") ||
+    trimmed.startsWith("homepage/") ||
+    trimmed.startsWith("avatars/") ||
+    trimmed.startsWith("/avatars/") ||
+    trimmed.startsWith("general/")
+  ) {
+    return `/media/${trimmed.replace(/^\/+/, "")}`
+  }
+
+  // 3. Fully qualified external URLs (Supabase, CDN, AWS, Unsplash, etc.)
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return trimmed
+  }
+
+  // 4. Vite dev server / bundled assets / mockups
   if (
     trimmed.startsWith("/src/") ||
     trimmed.startsWith("src/") ||
@@ -58,14 +72,12 @@ export function resolveImageUrl(path, fallback = "") {
     trimmed.startsWith("assets/") ||
     trimmed.startsWith("/mockups/") ||
     trimmed.startsWith("mockups/") ||
-    trimmed.startsWith("/media/") ||
-    trimmed.startsWith("media/") ||
     trimmed.startsWith("/")
   ) {
     return trimmed.startsWith("/") ? trimmed : `/${trimmed}`
   }
 
-  // 3. Clean storage path (e.g. "catalog/packages/uuid.webp" or "homepage/hero/uuid.webp")
+  // 5. Clean storage path (e.g. "catalog/packages/uuid.webp" or "homepage/hero/uuid.webp")
   const cleanPath = trimmed.replace(/^\/+/, "")
   return `${SUPABASE_STORAGE_BASE}${cleanPath}`
 }

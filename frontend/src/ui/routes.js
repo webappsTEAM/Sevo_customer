@@ -39,6 +39,7 @@ export const routes = {
   booking_checkout: "/booking/checkout",
   feedback: "/feedback/:token",
   admin_service_requests: "/admin/service-requests",
+  service_requests: "/customers/bookings",
   admin_feedback: "/admin/feedback",
   customer_work_extension: "/customer/work-extensions/:token",
   // Public quotation decision — the token in the path is the credential, so

@@ -380,9 +380,12 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete, onSuccess 
       const res = await apiVerifyCustomerOTP(identifier, channel, otpCode)
 
       if (res && res.success) {
-        const { is_new_customer, customer_id, auth_token, access, user } = res.data || {}
+        const { is_new_customer, profile_complete, customer_id, auth_token, access, user } = res.data || {}
         setCustomerId(customer_id)
-        if (is_new_customer) {
+        if (is_new_customer || profile_complete === false || (channel === "EMAIL" && !(user?.phone || user?.mobile_number))) {
+          if (user?.full_name && !fullName) {
+            setFullName(user.full_name)
+          }
           setStep(3)
         } else {
           const userPayload = {
@@ -417,19 +420,22 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete, onSuccess 
   }
 
   // ── 5. Profile Completion (Step 3) ────────────────────────────────────────
-  // secondIdentifier (email when phone was used, or vice versa) is OPTIONAL.
-  // The backend apiCompleteCustomerProfile accepts an empty profileArgs object.
+  // When user logged in via EMAIL, mobile number is MANDATORY.
+  // When user logged in via PHONE, email remains optional.
   const secondChannel = channel === "EMAIL" ? "PHONE" : "EMAIL"
+  const isSecondIdentifierRequired = secondChannel === "PHONE"
   const secondIdentifierTrimmed = secondIdentifier.trim()
-  const isSecondIdentifierValid = !secondIdentifierTrimmed || (
-    secondChannel === "EMAIL"
-      ? EMAIL_RE.test(secondIdentifierTrimmed)
-      : /^[6-9]\d{9}$/.test(secondIdentifierTrimmed)
-  )
+  const isSecondIdentifierValid = isSecondIdentifierRequired
+    ? /^[6-9]\d{9}$/.test(secondIdentifierTrimmed)
+    : (!secondIdentifierTrimmed || EMAIL_RE.test(secondIdentifierTrimmed))
 
   const handleCompleteProfile = async () => {
     if (!fullName.trim()) { setErrorMsg("Full Name is required."); return }
-    if (secondIdentifierTrimmed && !isSecondIdentifierValid) {
+    if (isSecondIdentifierRequired && !secondIdentifierTrimmed) {
+      setErrorMsg("Mobile number is required.")
+      return
+    }
+    if (!isSecondIdentifierValid) {
       setErrorMsg(secondChannel === "EMAIL" ? "Please enter a valid email address." : "Please enter a valid 10-digit mobile number.")
       return
     }
@@ -771,7 +777,11 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete, onSuccess 
                 <div className="cef-single-input-card">
                   <label className="cef-label-tag">
                     <span>{secondChannel === "EMAIL" ? "Email Address" : "Mobile Number"}</span>
-                    <span style={{ fontSize: "0.68rem", color: "#94a3b8", fontWeight: 600, marginLeft: 4 }}>Optional</span>
+                    {secondChannel === "PHONE" ? (
+                      <span className="cef-req-star">*</span>
+                    ) : (
+                      <span style={{ fontSize: "0.68rem", color: "#94a3b8", fontWeight: 600, marginLeft: 4 }}>Optional</span>
+                    )}
                   </label>
                   {secondChannel === "EMAIL" ? (
                     <Mail size={16} className="cef-single-icon" />
@@ -790,7 +800,7 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete, onSuccess 
                       setSecondIdentifier(val)
                       if (errorMsg) setErrorMsg("")
                     }}
-                    placeholder={secondChannel === "EMAIL" ? "e.g. ramesh@example.com (optional)" : "10-digit mobile (optional)"}
+                    placeholder={secondChannel === "EMAIL" ? "e.g. ramesh@example.com (optional)" : "10-digit mobile number"}
                   />
                 </div>
 
