@@ -17,7 +17,17 @@ import { HeroServiceVisualization } from "../components/HeroServiceVisualization
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { AllServicesDrawer } from "../components/AllServicesDrawer.jsx"
-import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, MasonPackageModal, BkStyles, CustomerAccountModal, AddAddressSearchModal, CartDrawerModal } from "./BookingPage.jsx"
+import {
+  PackageModal,
+  CustomCleaningPackageModal,
+  KitchenCleaningModal,
+  PaintingPackageModal,
+  MasonPackageModal,
+  BkStyles,
+  CustomerAccountModal,
+  AddAddressSearchModal,
+  CartDrawerModal
+} from "./BookingPage.jsx"
 import { ModernServiceCatalogView } from "../components/ModernServiceCatalogView.jsx"
 import { estimationRepository } from "../../services/estimation/estimationRepository.js"
 import { SelectServiceAddressDrawer } from "../components/AddressPicker/index.js"
