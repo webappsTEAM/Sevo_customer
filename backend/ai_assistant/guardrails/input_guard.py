@@ -9,20 +9,23 @@ class InputGuardResult:
     is_blocked: bool
     reason: Optional[str] = None
     response_override: Optional[str] = None
-    category: Optional[str] = None  # "injection", "write_action", "unsupported"
+    category: Optional[str] = None  # "injection", "write_action", "unsupported", "out_of_scope", "support_intent"
+    is_support_intent: bool = False
 
 
 class InputGuard:
     """
     Input layer security:
     1. Prompt-injection and jailbreak attempt detection.
-    2. Write/Mutation command interception (Hard Phase 1 restriction:
-       no create, update, delete, cancel, approve, reject, pay, verify, assign, reschedule, refund).
+    2. Out-of-scope domain restriction.
+    3. Return / Refund / Replace intake intent routing (Phase 1 support wizard).
+    4. Write/Mutation command interception (Hard Phase 1 restriction:
+       no create, update, delete, cancel, approve, reject, pay, verify, assign, reschedule).
     """
 
     # Patterns indicating prompt injection, privilege escalation, or jailbreaking
     INJECTION_PATTERNS = [
-        r"(?i)\bignore\s+(all\s+)?(previous|prior|system)\s+(instructions|prompts|rules)\b",
+        r"(?i)\bignore\s+(?:all\s+)?(?:previous|prior|system|\s+)*(?:instructions|prompts|rules)\b",
         r"(?i)\byou\s+are\s+now\s+(in\s+)?(dan|jailbreak|developer)\s+mode\b",
         r"(?i)\breveal\s+(the\s+)?(system\s+prompt|hidden\s+instructions|api\s*key|secret)\b",
         r"(?i)\bpretend\s+you\s+(have\s+no\s+rules|are\s+an\s+unrestricted\s+ai)\b",
@@ -31,11 +34,33 @@ class InputGuard:
         r"(?i)\bact\s+as\s+superadmin\b",
     ]
 
+    # Explicit out-of-scope queries (general knowledge, pop culture, beverages, trivia, entertainment)
+    OUT_OF_SCOPE_PATTERNS = [
+        # Entertainment / Creative / Coding requests
+        r"(?i)\b(tell\s+me\s+a\s+(?:joke|story|riddle)|make\s+me\s+laugh|sing\s+(?:a\s+)?song)\b",
+        r"(?i)\bwrite\s+(?:a\s+)?(?:poem|essay|story|song|script|letter|email|code)\b",
+        r"(?i)\bwrite\s+(?:python|javascript|java|c\+\+|html|css|sql|rust|php|ruby)\b",
+        r"(?i)\b(solve|calculate)\s+(?:\d+[\s\+\-\*\/\^]+\d+|\bmath\b)",
+        # Celebrity, historical, political figures & general 'who is' queries not tied to Sevo/technicians
+        r"(?i)\b(who\s+is|who\s+was)\s+(?:michael\s+jackson|mycheal\s+jackson|elvis|messi|ronaldo|taylor\s+swift|elon\s+musk|bill\s+gates|steve\s+jobs|donald\s+trump|narendra\s+modi|barack\s+obama|virat\s+kohli|sachin|dhoni|gandhi|einstein|newton|president|prime\s+minister)\b",
+        # Generic 'who is/was <person>' when not inquiring about technician, driver, or service partner
+        r"(?i)^who\s+(?:is|was)\s+(?!my\s+|the\s+(?:technician|driver|delivery|partner|worker|mechanic|electrician|plumber|painter|pro)|assigned|coming|sevo|calservices)[a-z]+(?:\s+[a-z]+)*\??$",
+        # Commercial food / beverage brands / non-service products
+        r"(?i)\bwhat\s+is\s+(?:pepsi|coca\s*cola|coke|sprite|fanta|mirinda|mountain\s+dew|thums\s*up|seven\s*up|7up|burger\s*king|mcdonalds?|kfc|dominos?|pizza\s*hut|starbucks)\b",
+        # General world trivia / geography / weather
+        r"(?i)\b(capital\s+of|weather\s+in|who\s+won\s+the|population\s+of|president\s+of|prime\s+minister\s+of|currency\s+of|distance\s+between)\b",
+        r"(?i)\bwhat\s+is\s+(?:the\s+capital\s+of|photosynthesis|quantum\s+physics|gravity|artificial\s+intelligence|bitcoin|ethereum|crypto|blockchain|the\s+meaning\s+of\s+life)\b",
+    ]
+
+    # Patterns indicating return, refund, or replacement intent that should ENTER the support flow
+    SUPPORT_INTAKE_PATTERNS = [
+        r"(?i)\b(refund|return|replace|replacement|exchange|chargeback|money\s+back)\b",
+    ]
+
     # Patterns indicating write / CRUD actions disallowed in Phase 1 (imperative commands)
     WRITE_ACTION_PATTERNS = [
-        (r"(?i)\b(cancel|discontinue|stop)\s+(my\s+)?(booking|service|order|request)\b", "cancel"),
+        (r"(?i)\b(cancel|discontinue|stop|delete|remove|terminate|drop)\s+(my\s+)?(booking|service|order|request|appointment)\b", "cancel"),
         (r"(?i)\b(reschedule|postpone|change\s+the\s+time|change\s+the\s+date)\b", "reschedule"),
-        (r"(?i)\b(refund|return\s+my\s+money|chargeback)\b", "refund"),
         (r"(?i)\b(pay|make\s+payment|retry\s+payment|checkout)\b", "pay"),
         (r"(?i)\b(confirm|finalize|place|execute)\s+(and\s+pay\s+for\s+)?(my\s+)?(booking|order)\s+(now|immediately)\b", "create"),
         (r"(?i)\b(assign|reassign)\s+(technician|worker|driver)\b", "assign"),
@@ -51,7 +76,7 @@ class InputGuard:
         r"(?i)\btell\s+me\s+(about|how|steps|what|more)\b",
         r"(?i)\b(guide|help)\s+(me|us)?\b",
         r"(?i)\b(steps?|instructions?|process|procedure|flow)\s+(to|for|of)\b",
-        r"(?i)\b(can|could)\s+i\s+(book|order|schedule|get|request|hire)\b",
+        r"(?i)\b(can|could)\s+i\s+(book|order|schedule|reschedule|cancel|get|request|hire)\b",
         r"(?i)\b(where|when)\s+(can|do|to)\s*(i)?\b",
         r"(?i)\b(i\s+want\s+to|i\s+would\s+like\s+to|looking\s+to|need\s+to|wish\s+to)\s+(book|know|find|explore|schedule|order)\b",
         r"(?i)\b(available\s+(services?|packages?)|(services?|packages?)\s+(available|list|options|offered|catalog))\b",
@@ -84,15 +109,45 @@ class InputGuard:
                     category="injection",
                 )
 
-        # 2. Check if this is an informational / guidance query or service inquiry
+        # 2. Check for explicit out-of-scope / general knowledge queries
+        for pattern in cls.OUT_OF_SCOPE_PATTERNS:
+            if re.search(pattern, query_clean):
+                return InputGuardResult(
+                    is_safe=True,
+                    is_blocked=True,
+                    reason=f"Out-of-scope query detected: {pattern}",
+                    response_override=(
+                        "I can only assist with questions related to Sevo services, bookings, orders, and our platform. "
+                        "Please let me know if you need help with any home services, repairs, cleaning, or deliveries!"
+                    ),
+                    category="out_of_scope",
+                )
+
+        # 3. Check for return / refund / replace intent -> ENTERS support flow (not blocked)
+        is_policy_query = bool(re.search(r"(?i)\b(policy|policies|rules|faq|terms)\b", query_clean))
+        if not is_policy_query:
+            for pattern in cls.SUPPORT_INTAKE_PATTERNS:
+                if re.search(pattern, query_clean):
+                    return InputGuardResult(
+                        is_safe=True,
+                        is_blocked=False,
+                        reason="Return, refund, or replacement support flow intent detected",
+                        category="support_intent",
+                        is_support_intent=True,
+                    )
+
+        # 4. Check if this is an informational / guidance query or service inquiry
         is_informational = any(re.search(p, query_clean) for p in cls.INFORMATIONAL_PATTERNS)
         is_imperative_write = bool(
             re.search(
                 r"(?i)\b("
-                r"please\s+(cancel|refund|reschedule|delete)"
+                r"please\s+(cancel|reschedule|delete|drop|remove)"
                 r"|cancel\s+(it|this|order|booking)\s*#?\d+"
+                r"|delete\s+(my\s+)?(booking|appointment|service)\s*#?\d*"
+                r"|remove\s+(my\s+)?(service\s+)?booking"
+                r"|terminate\s+(my\s+)?(appointment|booking)"
+                r"|drop\s+(my\s+)?service\s+request"
                 r"|i\s+want\s+to\s+cancel\s+now"
-                r"|give\s+me\s+(a\s+)?refund"
                 r"|reschedule\s+(my\s+)?(appointment|booking)\s+to"
                 r")\b",
                 query_clean,

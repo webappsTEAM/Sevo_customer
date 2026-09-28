@@ -47,9 +47,8 @@ class MockDeterministicProvider(BaseLLMProvider):
         # Fallback conversational response
         return LLMResponse(
             content=(
-                "I am your CalServices Assistant! I can help you check your bookings, "
-                "track en-route technicians, explore service packages and pricing, or answer questions "
-                "about our cancellation, refund, and delivery policies. How can I help you today?"
+                "I can only assist with questions related to Sevo services, bookings, and our platform. "
+                "Please let me know if you need help with any home services, repairs, cleaning, or deliveries!"
             ),
             tool_calls=[],
         )

@@ -18,12 +18,18 @@ class GuardrailsTests(TestCase):
         self.assertEqual(result.category, "write_action")
         self.assertIn("Reschedule Booking", result.response_override)
 
-    def test_write_action_refund_is_intercepted(self):
-        """Disallowed write actions (refund) in Phase 1 are blocked with guidance."""
-        result = InputGuard.inspect("Give me a refund for my order")
-        self.assertTrue(result.is_blocked)
-        self.assertEqual(result.category, "write_action")
-        self.assertIn("Refund Policy", result.response_override)
+    def test_refund_intent_enters_support_flow(self):
+        """Refund, return, and replacement intents enter the deterministic support flow instead of canned write blocks."""
+        queries = [
+            "Give me a refund for my order",
+            "I want to return my product",
+            "I need a replacement for my item",
+        ]
+        for q in queries:
+            result = InputGuard.inspect(q)
+            self.assertFalse(result.is_blocked, f"Query '{q}' should not be blocked")
+            self.assertEqual(result.category, "support_intent")
+            self.assertTrue(result.is_support_intent)
 
     def test_informational_policy_query_is_not_blocked_as_write(self):
         """Questions asking *about* cancellation policies must not be misclassified as write commands."""
@@ -69,3 +75,36 @@ class GuardrailsTests(TestCase):
         scrubbed = OutputGuard.sanitize_llm_response(dirty_text)
         self.assertNotIn("829471", scrubbed)
         self.assertIn("[OTP Hidden for Security]", scrubbed)
+
+    def test_out_of_scope_queries_are_intercepted(self):
+        """Off-topic queries like celebrities, beverages, jokes, and trivia are intercepted."""
+        off_topic_queries = [
+            "who is mycheal jackson",
+            "who is michael jackson",
+            "what is pepsi",
+            "what is coca cola",
+            "tell me a joke",
+            "write a poem about trees",
+            "who is elon musk",
+            "what is the capital of france",
+        ]
+        for q in off_topic_queries:
+            result = InputGuard.inspect(q)
+            self.assertTrue(result.is_blocked, f"Expected '{q}' to be blocked as out of scope")
+            self.assertEqual(result.category, "out_of_scope")
+            self.assertIn("Sevo services", result.response_override)
+
+    def test_in_scope_sevo_queries_are_not_blocked(self):
+        """Legitimate Sevo inquiries about services, technicians, and bookings must not be blocked."""
+        in_scope = [
+            "who is my technician",
+            "who is the driver",
+            "who is assigned to my booking",
+            "what is ac inspection",
+            "what is jet cleaning",
+            "what is the price of mini truck",
+            "where is my order",
+        ]
+        for q in in_scope:
+            result = InputGuard.inspect(q)
+            self.assertFalse(result.is_blocked, f"In-scope query '{q}' was unexpectedly blocked")
