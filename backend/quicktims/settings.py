@@ -7,8 +7,7 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment settings from .env (reloaded with correct DB password)
-_dotenv_override = os.getenv("SEVO_DOTENV_OVERRIDE", "1").strip() != "0"
-load_dotenv(BASE_DIR / ".env", override=_dotenv_override)
+load_dotenv(BASE_DIR / ".env", override=True)
 
 _SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 if not _SECRET_KEY:
@@ -72,6 +71,7 @@ INSTALLED_APPS = [
     "workforce_integration",
     "customer_analytics",
     "platform_control",
+    "ai_assistant",
 ]
 
 ASGI_APPLICATION = "quicktims.asgi.application"
@@ -102,21 +102,9 @@ SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
 # ---------------------------------------------------------------------------
 
 USE_POSTGRES = os.getenv("DB_NAME") or os.getenv("DB_HOST")
-_argv_str = " ".join(sys.argv).lower()
-IS_TESTING = (
-    "test" in sys.argv
-    or "pytest" in sys.modules
-    or "pytest" in _argv_str
-    or "unittest" in _argv_str
-    or os.getenv("DJANGO_TEST_SQLITE") == "1"
-    or os.getenv("SEVO_TESTING") == "1"
-)
+IS_TESTING = "test" in sys.argv or os.getenv("DJANGO_TEST_SQLITE") == "1"
 
 if IS_TESTING:
-    TESTING = True
-    PASSWORD_HASHERS = [
-        "django.contrib.auth.hashers.MD5PasswordHasher",
-    ]
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
@@ -168,19 +156,6 @@ else:
             "NAME": BASE_DIR / "db.sqlite3",
         }
     }
-
-_e2e_sqlite_path = os.getenv("SEVO_E2E_SQLITE_PATH")
-if _e2e_sqlite_path:
-    if DEBUG or IS_TESTING:
-        DATABASES["default"] = {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": Path(_e2e_sqlite_path),
-        }
-    else:
-        import logging
-        logging.getLogger(__name__).warning(
-            "SEVO_E2E_SQLITE_PATH is ignored because DEBUG is False and IS_TESTING is False."
-        )
 
 
 
@@ -338,6 +313,9 @@ SIMPLE_JWT = {
 AUTH_COOKIE          = "qt_access"         # access token cookie name
 AUTH_COOKIE_REFRESH  = "qt_refresh"        # refresh token cookie name
 AUTH_COOKIE_SECURE   = not DEBUG           # HTTPS-only in production; False in dev
+# Session and CSRF cookies are HTTPS-only in production, like the auth cookie above.
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 # "Lax" is required for cross-origin dev (frontend:5173 → backend:8000).
 # In production with same domain, change back to "Strict" via env var.
 AUTH_COOKIE_SAMESITE = os.getenv("AUTH_COOKIE_SAMESITE", "Lax" if DEBUG else "Strict")
@@ -518,6 +496,13 @@ GOOGLE_MAPS_API_KEY = (
 LOGISTICS_ROAD_CURVATURE_FACTOR = float(os.getenv("LOGISTICS_ROAD_CURVATURE_FACTOR", "1.00"))
 
 
+# Behind a reverse proxy every client shares the proxy's IP unless DRF is told how many
+# proxies to trust, so anon throttling (and per-IP scopes) would pool all visitors into one
+# bucket. Opt-in: set THROTTLE_NUM_PROXIES to the number of trusted proxies in front of Django.
+_throttle_num_proxies = os.getenv("THROTTLE_NUM_PROXIES", "").strip()
+if _throttle_num_proxies.isdigit():
+    REST_FRAMEWORK["NUM_PROXIES"] = int(_throttle_num_proxies)
+
 # ── Celery ────────────────────────────────────────────────────────────────────
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://127.0.0.1:6379/0")
@@ -526,7 +511,16 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
-CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "True") == "True"
+# Inline (eager) execution only by default for local dev and tests; production runs the
+# sevo-celery worker, so tasks must be queued. Set CELERY_TASK_ALWAYS_EAGER explicitly to override.
+CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "True" if (DEBUG or IS_TESTING) else "False").strip().lower() in ("true", "1", "yes")
+# Fail fast when the broker / result store is unreachable. Without these, task.delay() inside a booking
+# request blocked ~19 s (kombu publish retries + result-backend reconnects) before the caller's
+# direct-dispatch fallback could run -- a Redis outage turned every booking POST into a 20 s hang.
+CELERY_TASK_PUBLISH_RETRY_POLICY = {"max_retries": 1, "interval_start": 0, "interval_step": 0.2, "interval_max": 0.5}
+CELERY_BROKER_TRANSPORT_OPTIONS = {"socket_connect_timeout": 2, "socket_timeout": 5, "retry_on_timeout": False}
+CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {"retry_policy": {"max_retries": 1, "interval_start": 0, "interval_step": 0.2, "interval_max": 0.5}, "socket_connect_timeout": 2}
+CELERY_BROKER_CONNECTION_TIMEOUT = 2
 
 # ── Performance & Application Logging Configuration ──────────────────────────
 LOGGING = {
@@ -580,7 +574,20 @@ if IS_TESTING:
         k: "10000/minute" for k in REST_FRAMEWORK.get("DEFAULT_THROTTLE_RATES", {})
     }
 
-
-
-
+# ── Workforce & Marketplace Integration Settings ──────────────────────────────
+WORKFORCE_API_BASE_URL = (os.getenv("WORKFORCE_API_BASE_URL") or "http://127.0.0.1:8001/api/workforce").replace("localhost", "127.0.0.1").rstrip("/")
+# The cross-app webhook secret authenticates vendor -> customer events (including
+# payment.collected). A literal default committed to the repo is a skeleton key, so it
+# is only used for local DEBUG/test runs; in production it must come from the environment
+# (workforce_integration/services.py refuses to start without it).
+_DEV_WEBHOOK_SECRET = "caldim_secure_webhook_token_2026"
+_PLACEHOLDER_SECRETS = {_DEV_WEBHOOK_SECRET, "dev-insecure-workforce-webhook-secret-local-testing-only", "wf_webhook_secret_default"}
+_webhook_secret_env = (os.getenv("WORKFORCE_WEBHOOK_SECRET") or "").strip()
+_integration_secret_env = (os.getenv("SEVO_INTEGRATION_SECRET") or "").strip()
+if DEBUG or IS_TESTING:
+    WORKFORCE_WEBHOOK_SECRET = _webhook_secret_env or _DEV_WEBHOOK_SECRET
+    SEVO_INTEGRATION_SECRET = _integration_secret_env or _webhook_secret_env or _DEV_WEBHOOK_SECRET
+else:
+    WORKFORCE_WEBHOOK_SECRET = "" if _webhook_secret_env in _PLACEHOLDER_SECRETS else _webhook_secret_env
+    SEVO_INTEGRATION_SECRET = "" if (_integration_secret_env or _webhook_secret_env) in _PLACEHOLDER_SECRETS else (_integration_secret_env or _webhook_secret_env)
 

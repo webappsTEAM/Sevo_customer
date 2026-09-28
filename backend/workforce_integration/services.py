@@ -19,6 +19,15 @@ logger = logging.getLogger("workforce_integration")
 
 _raw_base_url = getattr(settings, "WORKFORCE_API_BASE_URL", None) or os.getenv("WORKFORCE_API_BASE_URL")
 _raw_webhook_secret = getattr(settings, "WORKFORCE_WEBHOOK_SECRET", None) or os.getenv("WORKFORCE_WEBHOOK_SECRET")
+# Publicly-known placeholder values (repo defaults / .env.example) are not secrets: outside
+# local DEBUG/tests they count as "not configured" so production fails closed instead of
+# authenticating webhooks with a value anyone can read in the repository.
+if _raw_webhook_secret and str(_raw_webhook_secret).strip() in (
+    "caldim_secure_webhook_token_2026",
+    "dev-insecure-workforce-webhook-secret-local-testing-only",
+    "wf_webhook_secret_default",
+) and not (settings.DEBUG or "test" in __import__("sys").argv or getattr(settings, "TESTING", False)):
+    _raw_webhook_secret = None
 
 if not _raw_base_url or not _raw_webhook_secret:
     if settings.DEBUG or "test" in sys.argv or getattr(settings, "TESTING", False):
@@ -436,8 +445,11 @@ class WorkforceIntegrationService:
         Dispatches customer verified rating and feedback score to the Workforce employee profile.
         """
         sr = cls._resolve_sr(service_request)
-        if not sr or not technician_id:
+        if not sr:
             return {"success": True, "fallback": True}
+        # The vendor resolves the technician from the job (authoritative); the id in the URL is only a
+        # hint, so a missing snapshot must not swallow the rating.
+        technician_id = technician_id or ""
 
         payload = {
             "booking_id": sr.request_id,
@@ -449,7 +461,7 @@ class WorkforceIntegrationService:
         }
 
         try:
-            url = f"{WORKFORCE_API_BASE_URL}/technicians/{technician_id}/feedback/"
+            url = f"{WORKFORCE_API_BASE_URL}/technicians/{technician_id or 'assigned'}/feedback/"
             response = requests.post(url, json=payload, headers=cls._internal_headers(), timeout=5)
             if response.status_code in [200, 201, 204]:
                 return {"success": True}

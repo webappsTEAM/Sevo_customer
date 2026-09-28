@@ -90,15 +90,27 @@ class LaneListView(APIView):
 
 
 class ServiceAreaListView(APIView):
-    """GET /api/logistics/areas/?city=hosur (category-agnostic — shared list)"""
+    """
+    GET /api/logistics/areas/?city=hosur&category=truck|two_wheeler|packers_movers
+
+    "Areas We Serve" is derived from real coverage (active ServiceZones that
+    the booking gate would accept for this city + service -- see
+    logistics.coverage), not from a free-standing list. Same row shape as
+    before (id, city, name, order). No coverage -> an empty list.
+    """
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
-        qs = ServiceArea.objects.filter(is_active=True)
-        city = request.query_params.get("city")
-        if city:
-            qs = qs.filter(city__iexact=city)
-        data = ServiceAreaSerializer(qs, many=True).data
+        from service_requests.views import _get_company
+        from .coverage import covered_area_zones
+
+        city = (request.query_params.get("city") or "").strip()
+        category = (request.query_params.get("category") or "").strip()
+        zones = covered_area_zones(company=_get_company(request), city_slug=city, category=category)
+        data = [
+            {"id": z.id, "city": city.lower(), "name": z.name, "order": i}
+            for i, z in enumerate(zones)
+        ]
         return success_response(data=data)
 
 
@@ -112,7 +124,7 @@ def _coord(value):
         return None
 
 
-def _route_coverage_for(request, category, tier, pickup_lat, pickup_lng, drop_lat, drop_lng):
+def _route_coverage_for(request, category, tier, pickup_lat, pickup_lng, drop_lat, drop_lng, stops=None):
     # Same company resolution as the booking endpoint, so quote-time and
     # submit-time coverage can never disagree about which zones apply.
     from service_requests.views import _get_company
@@ -127,6 +139,7 @@ def _route_coverage_for(request, category, tier, pickup_lat, pickup_lng, drop_la
         company=_get_company(request),
         vehicle_class=tier.get_vehicle_class() if tier is not None else "",
         vehicle_label=getattr(tier, "name", "") or "",
+        stops=stops,
     )
 
 
@@ -172,10 +185,15 @@ class LogisticsQuoteView(APIView):
         from service_requests.services.logistics_pricing import (
             DISTANCE_PRICED_CATEGORIES, LogisticsCatalogMismatchError,
             assert_catalog_matches_category, quote_logistics_fare,
+            TooManyStopsError,
         )
 
         data = request.data if isinstance(request.data, dict) else {}
-        tier = ServiceTier.objects.filter(id=data.get("tier_id"), is_active=True).first()
+        try:
+            _tier_id = int(data.get("tier_id"))
+        except (TypeError, ValueError):
+            _tier_id = None      # a non-numeric tier id is "no such tier", not a server error
+        tier = ServiceTier.objects.filter(id=_tier_id, is_active=True).first() if _tier_id is not None else None
         if tier is None:
             return Response(
                 {
@@ -250,13 +268,18 @@ class LogisticsQuoteView(APIView):
         # quote a trip whose pickup or drop is outside ACTIVE coverage, so the
         # customer sees the pickup/drop-specific reason in real time -- the
         # same check the booking endpoint enforces at submit.
-        coverage = _route_coverage_for(request, category, tier, pickup_lat, pickup_lng, drop_lat, drop_lng)
+        # Intermediate stops are part of the trip: each must be covered too.
+        coverage = _route_coverage_for(
+            request, category, tier, pickup_lat, pickup_lng, drop_lat, drop_lng,
+            stops=data.get("waypoints") or data.get("intermediate_stops"),
+        )
         if not coverage.allowed:
             return Response(
                 {
                     "success": False,
                     "error_code": coverage.error_code,
                     "failed_point": coverage.failed_point,
+                    "failed_stop_index": coverage.failed_stop_index,
                     "message": coverage.message,
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -333,14 +356,25 @@ class LogisticsQuoteView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        breakdown = quote_logistics_fare(
-            tier=tier,
-            pickup_lat=pickup_lat, pickup_lng=pickup_lng,
-            drop_lat=drop_lat, drop_lng=drop_lng,
-            stop_count=stop_count,
-            cargo_summary=cargo_summary,
-            waypoints=waypoints,
-        )
+        try:
+            breakdown = quote_logistics_fare(
+                tier=tier,
+                pickup_lat=pickup_lat, pickup_lng=pickup_lng,
+                drop_lat=drop_lat, drop_lng=drop_lng,
+                stop_count=stop_count,
+                cargo_summary=cargo_summary,
+                waypoints=waypoints,
+            )
+        except TooManyStopsError as exc:
+            return Response(
+                {
+                    "success": False,
+                    "error_code": "MAX_STOPS_EXCEEDED",
+                    "message": str(exc),
+                    "max_additional_stops": exc.allowed,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         if breakdown is None:
             if getattr(tier, "per_km_rate", None) is not None:
@@ -482,10 +516,22 @@ class PackersMoversQuoteView(APIView):
 
         data = request.data if isinstance(request.data, dict) else {}
 
+        # Bug found: both the pickup and drop fallbacks read the same bare
+        # "latitude"/"longitude" keys. A caller that omits drop_latitude/
+        # drop_longitude but sends a generic latitude/longitude (e.g. the
+        # single-address shape older callers used) would silently get drop
+        # coordinates identical to pickup instead of the intended
+        # COORDINATES_REQUIRED rejection. The current frontend
+        # (fetchPackersMoversQuote in logisticsService.js) always sends
+        # explicit pickup_latitude/drop_latitude, so this was latent, not
+        # yet triggered -- but it's a landmine for any future caller of this
+        # shared endpoint. The bare latitude/longitude fallback only makes
+        # sense for pickup (the historical single-address shape); drop must
+        # require its own explicit fields.
         pickup_lat = _coord(data.get("pickup_latitude") or data.get("pickup_lat") or data.get("latitude"))
         pickup_lng = _coord(data.get("pickup_longitude") or data.get("pickup_lng") or data.get("longitude"))
-        drop_lat = _coord(data.get("drop_latitude") or data.get("drop_lat") or data.get("latitude"))
-        drop_lng = _coord(data.get("drop_longitude") or data.get("drop_lng") or data.get("longitude"))
+        drop_lat = _coord(data.get("drop_latitude") or data.get("drop_lat"))
+        drop_lng = _coord(data.get("drop_longitude") or data.get("drop_lng"))
 
         if None in (pickup_lat, pickup_lng, drop_lat, drop_lng):
             return Response(
@@ -570,6 +616,11 @@ class PackersMoversQuoteView(APIView):
 
         relocation_type = str(data.get("relocation_type") or "Within City").strip()
         city = str(data.get("city") or "Hosur").strip()
+        # Stops between pickup and drop (priced at the tier's admin-configured per-stop charge).
+        try:
+            extra_stops = max(0, int(data.get("extra_stops") or 0))
+        except (TypeError, ValueError):
+            extra_stops = 0
 
         selected_tier_id = data.get("selected_tier_id") or data.get("service_tier_id") or data.get("tier_id")
         if selected_tier_id is not None:
@@ -625,6 +676,7 @@ class PackersMoversQuoteView(APIView):
                 drop_has_lift=drop_has_lift,
                 relocation_type=relocation_type,
                 service_tier_id=selected_tier_id,
+                extra_stops=extra_stops,
             )
         except Exception as e:
             logger.exception("Error computing Packers & Movers quote: %s", e)

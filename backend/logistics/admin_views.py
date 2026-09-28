@@ -61,6 +61,23 @@ def _ok(data, **extra):
     return Response(body, status=status.HTTP_200_OK)
 
 
+def _slot_label_times(label):
+    """(start, end) parsed from a slot label such as '08:00 AM - 09:00 AM', or None if the label is not
+    a time window. A label the booking engine cannot parse would make that slot silently skip every
+    slot-time rule (lead time, already-passed), so the admin API refuses it up front."""
+    from service_requests.booking_window import parse_slot_time
+    raw = str(label or "").strip()
+    start = parse_slot_time(raw)
+    if start is None:
+        return None
+    end = None
+    for sep in ("-", "\u2013", "to "):
+        if sep in raw:
+            end = parse_slot_time(raw.split(sep, 1)[1].strip())
+            break
+    return start, end
+
+
 def _fail(message, code, http_status, **extra):
     body = {"success": False, "error_code": code, "message": message}
     body.update(extra)
@@ -793,8 +810,10 @@ class AdminPackersMoversConfigView(APIView):
                     val = Decimal(str(data[field_name]))
                 except (InvalidOperation, TypeError, ValueError):
                     return _fail(f"Invalid decimal for {field_name}.", "INVALID_VALUE", status.HTTP_400_BAD_REQUEST)
-                if val < Decimal("0"):
-                    return _fail(f"{field_name} cannot be negative.", "INVALID_VALUE", status.HTTP_400_BAD_REQUEST)
+                if not val.is_finite() or val < Decimal("0"):
+                    return _fail(f"{field_name} must be a finite, non-negative number.", "INVALID_VALUE", status.HTTP_400_BAD_REQUEST)
+                if field_name == "gst_rate" and val > Decimal("1"):
+                    return _fail("gst_rate is a fraction (0.18 = 18%) and cannot exceed 1.", "INVALID_VALUE", status.HTTP_400_BAD_REQUEST)
                 if val != getattr(config, attr):
                     _parsed_dec[field_name] = val
         if _parsed_dec and not _can(request.user, "modify_price"):
@@ -824,6 +843,8 @@ class AdminPackersMoversConfigView(APIView):
         if "survey_cft_threshold" in data:
             try:
                 s_val = float(data["survey_cft_threshold"])
+                if s_val != s_val or s_val in (float("inf"), float("-inf")):
+                    return _fail("survey_cft_threshold must be a finite number.", "INVALID_VALUE", status.HTTP_400_BAD_REQUEST)
                 if s_val < 50.0:
                     return _fail("survey_cft_threshold must be at least 50 CFT.", "INVALID_VALUE", status.HTTP_400_BAD_REQUEST)
                 old_s = config.survey_cft_threshold
@@ -927,6 +948,9 @@ class AdminLogisticsSlotListView(APIView):
         slot_label = str(data.get("slot_label") or "").strip()
         if not slot_label:
             return _fail("Slot label is required (e.g. '08:00 AM - 09:00 AM').", "LABEL_REQUIRED", status.HTTP_400_BAD_REQUEST)
+        slot_times = _slot_label_times(slot_label)
+        if slot_times is None:
+            return _fail("Slot label must be a time window such as '08:00 AM - 09:00 AM'.", "INVALID_SLOT_LABEL", status.HTTP_400_BAD_REQUEST)
 
         group = str(data.get("group") or "Morning").strip()
         category = str(data.get("category") or "").strip()
@@ -949,6 +973,8 @@ class AdminLogisticsSlotListView(APIView):
             city=city,
             group=group,
             slot_label=slot_label,
+            start_time=slot_times[0],
+            end_time=slot_times[1],
             capacity=capacity,
             order=order,
             is_active=bool(data.get("is_active", True)),
@@ -998,6 +1024,12 @@ class AdminLogisticsSlotDetailView(APIView):
         from service_requests.models import CatalogChangeLog
         reason = str(data.get("reason") or "Updated via Logistics Admin API").strip()
         changes = []
+
+        if "slot_label" in data and str(data.get("slot_label") or "").strip() != slot.slot_label:
+            new_times = _slot_label_times(data.get("slot_label"))
+            if new_times is None:
+                return _fail("Slot label must be a time window such as '08:00 AM - 09:00 AM'.", "INVALID_SLOT_LABEL", status.HTTP_400_BAD_REQUEST)
+            slot.start_time, slot.end_time = new_times
 
         for str_field in ("slot_label", "group", "category", "city"):
             if str_field in data:
@@ -1121,6 +1153,18 @@ class AdminLaneListView(APIView):
         except (InvalidOperation, TypeError, ValueError):
             return _fail("Invalid fare amount.", "INVALID_FARE", status.HTTP_400_BAD_REQUEST)
 
+        # GT audit fix: Lane.fare is a real money field -- the fixed fare
+        # quoted to customers on this lane -- but this whole view was gated
+        # only on plain "edit", the same gap Update 7/8 closed for
+        # GoodsItem.special_handling_charge and PackersMoversConfig's rate
+        # fields. A non-zero fare on create is exactly that same bypass.
+        if fare > Decimal("0.00") and not _can(request.user, "modify_price"):
+            return _fail(
+                "Creating a lane with a non-zero fare requires the "
+                "'modify_price' permission on the Pricing module.",
+                "PRICING_FORBIDDEN", status.HTTP_403_FORBIDDEN,
+            )
+
         distance_km = None
         if data.get("distance_km") not in (None, ""):
             try:
@@ -1231,6 +1275,16 @@ class AdminLaneDetailView(APIView):
                     except (InvalidOperation, TypeError, ValueError):
                         continue
                 if new_val != old_val:
+                    # GT audit fix: same modify_price gate as the create path
+                    # above -- fare is a real money field, the other three
+                    # dec_fields (distance_km/lat/lng) are not pricing and
+                    # stay on plain "edit".
+                    if dec_field == "fare" and not _can(request.user, "modify_price"):
+                        return _fail(
+                            "Changing a lane's fare requires the "
+                            "'modify_price' permission on the Pricing module.",
+                            "PRICING_FORBIDDEN", status.HTTP_403_FORBIDDEN,
+                        )
                     CatalogChangeLog.objects.create(
                         entity_type="Lane", entity_id=lane.id,
                         field_name=dec_field, old_value=str(old_val), new_value=str(new_val),

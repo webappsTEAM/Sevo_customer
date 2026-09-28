@@ -62,6 +62,16 @@ const LOGISTICS_TIMELINE_STEPS = [
   { label: "Goods Delivered", emoji: "✅" },
 ]
 
+// A multi-stop booking stores its whole route as TripStops (PICKUP, each
+// WAYPOINT, DROP). Pickup and drop already have their own rows and pins, so the
+// "Stop 1..n" list and the numbered map pins must be the intermediate stops only
+// -- otherwise the pickup and drop appear a second time as numbered stops.
+function intermediateStops(logistics) {
+  return (Array.isArray(logistics?.stops) ? logistics.stops : []).filter(
+    (s) => !["PICKUP", "DROP"].includes(String(s?.stop_type || "").toUpperCase()),
+  )
+}
+
 function getTimelineIdx(s, isLogistics = false, logisticsLeg = "") {
   s = (s || "").toLowerCase()
   const leg = (logisticsLeg || "").toUpperCase()
@@ -108,6 +118,7 @@ export function CustomerTrackingPage({
 
   const [copiedOtp, setCopiedOtp] = useState(false)
   const [copiedPayOtp, setCopiedPayOtp] = useState(false)
+  const [copiedDeliveryOtp, setCopiedDeliveryOtp] = useState(false)
 
   // Multi-service booking (Sept 2026): when this booking is one task of a
   // multi-service parent Order (data.order_id + sibling_task_count > 1,
@@ -289,6 +300,7 @@ export function CustomerTrackingPage({
   const distKm = data?.technician?.distance_km ?? data?.distance_km ?? null
   const freshness = data?.freshness || "LIVE"
   const paymentConfirmationOtp = data?.payment_confirmation_otp || null
+  const deliveryOtp = data?.delivery_otp || null
 
   const copyOtp = () => {
     if (!startOtp || !navigator.clipboard) return
@@ -302,6 +314,13 @@ export function CustomerTrackingPage({
     navigator.clipboard.writeText(paymentConfirmationOtp)
     setCopiedPayOtp(true)
     setTimeout(() => setCopiedPayOtp(false), 2000)
+  }
+
+  const copyDeliveryOtp = () => {
+    if (!deliveryOtp || !navigator.clipboard) return
+    navigator.clipboard.writeText(deliveryOtp)
+    setCopiedDeliveryOtp(true)
+    setTimeout(() => setCopiedDeliveryOtp(false), 2000)
   }
 
   const openWA = () => {
@@ -456,8 +475,12 @@ export function CustomerTrackingPage({
               startOtp={startOtp}
               vendorName={vendorName}
               requestId={data?.request_id || activeIdentifier}
+              // Bug found: intermediate TripStop waypoints (already fetched
+              // into data.logistics.stops and listed in the address panel
+              // below) were never passed to the map, so they never appeared
+              // as markers and never factored into the camera's fitBounds.
               routePoints={isLogistics && (data?.pickup_location || data?.drop_location)
-                ? { pickup: data?.pickup_location, drop: data?.drop_location }
+                ? { pickup: data?.pickup_location, drop: data?.drop_location, stops: intermediateStops(data?.logistics) }
                 : null}
             />
 
@@ -792,6 +815,25 @@ export function CustomerTrackingPage({
               </div>
             )}
 
+            {/* Delivery OTP Card (goods & transport / packers & movers) */}
+            {isLogistics && deliveryOtp && !isCancelled && (
+              <div className="ltp-card ltp-otp-card highlight-arrived">
+                <div className="ltp-otp-left">
+                  <KeyRound size={18} color="#ea580c" />
+                  <div>
+                    <div className="ltp-otp-label">DELIVERY OTP</div>
+                    <div className="ltp-otp-hint">
+                      Share this code with the driver only after your goods have been delivered
+                    </div>
+                  </div>
+                </div>
+                <button className="ltp-otp-val" onClick={copyDeliveryOtp} aria-label="Copy Delivery OTP" title="Click to copy">
+                  {deliveryOtp}
+                  {copiedDeliveryOtp ? <Check size={13} color="#10b981" /> : <Copy size={13} />}
+                </button>
+              </div>
+            )}
+
             {/* Assigned Technician & Vendor Card */}
             {isAccepted ? (
               <motion.div className="ltp-card" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
@@ -925,7 +967,7 @@ export function CustomerTrackingPage({
                   </div>
                 </div>
                 {/* Intermediate Stops (if any) */}
-                {Array.isArray(data?.logistics?.stops) && data.logistics.stops.length > 0 && data.logistics.stops.map((stop, sIdx) => (
+                {intermediateStops(data?.logistics).map((stop, sIdx) => (
                   <div key={stop.id || sIdx} className="ltp-addr-row" style={{ marginBottom: 8, paddingLeft: 6, borderLeft: "2px dashed #94a3b8" }}>
                     <div style={{ width: 16, height: 16, borderRadius: "50%", background: "#f1f5f9", color: "#475569", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, flexShrink: 0, marginTop: 2 }}>{sIdx + 1}</div>
                     <div>

@@ -93,15 +93,10 @@ class InventoryItemSerializer(serializers.ModelSerializer):
 
             # Invalidate catalog cache so customer app gets immediate live update
             try:
-                from django.core.cache import cache
-                company_id = item.org_id or ""
-                cat_id = pkg.service.category_id if pkg.service else ""
-                service_slug = pkg.service.slug if pkg.service else "vegetables"
-                for st in ["", "ACTIVE", "DRAFT", "INACTIVE", "ARCHIVED"]:
-                    cache.delete(f"catalog_services_list_{company_id}__{service_slug}_{st}")
-                    cache.delete(f"catalog_services_list_{company_id}_{cat_id}_{service_slug}_{st}")
-                    cache.delete(f"catalog_services_list_{company_id}_{cat_id}__{st}")
-                    cache.delete(f"catalog_services_list_{company_id}___{st}")
+                from service_requests.cache_utils import clear_catalog_cache
+                cat_id = pkg.service.category_id if pkg and pkg.service else ""
+                service_slug = pkg.service.slug if pkg and pkg.service else "vegetables"
+                clear_catalog_cache(service_slug=service_slug, cat_id=cat_id)
             except Exception:
                 pass
 

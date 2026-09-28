@@ -40,14 +40,15 @@ def get_stock_status(product) -> Dict[str, Any]:
         - If stock_item.stock_quantity_grams is None or <= 0 -> in_stock: False, max_quantity: 0 (out of stock)
         - If stock_item.stock_quantity_grams > 0 -> in_stock: True, max_quantity: integer packs available
     """
-    # Use Swathi's multi-fallback resolution: vegetable_stock reverse accessor (added in Swathi's
-    # inventory model), then legacy stock_item, then DB query as last resort.
-    item = getattr(product, "vegetable_stock", None) or getattr(product, "stock_item", None)
-    if not item and hasattr(product, "id") and product.id:
+    # Fast in-memory resolution avoiding N+1 remote DB roundtrips
+    item = None
+    if getattr(product, "stock_item_id", None):
         try:
-            item = getattr(product, "_cached_vegetable", None) or Vegetable.objects.filter(package=product).first()
+            item = getattr(product, "stock_item", None)
         except Exception:
             item = None
+    if not item and hasattr(product, "_cached_vegetable"):
+        item = getattr(product, "_cached_vegetable", None)
     if not item:
         return {"in_stock": True, "max_quantity": None}
 

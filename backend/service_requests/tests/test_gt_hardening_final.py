@@ -22,6 +22,7 @@ django.setup()
 from decimal import Decimal
 from unittest.mock import patch, MagicMock
 from django.utils import timezone
+from service_requests.booking_window import next_bookable_date
 from rest_framework.test import APIRequestFactory
 
 from django.test import TestCase
@@ -50,7 +51,7 @@ class GTHardeningP0CustomerIdentityTests(TestCase):
             "issue_title": "Mini Truck Delivery",
             "description": "Commercial packaged goods",
             "address": "Hosur, Tamil Nadu",
-            "preferred_date": timezone.localdate().isoformat(),
+            "preferred_date": next_bookable_date(service_category="goods_transport_truck").isoformat(),
             "total_amount": "1500.00",
         })
         self.assertFalse(serializer.is_valid())
@@ -65,7 +66,7 @@ class GTHardeningP0CustomerIdentityTests(TestCase):
             "issue_title": "Mini Truck Delivery",
             "description": "Commercial packaged goods",
             "address": "Hosur, Tamil Nadu",
-            "preferred_date": timezone.localdate().isoformat(),
+            "preferred_date": next_bookable_date(service_category="goods_transport_truck").isoformat(),
             "total_amount": "1500.00",
         })
         self.assertFalse(serializer.is_valid())
@@ -80,7 +81,7 @@ class GTHardeningP0CustomerIdentityTests(TestCase):
             "issue_title": "Mini Truck Delivery",
             "description": "Commercial packaged goods",
             "address": "Hosur, Tamil Nadu",
-            "preferred_date": timezone.localdate().isoformat(),
+            "preferred_date": next_bookable_date(service_category="goods_transport_truck").isoformat(),
             "total_amount": "1500.00",
         })
         self.assertFalse(serializer.is_valid())
@@ -95,7 +96,7 @@ class GTHardeningP0CustomerIdentityTests(TestCase):
             "issue_title": "Mini Truck Delivery",
             "description": "Commercial packaged goods",
             "address": "Hosur, Tamil Nadu",
-            "preferred_date": timezone.localdate().isoformat(),
+            "preferred_date": next_bookable_date(service_category="goods_transport_truck").isoformat(),
             "total_amount": "1500.00",
         })
         self.assertFalse(serializer.is_valid())
@@ -110,7 +111,7 @@ class GTHardeningP0CustomerIdentityTests(TestCase):
             "issue_title": "Mini Truck Delivery",
             "description": "Commercial packaged goods",
             "address": "Hosur, Tamil Nadu",
-            "preferred_date": timezone.localdate().isoformat(),
+            "preferred_date": next_bookable_date(service_category="goods_transport_truck").isoformat(),
             "total_amount": "1500.00",
         })
         serializer.is_valid()
@@ -498,7 +499,7 @@ class GTBookingIdempotencyTests(TestCase):
             "longitude": 77.8253,
             "drop_latitude": 12.7500,
             "drop_longitude": 77.8350,
-            "preferred_date": timezone.localdate().isoformat(),
+            "preferred_date": next_bookable_date(service_category="goods_transport_truck").isoformat(),
             "total_amount": "150.00",
         }
 
@@ -586,7 +587,7 @@ class GTBookingIdempotencyTests(TestCase):
             "longitude": 77.8253,
             "drop_latitude": 12.7500,
             "drop_longitude": 77.8350,
-            "preferred_date": timezone.localdate().isoformat(),
+            "preferred_date": next_bookable_date(service_category="goods_transport_truck").isoformat(),
             "total_amount": "150.00",
         }
 

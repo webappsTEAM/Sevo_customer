@@ -185,10 +185,17 @@ export default function PlatformDashboardPage() {
           </p>
         </Link>
 
+<<<<<<< HEAD
         {/* Enter the real Customer UI (not a copy).
             Opens in a new tab so the Super Admin's platform session here is
             undisturbed; the customer page is protected by the same
             AuthProvider session. */}
+=======
+        {/* Enter the real Customer UI (not a copy) with authorized inline
+            Edit Mode — opens in a new tab so the Super Admin's platform session here is
+            undisturbed; the customer page is protected by the same
+            AuthProvider session, and edit affordances render for authorized admins. */}
+>>>>>>> e17da473130eaa586567d64ab59caed963ad2255
         <a
           href="/home"
           target="_blank"

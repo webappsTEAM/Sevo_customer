@@ -20,7 +20,7 @@ The server recomputes the authoritative line items, taxes, fees, and grand total
 
 import logging
 import math
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from service_requests.models import Package, AddOn, PackageStatus, Coupon
 

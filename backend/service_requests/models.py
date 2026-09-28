@@ -76,7 +76,7 @@ def is_mason_category(value) -> bool:
     return str(value).strip().lower() in MASON_CATEGORY_ALIASES
 
 
-def _generate_request_id(category_or_slug=None):
+def _generate_request_id(category_or_slug=None, skip=0):
     """
     Generate category-prefixed unique ID (e.g. HM0001, AC0001, PL0001, EL0001).
     Guarantees global uniqueness across all ServiceRequests.
@@ -97,6 +97,9 @@ def _generate_request_id(category_or_slug=None):
 
     last = ServiceRequest.objects.filter(request_id__startswith=prefix).order_by("-id").first()
     num = (last.id + 1) if last and last.id else (ServiceRequest.objects.count() + 1)
+    # `skip` > 0 only on a retry after a unique-id collision with a concurrent booking: every racing
+    # request would otherwise recompute the very same next number and keep colliding.
+    num += max(0, int(skip))
     req_id = f"{prefix}{str(num).zfill(4)}"
     while ServiceRequest.objects.filter(request_id=req_id).exists():
         num += 1
@@ -711,7 +714,7 @@ class ServiceRequest(models.Model):
         # under concurrent load). Retry with a freshly generated id a bounded
         # number of times inside a savepoint, so one collision doesn't also
         # abort whatever outer transaction the caller may be in.
-        _max_attempts = 5
+        _max_attempts = 8
         for _attempt in range(1, _max_attempts + 1):
             try:
                 with transaction.atomic():  # type: ignore[attr-defined]
@@ -720,7 +723,9 @@ class ServiceRequest(models.Model):
             except IntegrityError:
                 if not _request_id_was_generated or _attempt == _max_attempts:
                     raise
-                self.request_id = _generate_request_id(self.service_category)
+                import random
+                self.request_id = _generate_request_id(
+                    self.service_category, skip=random.randint(1, 5 * _attempt * _attempt))
 
         if is_new or old_status != self.status:
             from service_requests.state_machine import record_transition
@@ -1207,6 +1212,15 @@ class Package(models.Model):
     gt_minimum_fare = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True,
         help_text="Goods & Transport only: floor applied after everything else. Mirrors ServiceTier.minimum_fare.",
+    )
+    gt_gst_rate = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0.00")), MaxValueValidator(Decimal("100.00"))],
+        help_text=(
+            "Goods & Transport only: GST percentage already INCLUDED in the fare (18.00 = 18%). The fare does not "
+            "change; invoices show the GST component. Enter 0 to remove GST; blank leaves the tier unchanged. "
+            "Mirrors ServiceTier.gst_rate."
+        ),
     )
 
     created_at     = models.DateTimeField(auto_now_add=True)
@@ -1829,7 +1843,19 @@ class GTCancellationPolicy(models.Model):
         if not self.is_active or self.fee_mode == self.FeeMode.NONE:
             return Decimal("0")
         if self.applies_only_after_assignment:
+            # ServiceRequest itself carries no assignment timestamp: a driver's acceptance is
+            # recorded on BookingAssignment.accepted_at. (Reading only booking.accepted_at made
+            # "fee once a driver is assigned" permanently inert -- it always resolved to 0.)
             assigned_at = getattr(service_request, "accepted_at", None) or getattr(service_request, "assigned_at", None)
+            if not assigned_at:
+                try:
+                    latest = (
+                        service_request.assignments.filter(accepted_at__isnull=False)
+                        .order_by("-accepted_at").first()
+                    )
+                    assigned_at = latest.accepted_at if latest else None
+                except Exception:
+                    assigned_at = None
             if not assigned_at:
                 return Decimal("0")
             if self.grace_period_seconds:

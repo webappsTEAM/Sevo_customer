@@ -52,7 +52,7 @@ class CustomerInspectionService:
         name_snapshot = config.title if (config and config.title) else (inspection_name or "AC Inspection & Diagnostic Visit")
         if inspection_name and inspection_name != "AC Inspection & Diagnostic Visit":
             name_snapshot = inspection_name
-        qty = max(1, int(quantity or 1))
+        qty = max(1, quantity or 1)
 
         # 3. Create the parent CustomerInspection within current or caller transaction
         customer_inspection = CustomerInspection.objects.create(
