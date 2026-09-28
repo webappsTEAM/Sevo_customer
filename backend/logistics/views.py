@@ -188,7 +188,11 @@ class LogisticsQuoteView(APIView):
         )
 
         data = request.data if isinstance(request.data, dict) else {}
-        tier = ServiceTier.objects.filter(id=data.get("tier_id"), is_active=True).first()
+        try:
+            _tier_id = int(data.get("tier_id"))
+        except (TypeError, ValueError):
+            _tier_id = None      # a non-numeric tier id is "no such tier", not a server error
+        tier = ServiceTier.objects.filter(id=_tier_id, is_active=True).first() if _tier_id is not None else None
         if tier is None:
             return Response(
                 {

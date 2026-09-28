@@ -177,7 +177,7 @@ class GstEndToEndTests(TestCase):
                 "service_category": "goods_transport_two_wheeler", "issue_title": "Delivery", "description": "box",
                 "address": "Pickup, Hosur", "latitude": 12.7409, "longitude": 77.8253,
                 "drop_address": "Drop, Hosur", "drop_latitude": 12.76, "drop_longitude": 77.84,
-                "preferred_date": str(timezone.localdate()), "total_amount": str(total), "payment_method": "COD",
+                "preferred_date": str(timezone.localdate() + timezone.timedelta(days=1)), "total_amount": str(total), "payment_method": "COD",
                 "logistics_tier": self.tier.id,
                 "cart_data": [{"quote_id": qd["quote_id"], "quote_hash": qd["quote_hash"], "price": float(total)}]}, format="json")
         self.assertEqual(r.status_code, 201, r.content)

@@ -2667,6 +2667,8 @@ export function CatalogPackagesPage() {
         gt_surge_multiplier: editing.gt_surge_multiplier !== "" && editing.gt_surge_multiplier != null && !isNaN(Number(editing.gt_surge_multiplier)) ? Number(editing.gt_surge_multiplier) : null,
         gt_minimum_fare: editing.gt_minimum_fare !== "" && editing.gt_minimum_fare != null && !isNaN(Number(editing.gt_minimum_fare)) ? Number(editing.gt_minimum_fare) : null,
         gt_gst_rate: editing.gt_gst_rate !== "" && editing.gt_gst_rate != null && !isNaN(Number(editing.gt_gst_rate)) ? Number(editing.gt_gst_rate) : null,
+        // The server requires a reason whenever a Goods & Transport price changes (pricing audit trail).
+        ...(String(editing.gt_price_change_reason || "").trim() ? { reason: String(editing.gt_price_change_reason).trim() } : {}),
       }
       if (editing.virtualSlug && editing.virtualSlug.startsWith("tab_")) {
         payload.tag = editing.virtualSlug
@@ -2890,8 +2892,14 @@ export function CatalogPackagesPage() {
         name: quickPriceEditing.name,
         description: quickPriceEditing.description || "",
         base_price: Math.round(Number(quickPriceEditing.base_price) || 0),
-        gst_rate: quickPriceEditing.gst_rate !== undefined && quickPriceEditing.gst_rate !== "" ? parseFloat(quickPriceEditing.gst_rate) : 18.0,
-        platform_fee: quickPriceEditing.platform_fee !== undefined && quickPriceEditing.platform_fee !== "" ? parseFloat(quickPriceEditing.platform_fee) : 29.0,
+        ...(quickPriceEditing.category_slug === "goods_transports" && String(quickPriceEditing.price_change_reason || "").trim()
+          ? { reason: String(quickPriceEditing.price_change_reason).trim() } : {}),
+        // Goods & Transport fares are all-inclusive and priced by distance (Edit Package Details), so
+        // the generic GST / platform-fee pair is neither shown nor sent for that pillar.
+        ...(quickPriceEditing.category_slug === "goods_transports" ? {} : {
+          gst_rate: quickPriceEditing.gst_rate !== undefined && quickPriceEditing.gst_rate !== "" ? parseFloat(quickPriceEditing.gst_rate) : 18.0,
+          platform_fee: quickPriceEditing.platform_fee !== undefined && quickPriceEditing.platform_fee !== "" ? parseFloat(quickPriceEditing.platform_fee) : 29.0,
+        }),
         tag: quickPriceEditing.tag || "",
         popular: isPop,
         duration: quickPriceEditing.duration || "",
@@ -3678,9 +3686,20 @@ export function CatalogPackagesPage() {
                                   <div className="inline-flex items-center gap-1 text-sm font-extrabold text-indigo-700 bg-blue-50/80 border border-indigo-200/90 px-2.5 py-1 rounded-lg">
                                     <span>₹{Math.round(Number(pkg.base_price) || 0).toLocaleString("en-IN")}</span>
                                   </div>
-                                  <span className="text-[10px] text-slate-500 font-semibold pl-0.5">
-                                    +{pkg.gst_rate !== undefined ? pkg.gst_rate : 18}% GST • ₹{pkg.platform_fee !== undefined ? pkg.platform_fee : 29} fee
-                                  </span>
+                                  {activeCategoryKey === "goods_transports" ? (
+                                    // Goods & Transport fares are all-inclusive: show the admin-configured GST
+                                    // that is already inside the fare (none configured => nothing to show),
+                                    // never a made-up "+18% GST / fee" line.
+                                    Number(pkg.gt_gst_rate) > 0 && (
+                                      <span className="text-[10px] text-slate-500 font-semibold pl-0.5">
+                                        GST {Number(pkg.gt_gst_rate)}% included
+                                      </span>
+                                    )
+                                  ) : (
+                                    <span className="text-[10px] text-slate-500 font-semibold pl-0.5">
+                                      +{pkg.gst_rate !== undefined ? pkg.gst_rate : 18}% GST • ₹{pkg.platform_fee !== undefined ? pkg.platform_fee : 29} fee
+                                    </span>
+                                  )}
                                 </div>
                               </td>
 
@@ -6001,6 +6020,21 @@ export function CatalogPackagesPage() {
                   })()}
                 </div>
 
+                {quickPriceEditing.category_slug === "goods_transports" ? (
+                  <div className="space-y-3">
+                  <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                    Goods &amp; Transport fares are priced by distance and are all-inclusive. Set the fare components
+                    and any GST included in the fare under <span className="font-bold">Edit Package Details &rarr; Goods &amp; Transport Distance Pricing</span>.
+                  </p>
+                  <Input
+                    label="Reason for price change (required if the starting fare changes -- kept in the pricing audit trail)"
+                    placeholder="e.g. Fuel price revision"
+                    value={quickPriceEditing.price_change_reason ?? ""}
+                    onChange={(e) => setQuickPriceEditing({ ...quickPriceEditing, price_change_reason: e.target.value })}
+                  />
+                  </div>
+                ) : (
+                  <>
                 {/* GST & Platform Fee Row */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input
@@ -6044,6 +6078,8 @@ export function CatalogPackagesPage() {
                     </span>
                   </div>
                 </div>
+                  </>
+                )}
 
                 <div>
                   <TextArea
@@ -6828,6 +6864,13 @@ export function CatalogPackagesPage() {
                   placeholder="e.g. 18.00"
                   value={editing.gt_gst_rate ?? ""}
                   onChange={(e) => setEditing({ ...editing, gt_gst_rate: e.target.value })}
+                />
+
+                <Input
+                  label="Reason for price change (required when any fare, GST or starting price changes -- kept in the pricing audit trail)"
+                  placeholder="e.g. Fuel price revision"
+                  value={editing.gt_price_change_reason ?? ""}
+                  onChange={(e) => setEditing({ ...editing, gt_price_change_reason: e.target.value })}
                 />
               </div>
             )}

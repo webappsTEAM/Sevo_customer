@@ -514,6 +514,13 @@ CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 # Inline (eager) execution only by default for local dev and tests; production runs the
 # sevo-celery worker, so tasks must be queued. Set CELERY_TASK_ALWAYS_EAGER explicitly to override.
 CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "True" if (DEBUG or IS_TESTING) else "False").strip().lower() in ("true", "1", "yes")
+# Fail fast when the broker / result store is unreachable. Without these, task.delay() inside a booking
+# request blocked ~19 s (kombu publish retries + result-backend reconnects) before the caller's
+# direct-dispatch fallback could run -- a Redis outage turned every booking POST into a 20 s hang.
+CELERY_TASK_PUBLISH_RETRY_POLICY = {"max_retries": 1, "interval_start": 0, "interval_step": 0.2, "interval_max": 0.5}
+CELERY_BROKER_TRANSPORT_OPTIONS = {"socket_connect_timeout": 2, "socket_timeout": 5, "retry_on_timeout": False}
+CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {"retry_policy": {"max_retries": 1, "interval_start": 0, "interval_step": 0.2, "interval_max": 0.5}, "socket_connect_timeout": 2}
+CELERY_BROKER_CONNECTION_TIMEOUT = 2
 
 # ── Performance & Application Logging Configuration ──────────────────────────
 LOGGING = {

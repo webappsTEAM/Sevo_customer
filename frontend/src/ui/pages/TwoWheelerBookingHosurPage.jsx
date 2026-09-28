@@ -535,10 +535,16 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
   const [serverSlotsAvailability, setServerSlotsAvailability] = useState(null)
   const [serverSlotGroups, setServerSlotGroups] = useState(null)
   const [serverDates, setServerDates] = useState([])
+  const [serverCutoffLabel, setServerCutoffLabel] = useState("")
+  // The server is the source of truth for the same-day cut-off: its upcoming_dates start at the next
+  // bookable date, so a first date that is not "today" means today's window has already closed.
+  const sameDayClosed = serverDates.length > 0 && !serverDates[0].is_today
   const [slotsLoading, setSlotsLoading] = useState(false)
 
   useEffect(() => {
-    const dStr = selectedDate?.fullDate ? selectedDate.fullDate.toISOString().split("T")[0] : ""
+    const dStr = selectedDate?.fullDate
+      ? `${selectedDate.fullDate.getFullYear()}-${String(selectedDate.fullDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.fullDate.getDate()).padStart(2, "0")}`
+      : ""
     setSlotsLoading(true)
     fetchLogisticsSlots({ date: dStr, category: "goods_transport_two_wheeler", city: currentCitySlug })
       .then(res => {
@@ -553,6 +559,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
               is_today: d.is_today,
             }))
             setServerDates(mappedDates)
+            setServerCutoffLabel(res.cutoff_label || "")
             if (!selectedDate) {
               setSelectedDate(mappedDates[0])
             }
@@ -1578,6 +1585,10 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
   const handleBookNow = () => {
 
     // Instant Booking: sets bookingMode to IMMEDIATE, clears any stale slot/date, moves to Step 4 Summary
+    if (sameDayClosed) {
+      setBookingError(`Same-day booking closed at ${serverCutoffLabel || "the daily cut-off"}. Please schedule your booking for the next available date.`)
+      return
+    }
     if (!pickup || !pickup.trim()) {
       setBookingError("Please enter your pickup location.")
       const pickupEl = document.getElementById("pickup-input") || document.getElementById("estimate-bar")
@@ -2984,7 +2995,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
                   type="button"
                   onClick={handleBookNow}
 
-                  disabled={bookingSubmitting || quoteLoading || serverQuote?.total == null || isSelectedVehicleOverCapacity}
+                  disabled={bookingSubmitting || quoteLoading || serverQuote?.total == null || isSelectedVehicleOverCapacity || sameDayClosed}
                   title={
                     isSelectedVehicleOverCapacity
                       ? "Cargo exceeds Two-Wheeler limits. Please book a Mini Truck."
@@ -3005,7 +3016,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
                     <span>Capacity Exceeded — Book Mini Truck</span>
 
                   ) : (
-                    <span>Book Now</span>
+                    <span>{sameDayClosed ? `Same-day closed (${serverCutoffLabel || "cut-off"}) — schedule below` : "Book Now"}</span>
                   )}
                 </button>
 

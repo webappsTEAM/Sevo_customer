@@ -134,13 +134,22 @@ export function CustomerTrackingStatusCard({
     dynamicSub = "Reached delivery site — unloading items now"
     dynamicTheme = "blue"
   } else if (logisticsLeg === "EN_ROUTE_DROP" || logisticsLeg === "IN_TRANSIT") {
-    dynamicTag = "EN ROUTE TO DESTINATION"
-    dynamicTitle = `${techName || "Driver"} is en route to drop destination`
+    // Multi-stop trip: the driver's next target may be an intermediate stop, not the final drop
+    // (the tracking payload's `destination` says which -- see _build_tracking_payload).
+    const nextIsStop = String(data?.destination?.stop_type || "").toUpperCase() === "WAYPOINT"
+    const stopNumber = nextIsStop
+      ? stops.filter((s) => String(s.stop_type || "").toUpperCase() === "WAYPOINT").findIndex((s) => s.sequence === data.destination.stop_sequence) + 1
+      : 0
+    const targetLabel = nextIsStop ? (stopNumber > 0 ? `Stop ${stopNumber}` : "next stop") : "drop"
+    dynamicTag = nextIsStop ? `EN ROUTE TO ${targetLabel.toUpperCase()}` : "EN ROUTE TO DESTINATION"
+    dynamicTitle = nextIsStop
+      ? `${techName || "Driver"} is heading to ${targetLabel}`
+      : `${techName || "Driver"} is en route to drop destination`
     dynamicSub = (
       <>
         {cleanDist && <strong>{cleanDist}</strong>}
         {cleanDist && cleanEta && <span className="ltp-ftc-sep">·</span>}
-        {cleanEta ? <strong>~{cleanEta} ETA to drop</strong> : <span>In transit to destination…</span>}
+        {cleanEta ? <strong>~{cleanEta} ETA to {targetLabel}</strong> : <span>In transit to {nextIsStop ? targetLabel : "destination"}…</span>}
       </>
     )
     dynamicTheme = "orange"

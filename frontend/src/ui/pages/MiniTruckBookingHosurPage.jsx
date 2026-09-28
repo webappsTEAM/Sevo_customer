@@ -565,6 +565,10 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
   const [stepperStep, setStepperStep] = useState(3)
   const [selectedDate, setSelectedDate] = useState(null)
   const [serverDates, setServerDates] = useState([])
+  const [serverCutoffLabel, setServerCutoffLabel] = useState("")
+  // The server is the source of truth for the same-day cut-off: its upcoming_dates start at the next
+  // bookable date, so a first date that is not "today" means today's window has already closed.
+  const sameDayClosed = serverDates.length > 0 && !serverDates[0].is_today
   const [selectedSlot, setSelectedSlot] = useState(null)
   const [expandedSlotCategory, setExpandedSlotCategory] = useState("Morning")
 
@@ -841,6 +845,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
               is_today: d.is_today,
             }))
             setServerDates(mappedDates)
+            setServerCutoffLabel(res.cutoff_label || "")
             if (!selectedDate) {
               setSelectedDate(mappedDates[0])
             }
@@ -1952,6 +1957,10 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
   const handleBookNow = () => {
 
     // Instant Booking: sets bookingMode to IMMEDIATE, clears any stale slot/date, moves to Step 4 Summary
+    if (sameDayClosed) {
+      setBookingError(`Same-day booking closed at ${serverCutoffLabel || "the daily cut-off"}. Please schedule your booking for the next available date.`)
+      return
+    }
     if (!pickup || !pickup.trim()) {
       setBookingError("Please enter your pickup location.")
       const pickupEl = document.getElementById("pickup-input") || document.getElementById("estimate-bar")
@@ -3978,7 +3987,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                   <button
                     type="button"
                     onClick={handleBookNow}
-                    disabled={bookingSubmitting || quoteLoading || serverQuote?.total == null || isSelectedVehicleOverCapacity}
+                    disabled={bookingSubmitting || quoteLoading || serverQuote?.total == null || isSelectedVehicleOverCapacity || sameDayClosed}
                     title={
                       isSelectedVehicleOverCapacity
                         ? "Cargo exceeds selected vehicle capacity. Please select a larger vehicle."
@@ -3999,7 +4008,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                       <span>Capacity Exceeded — Pick Larger Vehicle</span>
 
                     ) : (
-                      <span>Book Now</span>
+                      <span>{sameDayClosed ? `Same-day closed (${serverCutoffLabel || "cut-off"}) — schedule below` : "Book Now"}</span>
                     )}
                   </button>
 

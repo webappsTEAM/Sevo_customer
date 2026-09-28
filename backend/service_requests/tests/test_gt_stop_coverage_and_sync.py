@@ -17,6 +17,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
+from service_requests.booking_window import next_bookable_date
 from rest_framework.test import APIClient
 
 from companies.models import Company
@@ -151,7 +152,7 @@ class StopFlowBase(TestCase):
                 "service_category": self.slug, "issue_title": "Delivery", "description": "boxes",
                 "address": "Pickup, Hosur", "latitude": PICKUP["lat"], "longitude": PICKUP["lng"],
                 "drop_address": "Drop, Hosur", "drop_latitude": DROP["lat"], "drop_longitude": DROP["lng"],
-                "preferred_date": str(timezone.localdate()), "total_amount": (quote["total"] if quote else "1.00"), "payment_method": "COD",
+                "preferred_date": str(next_bookable_date(service_category="goods_transport_truck")), "total_amount": (quote["total"] if quote else "1.00"), "payment_method": "COD",
                 "logistics_tier": self.tier.id, "stops": payload_stops,
                 **({"cart_data": [{"quote_id": quote["quote_id"], "quote_hash": quote["quote_hash"],
                                    "expires_at": quote["expires_at"], "stops": payload_stops}]} if quote else {}),

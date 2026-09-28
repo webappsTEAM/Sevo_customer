@@ -1764,14 +1764,22 @@ def _jsonable_fare_breakdown(breakdown):
     binary floating point) so the stored quote is exact and safely serialized.
     """
     if breakdown is None:
-        return {}
-    if isinstance(breakdown, Decimal):
-        return str(breakdown)
-    if isinstance(breakdown, dict):
-        return {k: _jsonable_fare_breakdown(v) for k, v in breakdown.items()}
-    if isinstance(breakdown, (list, tuple)):
-        return [_jsonable_fare_breakdown(v) for v in breakdown]
-    return breakdown
+        return {}          # no breakdown at all -> an empty one (top level only)
+
+    def _convert(value):
+        # A None INSIDE the breakdown (e.g. no minimum fare, no GST rate, unknown distance source)
+        # must stay null -- turning it into {} handed clients an object where they expect a scalar.
+        if value is None:
+            return None
+        if isinstance(value, Decimal):
+            return str(value)
+        if isinstance(value, dict):
+            return {k: _convert(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [_convert(v) for v in value]
+        return value
+
+    return _convert(breakdown)
 
 
 def _haversine_meters(lat1, lon1, lat2, lon2):
@@ -1836,6 +1844,8 @@ def _build_tracking_payload(sr, has_full_access, include_delivery_otp=False):
     dest_lat = float(sr.latitude) if sr.latitude is not None else None
     dest_lng = float(sr.longitude) if sr.longitude is not None else None
     dest_address = sr.address or ""
+    dest_stop_seq = None
+    dest_stop_type = ""
 
     # GT-D-02: sr.latitude/sr.longitude are the PICKUP point (see the
     # field comment above sr.address). Bookings that used TripStop
@@ -1866,8 +1876,21 @@ def _build_tracking_payload(sr, has_full_access, include_delivery_otp=False):
         if stops:
             target_stop = None
             if sr.logistics_leg in post_pickup_legs:
-                drop_stops = [s for s in stops if s.stop_type == TripStop.StopType.DROP]
-                target_stop = drop_stops[-1] if drop_stops else stops[-1]
+                # Heading out after loading, the NEXT unfinished stop is the target -- Pickup ->
+                # Stop 1..n -> Destination -- not the final drop. Once at/after the drop (unloading,
+                # delivered, ...) the drop is always the target.
+                if sr.logistics_leg in (
+                    ServiceRequest.LogisticsLeg.EN_ROUTE_DROP,
+                    ServiceRequest.LogisticsLeg.IN_TRANSIT,
+                ):
+                    pending = [
+                        s for s in stops
+                        if s.stop_type != TripStop.StopType.PICKUP and s.completed_at is None
+                    ]
+                    target_stop = pending[0] if pending else None
+                if target_stop is None:
+                    drop_stops = [s for s in stops if s.stop_type == TripStop.StopType.DROP]
+                    target_stop = drop_stops[-1] if drop_stops else stops[-1]
             else:
                 pickup_stops = [s for s in stops if s.stop_type == TripStop.StopType.PICKUP]
                 target_stop = pickup_stops[0] if pickup_stops else stops[0]
@@ -1875,6 +1898,8 @@ def _build_tracking_payload(sr, has_full_access, include_delivery_otp=False):
                 dest_lat = float(target_stop.latitude)
                 dest_lng = float(target_stop.longitude)
                 dest_address = target_stop.address or dest_address
+                dest_stop_seq = target_stop.sequence
+                dest_stop_type = target_stop.stop_type
         elif (
             sr.logistics_leg in post_pickup_legs
             and sr.drop_latitude is not None
@@ -2293,6 +2318,9 @@ def _build_tracking_payload(sr, has_full_access, include_delivery_otp=False):
             "address": dest_address,
             "latitude": dest_lat,
             "longitude": dest_lng,
+            # Which stop of a multi-stop trip this is (None for single pickup/drop bookings).
+            "stop_sequence": dest_stop_seq,
+            "stop_type": dest_stop_type,
         },
         "technician": technician_data,
         "technician_name": tech_name if is_accepted else "",

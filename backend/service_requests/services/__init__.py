@@ -1114,7 +1114,9 @@ def set_trip_stops(booking, customer, stops):
     from .address_service import AddressService
 
     for s in stops:
-        addr = (s.get("address") or "").strip()
+        if not isinstance(s, dict):
+            raise ValueError("Every stop must be an object with an address and coordinates.")
+        addr = str(s.get("address") or "").strip()
         if not addr:
             raise ValueError("Every stop requires an address.")
         lat = s.get("latitude")

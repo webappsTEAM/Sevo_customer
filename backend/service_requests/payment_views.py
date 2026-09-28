@@ -522,6 +522,123 @@ class AdminPaymentUpdateView(APIView):
 
 # ─── Invoice PDF Generation ───────────────────────────────────────────────────
 
+_INVOICE_FONT = {}
+
+
+def _invoice_unicode_font():
+    """
+    A Unicode TrueType font for customer-entered text that the built-in Helvetica cannot draw
+    (Tamil, Hindi, ... names and addresses used to print as black boxes). Configure with the
+    INVOICE_UNICODE_FONT setting/env (path to a .ttf); otherwise common system fonts are tried.
+    Returns the registered font name or None. Note: reportlab draws glyph by glyph, so complex
+    scripts are not shaped -- use a font/pipeline with shaping if exact Indic typography is needed.
+    """
+    if "name" in _INVOICE_FONT:
+        return _INVOICE_FONT["name"]
+    import os
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    candidates = [
+        getattr(settings, "INVOICE_UNICODE_FONT", "") or "",
+        os.getenv("INVOICE_UNICODE_FONT", ""),
+        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "C:\\Windows\\Fonts\\Nirmala.ttf",
+        "C:\\Windows\\Fonts\\arialuni.ttf",
+    ]
+    for path in candidates:
+        if path and os.path.exists(path):
+            try:
+                pdfmetrics.registerFont(TTFont("SevoInvoiceUnicode", path))
+                _INVOICE_FONT["name"] = "SevoInvoiceUnicode"
+                return "SevoInvoiceUnicode"
+            except Exception:
+                continue
+    _INVOICE_FONT["name"] = None
+    return None
+
+
+def _pdf_text(c, text, size, bold=False):
+    """Set the right font on canvas `c` for `text` and return the (sanitised) text to draw."""
+    text = "".join(ch for ch in str(text or "") if ch.isprintable())
+    base = "Helvetica-Bold" if bold else "Helvetica"
+    try:
+        text.encode("cp1252")
+        c.setFont(base, size)
+        return text
+    except UnicodeEncodeError:
+        pass
+    uni = _invoice_unicode_font()
+    if uni:
+        c.setFont(uni, size)
+        return text
+    c.setFont(base, size)
+    return text.encode("cp1252", "replace").decode("cp1252")   # readable "?" instead of black boxes
+
+
+def _shaped_font_paths():
+    import os
+    cfg = [getattr(settings, "INVOICE_UNICODE_FONT", "") or "", os.getenv("INVOICE_UNICODE_FONT", "")]
+    dirs = ["/usr/share/fonts", "/usr/local/share/fonts", "C:\\Windows\\Fonts", os.path.expanduser("~/.fonts")]
+    names = ["Nirmala.ttf", "NotoSansTamil", "NotoSansDevanagari", "NotoSans-Regular", "FreeSans.ttf", "DejaVuSans.ttf"]
+    found = [p for p in cfg if p and os.path.exists(p)]
+    for n in names:
+        for d in dirs:
+            for root, _dirs, files in os.walk(d) if os.path.isdir(d) else []:
+                for f in files:
+                    if f.startswith(n) and f.lower().endswith(".ttf") and "Bold" not in f:
+                        found.append(os.path.join(root, f))
+    return found
+
+
+def _shaped_image(text, size):
+    """Render `text` with a shaping engine (Pillow+raqm) so Indic conjuncts/vowel signs are correct.
+    Returns (PNG bytes, width_pt, height_pt) or None when no shaper/font that covers the text exists."""
+    try:
+        import io
+        from PIL import Image, ImageDraw, ImageFont, features
+        if not features.check("raqm"):
+            return None
+        scale = 4
+        for path in _shaped_font_paths():
+            try:
+                font = ImageFont.truetype(path, int(size * scale), layout_engine=ImageFont.Layout.RAQM)
+                # every character must be covered by this font (no .notdef boxes)
+                notdef = bytes(font.getmask("\U0010FFFF"))
+                if any(ch != " " and bytes(font.getmask(ch)) == notdef for ch in set(text)):
+                    continue
+                l, t, r, b = font.getbbox(text)
+                img = Image.new("RGBA", (max(1, r + 4), max(1, b - min(t, 0) + 4)), (255, 255, 255, 0))
+                ImageDraw.Draw(img).text((0, -min(t, 0)), text, font=font, fill=(0, 0, 0, 255))
+                buf = io.BytesIO()
+                img.save(buf, "PNG")
+                return buf.getvalue(), img.width / scale, img.height / scale
+            except Exception:
+                continue
+    except Exception:
+        return None
+    return None
+
+
+def _draw_text(c, x, y, text, size, bold=False):
+    """drawString that also handles Tamil/Hindi/etc.: shaped image when a shaper is available,
+    else the glyph-by-glyph Unicode font, else '?' (never black boxes)."""
+    clean = "".join(ch for ch in str(text or "") if ch.isprintable())
+    try:
+        clean.encode("cp1252")
+    except UnicodeEncodeError:
+        shaped = _shaped_image(clean, size)
+        if shaped:
+            from reportlab.lib.utils import ImageReader
+            import io
+            png, w, h = shaped
+            c.drawImage(ImageReader(io.BytesIO(png)), x, y - size * 0.25, width=w, height=h, mask="auto")
+            return
+    c.drawString(x, y, _pdf_text(c, clean, size, bold))
+
+
 class InvoiceDownloadView(APIView):
     """
     GET /api/booking/<id>/invoice/ or GET /api/settings/invoices/download/?request_id=<id>
@@ -630,14 +747,14 @@ class InvoiceDownloadView(APIView):
         c.drawString(35, y + 48, "BILLED TO")
         c.setFillColor(black)
         c.setFont("Helvetica-Bold", 11)
-        c.drawString(35, y + 30, sr.customer_name)
+        _draw_text(c, 35, y + 30, sr.customer_name, 11, bold=True)
         c.setFont("Helvetica", 10)
         c.drawString(35, y + 14, sr.phone)
         if sr.email:
-            c.drawString(35, y - 2, sr.email)
+            _draw_text(c, 35, y - 2, sr.email, 10)
         c.setFont("Helvetica", 9)
         addr = sr.address[:80] + "..." if len(sr.address) > 80 else sr.address
-        c.drawString(35, y - 18, addr)
+        _draw_text(c, 35, y - 18, addr, 9)
 
         # Line items
         y -= 62
@@ -729,7 +846,7 @@ class InvoiceDownloadView(APIView):
                 c.rect(25, y - 4, W - 50, 22, fill=1, stroke=0)
                 c.setFillColor(black)
                 c.setFont("Helvetica", 10)
-                c.drawString(35, y + 4, name[:48])
+                _draw_text(c, 35, y + 4, name[:48], 10)
                 c.drawString(320, y + 4, "1")
                 c.drawRightString(W - 35, y + 4, f"Rs. {amt:,.2f}")
             base_total = float(gst_row[2]) if gst_row else float(total_q)
@@ -748,7 +865,7 @@ class InvoiceDownloadView(APIView):
                 for n, a in enumerate(route):
                     y -= 13
                     label = "Pickup" if n == 0 else ("Drop" if n == len(route) - 1 else f"Stop {n}")
-                    c.drawString(45, y + 4, f"{label}: {a[:90]}")
+                    _draw_text(c, 45, y + 4, f"{label}: {a[:90]}", 9)
         elif cart:
             for i, item in enumerate(cart):
                 y -= 22
@@ -758,7 +875,7 @@ class InvoiceDownloadView(APIView):
                 c.setFillColor(black)
                 c.setFont("Helvetica", 10)
                 name = str(item.get("name", "Service"))[:40]
-                c.drawString(35, y + 4, name)
+                _draw_text(c, 35, y + 4, name, 10)
                 qty = item.get("quantity", 1)
                 c.drawString(320, y + 4, str(qty))
                 price = float(item.get("price", 0))
@@ -769,7 +886,7 @@ class InvoiceDownloadView(APIView):
             base_total = float(getattr(sr, "total_amount", 0) or 599.0)
             y -= 22
             c.setFont("Helvetica", 10)
-            c.drawString(35, y + 4, sr.issue_title or "Standard Service Package")
+            _draw_text(c, 35, y + 4, sr.issue_title or "Standard Service Package", 10)
             c.drawString(320, y + 4, "1")
             c.drawString(370, y + 4, f"Rs. {base_total:,.0f}")
             c.drawRightString(W - 35, y + 4, f"Rs. {base_total:,.0f}")
@@ -796,7 +913,7 @@ class InvoiceDownloadView(APIView):
             c.setFillColor(HexColor("#B45309"))
             c.setFont("Helvetica-Bold", 9)
             reason_clean = ext_reason[:42] if ext_reason else "Approved Extension"
-            c.drawString(35, y + 4, f"Approved Extension: {reason_clean}")
+            _draw_text(c, 35, y + 4, f"Approved Extension: {reason_clean}", 9, bold=True)
             c.drawString(320, y + 4, "1")
             c.drawString(370, y + 4, f"Rs. {ext_amount:,.0f}")
             c.drawRightString(W - 35, y + 4, f"Rs. {ext_amount:,.0f}")

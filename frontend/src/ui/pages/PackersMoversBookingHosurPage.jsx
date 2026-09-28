@@ -18,6 +18,7 @@ import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
 import { BookingRescheduleModal } from "../components/BookingRescheduleModal.jsx"
 import { MapPickerScreen } from "../components/AddressPicker/MapPickerScreen.jsx"
+import { useLegalConfig } from "./legal/legalConfig.js"
 import { MultiStopRouteManager, findUnpinnedStop } from "../../components/logistics/MultiStopRouteManager.jsx"
 import { LogisticsFooter } from "../components/LogisticsFooter.jsx"
 import {
@@ -654,6 +655,9 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
     } catch (_) { return {} }
   }
   const savedForm = getSavedForm()
+  // Support line comes from the admin-managed legal/contact config (same source as Help & Support).
+  const { config: supportConfig } = useLegalConfig()
+  const supportTel = String(supportConfig?.support_phone || "").replace(/[^\d+]/g, "")
 
   // Form State
   const [pickup, setPickup] = useState(() => savedForm.pickup || "")
@@ -3132,9 +3136,11 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                         </button>
                         <h2 className="text-xl font-bold text-slate-800">Add your Inventory</h2>
                       </div>
-                      <button className="text-[11px] font-bold text-[#0B8860] border border-[#0B8860]/30 bg-[#0B8860]/5 px-3 py-1.5 rounded-full flex items-center gap-1.5 hover:bg-[#0B8860]/10 transition-colors cursor-pointer">
-                        <Phone className="w-3.5 h-3.5" /> Get a call
-                      </button>
+                      {supportTel && (
+                        <a href={`tel:${supportTel}`} data-testid="get-a-call" className="text-[11px] font-bold text-[#0B8860] border border-[#0B8860]/30 bg-[#0B8860]/5 px-3 py-1.5 rounded-full flex items-center gap-1.5 hover:bg-[#0B8860]/10 transition-colors cursor-pointer">
+                          <Phone className="w-3.5 h-3.5" /> Get a call
+                        </a>
+                      )}
                     </div>
 
                     {/* Search Bar */}
@@ -3391,21 +3397,21 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
 
                     {/* Step 3 Footer */}
                     <div className="absolute bottom-0 left-0 right-0 bg-white shadow-[0_-8px_20px_rgba(0,0,0,0.04)]">
-                      {/* Carton Recommendation Banner */}
-                      <div className="bg-[#F8F9FA] px-6 py-3 border-t border-slate-100 flex items-start gap-2">
-                        <span className="text-lg leading-none">📦</span>
-                        {(() => {
-                          const cartonCat = pmCategories.find(c => (c.slug && c.slug.includes("carton")) || (c.name && c.name.toLowerCase().includes("carton")))
-                          const cartonItems = cartonCat?.items || []
-                          const addedCartons = cartonItems.reduce((acc, it) => acc + (inventoryItems[it.id] || 0), 0);
-                          return (
+                      {/* Carton pointer: only when the admin has a cartons category; nothing is invented or auto-added */}
+                      {(() => {
+                        const cartonCat = pmCategories.find(c => (c.slug && c.slug.includes("carton")) || (c.name && c.name.toLowerCase().includes("carton")))
+                        if (!cartonCat) return null
+                        const addedCartons = (cartonCat.items || []).reduce((acc, it) => acc + (inventoryItems[it.id] || 0), 0)
+                        return (
+                          <div className="bg-[#F8F9FA] px-6 py-3 border-t border-slate-100 flex items-start gap-2">
+                            <span className="text-lg leading-none">📦</span>
                             <p className="text-[11px] text-slate-600 leading-relaxed pt-0.5">
-                              You've added {addedCartons} carton{addedCartons !== 1 ? 's' : ''}. Based on your inventory, we estimate you'll need 3 for small items like books and clothes.
-                              <span className="text-[#0B8860] font-bold hover:underline cursor-pointer ml-1 inline-block" onClick={() => { setStepperStep(2); setActiveCategory("Cartons") }}>Add 3 Cartons</span>
+                              You've added {addedCartons} carton{addedCartons !== 1 ? 's' : ''}. Small items like books and clothes usually go in cartons.
+                              <span role="button" className="text-[#0B8860] font-bold hover:underline cursor-pointer ml-1 inline-block" onClick={() => { setStepperStep(2); setActiveCategory(cartonCat.name) }}>Browse cartons</span>
                             </p>
-                          );
-                        })()}
-                      </div>
+                          </div>
+                        )
+                      })()}
 
                       <div className="px-6 py-4 border-t border-slate-100">
                         <button
@@ -3429,9 +3435,11 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                         </button>
                         <h2 className="text-xl font-bold text-slate-800">Booking Summary</h2>
                       </div>
-                      <button className="text-[11px] font-bold text-[#0B8860] border border-[#0B8860]/30 bg-[#0B8860]/5 px-3 py-1.5 rounded-full flex items-center gap-1.5 hover:bg-[#0B8860]/10 transition-colors cursor-pointer">
-                        <Phone className="w-3.5 h-3.5" /> Get a call
-                      </button>
+                      {supportTel && (
+                        <a href={`tel:${supportTel}`} data-testid="get-a-call" className="text-[11px] font-bold text-[#0B8860] border border-[#0B8860]/30 bg-[#0B8860]/5 px-3 py-1.5 rounded-full flex items-center gap-1.5 hover:bg-[#0B8860]/10 transition-colors cursor-pointer">
+                          <Phone className="w-3.5 h-3.5" /> Get a call
+                        </a>
+                      )}
                     </div>
 
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6 pb-36">

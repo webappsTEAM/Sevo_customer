@@ -20,6 +20,11 @@ const TIME_SLOTS = [
   { id: "06:00 PM - 07:00 PM", label: "06:00 PM – 07:00 PM", period: "Night" },
 ]
 
+// Local calendar date as YYYY-MM-DD. toISOString() converts to UTC first, which shifts the date back a
+// day for anyone ahead of UTC (all of India between 00:00 and 05:30) and for local-midnight dates.
+const localISODate = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+
 export function BookingRescheduleModal({
   bookingId,
   currentDate = "",
@@ -31,7 +36,7 @@ export function BookingRescheduleModal({
     // Default to tomorrow
     const d = new Date()
     d.setDate(d.getDate() + 1)
-    return d.toISOString().split("T")[0]
+    return localISODate(d)
   })
   const [selectedSlot, setSelectedSlot] = useState(currentTimeSlot || "09:00 AM - 10:00 AM")
   const [selectedReason, setSelectedReason] = useState(PRESET_REASONS[0].id)
@@ -47,7 +52,7 @@ export function BookingRescheduleModal({
     for (let i = 0; i < 7; i++) {
       const d = new Date(today)
       d.setDate(today.getDate() + i)
-      const dateStr = d.toISOString().split("T")[0]
+      const dateStr = localISODate(d)
       const dayName = i === 0 ? "Today" : i === 1 ? "Tomorrow" : d.toLocaleDateString("en-US", { weekday: "short" })
       const formatted = d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
       days.push({ dateStr, dayName, formatted })
@@ -209,7 +214,7 @@ export function BookingRescheduleModal({
               <input
                 type="date"
                 value={selectedDate}
-                min={new Date().toISOString().split("T")[0]}
+                min={localISODate(new Date())}
                 onChange={(e) => setSelectedDate(e.target.value)}
                 className="flex-1 px-3 py-1.5 text-xs font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500"
               />

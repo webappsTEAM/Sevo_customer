@@ -147,8 +147,11 @@ def _validate_zone_geometry(zone_type, center_lat, center_lng, radius_meters, po
             r = float(radius_meters)
         except (TypeError, ValueError):
             raise _ZoneInputError("radius_meters must be a number.")
-        if r <= 0:
-            raise _ZoneInputError("Radius must be greater than zero.")
+        import math
+        if not math.isfinite(r) or r <= 0:
+            raise _ZoneInputError("Radius must be a finite number greater than zero.")
+        if r > 20_037_500:            # half the Earth's circumference: anything larger is not a place
+            raise _ZoneInputError("Radius is larger than the Earth; enter a realistic coverage radius in metres.")
         return
     ring = []
     if isinstance(polygon, dict) and isinstance(polygon.get("coordinates"), list) and polygon["coordinates"]:
