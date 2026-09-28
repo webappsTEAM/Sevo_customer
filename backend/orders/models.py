@@ -437,13 +437,19 @@ class MarketplaceOrder(models.Model):
 
 class MarketplaceOrderItem(models.Model):
     """
-    Line item for MarketplaceOrder snapshotting product details at checkout time.
+    Line item for MarketplaceOrder snapshotting product or basket details at checkout time.
+    Exactly one of seller_product_id or basket_id must be set per item.
     """
 
     order = models.ForeignKey(MarketplaceOrder, on_delete=models.CASCADE, related_name="items")
 
-    seller_product_id = models.IntegerField(db_index=True)
-    product_title = models.CharField(max_length=255)
+    # Individual product (set for regular product items; null for basket items)
+    seller_product_id = models.IntegerField(null=True, blank=True, db_index=True)
+    # Basket/combo-offer (set for basket items; null for regular product items)
+    basket_id = models.IntegerField(null=True, blank=True, db_index=True)
+    basket_title = models.CharField(max_length=255, blank=True, default="")
+
+    product_title = models.CharField(max_length=255, blank=True, default="")
     product_sku = models.CharField(max_length=100, blank=True, default="")
     product_brand = models.CharField(max_length=150, blank=True, default="")
     unit = models.CharField(max_length=50, blank=True, default="")
@@ -463,7 +469,8 @@ class MarketplaceOrderItem(models.Model):
         ordering = ["id"]
 
     def __str__(self):
-        return f"MarketplaceOrderItem #{self.id} ({self.product_title}) of {self.order.order_number}"
+        label = self.basket_title or self.product_title or f"Item #{self.id}"
+        return f"MarketplaceOrderItem #{self.id} ({label}) of {self.order.order_number}"
 
 
 class MarketplaceOrderOutbox(models.Model):
@@ -530,5 +537,51 @@ class MarketplaceOrderEvent(models.Model):
 
     def __str__(self):
         return f"Event {self.event_id} ({self.event_type}: {self.vendor_status} -> {self.mapped_status}) on {self.order.order_number}"
+
+
+class MarketplacePaymentIntent(models.Model):
+    """
+    Tracks Razorpay payment intents created for Marketplace checkout.
+    Persists the authoritative cart snapshot and payload before payment collection.
+    Vendor order intake and stock decrement only happen after verified payment confirmation.
+    """
+
+    class Status(models.TextChoices):
+        CREATED = "CREATED", "Created"
+        PAID = "PAID", "Paid"
+        FAILED = "FAILED", "Failed"
+        EXPIRED = "EXPIRED", "Expired"
+
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="marketplace_payment_intents",
+        help_text="Customer who initiated this payment intent.",
+    )
+    cart = models.ForeignKey(
+        "carts.Cart",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="payment_intents",
+        help_text="The marketplace cart this intent was created against.",
+    )
+    razorpay_order_id = models.CharField(max_length=100, unique=True, db_index=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, help_text="Authoritative amount in INR.")
+    currency = models.CharField(max_length=10, default="INR")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.CREATED, db_index=True)
+    checkout_payload = models.JSONField(default=dict, blank=True, help_text="Snapshot of validated checkout fields.")
+    razorpay_payment_id = models.CharField(max_length=100, blank=True, default="")
+    razorpay_signature = models.CharField(max_length=255, blank=True, default="")
+    idempotency_key = models.CharField(max_length=128, blank=True, default="", db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "orders_marketplacepaymentintent"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"PaymentIntent {self.razorpay_order_id} ({self.status}) - ₹{self.amount}"
 
 

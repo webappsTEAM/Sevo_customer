@@ -78,6 +78,10 @@ class CartItem(models.Model):
     product_image = models.CharField(max_length=500, blank=True, default="")
     mrp_snapshot = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
+    # Basket/Combo-offer fields (mutually exclusive with seller_product_id at app layer)
+    basket_id = models.IntegerField(null=True, blank=True, db_index=True)
+    basket_title = models.CharField(max_length=255, blank=True, default="")
+
     quantity = models.PositiveIntegerField(default=1)
     unit_price_snapshot = models.DecimalField(max_digits=10, decimal_places=2)
     customization = models.JSONField(default=dict, blank=True)

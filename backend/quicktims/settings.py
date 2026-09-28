@@ -568,6 +568,12 @@ WORKFORCE_API_BASE_URL = (os.getenv("WORKFORCE_API_BASE_URL") or "http://127.0.0
 SEVO_INTEGRATION_SECRET = (os.getenv("SEVO_INTEGRATION_SECRET") or "caldim_secure_webhook_token_2026").strip()
 WORKFORCE_WEBHOOK_SECRET = (os.getenv("WORKFORCE_WEBHOOK_SECRET") or "caldim_secure_webhook_token_2026").strip()
 
+# ── Razorpay Payment Gateway Settings ────────────────────────────────────────
+RAZORPAY_KEY_ID = (os.getenv("RAZORPAY_KEY_ID") or "").strip()
+RAZORPAY_KEY_SECRET = (os.getenv("RAZORPAY_KEY_SECRET") or "").strip()
+RAZORPAY_WEBHOOK_SECRET = (os.getenv("RAZORPAY_WEBHOOK_SECRET") or "").strip()
+PAYMENT_SANDBOX_MODE = os.getenv("PAYMENT_SANDBOX_MODE", "1").lower() in ("1", "true", "yes")
+
 
 
 

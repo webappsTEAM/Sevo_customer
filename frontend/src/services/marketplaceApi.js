@@ -115,7 +115,73 @@ export async function validateMarketplaceCart(sellerId, items) {
 }
 
 /**
- * Place canonical marketplace order.
+ * Load Razorpay Checkout SDK dynamically if not already loaded.
+ */
+export function loadRazorpayScript() {
+  return new Promise((resolve) => {
+    if (window.Razorpay) {
+      resolve(true)
+      return
+    }
+    const existing = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]')
+    if (existing) {
+      existing.addEventListener("load", () => resolve(true))
+      existing.addEventListener("error", () => resolve(false))
+      return
+    }
+    const script = document.createElement("script")
+    script.src = "https://checkout.razorpay.com/v1/checkout.js"
+    script.async = true
+    script.onload = () => resolve(true)
+    script.onerror = () => resolve(false)
+    document.body.appendChild(script)
+  })
+}
+
+/**
+ * Initiate Razorpay Payment intent for Marketplace Checkout (Step 1).
+ */
+export async function initiateMarketplacePayment({
+  delivery_address,
+  customer_name = "",
+  customer_phone = "",
+  customer_email = "",
+  payment_method = "UPI",
+  fulfilment_type = "DELIVERY",
+}) {
+  return await apiRequest("/orders/marketplace/checkout/initiate-payment/", {
+    method: "POST",
+    json: {
+      delivery_address,
+      customer_name,
+      customer_phone,
+      customer_email,
+      payment_method,
+      fulfilment_type,
+    },
+  })
+}
+
+/**
+ * Verify Razorpay Payment signature and finalize Marketplace orders (Step 2).
+ */
+export async function verifyMarketplacePayment({
+  razorpay_order_id,
+  razorpay_payment_id,
+  razorpay_signature,
+}) {
+  return await apiRequest("/orders/marketplace/checkout/verify-payment/", {
+    method: "POST",
+    json: {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+    },
+  })
+}
+
+/**
+ * Place canonical marketplace order (Direct fallback).
  */
 export async function checkoutMarketplaceOrder({
   delivery_address,
@@ -164,3 +230,33 @@ export async function fetchMyOrders() {
   return await apiRequest("/orders/my/", { method: "GET" })
 }
 
+/**
+ * Fetch basket/combo offers from the marketplace.
+ */
+export async function fetchMarketplaceBaskets({ company_id = "", search = "", page = 1, page_size = 20 } = {}) {
+  const params = new URLSearchParams()
+  if (company_id) params.append("company_id", company_id)
+  if (search) params.append("search", search)
+  if (page) params.append("page", page)
+  if (page_size) params.append("page_size", page_size)
+  const qs = params.toString()
+  const url = qs ? `/marketplace/baskets/?${qs}` : "/marketplace/baskets/"
+  return await apiRequest(url, { method: "GET" })
+}
+
+/**
+ * Fetch full detail for a single basket offer (component breakdown).
+ */
+export async function fetchMarketplaceBasketDetail(basketId) {
+  return await apiRequest(`/marketplace/baskets/${basketId}/`, { method: "GET" })
+}
+
+/**
+ * Add a basket combo offer to the marketplace cart.
+ */
+export async function addBasketToCart({ basket_id, quantity = 1, clear_cart = false }) {
+  return await apiRequest("/carts/marketplace/items/", {
+    method: "POST",
+    json: { basket_id, quantity, clear_cart },
+  })
+}

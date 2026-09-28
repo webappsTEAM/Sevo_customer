@@ -142,6 +142,8 @@ def serialize_marketplace_order(order):
         "seller_name": order.seller_name,
         "status": order.status,
         "status_label": order.get_status_display(),
+        "payment_method": order.payment_method,
+        "payment_status": order.payment_status,
         "total_amount": order.total_amount,
         "created_at": order.created_at,
         "detail": {
@@ -152,6 +154,8 @@ def serialize_marketplace_order(order):
             "seller_name": order.seller_name,
             "status": order.status,
             "status_label": order.get_status_display(),
+            "payment_method": order.payment_method,
+            "payment_status": order.payment_status,
             "items": [
                 {
                     "seller_product_id": item.seller_product_id,

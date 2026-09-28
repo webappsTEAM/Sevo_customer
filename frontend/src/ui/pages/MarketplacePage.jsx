@@ -7,10 +7,10 @@ import {
   ShieldCheck, Sparkles, Filter, Trash2, Plus, Minus,
   RefreshCw, ChevronDown, Check, Info, AlertCircle, ShoppingBag,
   Layers, FolderTree, Tag, SlidersHorizontal, ArrowUpRight,
-  ListFilter, Grid, ChevronLeft,
+  ListFilter, Grid, ChevronLeft, Boxes, Gift, Zap,
   Apple, Carrot, Milk, Coffee, Utensils, CupSoda, Cookie,
   Fish, Egg, Beef, Shirt, Dumbbell, Laptop, Smartphone,
-  Tv, Bath, Baby, Home, Package, Boxes, Droplet, Hammer,
+  Tv, Bath, Baby, Home, Package, Droplet, Hammer,
   PaintRoller, Wrench, HeartPulse, Croissant
 } from "lucide-react"
 import { routes } from "../routes.js"
@@ -28,9 +28,15 @@ import {
   clearMarketplaceCart,
   validateMarketplaceCart,
   checkoutMarketplaceOrder,
+  loadRazorpayScript,
+  initiateMarketplacePayment,
+  verifyMarketplacePayment,
   fetchMarketplaceOrderDetail,
   cancelMarketplaceOrder,
   fetchMyOrders,
+  fetchMarketplaceBaskets,
+  fetchMarketplaceBasketDetail,
+  addBasketToCart,
 } from "../../services/marketplaceApi.js"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
@@ -396,6 +402,12 @@ export function MarketplacePage() {
   const [showCustomerEntryModal, setShowCustomerEntryModal] = useState(false)
   const [pendingAddToCart, setPendingAddToCart] = useState(null)
 
+  // Basket/Combo Offer State
+  const [baskets, setBaskets] = useState([])
+  const [basketsLoading, setBasketsLoading] = useState(true)
+  const [basketDetailModal, setBasketDetailModal] = useState(null)
+  const [basketDetailLoading, setBasketDetailLoading] = useState(false)
+
   // Product Catalog & Category State
   const [products, setProducts] = useState([])
   const [categoryTree, setCategoryTree] = useState([])
@@ -425,6 +437,7 @@ export function MarketplacePage() {
   const [checkoutModalOpen, setCheckoutModalOpen] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [checkoutError, setCheckoutError] = useState("")
+  const [paymentMethod, setPaymentMethod] = useState("UPI")
   const [activeOrder, setActiveOrder] = useState(null)
   const [trackingModalOpen, setTrackingModalOpen] = useState(false)
   const [cancelLoading, setCancelLoading] = useState(false)
@@ -641,6 +654,18 @@ export function MarketplacePage() {
     }
   }
 
+  // Load Baskets on mount
+  useEffect(() => {
+    setBasketsLoading(true)
+    fetchMarketplaceBaskets({ page_size: 20 })
+      .then((res) => {
+        const raw = res?.results || res?.data?.results || (Array.isArray(res?.data) ? res.data : null) || (Array.isArray(res) ? res : [])
+        setBaskets(Array.isArray(raw) ? raw : [])
+      })
+      .catch(() => setBaskets([]))
+      .finally(() => setBasketsLoading(false))
+  }, [])
+
   useEffect(() => {
     reloadCart()
     reloadActiveOrder()
@@ -657,7 +682,7 @@ export function MarketplacePage() {
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }))
   }, [products])
 
-  // Handle Add To Cart
+  // Handle Add To Cart (products only)
   const handleAddToCart = async (product, quantityDelta = 1) => {
     if (!user) {
       setPendingAddToCart({ product, quantityDelta })
@@ -709,6 +734,7 @@ export function MarketplacePage() {
           current_seller_name: res.current_seller_name || cart?.seller_name || "another seller",
           new_seller_name: product.seller_name || "New Seller",
           pendingProduct: product,
+          pendingBasket: null,
           pendingQty: quantityDelta,
         })
       } else {
@@ -720,6 +746,7 @@ export function MarketplacePage() {
           current_seller_name: err.body?.current_seller_name || cart?.seller_name || "another seller",
           new_seller_name: product.seller_name || "New Seller",
           pendingProduct: product,
+          pendingBasket: null,
           pendingQty: quantityDelta,
         })
       } else {
@@ -730,23 +757,117 @@ export function MarketplacePage() {
     }
   }
 
+  // Handle Add Basket To Cart
+  const handleAddBasketToCart = async (basket, clearExisting = false) => {
+    if (!user) {
+      // Store pending basket, reuse modal flow
+      setPendingAddToCart({ basket, isBasket: true })
+      setShowCustomerEntryModal(true)
+      return
+    }
+    const cartItems = Array.isArray(cart?.items) ? cart.items : []
+    const existingItem = cartItems.find((i) => i.basket_id === basket.id)
+    if (existingItem && !clearExisting) {
+      // Already in cart — just increment
+      try {
+        await updateMarketplaceCartItem(existingItem.id, { quantity: existingItem.quantity + 1 })
+        await reloadCart()
+        showToast(`Added another "${basket.title}" bundle to cart`, "success")
+      } catch (err) {
+        showToast(err?.body?.message || "Failed to update cart.", "error")
+      }
+      return
+    }
+    setCartLoading(true)
+    try {
+      const res = await addBasketToCart({
+        basket_id: basket.id,
+        quantity: 1,
+        clear_cart: clearExisting,
+      })
+      if (res?.success) {
+        await reloadCart()
+        showToast(`Bundle "${basket.title}" added to cart!`, "success")
+      } else if (res?.error === "seller_mismatch" || res?.status_code === 409) {
+        setSellerConflict({
+          current_seller_name: res.current_seller_name || cart?.seller_name || "another seller",
+          new_seller_name: basket.seller_name || "New Seller",
+          pendingBasket: basket,
+          pendingProduct: null,
+          pendingQty: 1,
+        })
+      } else {
+        showToast(res?.message || "Could not add bundle to cart.", "error")
+      }
+    } catch (err) {
+      if (err?.body?.error === "seller_mismatch" || err?.status === 409) {
+        setSellerConflict({
+          current_seller_name: err.body?.current_seller_name || cart?.seller_name || "another seller",
+          new_seller_name: basket.seller_name || "New Seller",
+          pendingBasket: basket,
+          pendingProduct: null,
+          pendingQty: 1,
+        })
+      } else {
+        showToast(err?.body?.message || "Failed to add bundle to cart.", "error")
+      }
+    } finally {
+      setCartLoading(false)
+    }
+  }
+
+  // Handle Open Basket Detail Modal
+  const handleOpenBasketDetail = async (basket) => {
+    setBasketDetailModal(basket)
+    if (!basket.items || basket.items.length === 0) {
+      setBasketDetailLoading(true)
+      try {
+        const res = await fetchMarketplaceBasketDetail(basket.id)
+        if (res?.id || res?.data?.id) {
+          setBasketDetailModal(res?.data || res)
+        }
+      } catch (err) {
+        console.error("Failed to load basket detail:", err)
+      } finally {
+        setBasketDetailLoading(false)
+      }
+    }
+  }
+
   // Handle Confirm Seller Switch
   const handleConfirmSellerSwitch = async () => {
     if (!sellerConflict) return
-    const { pendingProduct, pendingQty } = sellerConflict
+    const { pendingProduct, pendingBasket, pendingQty } = sellerConflict
     setCartLoading(true)
     try {
-      const res = await addMarketplaceCartItem({
-        seller_product_id: pendingProduct.id,
-        quantity: pendingQty,
-        clear_cart: true,
-      })
-      if (res?.success) {
-        setSellerConflict(null)
-        reloadCart()
-        showToast(`Cart updated with items from "${pendingProduct.seller_name}"`, "success")
+      if (pendingBasket) {
+        // Basket seller switch
+        const res = await addBasketToCart({
+          basket_id: pendingBasket.id,
+          quantity: pendingQty,
+          clear_cart: true,
+        })
+        if (res?.success) {
+          setSellerConflict(null)
+          reloadCart()
+          showToast(`Cart updated with bundle from "${pendingBasket.seller_name}"`, "success")
+        } else {
+          showToast(res?.message || "Failed to switch seller.", "error")
+        }
       } else {
-        showToast(res?.message || "Failed to switch seller.", "error")
+        // Product seller switch (existing logic)
+        const res = await addMarketplaceCartItem({
+          seller_product_id: pendingProduct.id,
+          quantity: pendingQty,
+          clear_cart: true,
+        })
+        if (res?.success) {
+          setSellerConflict(null)
+          reloadCart()
+          showToast(`Cart updated with items from "${pendingProduct.seller_name}"`, "success")
+        } else {
+          showToast(res?.message || "Failed to switch seller.", "error")
+        }
       }
     } catch (err) {
       showToast(err?.body?.message || "Failed to switch seller.", "error")
@@ -771,13 +892,47 @@ export function MarketplacePage() {
     }
   }
 
-  // Handle Checkout Order
+  // Handle Checkout Order via UPI (Razorpay) or Cash on Delivery (COD)
   const handleProceedToCheckout = async () => {
     if (cart.items.length === 0) return
     setCheckoutError("")
     setCheckoutLoading(true)
+
+    // Option A: Cash on Delivery (COD) Flow
+    if (paymentMethod === "COD") {
+      try {
+        const res = await checkoutMarketplaceOrder({
+          delivery_address: deliveryAddress,
+          customer_name: user?.name || "",
+          customer_phone: user?.phone || "",
+          customer_email: user?.email || "",
+          payment_method: "COD",
+          fulfilment_type: "DELIVERY",
+        })
+
+        if (res?.success && res?.data) {
+          setActiveOrder(res.data)
+          setCartDrawerOpen(false)
+          setTrackingModalOpen(true)
+          reloadCart()
+          const amount = res.data.total_amount || cart.subtotal
+          showToast(`Order placed! Pay ₹${amount} in cash on delivery.`, "success")
+        } else {
+          setCheckoutError(res?.message || "Failed to place Cash on Delivery order.")
+        }
+      } catch (err) {
+        console.error("COD checkout error:", err)
+        setCheckoutError(err?.body?.message || err?.message || "Failed to place Cash on Delivery order.")
+      } finally {
+        setCheckoutLoading(false)
+      }
+      return
+    }
+
+    // Option B: UPI (Razorpay) Flow
     try {
-      const res = await checkoutMarketplaceOrder({
+      // Step 1: Initiate Payment Intent on backend
+      const intentRes = await initiateMarketplacePayment({
         delivery_address: deliveryAddress,
         customer_name: user?.name || "",
         customer_phone: user?.phone || "",
@@ -786,18 +941,115 @@ export function MarketplacePage() {
         fulfilment_type: "DELIVERY",
       })
 
-      if (res?.success && res?.data) {
-        setActiveOrder(res.data)
-        setCartDrawerOpen(false)
-        setTrackingModalOpen(true)
-        reloadCart()
-        showToast("Order placed successfully!", "success")
-      } else {
-        setCheckoutError(res?.message || "Order placement failed. Please verify item stock.")
+      if (!intentRes?.success || !intentRes?.data) {
+        setCheckoutError(intentRes?.message || "Failed to initialize payment.")
+        setCheckoutLoading(false)
+        return
       }
+
+      const intentData = intentRes.data
+
+      // If sandbox fallback mode is active (no keys configured on backend)
+      if (intentData.sandbox_fallback) {
+        const verifyRes = await verifyMarketplacePayment({
+          razorpay_order_id: intentData.razorpay_order_id,
+          razorpay_payment_id: `pay_mock_${Date.now()}`,
+          razorpay_signature: "sandbox_mock_signature",
+        })
+        if (verifyRes?.success && verifyRes?.data) {
+          setActiveOrder(verifyRes.data)
+          setCartDrawerOpen(false)
+          setTrackingModalOpen(true)
+          reloadCart()
+          showToast("Order placed successfully!", "success")
+        } else {
+          setCheckoutError(verifyRes?.message || "Order verification failed.")
+        }
+        setCheckoutLoading(false)
+        return
+      }
+
+      // Ensure Razorpay SDK is loaded
+      const isLoaded = await loadRazorpayScript()
+      if (!isLoaded || !window.Razorpay) {
+        setCheckoutError("Unable to load payment gateway. Please check your network connection.")
+        setCheckoutLoading(false)
+        return
+      }
+
+      // Step 2: Open Razorpay Checkout widget configured for UPI default
+      const options = {
+        key: intentData.key_id,
+        amount: intentData.amount_paise || Math.round(Number(intentData.amount) * 100),
+        currency: intentData.currency || "INR",
+        name: intentData.name || "Sevo Mart",
+        description: intentData.description || "Sevo Grocery Marketplace Order",
+        order_id: intentData.razorpay_order_id,
+        prefill: intentData.prefill || {
+          name: user?.name || "",
+          email: user?.email || "",
+          contact: user?.phone || "",
+        },
+        config: {
+          display: {
+            blocks: {
+              upi: {
+                name: "Pay by UPI",
+                instruments: [{ method: "upi" }],
+              },
+            },
+            sequence: ["block.upi"],
+            preferences: { show_default_blocks: false },
+          },
+        },
+        theme: {
+          color: "#059669",
+        },
+        handler: async (paymentResponse) => {
+          setCheckoutLoading(true)
+          setCheckoutError("")
+          try {
+            // Step 3: Authoritative HMAC signature verification on backend
+            const verifyRes = await verifyMarketplacePayment({
+              razorpay_order_id: paymentResponse.razorpay_order_id,
+              razorpay_payment_id: paymentResponse.razorpay_payment_id,
+              razorpay_signature: paymentResponse.razorpay_signature,
+            })
+
+            if (verifyRes?.success && verifyRes?.data) {
+              setActiveOrder(verifyRes.data)
+              setCartDrawerOpen(false)
+              setTrackingModalOpen(true)
+              reloadCart()
+              showToast("Payment successful! Order placed.", "success")
+            } else {
+              setCheckoutError(verifyRes?.message || "Payment verification failed. Please contact support.")
+            }
+          } catch (verifyErr) {
+            console.error("Payment verification error:", verifyErr)
+            setCheckoutError(verifyErr?.body?.message || verifyErr?.message || "Payment verification failed. Please try again.")
+          } finally {
+            setCheckoutLoading(false)
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            // Customer closed popup without paying - leave cart untouched
+            setCheckoutLoading(false)
+          },
+        },
+      }
+
+      const rzp = new window.Razorpay(options)
+      rzp.on("payment.failed", (failedRes) => {
+        console.warn("Payment failed or declined:", failedRes)
+        setCheckoutError(failedRes?.error?.description || "Payment failed or was declined.")
+        setCheckoutLoading(false)
+      })
+      rzp.open()
     } catch (err) {
-      setCheckoutError(err?.body?.message || "Failed to place order. Please try again.")
-    } finally {
+      console.error("Checkout initiation error:", err)
+      setCheckoutError(err?.body?.message || err?.message || "Failed to initiate payment. Please try again.")
       setCheckoutLoading(false)
     }
   }
@@ -1196,7 +1448,134 @@ export function MarketplacePage() {
                 )}
               </div>
 
+              {/* ── Combo Deals / Basket Offers Strip ── */}
+              {currentCategorySlug === "all" && !searchQuery && (baskets.length > 0 || basketsLoading) && (
+                <div className="mb-7">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Gift className="w-4 h-4 text-violet-600" />
+                    <h4 className="text-sm font-black text-slate-900 tracking-tight">Combo Deals</h4>
+                    <span className="text-[11px] font-bold text-violet-700 bg-violet-50 border border-violet-200 px-2 py-0.5 rounded-full">
+                      Bundle & Save
+                    </span>
+                  </div>
+
+                  {basketsLoading ? (
+                    <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
+                      {[...Array(3)].map((_, i) => (
+                        <div key={i} className="shrink-0 w-64 h-36 bg-white rounded-2xl border border-slate-200 animate-pulse" />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
+                      {baskets.map((basket) => {
+                        const bundlePrice = Number(basket.bundle_price || 0)
+                        const mrpTotal = Number(basket.mrp_total || 0)
+                        const savings = Number(basket.savings || (mrpTotal > bundlePrice ? mrpTotal - bundlePrice : 0))
+                        const savingsPct = mrpTotal > 0 ? Math.round((savings / mrpTotal) * 100) : 0
+                        const inCartItem = cart.items?.find((i) => i.basket_id === basket.id)
+                        const inCartQty = inCartItem ? inCartItem.quantity : 0
+
+                        return (
+                          <motion.div
+                            key={basket.id}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="shrink-0 w-64 bg-white rounded-2xl border border-violet-200/60 hover:border-violet-400/60 hover:shadow-xl shadow-sm overflow-hidden flex flex-col transition-all duration-200 cursor-pointer group"
+                            onClick={() => handleOpenBasketDetail(basket)}
+                          >
+                            {/* Top Banner */}
+                            <div className="bg-gradient-to-r from-violet-600 to-purple-700 px-3.5 pt-3 pb-2 flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <Boxes className="w-3.5 h-3.5 text-violet-200 shrink-0" />
+                                <span className="text-[11px] font-black text-white uppercase tracking-wide">Bundle Deal</span>
+                              </div>
+                              {savingsPct > 0 && (
+                                <span className="bg-amber-400 text-amber-950 text-[10px] font-black px-1.5 py-0.5 rounded-full">
+                                  Save {savingsPct}%
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Basket Body */}
+                            <div className="px-3.5 pt-2.5 pb-3 flex-1 flex flex-col justify-between">
+                              <div>
+                                <h5 className="text-sm font-extrabold text-slate-900 line-clamp-2 leading-snug mb-1 group-hover:text-violet-800 transition-colors">
+                                  {basket.title}
+                                </h5>
+                                <p className="text-[11px] text-slate-400 font-medium">
+                                  {basket.item_count || basket.items?.length || "?"} items · {basket.seller_name || "Seller Hub Partner"}
+                                </p>
+                                {/* Preview items */}
+                                {Array.isArray(basket.items) && basket.items.length > 0 && (
+                                  <div className="mt-2 flex gap-1">
+                                    {basket.items.slice(0, 3).map((it, idx) => (
+                                      <div key={idx} className="w-8 h-8 rounded-lg border border-slate-100 bg-slate-50 overflow-hidden flex items-center justify-center shrink-0">
+                                        {it.primary_image ? (
+                                          <img src={it.primary_image} alt={it.product_title} className="w-full h-full object-cover" onError={(e) => { e.target.src = "/mockups/vegetables_realistic.png" }} />
+                                        ) : (
+                                          <Boxes className="w-4 h-4 text-slate-300" />
+                                        )}
+                                      </div>
+                                    ))}
+                                    {(basket.items?.length || 0) > 3 && (
+                                      <div className="w-8 h-8 rounded-lg border border-slate-100 bg-slate-50 flex items-center justify-center text-[10px] font-bold text-slate-400">
+                                        +{basket.items.length - 3}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Price + CTA */}
+                              <div className="flex items-center justify-between mt-3 gap-2">
+                                <div>
+                                  <div className="text-sm font-black text-slate-900">₹{bundlePrice}</div>
+                                  {mrpTotal > bundlePrice && (
+                                    <div className="text-[11px] text-slate-400 line-through">₹{mrpTotal}</div>
+                                  )}
+                                </div>
+                                {inCartQty > 0 ? (
+                                  <div
+                                    className="flex items-center bg-violet-600 text-white rounded-xl overflow-hidden shadow-sm"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); removeMarketplaceCartItem(inCartItem.id).then(reloadCart) }}
+                                      className="px-2 py-1.5 hover:bg-violet-700 transition-colors"
+                                    >
+                                      <Minus className="w-3 h-3" />
+                                    </button>
+                                    <span className="px-2 text-xs font-black">{inCartQty}</span>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); handleAddBasketToCart(basket) }}
+                                      className="px-2 py-1.5 hover:bg-violet-700 transition-colors"
+                                    >
+                                      <Plus className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); handleAddBasketToCart(basket) }}
+                                    className="px-3 py-1.5 bg-violet-50 hover:bg-violet-600 hover:text-white text-violet-700 border border-violet-200 hover:border-violet-600 rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm active:scale-95"
+                                  >
+                                    Add Bundle
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </motion.div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Loading Skeletons */}
+
               {loading && (
                 <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                   {[...Array(8)].map((_, i) => (
@@ -1470,7 +1849,143 @@ export function MarketplacePage() {
         )}
       </AnimatePresence>
 
+      {/* ── Basket / Combo Deal Detail Modal ── */}
+      <AnimatePresence>
+        {basketDetailModal && (
+          <div className="fixed inset-0 z-[10006] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 30 }}
+              className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-100 max-h-[90vh] flex flex-col font-sans"
+            >
+              {/* Modal Header */}
+              <div className="p-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-gradient-to-r from-violet-50 to-purple-50">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-xl bg-violet-100 flex items-center justify-center">
+                    <Boxes className="w-4 h-4 text-violet-700" />
+                  </div>
+                  <span className="text-xs font-black uppercase tracking-wider text-violet-800 bg-violet-100 px-2.5 py-1 rounded-md">
+                    Bundle Deal
+                  </span>
+                </div>
+                <button
+                  onClick={() => setBasketDetailModal(null)}
+                  className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto space-y-5 flex-1">
+                {/* Title & Meta */}
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 tracking-tight leading-snug">
+                    {basketDetailModal.title}
+                  </h3>
+                  <div className="flex items-center gap-3 mt-2 text-xs text-slate-500">
+                    <span className="flex items-center gap-1"><Store className="w-3 h-3" />{basketDetailModal.seller_name || "Seller Hub Partner"}</span>
+                    {basketDetailModal.item_count > 0 && (
+                      <span className="flex items-center gap-1"><Boxes className="w-3 h-3" />{basketDetailModal.item_count} Items</span>
+                    )}
+                  </div>
+                  {basketDetailModal.description && (
+                    <p className="text-xs text-slate-500 mt-2 leading-relaxed">{basketDetailModal.description}</p>
+                  )}
+                </div>
+
+                {/* Savings Summary */}
+                {(() => {
+                  const bundlePrice = Number(basketDetailModal.bundle_price || 0)
+                  const mrpTotal = Number(basketDetailModal.mrp_total || 0)
+                  const savings = Number(basketDetailModal.savings || (mrpTotal > bundlePrice ? mrpTotal - bundlePrice : 0))
+                  return (
+                    <div className="bg-violet-50 border border-violet-200 rounded-2xl p-4 flex items-center justify-between gap-4">
+                      <div>
+                        <div className="text-xs font-bold text-violet-600 uppercase tracking-wider">Bundle Price</div>
+                        <div className="text-3xl font-black text-slate-900 mt-0.5">₹{bundlePrice}</div>
+                        {mrpTotal > bundlePrice && (
+                          <div className="text-sm text-slate-400 line-through">MRP: ₹{mrpTotal}</div>
+                        )}
+                      </div>
+                      {savings > 0 && (
+                        <div className="bg-amber-400 text-amber-950 px-3 py-2 rounded-xl text-center shrink-0">
+                          <div className="text-xs font-bold">You save</div>
+                          <div className="text-lg font-black">₹{savings}</div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
+
+                {/* Component Items */}
+                {basketDetailLoading ? (
+                  <div className="space-y-2 animate-pulse">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="h-14 bg-slate-100 rounded-xl" />
+                    ))}
+                  </div>
+                ) : Array.isArray(basketDetailModal.items) && basketDetailModal.items.length > 0 ? (
+                  <div>
+                    <div className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">What's Included</div>
+                    <div className="space-y-2">
+                      {basketDetailModal.items.map((it, idx) => (
+                        <div key={idx} className="flex items-center gap-3 bg-slate-50 rounded-xl p-3 border border-slate-100">
+                          <div className="w-11 h-11 shrink-0 rounded-xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden">
+                            {it.primary_image ? (
+                              <img src={it.primary_image} alt={it.product_title} className="w-full h-full object-cover"
+                                onError={(e) => { e.target.src = "/mockups/vegetables_realistic.png" }} />
+                            ) : (
+                              <Boxes className="w-5 h-5 text-slate-300" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-extrabold text-slate-900 truncate">{it.product_title}</div>
+                            <div className="text-[11px] text-slate-400 font-medium">
+                              {[it.pack_size || it.unit, it.product_sku].filter(Boolean).join(" · ") || ""}
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div className="text-xs font-black text-slate-900">×{it.quantity}</div>
+                            {it.unit_price && (
+                              <div className="text-[11px] text-slate-400">₹{it.unit_price} each</div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Modal Footer CTA */}
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setBasketDetailModal(null)}
+                  className="px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-extrabold transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleAddBasketToCart(basketDetailModal)
+                    setBasketDetailModal(null)
+                  }}
+                  className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-xs font-black shadow-md shadow-violet-600/20 transition-all cursor-pointer flex items-center gap-2"
+                >
+                  <Gift className="w-3.5 h-3.5" />
+                  Add Bundle • ₹{basketDetailModal.bundle_price}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* ── Cart Drawer ── */}
+
       <AnimatePresence>
         {cartDrawerOpen && (
           <div className="fixed inset-0 z-[10000] overflow-hidden" onClick={() => setCartDrawerOpen(false)}>
@@ -1547,20 +2062,35 @@ export function MarketplacePage() {
                             {group.items.map((item) => (
                               <div
                                 key={item.id}
-                                className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-sm flex items-center gap-3.5"
+                                className={`bg-white rounded-2xl p-3.5 border shadow-sm flex items-center gap-3.5 ${
+                                  item.basket_id ? "border-violet-200/60" : "border-slate-200"
+                                }`}
                               >
-                                <img
-                                  src={item.product_image || "/mockups/vegetables_realistic.png"}
-                                  alt={item.product_title}
-                                  className="w-14 h-14 object-contain bg-slate-50 rounded-xl p-1 shrink-0"
-                                  onError={(e) => { e.target.src = "/mockups/vegetables_realistic.png" }}
-                                />
+                                {item.basket_id ? (
+                                  <div className="w-14 h-14 bg-violet-50 rounded-xl flex items-center justify-center shrink-0 border border-violet-200">
+                                    <Boxes className="w-6 h-6 text-violet-400" />
+                                  </div>
+                                ) : (
+                                  <img
+                                    src={item.product_image || "/mockups/vegetables_realistic.png"}
+                                    alt={item.product_title}
+                                    className="w-14 h-14 object-contain bg-slate-50 rounded-xl p-1 shrink-0"
+                                    onError={(e) => { e.target.src = "/mockups/vegetables_realistic.png" }}
+                                  />
+                                )}
                                 <div className="flex-1 min-w-0">
-                                  <h4 className="text-xs font-extrabold text-slate-900 truncate">
-                                    {item.product_title}
-                                  </h4>
+                                  <div className="flex items-center gap-1.5 mb-0.5">
+                                    {item.basket_id && (
+                                      <span className="text-[9px] font-black uppercase tracking-wider text-violet-700 bg-violet-100 px-1.5 py-0.5 rounded">
+                                        BUNDLE
+                                      </span>
+                                    )}
+                                    <h4 className="text-xs font-extrabold text-slate-900 truncate">
+                                      {item.basket_title || item.product_title}
+                                    </h4>
+                                  </div>
                                   <div className="text-[11px] text-slate-400 font-medium">
-                                    {item.pack_size || item.unit} • ₹{item.unit_price_snapshot}
+                                    {item.basket_id ? `Bundle · ₹${item.unit_price_snapshot}` : `${item.pack_size || item.unit} • ₹${item.unit_price_snapshot}`}
                                   </div>
                                   {item.seller_name && (
                                     <div className="text-[10px] text-slate-500 font-bold mt-0.5">
@@ -1573,7 +2103,7 @@ export function MarketplacePage() {
                                 </div>
 
                                 {/* Stepper */}
-                                <div className="flex items-center bg-slate-100 rounded-xl overflow-hidden shrink-0">
+                                <div className={`flex items-center rounded-xl overflow-hidden shrink-0 ${item.basket_id ? "bg-violet-100" : "bg-slate-100"}`}>
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -1583,7 +2113,7 @@ export function MarketplacePage() {
                                         updateMarketplaceCartItem(item.id, { quantity: item.quantity - 1 }).then(reloadCart)
                                       }
                                     }}
-                                    className="p-1.5 hover:bg-slate-200 text-slate-700 transition-colors"
+                                    className={`p-1.5 transition-colors ${item.basket_id ? "hover:bg-violet-200 text-violet-700" : "hover:bg-slate-200 text-slate-700"}`}
                                   >
                                     <Minus className="w-3.5 h-3.5" />
                                   </button>
@@ -1595,7 +2125,7 @@ export function MarketplacePage() {
                                     onClick={() => {
                                       updateMarketplaceCartItem(item.id, { quantity: item.quantity + 1 }).then(reloadCart)
                                     }}
-                                    className="p-1.5 hover:bg-slate-200 text-slate-700 transition-colors"
+                                    className={`p-1.5 transition-colors ${item.basket_id ? "hover:bg-violet-200 text-violet-700" : "hover:bg-slate-200 text-slate-700"}`}
                                   >
                                     <Plus className="w-3.5 h-3.5" />
                                   </button>
@@ -1609,20 +2139,36 @@ export function MarketplacePage() {
                       cart.items.map((item) => (
                         <div
                           key={item.id}
-                          className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-sm flex items-center gap-3.5"
+                          className={`bg-white rounded-2xl p-3.5 border shadow-sm flex items-center gap-3.5 ${
+                            item.basket_id ? "border-violet-200/60" : "border-slate-200"
+                          }`}
                         >
-                          <img
-                            src={item.product_image || "/mockups/vegetables_realistic.png"}
-                            alt={item.product_title}
-                            className="w-14 h-14 object-contain bg-slate-50 rounded-xl p-1 shrink-0"
-                            onError={(e) => { e.target.src = "/mockups/vegetables_realistic.png" }}
-                          />
+                          {/* Image or Basket Icon */}
+                          {item.basket_id ? (
+                            <div className="w-14 h-14 bg-violet-50 rounded-xl flex items-center justify-center shrink-0 border border-violet-200">
+                              <Boxes className="w-6 h-6 text-violet-400" />
+                            </div>
+                          ) : (
+                            <img
+                              src={item.product_image || "/mockups/vegetables_realistic.png"}
+                              alt={item.product_title}
+                              className="w-14 h-14 object-contain bg-slate-50 rounded-xl p-1 shrink-0"
+                              onError={(e) => { e.target.src = "/mockups/vegetables_realistic.png" }}
+                            />
+                          )}
                           <div className="flex-1 min-w-0">
-                            <h4 className="text-xs font-extrabold text-slate-900 truncate">
-                              {item.product_title}
-                            </h4>
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              {item.basket_id && (
+                                <span className="text-[9px] font-black uppercase tracking-wider text-violet-700 bg-violet-100 px-1.5 py-0.5 rounded">
+                                  BUNDLE
+                                </span>
+                              )}
+                              <h4 className="text-xs font-extrabold text-slate-900 truncate">
+                                {item.basket_title || item.product_title}
+                              </h4>
+                            </div>
                             <div className="text-[11px] text-slate-400 font-medium">
-                              {item.pack_size || item.unit} • ₹{item.unit_price_snapshot}
+                              {item.basket_id ? `Bundle · ₹${item.unit_price_snapshot}` : `${item.pack_size || item.unit} • ₹${item.unit_price_snapshot}`}
                             </div>
                             {item.seller_name && (
                               <div className="text-[10px] text-slate-500 font-bold mt-0.5">
@@ -1635,7 +2181,7 @@ export function MarketplacePage() {
                           </div>
 
                           {/* Stepper */}
-                          <div className="flex items-center bg-slate-100 rounded-xl overflow-hidden shrink-0">
+                          <div className={`flex items-center rounded-xl overflow-hidden shrink-0 ${item.basket_id ? "bg-violet-100" : "bg-slate-100"}`}>
                             <button
                               type="button"
                               onClick={() => {
@@ -1645,7 +2191,7 @@ export function MarketplacePage() {
                                   updateMarketplaceCartItem(item.id, { quantity: item.quantity - 1 }).then(reloadCart)
                                 }
                               }}
-                              className="p-1.5 hover:bg-slate-200 text-slate-700 transition-colors"
+                              className={`p-1.5 transition-colors ${item.basket_id ? "hover:bg-violet-200 text-violet-700" : "hover:bg-slate-200 text-slate-700"}`}
                             >
                               <Minus className="w-3.5 h-3.5" />
                             </button>
@@ -1657,7 +2203,7 @@ export function MarketplacePage() {
                               onClick={() => {
                                 updateMarketplaceCartItem(item.id, { quantity: item.quantity + 1 }).then(reloadCart)
                               }}
-                              className="p-1.5 hover:bg-slate-200 text-slate-700 transition-colors"
+                              className={`p-1.5 transition-colors ${item.basket_id ? "hover:bg-violet-200 text-violet-700" : "hover:bg-slate-200 text-slate-700"}`}
                             >
                               <Plus className="w-3.5 h-3.5" />
                             </button>
@@ -1697,6 +2243,54 @@ export function MarketplacePage() {
                       </div>
                     </div>
 
+                    {/* Payment Method Selector */}
+                    <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-2.5">
+                      <div className="text-xs font-black text-slate-400 uppercase tracking-wider">
+                        Payment Method
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMethod("UPI")}
+                          className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
+                            paymentMethod === "UPI"
+                              ? "bg-emerald-50/80 border-emerald-500 text-emerald-950 ring-2 ring-emerald-500/20"
+                              : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100/70"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-extrabold text-xs text-slate-900">UPI</span>
+                            <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                              paymentMethod === "UPI" ? "border-emerald-600 bg-emerald-600" : "border-slate-300 bg-white"
+                            }`}>
+                              {paymentMethod === "UPI" && <span className="w-1.5 h-1.5 rounded-full bg-white block" />}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-500 font-medium">Instant pay via QR/App</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMethod("COD")}
+                          className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
+                            paymentMethod === "COD"
+                              ? "bg-emerald-50/80 border-emerald-500 text-emerald-950 ring-2 ring-emerald-500/20"
+                              : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100/70"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-extrabold text-xs text-slate-900">Cash on Delivery</span>
+                            <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                              paymentMethod === "COD" ? "border-emerald-600 bg-emerald-600" : "border-slate-300 bg-white"
+                            }`}>
+                              {paymentMethod === "COD" && <span className="w-1.5 h-1.5 rounded-full bg-white block" />}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-500 font-medium">Pay cash at doorstep</span>
+                        </button>
+                      </div>
+                    </div>
+
                     {checkoutError && (
                       <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold p-3 rounded-xl flex items-center gap-2">
                         <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
@@ -1720,7 +2314,7 @@ export function MarketplacePage() {
                       <RefreshCw className="w-4 h-4 animate-spin" />
                     ) : (
                       <>
-                        <span>Place Order • ₹{cart.subtotal}</span>
+                        <span>{paymentMethod === "COD" ? `Place Order (Pay on Delivery) • ₹${cart.subtotal}` : `Place Order • ₹${cart.subtotal}`}</span>
                         <ChevronRight className="w-4 h-4" />
                       </>
                     )}
@@ -2033,9 +2627,21 @@ export function MarketplacePage() {
                         <span className="font-bold">₹{it.line_amount}</span>
                       </div>
                     ))}
-                    <div className="pt-2 border-t border-slate-100 flex justify-between font-black text-slate-900 text-sm">
-                      <span>Total Paid</span>
-                      <span>₹{activeOrder.total_amount}</span>
+                    <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                      <div className="flex justify-between font-black text-slate-900 text-sm">
+                        <span>{activeOrder.payment_method === "COD" ? "Amount to Pay on Delivery" : "Total Paid"}</span>
+                        <span>₹{activeOrder.total_amount}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-[11px] text-slate-500 font-medium">
+                        <span>Payment Method</span>
+                        <span className={`font-bold px-2 py-0.5 rounded-md ${
+                          activeOrder.payment_method === "COD"
+                            ? "bg-amber-100 text-amber-900"
+                            : "bg-emerald-100 text-emerald-900"
+                        }`}>
+                          {activeOrder.payment_method === "COD" ? "Cash on Delivery (Pending)" : "Paid via UPI"}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -2079,10 +2685,14 @@ export function MarketplacePage() {
             await refreshMe?.()
             await reloadCart()
             if (pendingAddToCart) {
-              const { product, quantityDelta } = pendingAddToCart
+              const { product, quantityDelta, basket, isBasket } = pendingAddToCart
               setPendingAddToCart(null)
               setTimeout(() => {
-                handleAddToCart(product, quantityDelta)
+                if (isBasket && basket) {
+                  handleAddBasketToCart(basket)
+                } else if (product) {
+                  handleAddToCart(product, quantityDelta)
+                }
               }, 300)
             }
           }}

@@ -53,6 +53,13 @@ class CheckoutOrchestrationTests(TestCase):
             base_price=Decimal("40.00"), duration="500g", status="ACTIVE",
         )
 
+        elec_cat = CatalogCategory.objects.create(name="Electrician", slug="electrician", is_active=True)
+        elec_srv = Service.objects.create(category=elec_cat, name="Electrician Services", slug="electrician", is_active=True)
+        Package.objects.create(
+            service=elec_srv, name="Fan Repair", slug="electrician-fan-repair",
+            base_price=Decimal("150.00"), status="ACTIVE",
+        )
+
         self.service_payload = {
             "customer_name": "Ravi Kumar",
             "phone": "9876533333",
@@ -62,6 +69,7 @@ class CheckoutOrchestrationTests(TestCase):
             "latitude": 12.9716,
             "longitude": 77.5946,
             "preferred_date": timezone.localdate().strftime("%Y-%m-%d"),
+            "time_slot": "slot_10_00_am_to_12_00_pm",
             "cart_data": [{"id": "electrician-fan-repair", "name": "Fan Repair", "quantity": 1}],
         }
 

@@ -313,6 +313,53 @@ class MarketplaceIntegrationClient:
             return {"success": False, "message": "Vendor cancellation service unreachable", "retryable": True}
 
     @classmethod
+    def fetch_baskets(cls, company_id=None, search=None, page=1, page_size=20) -> dict:
+        """
+        Lists published basket/combo offers from Vendor Seller Hub marketplace feed.
+        GET {base}/marketplace/baskets/
+        """
+        params = {"page": page, "page_size": page_size}
+        if company_id:
+            params["company_id"] = company_id
+        if search:
+            params["search"] = str(search).strip()
+        headers = cls._headers()
+        if not headers:
+            return {"success": False, "message": "Integration secret not configured", "data": {"count": 0, "results": []}}
+        try:
+            url = f"{cls._get_base_url()}/marketplace/baskets/"
+            response = requests.get(url, params=params, headers=headers, timeout=20)
+            if response.status_code == 200:
+                return {"success": True, "data": response.json()}
+            logger.warning(f"Vendor marketplace baskets returned {response.status_code}: {response.text[:300]}")
+            return {"success": False, "status_code": response.status_code, "message": "Failed to fetch basket offers", "data": {"count": 0, "results": []}}
+        except Exception as e:
+            logger.error(f"Error fetching marketplace baskets: {e}")
+            return {"success": False, "message": "Marketplace basket service unreachable", "data": {"count": 0, "results": []}}
+
+    @classmethod
+    def fetch_basket_detail(cls, basket_id: int) -> dict:
+        """
+        Fetches full detail for a single basket combo offer including component breakdown.
+        GET {base}/marketplace/baskets/{basket_id}/
+        """
+        headers = cls._headers()
+        if not headers:
+            return {"success": False, "message": "Integration secret not configured"}
+        try:
+            url = f"{cls._get_base_url()}/marketplace/baskets/{basket_id}/"
+            response = requests.get(url, headers=headers, timeout=20)
+            if response.status_code == 200:
+                return {"success": True, "data": response.json()}
+            elif response.status_code == 404:
+                return {"success": False, "status_code": 404, "message": "Basket offer not found or unavailable"}
+            logger.warning(f"Vendor marketplace basket {basket_id} detail returned {response.status_code}: {response.text[:300]}")
+            return {"success": False, "status_code": response.status_code, "message": "Failed to fetch basket detail"}
+        except Exception as e:
+            logger.error(f"Error fetching basket {basket_id} detail: {e}")
+            return {"success": False, "message": "Marketplace basket service unreachable"}
+
+    @classmethod
     def fetch_order_status(cls, source_order_id: str) -> dict:
         """
         Queries authoritative order status snapshot from Vendor status endpoint.

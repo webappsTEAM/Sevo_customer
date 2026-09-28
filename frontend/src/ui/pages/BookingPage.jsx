@@ -4812,7 +4812,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         apiRequest("/orders/my/")
           .then(res => {
             const merged = Array.isArray(res?.data) ? res.data : []
-            setGroceryOrders(merged.filter(o => o.order_type === "grocery"))
+            setGroceryOrders(merged.filter(o => o.order_type === "grocery" || o.order_type === "marketplace"))
           })
           .catch(console.error)
           .finally(() => {
@@ -6407,6 +6407,18 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                             <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4, fontWeight: 600 }}>
                               {o.created_at ? new Date(o.created_at).toLocaleString() : ''}
                             </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                              <span style={{
+                                padding: '2px 8px',
+                                borderRadius: 6,
+                                fontSize: '0.68rem',
+                                fontWeight: 800,
+                                background: (o.payment_method === 'COD' || o.detail?.payment_method === 'COD') ? '#fef3c7' : '#ecfdf5',
+                                color: (o.payment_method === 'COD' || o.detail?.payment_method === 'COD') ? '#92400e' : '#059669',
+                              }}>
+                                {(o.payment_method === 'COD' || o.detail?.payment_method === 'COD') ? 'Cash on Delivery (Pending)' : 'Paid via UPI'}
+                              </span>
+                            </div>
                           </div>
                           <span style={{
                             padding: '4px 10px', borderRadius: 999, fontSize: '0.72rem', fontWeight: 800,
@@ -6419,7 +6431,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed #e2e8f0', display: 'flex', flexDirection: 'column', gap: 4 }}>
                             {o.detail.items.map((it, idx) => (
                               <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#475569' }}>
-                                <span>{it.package_name} × {it.quantity_grams}g</span>
+                                <span>{it.package_name || it.product_title || 'Item'} {it.quantity_grams ? `× ${it.quantity_grams}g` : `× ${it.quantity || 1}`}</span>
                                 <span style={{ fontWeight: 700, color: '#334155' }}>₹{it.line_amount}</span>
                               </div>
                             ))}
