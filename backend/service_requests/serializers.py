@@ -180,6 +180,20 @@ class PackageSerializer(serializers.ModelSerializer):
         model = Package
         fields = '__all__'
 
+    def get_stock_status(self, obj):
+        if not hasattr(self, "_stock_status_cache"):
+            self._stock_status_cache = {}
+        if obj.pk not in self._stock_status_cache:
+            from inventory.selectors.vegetable_stock_selectors import get_stock_status
+            self._stock_status_cache[obj.pk] = get_stock_status(obj)
+        return self._stock_status_cache[obj.pk]
+
+    def get_in_stock(self, obj):
+        return self.get_stock_status(obj)["in_stock"]
+
+    def get_max_quantity(self, obj):
+        return self.get_stock_status(obj)["max_quantity"]
+
 
 class CatalogChangeLogSerializer(serializers.ModelSerializer):
     changed_by_name = serializers.SerializerMethodField()

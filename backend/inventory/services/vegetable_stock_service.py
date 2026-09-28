@@ -251,7 +251,10 @@ def reserve_stock_for_booking_items(items: list, company, booking_ref: str) -> N
         prod = entry.get("product")
         if not prod:
             continue
-        stock_item = getattr(prod, "stock_item", None)
+        try:
+            stock_item = getattr(prod, "stock_item", None)
+        except Exception:
+            stock_item = None
         if stock_item is None:
             continue
         qty = entry.get("quantity")

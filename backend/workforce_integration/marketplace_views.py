@@ -38,14 +38,19 @@ def _sanitize_category_node(node):
                 "slug": p.get("slug", ""),
             })
 
+    image_val = str(node.get("image_url") or node.get("image") or "")
+    icon_val = str(node.get("icon_key") or node.get("icon") or "")
+
     sanitized = {
         "id": node.get("id"),
         "name": str(node.get("name") or ""),
         "slug": str(node.get("slug") or ""),
         "parent_id": node.get("parent_id"),
         "sort_order": int(node.get("sort_order") or 0),
-        "icon": str(node.get("icon") or ""),
-        "image": str(node.get("image") or ""),
+        "icon": icon_val,
+        "icon_key": icon_val,
+        "image": image_val,
+        "image_url": image_val,
         "is_leaf": bool(node.get("is_leaf", True)),
         "has_children": bool(node.get("has_children", False)),
         "path": path,
@@ -148,11 +153,14 @@ class MarketplaceCategoryListView(APIView):
         tree_param = request.query_params.get("tree", "true").lower() != "false"
         hide_empty_param = request.query_params.get("hide_empty", "true").lower() != "false"
         parent_id_param = request.query_params.get("parent_id")
+        level_param = request.query_params.get("level")
+        top_level_param = request.query_params.get("top_level", "").lower() in ["true", "1", "yes"] or (level_param and level_param.lower() in ["root", "top"])
         if not parent_id_param or str(parent_id_param).lower() in ["null", "none", ""]:
             parent_id_param = "null"
 
-        cache_key = f"mkt_cat_tree_{tree_param}_{parent_id_param}_{hide_empty_param}"
-        stale_cache_key = f"mkt_cat_stale_{tree_param}_{parent_id_param}_{hide_empty_param}"
+        cache_suffix = "_top" if top_level_param else ""
+        cache_key = f"mkt_cat_tree_{tree_param}_{parent_id_param}_{hide_empty_param}{cache_suffix}"
+        stale_cache_key = f"mkt_cat_stale_{tree_param}_{parent_id_param}_{hide_empty_param}{cache_suffix}"
 
         # 1. Try Live Cache (TTL 60s)
         cached_data = cache.get(cache_key)
@@ -169,6 +177,11 @@ class MarketplaceCategoryListView(APIView):
         if res.get("success") and isinstance(res.get("data"), list):
             # An empty-but-valid list or populated list from a successful 200 response is legitimate and cached
             sanitized = [_sanitize_category_node(item) for item in res["data"] if isinstance(item, dict)]
+            if top_level_param:
+                # Filter to only root/top-level categories (no parent_id or parent_id is null/None)
+                sanitized = [item for item in sanitized if item.get("parent_id") is None]
+                for item in sanitized:
+                    item.pop("children", None)
             cache.set(cache_key, sanitized, timeout=60)
             cache.set(stale_cache_key, sanitized, timeout=86400)
             return _success(sanitized)
