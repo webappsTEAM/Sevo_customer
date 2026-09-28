@@ -13,7 +13,7 @@ import { apiRequest } from "../../api/client.js"
 
 /* ── Design System ───────────────────────────────────────────── */
 const COLORS = {
-  primary: "#ff7020",      // CalTrack Orange
+  primary: "#ff7020",      // sevo Orange
   primaryLight: "#fff7ed",
   primaryHover: "#ea580c",
   success: "#22c55e",
@@ -78,7 +78,7 @@ const STEPS = [
   },
 ]
 
-const STORAGE_KEY = "caltrack.onboarding.dismissed"
+const STORAGE_KEY = "sevo.onboarding.dismissed"
 
 /* ── Components ─────────────────────────────────────────────── */
 
@@ -147,7 +147,7 @@ export function GetStartedPage() {
         try {
           const res = await apiRequest("/company/me/")
           const companyRes = res?.data || res || {}
-          if (companyRes.shift_enforcement_mode && companyRes.shift_enforcement_mode !== "warn" || localStorage.getItem("caltrack.onboarding.rules.completed") === "true") {
+          if (companyRes.shift_enforcement_mode && companyRes.shift_enforcement_mode !== "warn" || localStorage.getItem("sevo.onboarding.rules.completed") === "true") {
             completed.add("rules")
           }
         } catch (e) {
@@ -179,7 +179,7 @@ export function GetStartedPage() {
   const displayName = getGreetingName()
   const totalSteps = STEPS.length
   const doneCount = completedSteps.size
-  
+
   let profileScore = 0
   if (user?.firstName) profileScore++
   if (user?.lastName) profileScore++
@@ -201,14 +201,14 @@ export function GetStartedPage() {
 
       {/* ── Hero Section ─────────────────────────────────────── */}
       <div className="bg-orange-600 dark:bg-slate-900 h-[420px] px-10 md:px-20 py-10 relative overflow-hidden flex flex-col md:flex-row items-center justify-center gap-10 md:gap-20">
-        
+
         {/* Abstract Background Shapes */}
         <div className="absolute top-[-100px] left-[-100px] w-[400px] h-[400px] rounded-full bg-white/10 dark:bg-indigo-500/5 blur-3xl pointer-events-none" />
         <div className="absolute bottom-[-50px] right-[100px] w-[200px] h-[200px] rounded-full bg-white/5 dark:bg-orange-500/5 blur-2xl pointer-events-none" />
 
         {/* Big Background Text */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[120px] font-black text-white/5 dark:text-white/[0.02] whitespace-nowrap pointer-events-none uppercase tracking-tighter select-none">
-          CALTRACK CALTRACK CALTRACK
+          sevo sevo sevo
         </div>
 
         {/* Greeting Card (Left) */}
@@ -221,7 +221,7 @@ export function GetStartedPage() {
             <LayoutGrid size={32} />
           </div>
           <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight leading-tight m-0" style={{ overflowWrap: "break-word", wordBreak: "break-word" }}>
-            Hi {displayName}! 👋 <br/>Welcome to CalTrack
+            Hi {displayName}! 👋 <br />Welcome to sevo
           </h1>
           <p className="text-base font-medium text-slate-500 dark:text-slate-400 m-0 max-w-[380px] leading-relaxed">
             Your enterprise portal is ready. Let's finish the setup and start managing your workspace.
@@ -302,15 +302,15 @@ const SetupCard = ({ step, isCompleted, onStart }) => (
   >
     {/* Border Animation Layer */}
     <div className="absolute inset-[-100%] bg-[conic-gradient(from_0deg,transparent_0deg,transparent_120deg,rgba(93,95,239,0.5)_180deg,transparent_240deg)] animate-[spin_4s_linear_infinite] opacity-0 group-hover/card:opacity-100 transition-opacity duration-500" />
-    
+
     <div
       className={`relative bg-surface dark:bg-slate-900 border ${isCompleted ? 'border-emerald-500/20 dark:border-emerald-500/10' : 'border-stroke dark:border-slate-800'} rounded-[2rem] p-8 h-full flex flex-col gap-6 transition-all duration-300 group-hover/card:shadow-[0_20px_50px_-15px_rgba(0,0,0,0.1)] dark:group-hover/card:shadow-none`}
     >
-      <div 
+      <div
         className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm`}
-        style={{ 
+        style={{
           background: isCompleted ? '#ecfdf5' : step.bg,
-          color: isCompleted ? '#10b981' : step.color 
+          color: isCompleted ? '#10b981' : step.color
         }}
       >
         {step.icon}

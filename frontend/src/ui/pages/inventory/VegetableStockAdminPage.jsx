@@ -180,7 +180,7 @@ export function VegetableStockAdminPage() {
         price: parseFloat(editForm.price) || 0,
         mrp: editForm.mrp !== "" ? parseFloat(editForm.mrp) : null,
         offer_percentage: parseFloat(editForm.offer_percentage) || 0,
-        vegetable_gram: editForm.vegetable_gram.trim() || (editDetailsModalItem.unit_basis === "COUNT" ? "1 pc" : "500 g"),
+        vegetable_gram: editForm.vegetable_gram.trim() || "500 g",
         unit_basis: editDetailsModalItem.unit_basis || "WEIGHT",
         opening_stock_quantity: editForm.opening_stock_quantity !== "" ? parseFloat(editForm.opening_stock_quantity) : null,
         opening_stock_unit: editForm.opening_stock_unit,
@@ -845,6 +845,76 @@ export function VegetableStockAdminPage() {
                       <select
                         value={editForm.current_stock_unit}
                         onChange={(e) => setEditForm(prev => ({ ...prev, current_stock_unit: e.target.value }))}
+                        className="px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none"
+                      >
+                        {editDetailsModalItem?.unit_basis === "COUNT" ? (
+                          <>
+                            <option value="pcs">pcs</option>
+                            <option value="bunch">bunch</option>
+                            <option value="packet">packet</option>
+                            <option value="dozen">dozen</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="kg">kg</option>
+                            <option value="g">g</option>
+                          </>
+                        )}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Opening / Daily Stock */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">Opening Stock (Daily)</label>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={editForm.opening_stock_quantity}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, opening_stock_quantity: e.target.value }))}
+                        placeholder="Opening/Daily"
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
+                      />
+                      <select
+                        value={editForm.opening_stock_unit}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, opening_stock_unit: e.target.value }))}
+                        className="px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none"
+                      >
+                        {editDetailsModalItem?.unit_basis === "COUNT" ? (
+                          <>
+                            <option value="pcs">pcs</option>
+                            <option value="bunch">bunch</option>
+                            <option value="packet">packet</option>
+                            <option value="dozen">dozen</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="kg">kg</option>
+                            <option value="g">g</option>
+                          </>
+                        )}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Restock Level */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">Restock Level</label>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={editForm.restock_level_quantity}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, restock_level_quantity: e.target.value }))}
+                        placeholder="Restock amount"
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                      <select
+                        value={editForm.restock_level_unit}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, restock_level_unit: e.target.value }))}
                         className="px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none"
                       >
                         {editDetailsModalItem?.unit_basis === "COUNT" ? (

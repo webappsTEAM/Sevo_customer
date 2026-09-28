@@ -6,7 +6,7 @@ import { extractAuthError, API_BASE_URL } from "../../api/authService.js"
 
 import { validateLoginForm } from "../../utils/validate.js"
 import { routes } from "../routes.js"
-import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
+import { SevoLogo, sevoLogo } from "../components/sevoLogo.jsx"
 import { RefreshCcw, AlertCircle, Eye, EyeOff, Mail, Lock, X, ArrowRight, Check, User, ShieldCheck, CheckCircle2, ExternalLink, Sparkles, KeyRound } from "lucide-react"
 import IntroAnimation from "../../components/ui/scroll-morph-hero"
 
@@ -19,64 +19,64 @@ const CH = 140
 const CARDS = [
   // Row 1 (top)
   {
-    id: 1, src: "/mockups/caltrack_dashboard_mockup_1778231495839.png", x: -250, y: -150, z: 80, r: -6,
+    id: 1, src: "/mockups/sevo_dashboard_mockup_1778231495839.png", x: -250, y: -150, z: 80, r: -6,
     title: "Executive Dashboard",
     desc: "1. Real-time KPI overview with productivity scores\n2. Total labor cost tracking across departments\n3. Employee engagement metrics with trend analysis\n4. Active headcount monitoring per location\n5. Monthly labor cost trend with bar & line charts\n6. Productivity score distribution (donut chart)\n7. AI-driven anomaly detection alerts\n8. Top productive teams ranking table\n9. Department-wise cost breakdown\n10. One-click drill-down into any metric"
   },
   {
-    id: 2, src: "/mockups/caltrack_scheduling_mockup_1778231584856.png", x: -80, y: -160, z: 50, r: 4,
+    id: 2, src: "/mockups/sevo_scheduling_mockup_1778231584856.png", x: -80, y: -160, z: 50, r: 4,
     title: "Smart Scheduling",
     desc: "1. Drag-and-drop shift assignment calendar\n2. Auto-fill shifts based on availability rules\n3. Overtime threshold alerts & compliance flags\n4. Shift swap requests with manager approval\n5. Break scheduling with labor law compliance\n6. Multi-location coverage visualization\n7. Skills-based shift matching engine\n8. Recurring schedule templates\n9. Real-time understaffing notifications\n10. Export schedules to PDF or calendar sync"
   },
   {
-    id: 3, src: "/mockups/caltrack_live_map_mockup_1778231560076.png", x: 80, y: -145, z: 70, r: -3,
+    id: 3, src: "/mockups/sevo_live_map_mockup_1778231560076.png", x: 80, y: -145, z: 70, r: -3,
     title: "Live Tracking Map",
     desc: "1. Real-time GPS tracking of field employees\n2. Geofenced work zones with entry/exit alerts\n3. Route history playback for each worker\n4. Active employee count per zone\n5. Speed and movement status indicators\n6. Site boundary polygon editor\n7. Employee activity feed with timestamps\n8. Satellite and road map toggle views\n9. Restricted zone violation notifications\n10. Multi-site dashboard with zone summaries"
   },
   {
-    id: 4, src: "/mockups/caltrack_mobile_app_mockup_1778231517495.png", x: 250, y: -155, z: 40, r: 8,
+    id: 4, src: "/mockups/sevo_mobile_app_mockup_1778231517495.png", x: 250, y: -155, z: 40, r: 8,
     title: "Mobile Field App",
     desc: "1. Geolocation-based punch in/out\n2. Selfie verification at clock-in\n3. Weekly timesheet with daily hours\n4. Current week total and pending approvals\n5. Geolocation map with red pin for HQ\n6. Face verification capture & validation\n7. Activity feed with task assignments\n8. Break timer with auto-deduction\n9. Push notifications for schedule changes\n10. Offline mode with auto-sync on reconnect"
   },
   // Row 2 (middle)
   {
-    id: 5, src: "/mockups/caltrack_analytics_mockup_1778231608789.png", x: -220, y: 0, z: 60, r: 5,
+    id: 5, src: "/mockups/sevo_analytics_mockup_1778231608789.png", x: -220, y: 0, z: 60, r: 5,
     title: "Workforce Analytics",
     desc: "1. Attendance trend analysis over 12 months\n2. Department-level productivity heatmap\n3. Overtime distribution across teams\n4. Late arrival pattern detection\n5. Leave utilization rate by category\n6. Cost-per-employee benchmarking\n7. Predictive staffing recommendations\n8. Custom date range filtering\n9. Export reports to Excel/PDF\n10. Scheduled report email delivery"
   },
   {
-    id: 6, src: "/mockups/caltrack_payroll_mockup_1778231538875.png", x: -60, y: 10, z: 90, r: -4,
+    id: 6, src: "/mockups/sevo_payroll_mockup_1778231538875.png", x: -60, y: 10, z: 90, r: -4,
     title: "Payroll Processing",
     desc: "1. Automated payroll calculation from timesheets\n2. Tax deduction and compliance engine\n3. Overtime rate multiplier configuration\n4. Department-wise salary breakdown\n5. Bonus and incentive management\n6. Payslip generation with PDF export\n7. Bank transfer file generation\n8. Year-to-date earnings summary\n9. Multi-currency support for global teams\n10. Audit trail for all payroll changes"
   },
   {
-    id: 7, src: "/mockups/caltrack_dashboard_mockup_1778231495839.png", x: 100, y: -5, z: 30, r: 3,
+    id: 7, src: "/mockups/sevo_dashboard_mockup_1778231495839.png", x: 100, y: -5, z: 30, r: 3,
     title: "Performance Overview",
     desc: "1. Individual employee performance scores\n2. Team comparison leaderboards\n3. Goal tracking with progress bars\n4. Performance review cycle management\n5. 360-degree feedback collection\n6. Skill gap analysis visualization\n7. Training completion tracking\n8. Monthly performance trend lines\n9. Manager notes and action items\n10. Integration with HR systems"
   },
   {
-    id: 8, src: "/mockups/caltrack_live_map_mockup_1778231560076.png", x: 260, y: 5, z: 55, r: -7,
+    id: 8, src: "/mockups/sevo_live_map_mockup_1778231560076.png", x: 260, y: 5, z: 55, r: -7,
     title: "Zone Management",
     desc: "1. Custom geofence zone creation\n2. Multi-polygon boundary drawing\n3. Zone-based attendance rules\n4. Entry/exit time logging per zone\n5. Restricted area access control\n6. Zone capacity monitoring\n7. Historical zone activity reports\n8. Alert configuration per zone\n9. Integration with access control systems\n10. Zone-wise labor cost allocation"
   },
   // Row 3 (bottom)
   {
-    id: 9, src: "/mockups/caltrack_mobile_app_mockup_1778231517495.png", x: -240, y: 150, z: 35, r: 6,
+    id: 9, src: "/mockups/sevo_mobile_app_mockup_1778231517495.png", x: -240, y: 150, z: 35, r: 6,
     title: "Employee Self-Service",
     desc: "1. Personal profile and document management\n2. Leave request submission with calendar\n3. Timesheet review and approval status\n4. Expense claim submission with receipts\n5. Team directory with org chart\n6. Company announcements feed\n7. Benefits enrollment dashboard\n8. Training module access\n9. Helpdesk ticket creation\n10. Personal analytics and hours summary"
   },
   {
-    id: 10, src: "/mockups/caltrack_scheduling_mockup_1778231584856.png", x: -70, y: 155, z: 65, r: -5,
+    id: 10, src: "/mockups/sevo_scheduling_mockup_1778231584856.png", x: -70, y: 155, z: 65, r: -5,
     title: "Shift Planning",
     desc: "1. Weekly and monthly shift calendar views\n2. Employee availability preferences\n3. Conflict detection and resolution\n4. Minimum rest period enforcement\n5. Holiday and leave integration\n6. Cost optimization suggestions\n7. Bulk shift assignment tools\n8. Notification to employees on changes\n9. Coverage gap highlighting\n10. Historical shift pattern analytics"
   },
   {
-    id: 11, src: "/mockups/caltrack_payroll_mockup_1778231538875.png", x: 90, y: 145, z: 45, r: 4,
+    id: 11, src: "/mockups/sevo_payroll_mockup_1778231538875.png", x: 90, y: 145, z: 45, r: 4,
     title: "Compensation Reports",
     desc: "1. Comprehensive salary reports by department\n2. Overtime cost analysis and trends\n3. Benefits cost per employee tracking\n4. Tax liability forecasting\n5. Budget vs actual labor cost comparison\n6. Compensation band analysis\n7. Equal pay audit reports\n8. Contractor vs employee cost analysis\n9. Annual compensation review tools\n10. Custom report builder with filters"
   },
   {
-    id: 12, src: "/mockups/caltrack_analytics_mockup_1778231608789.png", x: 240, y: 160, z: 75, r: -8,
+    id: 12, src: "/mockups/sevo_analytics_mockup_1778231608789.png", x: 240, y: 160, z: 75, r: -8,
     title: "Insights Engine",
     desc: "1. AI-powered workforce trend predictions\n2. Attrition risk scoring per employee\n3. Engagement survey result analysis\n4. Absenteeism pattern recognition\n5. Seasonal demand forecasting\n6. Cost saving opportunity identification\n7. Benchmark against industry standards\n8. Custom KPI dashboard builder\n9. Real-time data pipeline monitoring\n10. Automated insight notifications"
   },
@@ -151,8 +151,8 @@ export function LoginPage() {
   const navigate = useNavigate()
 
   const [mode, setMode] = useState("signin")
-  const [username, setUsername] = useState(() => localStorage.getItem("caltrack_remember_username") || "")
-  const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem("caltrack_remember_username"))
+  const [username, setUsername] = useState(() => localStorage.getItem("sevo_remember_username") || "")
+  const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem("sevo_remember_username"))
   const [password, setPassword] = useState("")
   const [showPass, setShowPass] = useState(false)
   const [error, setError] = useState("")
@@ -182,7 +182,7 @@ export function LoginPage() {
   const [generationProgress, setGenerationProgress] = useState(0)
   const [generationLog, setGenerationLog] = useState("")
 
-  const ONBOARDING_DISMISSED_KEY = "caltrack.onboarding.dismissed"
+  const ONBOARDING_DISMISSED_KEY = "sevo.onboarding.dismissed"
   const postLoginRoute = (usr) => {
     const role = usr?.role
     if (usr?.isSuperAdmin || usr?.is_super_admin || role === "super_admin" || role === "superadmin") {
@@ -252,9 +252,9 @@ export function LoginPage() {
     }
     setError("")
     setIdentityScanning(true)
-    
+
     await new Promise(r => setTimeout(r, 1500))
-    
+
     try {
       const response = await fetch(`${API_BASE_URL}/auth/password-reset/verify-identity/`, {
         method: "POST",
@@ -284,7 +284,7 @@ export function LoginPage() {
     setGenerationPhase(1)
     setGenerationProgress(0)
     setGenerationLog("Initializing quantum reset telemetry...")
-    
+
     const logs = [
       { progress: 15, log: "Performing digital AI scan..." },
       { progress: 40, log: "Blue particle flow calibration..." },
@@ -292,17 +292,17 @@ export function LoginPage() {
       { progress: 90, log: "Mail transmission beam configured..." },
       { progress: 100, log: "Encrypted recovery token generated." }
     ]
-    
+
     let currentProgress = 0
     const interval = setInterval(() => {
       currentProgress += 5
       setGenerationProgress(currentProgress)
-      
+
       const matchingLog = logs.find(l => currentProgress === l.progress || (currentProgress > l.progress && currentProgress - 5 < l.progress))
       if (matchingLog) {
         setGenerationLog(matchingLog.log)
       }
-      
+
       if (currentProgress >= 100) {
         clearInterval(interval)
         setGenerationPhase(2)
@@ -337,7 +337,7 @@ export function LoginPage() {
     if (ve) return setError(ve)
     setLoading(true)
 
-    try { 
+    try {
       const result = await login(username.trim(), password)
       // 2FA required — show TOTP entry screen
       if (result?.requires2FA) {
@@ -351,13 +351,13 @@ export function LoginPage() {
         return
       }
       if (rememberMe) {
-        localStorage.setItem("caltrack_remember_username", username.trim())
+        localStorage.setItem("sevo_remember_username", username.trim())
       } else {
-        localStorage.removeItem("caltrack_remember_username")
+        localStorage.removeItem("sevo_remember_username")
       }
-      navigate(postLoginRoute(u), { replace: true }) 
+      navigate(postLoginRoute(u), { replace: true })
     }
-    catch (err) { 
+    catch (err) {
       setError("Invalid username or password.")
     }
     finally { setLoading(false) }
@@ -406,7 +406,7 @@ export function LoginPage() {
           className="absolute top-8 left-8 z-50 pointer-events-none"
         >
           <div className="pointer-events-auto">
-            <CalTrackLogo size="md" showTagline={false} />
+            <SevoLogo size="md" showTagline={false} />
           </div>
         </motion.div>        {/* Intro Animation / Scroll Morph Hero */}
         {mode === "forgot_password" ? (
@@ -414,7 +414,7 @@ export function LoginPage() {
             {/* Holographic grids and scanline */}
             <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: "radial-gradient(#4f46e5 2px, transparent 2px)", backgroundSize: "40px 40px" }} />
             <div className="absolute w-[600px] h-[600px] rounded-full bg-indigo-500/5 blur-[120px] pointer-events-none" />
-            
+
             {/* HUD Scanline */}
             <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-indigo-500 to-transparent opacity-40 animate-pulse pointer-events-none" style={{ animationDuration: '3s' }} />
 
@@ -437,7 +437,7 @@ export function LoginPage() {
                     Secure. Encrypted. Intelligent.
                   </p>
                   <p className="text-sm font-semibold text-slate-600 leading-relaxed max-w-sm mx-auto">
-                    Restore access to your CALtrack account through our AI-powered recovery system.
+                    Restore access to your sevo account through our AI-powered recovery system.
                   </p>
                 </div>
               </motion.div>
@@ -587,7 +587,7 @@ export function LoginPage() {
               <h2 className="text-xl font-display font-black text-rose-600 tracking-wider uppercase text-center">
                 ⚠ ACCESS DENIED
               </h2>
-              
+
               <div className="p-5 rounded-2xl bg-rose-50/20 border border-rose-100/80 text-left space-y-4">
                 <div>
                   <div className="text-[10px] font-mono uppercase text-slate-500 tracking-wider">Identity Detected</div>
@@ -626,7 +626,7 @@ export function LoginPage() {
                 >
                   Retry Authentication
                 </button>
-                
+
                 <button
                   type="button"
                   onClick={handleStartRecovery}
@@ -646,7 +646,7 @@ export function LoginPage() {
                     </span>
                     <div className="flex justify-center mb-3">
                       <pre className="font-mono text-[9px] font-bold text-indigo-600 leading-normal text-left select-none bg-slate-50 border border-slate-200 p-3 rounded-2xl shadow-inner">
-{`╔══════════════════════════════════╗
+                        {`╔══════════════════════════════════╗
 ║   ACCESS RECOVERY TERMINAL       ║
 ╚══════════════════════════════════╝`}
                       </pre>
@@ -663,7 +663,7 @@ export function LoginPage() {
                         <User className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors duration-300" size={18} />
                         <input
                           className="w-full pl-14 pr-5 py-4 bg-slate-50 border border-slate-200 focus:border-indigo-500/50 rounded-2xl text-[14px] font-medium text-slate-800 focus:bg-white focus:ring-4 focus:ring-indigo-500/5 outline-none transition-all duration-300 placeholder:text-slate-400 font-mono"
-                          placeholder="e.g. admin@caltrack.com"
+                          placeholder="e.g. admin@sevo.com"
                           value={identityInput}
                           onChange={e => setIdentityInput(e.target.value)}
                           required
@@ -747,7 +747,7 @@ export function LoginPage() {
                       <span className="inline-flex items-center px-3 py-1 rounded-full text-[9px] font-mono uppercase tracking-widest bg-indigo-50 text-indigo-600 border border-indigo-100/50 mb-1">
                         Phase 02 — Secure Link Generation
                       </span>
-                      
+
                       <div className="flex justify-center py-2 relative">
                         <div className="w-16 h-16 rounded-full border-4 border-indigo-100 border-t-indigo-600 animate-spin" />
                         <div className="absolute inset-0 flex items-center justify-center">
@@ -757,7 +757,7 @@ export function LoginPage() {
 
                       <div className="space-y-2">
                         <div className="text-[10px] font-mono uppercase text-indigo-600 font-bold tracking-widest text-center">
-                          CALTRACK SECURITY ENGINE
+                          sevo SECURITY ENGINE
                         </div>
                         <div className="text-xs text-slate-600 font-semibold h-6 text-center leading-normal">
                           {generationLog}
@@ -767,8 +767,8 @@ export function LoginPage() {
                       {/* Cyber Progress Bar */}
                       <div className="space-y-1.5 max-w-xs mx-auto">
                         <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-200">
-                          <div 
-                            className="bg-indigo-600 h-full rounded-full transition-all duration-100 ease-out" 
+                          <div
+                            className="bg-indigo-600 h-full rounded-full transition-all duration-100 ease-out"
                             style={{ width: `${generationProgress}%` }}
                           />
                         </div>
@@ -786,7 +786,7 @@ export function LoginPage() {
                         <span className="inline-flex items-center px-3 py-1 rounded-full text-[9px] font-mono uppercase tracking-widest bg-emerald-50 text-emerald-600 border border-emerald-100/50 mb-3">
                           ✓ TOKEN READY
                         </span>
-                        <h2 className="text-xl font-display font-black text-slate-900 mb-1 text-center">CALTRACK SECURITY ENGINE</h2>
+                        <h2 className="text-xl font-display font-black text-slate-900 mb-1 text-center">sevo SECURITY ENGINE</h2>
                         <p className="text-[10px] font-mono text-slate-500 uppercase tracking-wider text-center">Secure reset link created</p>
                       </div>
 
@@ -826,11 +826,11 @@ export function LoginPage() {
                   <span className="inline-flex items-center px-3 py-1 rounded-full text-[9px] font-mono uppercase tracking-widest bg-emerald-50 text-emerald-600 border border-emerald-100/50 mb-1">
                     Phase 03 — Mail Sent Success
                   </span>
-                  
+
                   <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-2 border border-emerald-100 shadow-sm text-emerald-500 animate-bounce">
                     <CheckCircle2 size={32} />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <h1 className="text-2xl font-display font-black text-slate-900 leading-tight tracking-tight text-center">
                       🚀 RECOVERY LINK DEPLOYED
@@ -861,7 +861,7 @@ export function LoginPage() {
                       </span>
                     </div>
                   </div>
-                  
+
                   <div className="space-y-3 pt-2">
                     <a
                       href="https://mail.google.com/"

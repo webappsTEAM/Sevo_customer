@@ -3,7 +3,7 @@ import { CustomerTrackingPage } from "../customer/tracking/CustomerTrackingPage.
 
 /**
  * CustomerLiveTrackingModal
- * Smooth, full-featured in-page live tracking popup modal for CalTrack.
+ * Smooth, full-featured in-page live tracking popup modal for sevo.
  * Renders the authoritative CustomerTrackingPage inside a rich modal overlay.
  */
 export default function CustomerLiveTrackingModal({ booking, onClose }) {

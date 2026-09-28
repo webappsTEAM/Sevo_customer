@@ -318,3 +318,206 @@ class GroceryOrderItem(models.Model):
 
     def __str__(self):
         return f"GroceryOrderItem #{self.id} of {self.order.order_number}"
+
+
+# ─── Seller Hub Marketplace Order layer (Phase 8B) ───────────────────────────
+
+def _generate_marketplace_order_number():
+    """
+    Generates a unique human-readable source order ID for Seller Hub checkouts,
+    e.g. MKT00001.
+    """
+    prefix = "MKT"
+    last = MarketplaceOrder.objects.filter(order_number__startswith=prefix).order_by("-id").first()
+    num = (last.id + 1) if last and last.id else (MarketplaceOrder.objects.count() + 1)
+    order_number = f"{prefix}{str(num).zfill(5)}"
+    while MarketplaceOrder.objects.filter(order_number=order_number).exists():
+        num += 1
+        order_number = f"{prefix}{str(num).zfill(5)}"
+    return order_number
+
+
+class MarketplaceOrder(models.Model):
+    """
+    Parent record for one Seller Hub Marketplace checkout.
+    Sevo-customer is canonical owner of customer identity, delivery address,
+    and payment snapshot; delegates fulfillment to Vendor via SellerOrder intake.
+    """
+
+    class Status(models.TextChoices):
+        CONFIRMED = "CONFIRMED", "Confirmed"
+        PACKING = "PACKING", "Seller is packing"
+        READY_FOR_PICKUP = "READY_FOR_PICKUP", "Ready for pickup"
+        OUT_FOR_DELIVERY = "OUT_FOR_DELIVERY", "On the way"
+        DELIVERED = "DELIVERED", "Delivered"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    order_number = models.CharField(max_length=30, unique=True, blank=True, db_index=True)
+
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="marketplace_orders",
+        help_text="The customer who placed this marketplace order.",
+    )
+
+    seller_id = models.IntegerField(db_index=True)
+    seller_name = models.CharField(max_length=255, blank=True, default="")
+
+    vendor_order_id = models.IntegerField(null=True, blank=True, db_index=True)
+    vendor_order_number = models.CharField(max_length=50, blank=True, default="")
+
+    status = models.CharField(max_length=25, choices=Status.choices, default=Status.CONFIRMED, db_index=True)
+
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    subtotal_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    delivery_address = models.TextField()
+    customer_name = models.CharField(max_length=255, blank=True, default="")
+    customer_phone = models.CharField(max_length=50, blank=True, default="")
+    customer_email = models.CharField(max_length=255, blank=True, default="")
+
+    payment_method = models.CharField(max_length=50, default="UPI")
+    payment_status = models.CharField(max_length=50, default="PAID")
+    payment_transaction_id = models.CharField(max_length=100, blank=True, default="")
+
+    vendor_intake_synced = models.BooleanField(default=False)
+    vendor_intake_response = models.JSONField(default=dict, blank=True)
+
+    cancellation_reason = models.TextField(blank=True, default="")
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancelled_by = models.CharField(max_length=50, blank=True, default="")
+    cancellation_pending = models.BooleanField(default=False)
+    needs_refund_review = models.BooleanField(default=False)
+
+    delivery_slot = models.CharField(max_length=100, blank=True, default="")
+    handover_ref = models.CharField(max_length=100, blank=True, default="")
+    idempotency_key = models.CharField(max_length=100, blank=True, default="", db_index=True)
+    last_applied_vendor_sequence = models.PositiveIntegerField(default=0, db_index=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "orders_marketplaceorder"
+        ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        _order_number_was_generated = False
+        if not self.order_number:
+            self.order_number = _generate_marketplace_order_number()
+            _order_number_was_generated = True
+
+        _max_attempts = 5
+        for _attempt in range(1, _max_attempts + 1):
+            try:
+                with transaction.atomic():
+                    super().save(*args, **kwargs)
+                break
+            except IntegrityError:
+                if not _order_number_was_generated or _attempt == _max_attempts:
+                    raise
+                self.order_number = _generate_marketplace_order_number()
+
+    def __str__(self):
+        return f"{self.order_number} ({self.get_status_display()})"
+
+
+class MarketplaceOrderItem(models.Model):
+    """
+    Line item for MarketplaceOrder snapshotting product details at checkout time.
+    """
+
+    order = models.ForeignKey(MarketplaceOrder, on_delete=models.CASCADE, related_name="items")
+
+    seller_product_id = models.IntegerField(db_index=True)
+    product_title = models.CharField(max_length=255)
+    product_sku = models.CharField(max_length=100, blank=True, default="")
+    product_brand = models.CharField(max_length=150, blank=True, default="")
+    unit = models.CharField(max_length=50, blank=True, default="")
+    pack_size = models.CharField(max_length=50, blank=True, default="")
+    product_image = models.CharField(max_length=500, blank=True, default="")
+
+    quantity = models.PositiveIntegerField(default=1)
+    unit_price_snapshot = models.DecimalField(max_digits=10, decimal_places=2)
+    mrp_snapshot = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    line_amount = models.DecimalField(max_digits=10, decimal_places=2)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "orders_marketplaceorderitem"
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"MarketplaceOrderItem #{self.id} ({self.product_title}) of {self.order.order_number}"
+
+
+class MarketplaceOrderOutbox(models.Model):
+    """
+    Idempotent outbox for syncing order intake and cancellation to Vendor.
+    Prevents duplicate dispatches and guarantees retry safety.
+    """
+
+    class EventType(models.TextChoices):
+        ORDER_INTAKE = "ORDER_INTAKE", "Order Intake"
+        ORDER_CANCEL = "ORDER_CANCEL", "Order Cancel"
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        PROCESSED = "PROCESSED", "Processed"
+        FAILED = "FAILED", "Failed"
+
+    event_type = models.CharField(max_length=30, choices=EventType.choices)
+    source_order_id = models.CharField(max_length=30, db_index=True)
+    payload = models.JSONField(default=dict)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
+    retry_count = models.PositiveIntegerField(default=0)
+    next_retry_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    last_error = models.TextField(blank=True, default="")
+    processed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "orders_marketplaceorderoutbox"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Outbox {self.event_type} for {self.source_order_id} [{self.status}]"
+
+
+class MarketplaceOrderEvent(models.Model):
+    """
+    Authoritative event timeline and audit record for Seller Hub Marketplace orders.
+    Stores raw vendor webhook events and reconciliation updates idempotently.
+    """
+
+    class Source(models.TextChoices):
+        VENDOR_EVENT = "VENDOR_EVENT", "Vendor Webhook Event"
+        RECONCILE = "RECONCILE", "Reconcile Poll"
+
+    order = models.ForeignKey(MarketplaceOrder, on_delete=models.CASCADE, related_name="events")
+    event_id = models.CharField(max_length=64, unique=True, db_index=True)
+    sequence = models.PositiveIntegerField(default=0, db_index=True)
+    event_type = models.CharField(max_length=60)
+    vendor_status = models.CharField(max_length=50)
+    previous_vendor_status = models.CharField(max_length=50, blank=True, default="")
+    mapped_status = models.CharField(max_length=50, blank=True, default="")
+    occurred_at = models.DateTimeField(null=True, blank=True)
+    received_at = models.DateTimeField(auto_now_add=True)
+    source = models.CharField(max_length=30, choices=Source.choices, default=Source.VENDOR_EVENT)
+    cancellation_reason = models.TextField(blank=True, default="")
+    cancelled_by = models.CharField(max_length=50, blank=True, default="")
+    raw_payload = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        db_table = "orders_marketplaceorderevent"
+        ordering = ["sequence", "occurred_at", "id"]
+
+    def __str__(self):
+        return f"Event {self.event_id} ({self.event_type}: {self.vendor_status} -> {self.mapped_status}) on {self.order.order_number}"
+
+

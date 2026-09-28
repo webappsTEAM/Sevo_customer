@@ -1,6 +1,6 @@
 /**
  * technicianBikeMarker.js
- * Generates high-fidelity, directional Leaflet vehicle markers for CalTrack.
+ * Generates high-fidelity, directional Leaflet vehicle markers for sevo.
  * Supports:
  *  - Bike / Scooter (Electrician, Plumber, Handyman, Locksmith, Repair)
  *  - Cargo Truck / Mini Van (Packers & Movers, Furniture Transport, Heavy Appliance)
@@ -163,7 +163,7 @@ function renderVehicleSvg(category, bearing) {
         <path d="M28 25 Q32 22 36 25 Q36 28 32 29 Q28 28 28 25 Z" fill="#0284c7"/>
         <path d="M28.5 24 Q32 22 35.5 24" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/>
 
-        <!-- CalTrack Rear Service Box -->
+        <!-- sevo Rear Service Box -->
         <rect x="23" y="40" width="18" height="13" rx="2.5" fill="#f8fafc" stroke="#2563eb" stroke-width="1.5"/>
         <rect x="25" y="41" width="14" height="2" rx="0.5" fill="#2563eb"/>
         <rect x="27" y="45" width="10" height="5" rx="1" fill="#2563eb"/>

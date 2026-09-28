@@ -1,25 +1,8 @@
 """
 orders/checkout_views.py
 
-Phase 4 (DAILY_ESSENTIALS_IMPLEMENTATION_PLAN.md): the explicit unified
-checkout controller. Thin orchestration only -- runs Services checkout
-(BookingCreateView, untouched) and/or Grocery checkout (Phase 3's
-GroceryCheckoutView, untouched) as fully independent calls, each managing
-its own transaction boundary internally, never a shared one. A failure in
-one must never roll back or block the other.
-
-The backend never infers "both" just because both carts happen to be
-non-empty -- the frontend must send an explicit `cart_types` list, only
-ever `["services", "daily_essentials"]` after the customer has explicitly
-confirmed checking out both.
-
-Re-runs each existing view's own `.post()` unchanged, against the same
-real authenticated request (so `request.user`, headers, etc. are all
-genuine) but with a different body -- a plain attribute-proxy, rather than
-fabricating a second WSGI request via APIRequestFactory. This is what
-keeps BookingCreateView and GroceryCheckoutView byte-for-byte unchanged
-per the plan's "effectively unchanged" requirement, without the fragility
-of a synthetic request cycle.
+Unified checkout controller. Supports Services, Daily Essentials, and Marketplace carts.
+Runs each checkout controller independently with separate transaction boundaries.
 """
 from rest_framework import status
 from rest_framework.views import APIView
@@ -28,6 +11,7 @@ from accounts.permissions import IsCustomer
 from service_requests.views import BookingCreateView
 
 from .views import GroceryCheckoutView, _success, _error
+from .marketplace_views import MarketplaceCheckoutView
 
 
 class _PayloadOverrideRequest:
@@ -49,13 +33,6 @@ class _PayloadOverrideRequest:
 
 
 def _run_subview(view_class, payload, original_request):
-    """
-    Response.data is already populated by the view's own `.post()` -- no
-    need to render it, since the result is embedded into another Response
-    (and rendering here would fail anyway: `.render()` needs
-    accepted_renderer/accepted_media_type, which are only set by
-    `dispatch()`'s finalize_response(), which this bypasses on purpose).
-    """
     view = view_class()
     view.request = original_request
     view.format_kwarg = None
@@ -67,19 +44,15 @@ class CheckoutView(APIView):
     POST /api/orders/checkout/
 
     Body: {
-      "cart_types": ["services"] | ["daily_essentials"] | ["services", "daily_essentials"],
-      "service": {...same payload BookingCreateView accepts...},  # required if "services" requested
-      "grocery": {"delivery_address": "..."},                     # required if "daily_essentials" requested
+      "cart_types": ["services"] | ["daily_essentials"] | ["marketplace"] | combination,
+      "service": {...BookingCreateView payload...},
+      "grocery": {"delivery_address": "..."},
+      "marketplace": {"delivery_address": "...", "payment_method": "UPI", ...}
     }
-
-    Response: { "service_order": <BookingCreateView envelope> | null,
-                "grocery_order": <GroceryCheckoutView envelope> | null }
-    Each nested envelope carries its own success/data/message/errors, so the
-    frontend can show partial success/failure clearly.
     """
     permission_classes = [IsCustomer]
 
-    VALID_TYPES = {"services", "daily_essentials"}
+    VALID_TYPES = {"services", "daily_essentials", "marketplace"}
 
     def post(self, request):
         cart_types = request.data.get("cart_types")
@@ -90,7 +63,11 @@ class CheckoutView(APIView):
         if unknown:
             return _error(f"Unknown cart_types: {sorted(unknown)}.", status.HTTP_400_BAD_REQUEST)
 
-        result = {"service_order": None, "grocery_order": None}
+        result = {
+            "service_order": None,
+            "grocery_order": None,
+            "marketplace_order": None,
+        }
 
         if "services" in cart_types:
             service_payload = request.data.get("service") or {}
@@ -99,5 +76,9 @@ class CheckoutView(APIView):
         if "daily_essentials" in cart_types:
             grocery_payload = request.data.get("grocery") or {}
             result["grocery_order"] = _run_subview(GroceryCheckoutView, grocery_payload, request).data
+
+        if "marketplace" in cart_types:
+            marketplace_payload = request.data.get("marketplace") or {}
+            result["marketplace_order"] = _run_subview(MarketplaceCheckoutView, marketplace_payload, request).data
 
         return _success(result)

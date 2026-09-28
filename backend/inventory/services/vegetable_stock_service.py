@@ -9,6 +9,7 @@ import logging
 from django.db import transaction
 from django.utils import timezone
 from django.conf import settings
+from django.core.exceptions import ObjectDoesNotExist
 from rest_framework.exceptions import ValidationError
 
 from inventory.models import Vegetable, VegetableStockMovement
@@ -20,6 +21,11 @@ from inventory.utils.unit_conversion import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_get_product_stock_item(product):
+    """Backward-compat alias for _resolve_vegetable_item."""
+    return _resolve_vegetable_item(product)
 
 
 class InsufficientStockError(Exception):
@@ -121,7 +127,7 @@ def adjust_stock(product, quantity, unit, reason: str, company, entered_by_user=
     Sets stock to the exact converted base units. Reason is required.
     Logs VegetableStockMovement (ADJUSTMENT) with computed delta and reason.
     """
-    if not reason or not str(reason).strip():
+    if not reason or not reason.strip():
         raise ValueError("Reason is required for manual stock adjustment.")
 
     basis = unit_basis_for_unit(unit)

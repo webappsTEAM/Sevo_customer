@@ -8,6 +8,7 @@ from datetime import datetime, date, timedelta
 from typing import List, Dict, Any, Optional
 from django.utils import timezone
 from django.db.models import Sum, Q
+from django.core.exceptions import ObjectDoesNotExist
 
 from inventory.models import Vegetable, VegetableStockMovement
 from inventory.utils.unit_conversion import (
@@ -19,6 +20,17 @@ from inventory.utils.unit_conversion import (
 )
 
 
+def _safe_get_stock_item(product) -> Optional[Any]:
+    """
+    Safely retrieves product.stock_item.
+    Handles ObjectDoesNotExist which getattr does not catch.
+    """
+    try:
+        return getattr(product, "stock_item", None)
+    except ObjectDoesNotExist:
+        return None
+
+
 def get_stock_status(product) -> Dict[str, Any]:
     """
     Customer-facing stock status: in_stock boolean and max_quantity unit cap.
@@ -28,12 +40,15 @@ def get_stock_status(product) -> Dict[str, Any]:
         - If stock_item.stock_quantity_grams is None or <= 0 -> in_stock: False, max_quantity: 0 (out of stock)
         - If stock_item.stock_quantity_grams > 0 -> in_stock: True, max_quantity: integer packs available
     """
-    item = getattr(product, "vegetable_stock", None) or getattr(product, "stock_item", None)
-    if not item and hasattr(product, "id") and product.id:
+    # Fast in-memory resolution avoiding N+1 remote DB roundtrips
+    item = None
+    if getattr(product, "stock_item_id", None):
         try:
-            item = getattr(product, "_cached_vegetable", None) or Vegetable.objects.filter(package=product).first()
+            item = getattr(product, "stock_item", None)
         except Exception:
             item = None
+    if not item and hasattr(product, "_cached_vegetable"):
+        item = getattr(product, "_cached_vegetable", None)
     if not item:
         return {"in_stock": True, "max_quantity": None}
 
@@ -82,7 +97,7 @@ def get_bulk_admin_stock_status(products: list, for_date: Optional[date] = None)
     items = []
     item_by_prod_id = {}
     for prod in products:
-        item = getattr(prod, "stock_item", None)
+        item = _safe_get_stock_item(prod)
         if item:
             items.append(item)
             item_by_prod_id[prod.id] = item
@@ -237,7 +252,7 @@ def get_daily_stock_history(product, start_date: date, end_date: date) -> List[D
     """
     Reporting selector: derives daily opening, sold, and closing history from VegetableStockMovement.
     """
-    item = getattr(product, "stock_item", None)
+    item = _safe_get_stock_item(product)
     if not item:
         return []
 

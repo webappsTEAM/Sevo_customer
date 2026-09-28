@@ -267,41 +267,36 @@ class VegetableAdminDashboardStatsView(APIView):
             if stock == 0:
                 out_of_stock_count += 1
 
-            threshold = (
-                veg.reorder_threshold
-                if (veg.reorder_threshold or 0) > 0
-                else (int(default_daily * 0.25) if default_daily > 0 else 0)
-            )
-            base_for_pct = default_daily if default_daily > 0 else (threshold * 4 if threshold > 0 else (stock or 1))
+            if default_daily > 0:
+                threshold = int(default_daily * 0.25)
+                if stock <= threshold:
+                    pct = round((stock / default_daily) * 100, 1)
+                    img = ""
+                    if veg.image and str(veg.image).strip():
+                        img = str(veg.image).strip()
+                    elif veg.package and veg.package.image and str(veg.package.image).strip():
+                        img = str(veg.package.image).strip()
+                    elif veg.category and veg.category.image and str(veg.category.image).strip():
+                        img = str(veg.category.image).strip()
+                    if not img:
+                        img = "/mockups/vegetables_realistic.png"
 
-            if threshold > 0 and stock <= threshold:
-                pct = round((stock / base_for_pct) * 100, 1) if base_for_pct > 0 else 0.0
-                img = ""
-                if veg.image and str(veg.image).strip():
-                    img = str(veg.image).strip()
-                elif veg.package and veg.package.image and str(veg.package.image).strip():
-                    img = str(veg.package.image).strip()
-                elif veg.category and veg.category.image and str(veg.category.image).strip():
-                    img = str(veg.category.image).strip()
-                if not img:
-                    img = "/mockups/vegetables_realistic.png"
-
-                low_stock_items.append({
-                    "id": veg.id,
-                    "product_id": veg.package_id,
-                    "name": veg.package.name if veg.package else veg.name,
-                    "sku": veg.sku,
-                    "category_name": veg.category.name if veg.category else "Uncategorized",
-                    "image": img,
-                    "unit_basis": veg.unit_basis,
-                    "unit": veg.unit,
-                    "current_stock_grams": stock,
-                    "current_stock_display": format_stock_for_display(stock, unit_basis=veg.unit_basis, unit=veg.unit),
-                    "default_daily_grams": default_daily,
-                    "default_daily_display": format_stock_for_display(default_daily, unit_basis=veg.unit_basis, unit=veg.unit),
-                    "percentage_left": pct,
-                    "is_out_of_stock": stock == 0,
-                })
+                    low_stock_items.append({
+                        "id": veg.id,
+                        "product_id": veg.package_id,
+                        "name": veg.package.name if veg.package else veg.name,
+                        "sku": veg.sku,
+                        "category_name": veg.category.name if veg.category else "Uncategorized",
+                        "image": img,
+                        "unit_basis": veg.unit_basis,
+                        "unit": veg.unit,
+                        "current_stock_grams": stock,
+                        "current_stock_display": format_stock_for_display(stock, unit_basis=veg.unit_basis, unit=veg.unit),
+                        "default_daily_grams": default_daily,
+                        "default_daily_display": format_stock_for_display(default_daily, unit_basis=veg.unit_basis, unit=veg.unit),
+                        "percentage_left": pct,
+                        "is_out_of_stock": stock == 0,
+                    })
 
         # Sort low stock items: out of stock first, then lowest percentage left
         low_stock_items.sort(key=lambda x: (not x["is_out_of_stock"], x["percentage_left"]))

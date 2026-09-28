@@ -16,6 +16,7 @@ export function EstimationTimeline({
   currentStatus = "REQUESTED",
   technicianName = null,
   compact = false,
+  diagnosticFee = 199,
 }) {
   // Map status string to step index (1-indexed)
   const getActiveStepIndex = (status) => {
@@ -180,7 +181,7 @@ export function EstimationTimeline({
                 </div>
                 <div className="bg-white/90 p-2.5 rounded-lg border border-slate-200 text-slate-700">
                   <span className="font-bold text-slate-600 block mb-0.5">✗ IF YOU DECLINE:</span>
-                  Estimation is closed. Only the inspection fee (₹199) applies — zero surprise charges.
+                  Estimation is closed. Only the inspection fee (₹{diagnosticFee || 199}) applies — zero surprise charges.
                 </div>
               </div>
             </div>
