@@ -165,6 +165,7 @@ class VegetableStockTestSuite(TestCase):
             "latitude": 12.9716,
             "longitude": 77.5946,
             "preferred_date": (timezone.localdate() + timedelta(days=1)).strftime("%Y-%m-%d"),
+            "preferred_time": "10:00 AM - 12:00 PM",
             "cart_data": [
                 {"id": self.pkg_tomato.id, "name": self.pkg_tomato.name, "quantity": 2, "unit": "kg"}
             ],
