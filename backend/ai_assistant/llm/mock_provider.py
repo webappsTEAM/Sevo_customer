@@ -139,59 +139,57 @@ class MockDeterministicProvider(BaseLLMProvider):
             bookings = data.get("bookings", [])
             if not bookings:
                 return LLMResponse(
-                    content="You do not have any active or past bookings under this account.",
+                    content="You do not have any active bookings at the moment. How can I help you book a service today?",
                     tool_calls=[],
                 )
-            lines = ["Here are your recent bookings:"]
-            for b in bookings:
-                status_txt = b.get("status_display") or b.get("status")
-                price_txt = b.get("total_amount") or "To be estimated upon inspection"
-                tech_txt = b.get("technician_name") or b.get("technician_status") or "A technician will be assigned shortly."
-                lines.append(
-                    f"• **Booking #{b.get('booking_id')}** ({b.get('service_category')} - {b.get('issue_title')}): "
-                    f"Status: **{status_txt}** | Preferred Slot: {b.get('preferred_date')} ({b.get('preferred_time')}) | "
-                    f"Technician: {tech_txt}"
+
+            # Focus exclusively on current active booking
+            active_list = [b for b in bookings if str(b.get("status", "")).lower() not in {"completed", "closed", "cancelled", "rejected"}]
+            target = active_list[0] if active_list else bookings[0]
+
+            status_txt = target.get("status_display") or target.get("status") or "Confirmed"
+            tech_name = target.get("technician_name")
+            title = target.get("issue_title") or target.get("service_category") or "Service"
+            bid = target.get("booking_id")
+            slot = f"{target.get('preferred_date')} ({target.get('preferred_time')})"
+
+            if tech_name:
+                msg = (
+                    f"**{tech_name}** has been assigned for your **{title}** (Booking #{bid}) "
+                    f"and will reach you for your {slot} slot. Current status: **{status_txt}**."
                 )
-            return LLMResponse(content="\n".join(lines), tool_calls=[])
+            else:
+                msg = (
+                    f"We are currently assigning a technician for your **{title}** (Booking #{bid}). "
+                    f"Preferred slot: {slot}. We will update you with live tracking as soon as they are on the way."
+                )
+            return LLMResponse(content=msg, tool_calls=[])
 
         # Handle specific order detail
         if "order" in data:
             o = data["order"]
-            avail_actions = o.get("available_actions", {})
-            action_lines = []
-            if avail_actions.get("can_cancel"):
-                action_lines.append("Cancel Booking")
-            if avail_actions.get("can_reschedule"):
-                action_lines.append("Reschedule Booking")
-            if avail_actions.get("can_track"):
-                action_lines.append("Live GPS Tracking")
-            if avail_actions.get("can_pay"):
-                action_lines.append("Pay Online")
-            if avail_actions.get("can_give_feedback"):
-                action_lines.append("Submit Feedback")
-            if avail_actions.get("can_request_refund"):
-                action_lines.append("Request Refund")
-
             tech_info = o.get("technician")
             if tech_info and tech_info.get("name"):
-                tech_display = f"{tech_info.get('name')} (Rating: {tech_info.get('rating', '5.0')})"
+                tech_display = f"{tech_info.get('name')}"
             else:
-                tech_display = o.get("technician_status") or "A technician will be assigned shortly."
+                tech_display = o.get("technician_status") or "Assigning shortly"
 
             price_display = o.get("total_amount")
             if not price_display or price_display == "None":
-                price_display = "Unavailable (to be estimated upon inspection)"
+                price_display = "To be estimated upon inspection"
+            else:
+                price_display = f"₹{price_display}" if not str(price_display).startswith("₹") else str(price_display)
+
+            title = o.get("title") or o.get("category") or "Service"
+            status_txt = o.get("status_display") or o.get("status")
 
             resp = (
-                f"**Booking Details for #{o.get('booking_id')} ({o.get('request_id')}):**\n"
-                f"• **Service:** {o.get('category')} — {o.get('title')}\n"
-                f"• **Status:** {o.get('status_display')}\n"
-                f"• **Date & Slot:** {o.get('date')} ({o.get('time')})\n"
-                f"• **Address:** {o.get('address')}\n"
-                f"• **Technician:** {tech_display}\n"
-                f"• **Total Amount:** {price_display}\n"
-                f"• **Payment Status:** {o.get('payment_status')}\n"
-                f"• **What you can do:** {', '.join(action_lines) if action_lines else 'No modifications available at this stage'}"
+                f"**Booking #{o.get('booking_id')} — {title}**\n"
+                f"• Status: **{status_txt}**\n"
+                f"• Slot: {o.get('date')} ({o.get('time')})\n"
+                f"• Professional: {tech_display}\n"
+                f"• Total: **{price_display}** ({o.get('payment_status', 'Pending')})\n"
+                f"• Address: {o.get('address', 'On file')}"
             )
             return LLMResponse(content=resp, tool_calls=[])
 
@@ -199,44 +197,39 @@ class MockDeterministicProvider(BaseLLMProvider):
         if "can_track" in data:
             can_track = data.get("can_track", False)
             if can_track:
+                loc = data.get("technician_location_name") or "on the way to your location"
                 return LLMResponse(
                     content=(
-                        f"**Live Tracking for Booking #{data.get('order_id')}:**\n"
-                        f"• Status: **{data.get('status')}**\n"
-                        f"• Technician Location: {data.get('technician_location_name')}\n"
-                        f"• You can open live GPS map tracking directly on your [Tracking Screen]({data.get('tracking_url')})."
+                        f"Your technician for Booking #{data.get('order_id')} is currently **{loc}** (Status: **{data.get('status')}**). "
+                        f"You can view real-time movement on your [Live GPS Map]({data.get('tracking_url')})."
                     ),
                     tool_calls=[],
                 )
             else:
-                return LLMResponse(content=data.get("message", "Tracking is currently unavailable."), tool_calls=[])
+                return LLMResponse(content=data.get("message", "Tracking details will be active once your technician departs."), tool_calls=[])
 
         # Handle catalog search
         if "packages" in data:
             pkgs = data.get("packages", [])
             if not pkgs:
                 return LLMResponse(
-                    content=f"No matching service packages found for '{data.get('query')}'. Try searching for 'AC cleaning', 'plumbing', or 'painting'.",
+                    content=f"No matching service packages found for '{data.get('query')}'. You can try searching for 'AC service', 'cleaning', or 'plumbing'.",
                     tool_calls=[],
                 )
-            lines = [f"Found {len(pkgs)} available service packages:"]
-            for p in pkgs:
-                lines.append(f"• **{p['name']}** ({p['category']}): ₹{p['price']} | Duration: {p['duration']}")
-                if p.get("description"):
-                    lines.append(f"  _{p['description']}_")
+            lines = [f"Here are available {data.get('query', '')} packages:"]
+            for p in pkgs[:4]:
+                dur = f" ({p['duration']})" if p.get("duration") else ""
+                lines.append(f"• **{p['name']}**: ₹{p['price']}{dur}")
+            lines.append("\nWould you like help booking any of these?")
             return LLMResponse(content="\n".join(lines), tool_calls=[])
 
         # Handle customer profile
         if "profile" in data:
             prof = data["profile"]
-            addr_count = len(prof.get("saved_addresses", []))
             return LLMResponse(
                 content=(
-                    f"**Account Profile:**\n"
-                    f"• Name: {prof.get('first_name', '')} {prof.get('last_name', '')}\n"
-                    f"• Email: {prof.get('email', '')}\n"
-                    f"• Phone: {prof.get('phone', '')}\n"
-                    f"• Saved Addresses: {addr_count} saved address(es)"
+                    f"Hi {prof.get('first_name', 'there')}! You are registered with phone **{prof.get('phone', 'N/A')}** "
+                    f"and email **{prof.get('email', 'N/A')}**."
                 ),
                 tool_calls=[],
             )
@@ -245,39 +238,45 @@ class MockDeterministicProvider(BaseLLMProvider):
         return LLMResponse(content=str(data), tool_calls=[])
 
     def _synthesize_rag_response(self, rag_context: str, query: str) -> LLMResponse:
-        # Generate an authoritative summary using the retrieved RAG context
         q_lower = query.lower()
 
+        # Cancellation
         if "cancellation" in q_lower or "cancel" in q_lower:
             return LLMResponse(
                 content=(
-                    "**CalServices Cancellation Policy:**\n\n"
-                    "• **Free Cancellation:** You can cancel free of charge if cancelled more than 2 hours before "
-                    "your scheduled appointment slot, or before a technician is dispatched.\n"
-                    "• **Late Fee:** A nominal visitation charge (up to ₹149) may apply if cancelled within 2 hours of the slot "
-                    "or after the technician is on the way.\n"
-                    "• **Inspection Visits:** Diagnostic/inspection charges (typically ₹199) are non-refundable once completed."
+                    "You can cancel your booking **100% free of charge** up to 2 hours before your scheduled appointment slot. "
+                    "If cancelled when the technician is already dispatched, a nominal visit fee (up to ₹149) may apply."
                 ),
                 tool_calls=[],
             )
 
+        # Refund
         if "refund" in q_lower:
             return LLMResponse(
                 content=(
-                    "**CalServices Refund Policy:**\n\n"
-                    "• Approved refunds are credited back to your original payment method or wallet within **5 to 7 business days**.\n"
-                    "• If you experienced service quality issues, report within 48 hours to request a complimentary rework inspection."
+                    "Approved refunds are automatically credited back to your original payment method or wallet within **5 to 7 business days**."
                 ),
                 tool_calls=[],
             )
 
-        if "vendor" in q_lower or "partner" in q_lower or "join" in q_lower or "become" in q_lower:
+        # Partner / Vendor
+        if "vendor" in q_lower or "partner" in q_lower or "join" in q_lower:
             return LLMResponse(
                 content=(
-                    "**Becoming a CalServices Partner / Professional:**\n\n"
-                    "• **Requirements:** Valid government photo ID (Aadhaar / PAN), verified trade experience, and your own tools.\n"
-                    "• **Benefits:** Flexible schedule, steady local customer demand, and weekly direct bank payouts.\n"
-                    "• **How to Apply:** Visit the partner portal at https://calservices-vendor.vercel.app to apply online."
+                    "You can join CalServices as a verified service partner! Apply directly through our partner portal: https://calservices-vendor.vercel.app."
+                ),
+                tool_calls=[],
+            )
+
+        # How to book
+        if any(w in q_lower for w in ["how to book", "how do i book", "how can i book", "steps to book", "book a service"]):
+            return LLMResponse(
+                content=(
+                    "Booking is quick and simple:\n"
+                    "1. Select your service package from the catalog.\n"
+                    "2. Pick your preferred date and time slot.\n"
+                    "3. Enter your address and confirm your booking.\n\n"
+                    "A verified technician will be assigned with live tracking and ETA!"
                 ),
                 tool_calls=[],
             )
