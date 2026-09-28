@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-const filepath = 'c:/Users/user/Caltrackk/Caltrack/frontend/src/ui/pages/BookingPage.jsx';
+const filepath = 'c:/Users/user/sevok/sevo/frontend/src/ui/pages/BookingPage.jsx';
 const buffer = fs.readFileSync(filepath);
 
 console.log('Buffer header:', buffer.slice(0, 30));

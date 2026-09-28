@@ -24,7 +24,7 @@ import { usePendingIntent } from "../../hooks/usePendingIntent.js"
 import { setCustomerSelectedAddress, getCustomerSelectedAddress, getCustomerLocation, getCustomerCoordinates } from "../../utils/customerLocationStorage.js"
 import { routes } from "../routes.js"
 import { CATEGORIES } from "./categoriesData.js"
-import { apiRequest, extractApiErrorMessage } from "../../api/client.js"
+import { apiRequest, extractApiErrorMessage, API_BASE_URL } from "../../api/client.js"
 import { resetDailyEssentialsCartCache } from "../../services/dailyEssentialsCartSync.js"
 import { hasPendingDailyEssentialsCart, hasPendingServicesCart } from "../../services/combinedCartCheck.js"
 import { CombinedCheckoutConfirmModal } from "../components/CombinedCheckoutConfirmModal.jsx"
@@ -34,16 +34,18 @@ import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
 import { FullHouseCleaningModal } from "./FullHouseCleaningModal.jsx"
 import { CockroachControlModal } from "./CockroachControlModal.jsx"
 import { AntsBedBugsControlModal } from "./AntsBedBugsControlModal.jsx"
+import { AC_BRANDS_LIST } from "../components/estimation/ACInspectionFormModal.jsx"
 import { ACInspectionFormModal } from "../components/estimation/ACInspectionFormModal.jsx"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { resolveImageUrl } from "../../utils/imageUrl.js"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
-import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
+import { SevoLogo, sevoLogo } from "../components/sevoLogo.jsx"
 import CustomerLiveTrackingModal from "../components/CustomerLiveTrackingModal.jsx"
 import { CustomerTrackingMap } from "../customer/tracking/CustomerTrackingMap.jsx"
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
 import { EditModeToggleBar, SaveNoticeToast, EditableText, EditableImage } from "../components/SuperAdminEditControls.jsx"
 import { useEditMode } from "../../state/editMode/useEditMode.js"
+import { useMultiServiceCart } from "../../state/multiServiceCart/useMultiServiceCart.js"
 import { createTrackingWebSocket } from "../../api/websocketService.js"
 import SavedAddressesPage from "./SavedAddressesPage.jsx"
 import "leaflet/dist/leaflet.css";
@@ -212,57 +214,6 @@ export const resolveAcServiceImage = (nameOrIdOrSlug) => {
 };
 
 let BOOKING_CURRENCY_SYMBOL = "₹";
-
-export const triggerPdfDownload = async (token, filename = "Quotation.pdf") => {
-  if (!token) {
-    alert("Unable to find quotation reference for download.");
-    return;
-  }
-  const cleanToken = String(token).trim();
-  const pdfPath = `/api/booking/quote/${encodeURIComponent(cleanToken)}/pdf/?download=1`;
-  const cleanFilename = (filename || "Quotation.pdf").endsWith(".pdf") ? filename : `${filename}.pdf`;
-
-  try {
-    // 1. Try standard blob download
-    const res = await fetch(pdfPath, { credentials: "include" });
-    if (res.ok) {
-      const blob = await res.blob();
-      if (blob && blob.size > 0) {
-        const downloadUrl = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = cleanFilename;
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        setTimeout(() => {
-          try {
-            window.URL.revokeObjectURL(downloadUrl);
-            link.remove();
-          } catch (_) {}
-        }, 3000);
-        return;
-      }
-    }
-  } catch (err) {
-    console.warn("Direct blob download failed, trying direct anchor click fallback:", err);
-  }
-
-  // 2. Fallback: Direct Anchor Trigger with HTML5 download attribute
-  try {
-    const fallbackLink = document.createElement('a');
-    fallbackLink.href = pdfPath;
-    fallbackLink.download = cleanFilename;
-    fallbackLink.target = '_blank';
-    fallbackLink.rel = 'noopener noreferrer';
-    fallbackLink.style.display = 'none';
-    document.body.appendChild(fallbackLink);
-    fallbackLink.click();
-    setTimeout(() => fallbackLink.remove(), 2000);
-  } catch (e2) {
-    window.location.href = pdfPath;
-  }
-};
 
 export function getAuthoritativeItemPrice(item, booking) {
   if (!item) return 0;
@@ -488,7 +439,7 @@ const DAYS_LIST = getNextDays(21)
 // convenience filter, and the two deliberately use the same numbers.
 const BOOKING_TIMEZONE = 'Asia/Kolkata'
 const SAME_DAY_CUTOFF_HOUR = 18   // 6 PM: after this, today is closed
-const SAME_DAY_MIN_LEAD_MINUTES = 60
+const SAME_DAY_MIN_LEAD_MINUTES = 30
 
 function businessNowParts() {
   try {
@@ -554,11 +505,11 @@ function isSlotInPast(dateStr, slotStr) {
     minutes = parseInt(parts[1], 10) || 0
   }
 
-  // Compare in business-timezone minutes, and keep the same minimum lead time
-  // the server applies, so a slot starting in a few minutes is not offered.
+  // Compare in business-timezone minutes, and keep 30 minutes minimum lead time
+  // so slots within 30 minutes are locked, but slots >= 30 mins away are available.
   const slotMinutes = hours * 60 + minutes
   const nowMinutes = business.hour * 60 + business.minute
-  return slotMinutes <= nowMinutes + SAME_DAY_MIN_LEAD_MINUTES
+  return slotMinutes < nowMinutes + SAME_DAY_MIN_LEAD_MINUTES
 }
 
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
@@ -1434,14 +1385,14 @@ function StepPackage({ category, selectedPackage, onSelect, onNext, onBack, pack
               <div className="uc-pkg-divider" />
 
               <div className="uc-pkg-list">
-                {pkg.includes.map(item => (
-                  <div key={item} className="uc-pkg-item uc-pkg-yes">
-                    <CheckCircle2 size={13} /> {item}
+                {pkg.includes.map((item, idx) => (
+                  <div key={idx} className="uc-pkg-item uc-pkg-yes">
+                    <CheckCircle2 size={13} /> {typeof item === 'object' ? (item?.text || item?.name || '') : String(item || '')}
                   </div>
                 ))}
-                {pkg.excludes.map(item => (
-                  <div key={item} className="uc-pkg-item uc-pkg-no">
-                    <X size={12} /> {item}
+                {pkg.excludes.map((item, idx) => (
+                  <div key={idx} className="uc-pkg-item uc-pkg-no">
+                    <X size={12} /> {typeof item === 'object' ? (item?.text || item?.name || '') : String(item || '')}
                   </div>
                 ))}
               </div>
@@ -1486,17 +1437,18 @@ function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTi
   const platformFee = totalPrice === 0 || isPaintingOrMason || nonConsultCart.length === 0 ? 0 : Math.max(29, ...nonConsultCart.map(c => c.platform_fee !== undefined ? Number(c.platform_fee) : 29))
   const grandTotal = totalPrice + roundedGst + platformFee
 
-  // Urban time slots: Morning / Afternoon / Evening
+  // Urban time slots (30-min intervals): Morning / Afternoon / Evening
   const UC_TIME_SLOTS = [
-    { period: 'Morning', icon: '🌅', slots: ['07:00', '08:00', '09:00', '10:00', '11:00', '12:00'] },
-    { period: 'Afternoon', icon: '☀️', slots: ['12:00', '13:00', '14:00', '15:00', '16:00', '17:00'] },
-    { period: 'Evening', icon: '🌙', slots: ['17:00', '18:00', '19:00', '20:00', '21:00'] },
+    { period: 'Morning', icon: '🌅', slots: ['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30'] },
+    { period: 'Afternoon', icon: '☀️', slots: ['12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30'] },
+    { period: 'Evening', icon: '🌙', slots: ['17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00'] },
   ]
   const formatSlot = t => {
-    const [h] = t.split(':').map(Number)
+    const [h, m = 0] = t.split(':').map(Number)
     const ampm = h < 12 ? 'AM' : 'PM'
     const h12 = h % 12 === 0 ? 12 : h % 12
-    return `${h12}:00 ${ampm}`
+    const minStr = String(m).padStart(2, '0')
+    return `${h12}:${minStr} ${ampm}`
   }
 
   const canContinue = Boolean(selectedDate && selectedTime && !isSlotInPast(selectedDate, selectedTime))
@@ -1604,11 +1556,11 @@ function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTi
             disabled={!canContinue}
             style={{
               width: '100%', padding: '14px', borderRadius: 14,
-              background: canContinue ? 'linear-gradient(135deg,#7C3AED,#a855f7)' : '#e2e8f0',
+              background: canContinue ? 'linear-gradient(135deg, #059669, #0B8F7A)' : '#e2e8f0',
               color: canContinue ? 'white' : '#94a3b8',
               fontWeight: 800, fontSize: '1rem', border: 'none', cursor: canContinue ? 'pointer' : 'not-allowed',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              boxShadow: canContinue ? '0 4px 20px rgba(124,58,237,0.3)' : 'none', transition: 'all 0.18s'
+              boxShadow: canContinue ? '0 4px 20px rgba(11,143,122,0.3)' : 'none', transition: 'all 0.18s'
             }}
           >
             <Calendar size={17} /> Select {selectedDate && selectedTime ? `${selectedDate} at ${formatSlot(selectedTime)}` : 'Date & Time'}
@@ -1643,7 +1595,7 @@ function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTi
           </div>
           <div style={{ padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>Total Amount</span>
-            <span style={{ fontWeight: 900, color: '#7C3AED', fontSize: '1.05rem' }}>₹{grandTotal.toLocaleString()}</span>
+            <span style={{ fontWeight: 900, color: '#047857', fontSize: '1.05rem' }}>₹{grandTotal.toLocaleString()}</span>
           </div>
           <div style={{ padding: '0 18px 14px', fontSize: '0.68rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 4 }}>
             <Shield size={11} /> SSL Secured · Pay at doorstep
@@ -1753,7 +1705,7 @@ function StepLogin({ category, onVerified, onBack }) {
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
           <div className="uc-login-center">
             <div className="uc-login-shield">
-              <ShieldCheck size={32} style={{ color: "#7C3AED" }} />
+              <ShieldCheck size={32} style={{ color: "#0B8F7A" }} />
             </div>
             <h2 className="uc-step-h2">Verify your identity</h2>
             <p className="uc-step-sub">We'll send a 4-digit OTP to confirm your phone number before booking</p>
@@ -2261,26 +2213,12 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
   }
 
   const handleOnlinePayment = async () => {
-    setPayPhase('processing')
-    setPayError('')
-    await new Promise(r => setTimeout(r, 2200))
-    const success = Math.random() > 0.05
-    if (success) {
-      setPayPhase('success')
-      if (bookingId) {
-        try {
-          await apiRequest('/payment/verify/', {
-            method: 'POST',
-            json: { booking_id: bookingId, order_id: `order_mock_${Date.now()}`, payment_id: `PAY_${Date.now().toString(36).toUpperCase()}`, mock_success: true }
-          })
-        } catch (e) { /* non-critical */ }
-      }
-      await new Promise(r => setTimeout(r, 1200))
-      onConfirm('online')
-    } else {
-      setPayPhase('failed')
-      setPayError('Payment failed. Please check your details and try again.')
-    }
+    // This screen is unreachable while online payment is disabled above. It
+    // fails closed rather than simulating a result: nothing here has taken a
+    // payment, so it must never report one as taken. See the note on
+    // isOnlinePaymentAvailable for what a real implementation does.
+    setPayPhase('failed')
+    setPayError('Online payment is not available yet. Please choose Cash on Service.')
   }
 
   const options = [
@@ -2547,14 +2485,18 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [copiedOtp, setCopiedOtp] = useState(false)
   const [showDeclineReasonModal, setShowDeclineReasonModal] = useState(false)
-  const [showRequestChangesModal, setShowRequestChangesModal] = useState(false)
-  const [changeNotes, setChangeNotes] = useState("")
   const [declineReasonCode, setDeclineReasonCode] = useState("")
   const [declineReasonNotes, setDeclineReasonNotes] = useState("")
   const [quoteExpanded, setQuoteExpanded] = useState(true)
   const [expandedPrevQuotes, setExpandedPrevQuotes] = useState({})
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [wsState, setWsState] = useState("connecting")
+  const [ratingScore, setRatingScore] = useState(0)
+  const [ratingHover, setRatingHover] = useState(0)
+  const [selectedFeedbackTags, setSelectedFeedbackTags] = useState([])
+  const [ratingSubmitted, setRatingSubmitted] = useState(false)
+  const [copiedRid, setCopiedRid] = useState(false)
+  const [copiedTrackingUrl, setCopiedTrackingUrl] = useState(false)
 
   const handleManualRefresh = async () => {
     if (isRefreshing || !rid) return
@@ -2581,7 +2523,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
 
   const handleQuoteDecision = async (decision, reasonCode = "", reasonNotes = "") => {
     try {
-      const quoteToken = liveData?.quote?.decision_token || liveData?.quote?.customer_decision_token || liveData?.quote?.quote_number
+      const quoteToken = liveData?.quote?.decision_token || liveData?.quote?.customer_decision_token
       if (!quoteToken) return
 
       const response = await fetch(`/api/booking/quote/${quoteToken}/decide/`, {
@@ -2591,22 +2533,16 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         },
         body: JSON.stringify({
           decision,
-          action: decision === "CUSTOMER_ACCEPTED" ? "ACCEPT" : decision === "CHANGE_REQUESTED" ? "REQUEST_CHANGES" : "DECLINE",
           reason_code: reasonCode,
-          reason_notes: reasonNotes,
-          notes: reasonNotes,
-          reason: reasonCode || reasonNotes,
-          customer_notes: reasonNotes,
-          decline_reason: reasonNotes,
+          reason_notes: reasonNotes
         })
       })
-      const result = await response.json().catch(() => ({}))
-      if (response.ok || result.success) {
-        const actionText = decision === "CUSTOMER_ACCEPTED" ? "accepted" : decision === "CHANGE_REQUESTED" ? "re-quotation requested" : "declined"
-        alert(`Quotation ${actionText} successfully!`)
+      const result = await response.json()
+      if (result.success) {
+        alert(`Quote successfully ${decision === "CUSTOMER_ACCEPTED" ? "accepted" : "declined"}!`)
         window.location.reload()
       } else {
-        alert("Error saving quote decision: " + (result.message || result.error || "Unknown error"))
+        alert("Error saving quote decision: " + (result.message || "Unknown error"))
       }
     } catch (err) {
       console.error("Quote decision failed:", err)
@@ -2623,82 +2559,14 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     let isFetching = false
     const TERMINAL = new Set(["completed", "closed", "cancelled", "feedback_pending", "feedback_received", "rejected"])
 
-    // Resolve initial token from props, URL query parameters, or sessionStorage cache
-    let initialToken = successData?.tracking_token || successData?.booking?.tracking_token || liveData?.tracking_token
-    if (!initialToken && typeof window !== "undefined") {
-      try {
-        const urlParams = new URLSearchParams(window.location.search)
-        initialToken = urlParams.get("token")
-      } catch (_) { }
-      if (!initialToken) {
-        try {
-          const cached = JSON.parse(sessionStorage.getItem("calservice_last_booking") || "{}")
-          if (cached?.request_id === rid || String(cached?.id) === String(rid)) {
-            initialToken = cached.tracking_token
-          }
-        } catch (_) { }
-      }
-    }
-
-    let activeToken = initialToken
-
-    const startWebSocket = (tokenToUse) => {
-      if (!isMounted) return
-      if (ws) {
-        try { ws.close() } catch (_) { }
-        ws = null
-      }
-      try {
-        ws = createTrackingWebSocket(
-          rid,
-          tokenToUse,
-          (eventType, eventData) => {
-            if (!isMounted || !eventData) return
-            setLiveData(prev => {
-              const merged = {
-                ...(prev || {}),
-                ...(eventData?.booking || eventData || {}),
-              }
-              if (eventData?.status || eventData?.booking?.status) {
-                merged.status = eventData.status || eventData.booking.status
-              }
-              if (eventData?.technician || eventData?.booking?.technician) {
-                merged.technician = {
-                  ...(prev?.technician || {}),
-                  ...(eventData.technician || eventData.booking?.technician || {})
-                }
-              }
-              if (eventData?.is_accepted !== undefined || eventData?.technician_accepted !== undefined) {
-                merged.is_accepted = eventData.is_accepted ?? eventData.technician_accepted
-              }
-              try {
-                sessionStorage.setItem("calservice_last_booking", JSON.stringify(merged))
-              } catch (_) { }
-              return merged
-            })
-          },
-          (state) => {
-            if (isMounted) setWsState(state)
-          }
-        )
-      } catch (err) {
-        console.warn("[LiveTrackingPage] WS init error:", err)
-      }
-    }
-
     const fetchStatus = async () => {
       if (isFetching) return          // skip cycle if previous request still in-flight
       isFetching = true
       try {
-        const tokenQuery = activeToken ? `?token=${encodeURIComponent(activeToken)}` : ""
+        const tokenQuery = successData?.tracking_token ? `?token=${encodeURIComponent(successData.tracking_token)}` : ""
         const res = await apiRequest(`/booking/${encodeURIComponent(rid)}/live-location/${tokenQuery}`)
         if (res?.data && isMounted) {
           setLiveData(res.data)
-          setInitialLoading(false)
-          if (res.data.tracking_token && !activeToken) {
-            activeToken = res.data.tracking_token
-            startWebSocket(activeToken)
-          }
           try {
             sessionStorage.setItem("calservice_last_booking", JSON.stringify(res.data))
           } catch (_) { }
@@ -2709,7 +2577,6 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         }
       } catch (e) { }
       finally {
-        if (isMounted) setInitialLoading(false)
         isFetching = false
       }
     }
@@ -2720,9 +2587,42 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     // 2. High-frequency auto-refresh polling (every 2.5s)
     pollTimer = setInterval(fetchStatus, 2500)
 
-    // 3. Connect real-time WebSocket channel (when token is available, else fetchStatus will initiate it)
-    if (activeToken) {
-      startWebSocket(activeToken)
+    // 3. Connect real-time WebSocket channel for instant push notifications
+    try {
+      ws = createTrackingWebSocket(
+        rid,
+        successData?.tracking_token,
+        (eventType, eventData) => {
+          if (!isMounted || !eventData) return
+          setLiveData(prev => {
+            const merged = {
+              ...(prev || {}),
+              ...(eventData?.booking || eventData || {}),
+            }
+            if (eventData?.status || eventData?.booking?.status) {
+              merged.status = eventData.status || eventData.booking.status
+            }
+            if (eventData?.technician || eventData?.booking?.technician) {
+              merged.technician = {
+                ...(prev?.technician || {}),
+                ...(eventData.technician || eventData.booking?.technician || {})
+              }
+            }
+            if (eventData?.is_accepted !== undefined || eventData?.technician_accepted !== undefined) {
+              merged.is_accepted = eventData.is_accepted ?? eventData.technician_accepted
+            }
+            try {
+              sessionStorage.setItem("calservice_last_booking", JSON.stringify(merged))
+            } catch (_) { }
+            return merged
+          })
+        },
+        (state) => {
+          if (isMounted) setWsState(state)
+        }
+      )
+    } catch (err) {
+      console.warn("[LiveTrackingPage] WS init error:", err)
     }
 
     return () => {
@@ -2844,7 +2744,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   )
 
   const isProofSubmitted = Boolean(
-    liveData?.status && ["proof_submitted", "awaiting_verification", "cash_pending"].includes(String(liveData.status).toLowerCase())
+    liveData?.status && ["proof_submitted", "awaiting_verification"].includes(String(liveData.status).toLowerCase())
   )
 
   const empInfo = liveData?.assigned_employee || liveData?.technician || successData?.technician || null
@@ -2946,34 +2846,6 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
   }
 
-  /* ─────────────────── CASE 00: INITIAL LOADING STATE ─────────────────── */
-  if (initialLoading && !liveData) {
-    return (
-      <div style={{ maxWidth: 620, margin: "0 auto", padding: "4rem 1rem", textAlign: "center" }}>
-        <div style={{
-          width: 64,
-          height: 64,
-          borderRadius: "50%",
-          background: "#f5f3ff",
-          border: "1px solid #ddd6fe",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          margin: "0 auto 1.25rem",
-          boxShadow: "0 4px 14px rgba(124, 58, 237, 0.15)",
-        }}>
-          <RefreshCw size={28} className="animate-spin" color="#7C3AED" />
-        </div>
-        <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a", margin: "0 0 0.4rem" }}>
-          Loading Booking Details...
-        </h3>
-        <p style={{ color: "#64748b", fontSize: "0.88rem", margin: 0 }}>
-          Synchronizing live status for #{rid}
-        </p>
-      </div>
-    )
-  }
-
   /* ─────────────────── CASE 0A: BOOKING COMPLETED STATE ─────────────────── */
   if (isCompleted) {
     return (
@@ -2995,37 +2867,250 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         }}>
           <CheckCircle2 size={44} color="white" />
         </div>
-        <div style={{ background: "white", borderRadius: 24, padding: "2.5rem 1.5rem", boxShadow: "0 10px 40px rgba(0,0,0,0.06)", border: "1px solid #e2e8f0" }}>
-          <h2 style={{ fontSize: "1.6rem", fontWeight: 900, color: "#0f172a", marginBottom: "0.4rem" }}>
-            {isProofSubmitted ? "Service Completed & Proof Submitted! 📸" : "Service Completed! 🎉"}
-          </h2>
-          <p style={{ color: "#64748b", fontSize: "0.95rem", marginBottom: "1.5rem" }}>
-            {isProofSubmitted
-              ? <>Service request <strong style={{ color: "#0f172a" }}>#{rid}</strong> has been serviced and work proof has been uploaded.</>
-              : <>Your service request <strong style={{ color: "#0f172a" }}>#{rid}</strong> has been finished successfully.</>}
-          </p>
+        <div style={{ background: "white", borderRadius: 24, padding: "2rem 1.5rem", boxShadow: "0 10px 40px rgba(0,0,0,0.06)", border: "1px solid #e2e8f0", textAlign: "left" }}>
+          <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#ecfdf5", color: "#059669", border: "1px solid #a7f3d0", padding: "4px 12px", borderRadius: 99, fontSize: "0.75rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+              ✓ Service Fulfilled
+            </span>
+            <h2 style={{ fontSize: "1.6rem", fontWeight: 900, color: "#0f172a", margin: "0 0 0.4rem" }}>
+              {isProofSubmitted ? "Service Completed & Proof Submitted! 📸" : "Service Completed Successfully! 🎉"}
+            </h2>
+            <p style={{ color: "#64748b", fontSize: "0.92rem", margin: 0 }}>
+              Request <strong style={{ color: "#0f172a" }}>#{rid}</strong> • {displayDate || "Today"}
+            </p>
+          </div>
+
+          {/* Serviced By Partner Card */}
           {techName && (
-            <div style={{ padding: "0.85rem", background: "#f8fafc", borderRadius: 14, border: "1px solid #e2e8f0", display: "inline-flex", alignItems: "center", gap: 10, marginBottom: "1.5rem" }}>
-              <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, color: "#475569" }}>
-                {techName.charAt(0).toUpperCase()}
+            <div style={{ padding: "1rem 1.25rem", background: "#f8fafc", borderRadius: 16, border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 44, height: 44, borderRadius: "50%", background: "linear-gradient(135deg, #059669, #10b981)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "1.1rem", boxShadow: "0 2px 8px rgba(5,150,105,0.25)" }}>
+                  {techName.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 800, textTransform: "uppercase" }}>Serviced By</div>
+                  <div style={{ fontSize: "1rem", fontWeight: 900, color: "#0f172a" }}>{techName}</div>
+                </div>
               </div>
-              <div style={{ textAlign: "left" }}>
-                <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 800, textTransform: "uppercase" }}>Serviced By</div>
-                <div style={{ fontSize: "0.9rem", fontWeight: 900, color: "#0f172a" }}>{techName}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, background: "#fef3c7", padding: "4px 10px", borderRadius: 99, border: "1px solid #fde68a" }}>
+                <Star size={14} color="#d97706" fill="#d97706" />
+                <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#92400e" }}>{techRating ? Number(techRating).toFixed(1) : "4.8"}</span>
               </div>
             </div>
           )}
-          <div>
+
+          {/* Rating & Feedback Section */}
+          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 16, padding: "1.25rem", marginBottom: "1.25rem", textAlign: "center" }}>
+            <h4 style={{ margin: "0 0 6px", fontSize: "1rem", fontWeight: 800, color: "#065f46" }}>
+              {ratingSubmitted ? "Thank you for your rating! ⭐" : "How was your service experience?"}
+            </h4>
+            <p style={{ margin: "0 0 12px", fontSize: "0.82rem", color: "#047857" }}>
+              {ratingSubmitted ? "Your feedback helps us recognize top professionals and maintain quality." : "Tap a star to rate your technician and service quality"}
+            </p>
+
+            {/* Stars */}
+            <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 12 }}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => {
+                    setRatingScore(star)
+                    setRatingSubmitted(true)
+                  }}
+                  onMouseEnter={() => setRatingHover(star)}
+                  onMouseLeave={() => setRatingHover(0)}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: 4,
+                    transform: (ratingHover >= star || ratingScore >= star) ? "scale(1.2)" : "scale(1)",
+                    transition: "transform 0.15s ease"
+                  }}
+                >
+                  <Star
+                    size={32}
+                    color={(ratingHover || ratingScore) >= star ? "#f59e0b" : "#cbd5e1"}
+                    fill={(ratingHover || ratingScore) >= star ? "#f59e0b" : "transparent"}
+                  />
+                </button>
+              ))}
+            </div>
+
+            {/* Quick Feedback Tags */}
+            {ratingScore > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6, marginTop: 10 }}>
+                {["Punctual", "Clean Work", "Polite & Professional", "Clear Communication", "Expert Diagnosis", "Great Value"].map((tag) => {
+                  const isSelected = selectedFeedbackTags.includes(tag)
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => {
+                        setSelectedFeedbackTags(prev =>
+                          prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+                        )
+                      }}
+                      style={{
+                        padding: "5px 12px",
+                        borderRadius: 99,
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        border: isSelected ? "1px solid #059669" : "1px solid #cbd5e1",
+                        background: isSelected ? "#059669" : "white",
+                        color: isSelected ? "white" : "#334155",
+                        transition: "all 0.15s ease"
+                      }}
+                    >
+                      {isSelected ? "✓ " : ""}{tag}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* 30-Day Doorstep Guarantee Reassurance Card */}
+          <div style={{ background: "linear-gradient(135deg, #064e3b, #065f46)", borderRadius: 16, padding: "1.25rem 1.5rem", color: "white", marginBottom: "1.25rem", boxShadow: "0 4px 14px rgba(6, 78, 59, 0.2)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <ShieldCheck size={20} color="#34d399" />
+              </div>
+              <div>
+                <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#a7f3d0", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  SEVO Protection Program
+                </div>
+                <div style={{ fontSize: "1rem", fontWeight: 900, color: "white" }}>
+                  30-Day Doorstep Revisit Guarantee Active
+                </div>
+              </div>
+            </div>
+            <p style={{ margin: "0 0 10px", fontSize: "0.82rem", color: "#d1fae5", lineHeight: 1.5 }}>
+              If any problem resurfaces with this service, we will send an expert technician to re-inspect and fix it with zero service fee.
+            </p>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid rgba(255,255,255,0.15)", paddingTop: 10 }}>
+              <span style={{ fontSize: "0.76rem", color: "#a7f3d0", fontWeight: 700 }}>
+                🛡️ Covered until {new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+              </span>
+              <a
+                href={`https://wa.me/919944686884?text=${encodeURIComponent(`Hi SEVO Team, I need warranty support for completed booking #${rid}`)}`}
+                target="_blank"
+                rel="noreferrer"
+                style={{ fontSize: "0.76rem", fontWeight: 800, color: "#ffffff", background: "rgba(255,255,255,0.2)", padding: "4px 10px", borderRadius: 8, textDecoration: "none" }}
+              >
+                Claim Revisit →
+              </a>
+            </div>
+          </div>
+
+          {/* Service & Payment Summary */}
+          <div style={{ padding: "1rem 1.25rem", background: "#f8fafc", borderRadius: 16, border: "1px solid #e2e8f0", marginBottom: "1.5rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <span style={{ fontSize: "0.85rem", fontWeight: 800, color: "#0f172a" }}>
+                {displayCart[0]?.name || displayCart[0]?.title || category?.name || liveData?.service_name || "SEVO Home Service"}
+              </span>
+              <span style={{ fontSize: "1.05rem", fontWeight: 900, color: "#059669" }}>₹{Number(displayTotal).toLocaleString("en-IN")}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.78rem", color: "#64748b" }}>
+              <span>Payment Mode: {paymentMethod} ({paymentStatusText})</span>
+              {liveData?.id && (
+                <button
+                  type="button"
+                  onClick={() => window.open(`${API_BASE_URL}/booking/${liveData.id}/invoice/`, '_blank')}
+                  style={{ background: "transparent", border: "none", color: "#0284c7", fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
+                >
+                  <FileText size={12} /> View Invoice
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Action CTAs: Book Again, Problem, Back to Home */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <button
+              type="button"
               onClick={() => {
                 sessionStorage.removeItem("calservice_active_tracking_id")
                 sessionStorage.removeItem("calservice_last_booking")
-                window.location.href = "/"
+                sessionStorage.removeItem("calservices_customer_cart")
+                localStorage.removeItem("calservices_customer_cart")
+                if (typeof onBookAgain === "function") {
+                  onBookAgain()
+                } else {
+                  window.location.href = "/"
+                }
               }}
-              style={{ padding: "0.85rem 2rem", background: "linear-gradient(135deg, #10B981, #059669)", color: "white", fontWeight: 800, border: "none", borderRadius: 14, cursor: "pointer", boxShadow: "0 4px 14px rgba(16,185,129,0.3)" }}
+              style={{
+                width: "100%",
+                padding: "0.95rem 1.5rem",
+                background: "linear-gradient(135deg, #059669, #047857)",
+                color: "white",
+                fontWeight: 900,
+                fontSize: "0.95rem",
+                border: "none",
+                borderRadius: 14,
+                cursor: "pointer",
+                boxShadow: "0 4px 14px rgba(5,150,105,0.3)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8
+              }}
             >
-              Back to Home
+              <RefreshCw size={18} /> Book Again (Repeat This Service)
             </button>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <a
+                href={`https://wa.me/919944686884?text=${encodeURIComponent(`Hi SEVO Team, I need help with my completed booking #${rid}`)}`}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  padding: "0.85rem 1rem",
+                  background: "#ffffff",
+                  color: "#dc2626",
+                  fontWeight: 800,
+                  fontSize: "0.85rem",
+                  border: "1.5px solid #fecaca",
+                  borderRadius: 14,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  textDecoration: "none"
+                }}
+              >
+                <AlertCircle size={15} /> Report an Issue
+              </a>
+
+              <button
+                type="button"
+                onClick={() => {
+                  sessionStorage.removeItem("calservice_active_tracking_id")
+                  sessionStorage.removeItem("calservice_last_booking")
+                  window.location.href = "/"
+                }}
+                style={{
+                  padding: "0.85rem 1rem",
+                  background: "#0f172a",
+                  color: "white",
+                  fontWeight: 800,
+                  fontSize: "0.85rem",
+                  border: "none",
+                  borderRadius: 14,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6
+                }}
+              >
+                <Home size={15} /> Back to Home
+              </button>
+            </div>
           </div>
         </div>
       </motion.div>
@@ -3117,6 +3202,148 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       transition={{ duration: 0.35 }}
       style={{ maxWidth: 620, margin: '0 auto', padding: '1.5rem 1rem' }}
     >
+      {/* ─────────────────── USEFUL BOOKING CONFIRMATION CARD (PHASE 5) ─────────────────── */}
+      <div style={{
+        background: "#ffffff",
+        border: "1.5px solid #10b98140",
+        borderRadius: 20,
+        padding: "1.25rem",
+        marginBottom: "1.25rem",
+        boxShadow: "0 4px 20px rgba(16, 185, 129, 0.08)",
+        position: "relative"
+      }}>
+        {/* Top bar: Booking Confirmed pill + Request ID */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: "1rem", paddingBottom: "0.85rem", borderBottom: "1px solid #f1f5f9" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{
+              width: 26,
+              height: 26,
+              borderRadius: "50%",
+              background: "#10b981",
+              color: "white",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 2px 6px rgba(16, 185, 129, 0.3)"
+            }}>
+              <Check size={16} strokeWidth={3} />
+            </span>
+            <div>
+              <span style={{ fontSize: "0.88rem", fontWeight: 900, color: "#065f46" }}>Booking Confirmed!</span>
+              <span style={{ display: "block", fontSize: "0.72rem", color: "#64748b", fontWeight: 600 }}>We are dispatching your Hosur service partner</span>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontFamily: "monospace", fontSize: "0.85rem", fontWeight: 800, color: "#0f172a", background: "#f8fafc", padding: "4px 10px", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+              #{rid}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                if (rid) {
+                  navigator.clipboard?.writeText(rid)
+                  setCopiedRid(true)
+                  setTimeout(() => setCopiedRid(false), 2000)
+                }
+              }}
+              title="Copy Booking ID"
+              style={{ padding: "6px 8px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: 8, cursor: "pointer", color: "#475569", display: "flex", alignItems: "center" }}
+            >
+              {copiedRid ? <Check size={13} color="#10b981" /> : <Copy size={13} />}
+            </button>
+          </div>
+        </div>
+
+        {/* 3-Section Structured Grid: Service, Date & Slot, Address */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: "1rem" }}>
+          {/* 1. Service */}
+          <div style={{ background: "#f8fafc", borderRadius: 12, padding: "10px 12px", border: "1px solid #e2e8f0" }}>
+            <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase", marginBottom: 3 }}>Service</div>
+            <div style={{ fontSize: "0.84rem", fontWeight: 800, color: "#0f172a", lineHeight: 1.3 }}>
+              {displayCart[0]?.name || displayCart[0]?.title || category?.name || liveData?.service_name || "Home Service"}
+            </div>
+            {displayCart.length > 1 && (
+              <div style={{ fontSize: "0.72rem", color: "#059669", fontWeight: 700, marginTop: 2 }}>
+                +{displayCart.length - 1} more submodule{displayCart.length > 2 ? 's' : ''}
+              </div>
+            )}
+          </div>
+
+          {/* 2. Scheduled Slot */}
+          <div style={{ background: "#f8fafc", borderRadius: 12, padding: "10px 12px", border: "1px solid #e2e8f0" }}>
+            <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase", marginBottom: 3 }}>Date & Slot</div>
+            <div style={{ fontSize: "0.84rem", fontWeight: 800, color: "#0f172a", lineHeight: 1.3 }}>
+              📅 {displayDate || "Today"}
+            </div>
+            <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 700, marginTop: 2 }}>
+              ⏰ {displayTime || "Earliest Available"}
+            </div>
+          </div>
+
+          {/* 3. Address */}
+          <div style={{ background: "#f8fafc", borderRadius: 12, padding: "10px 12px", border: "1px solid #e2e8f0" }}>
+            <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase", marginBottom: 3 }}>Address</div>
+            <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#0f172a", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+              📍 {displayAddress}
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Actions: Share Tracking + Call Support */}
+        <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => {
+              const url = window.location.href
+              if (navigator.share) {
+                navigator.share({ title: "SEVO Live Tracking", url }).catch(() => { })
+              } else {
+                navigator.clipboard?.writeText(url)
+                setCopiedTrackingUrl(true)
+                setTimeout(() => setCopiedTrackingUrl(false), 2500)
+              }
+            }}
+            style={{
+              padding: "7px 14px",
+              background: "#ffffff",
+              border: "1px solid #cbd5e1",
+              borderRadius: 10,
+              fontSize: "0.78rem",
+              fontWeight: 700,
+              color: "#334155",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6
+            }}
+          >
+            {copiedTrackingUrl ? <Check size={13} color="#059669" /> : <Copy size={13} />}
+            <span>{copiedTrackingUrl ? "Tracking Link Copied!" : "Share Live Tracking"}</span>
+          </button>
+
+          <a
+            href="tel:+919944686884"
+            style={{
+              padding: "7px 14px",
+              background: "#ecfdf5",
+              border: "1px solid #a7f3d0",
+              borderRadius: 10,
+              fontSize: "0.78rem",
+              fontWeight: 800,
+              color: "#065f46",
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6
+            }}
+          >
+            <Phone size={13} />
+            <span>Call SEVO Support</span>
+          </a>
+        </div>
+      </div>
+
       {/* ─────────────────── HEADLINE STATUS BANNER ─────────────────── */}
       {isAccepted ? (
         <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
@@ -3293,6 +3520,15 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           startOtp={startOtp}
           vendorName={liveData?.vendor?.name || ""}
           requestId={rid}
+          routePoints={(() => {
+            // GT / Packers & Movers: show green P (pickup) + red D (drop) stop
+            // pins instead of the generic single "Your Service Location" pin.
+            const cat = String(liveData?.service_category || successData?.service_category || "").toLowerCase()
+            const isLogisticsCat = Boolean(liveData?.logistics?.leg) || ["goods", "truck", "two_wheeler", "packers", "transport"].some(k => cat.includes(k))
+            const pickup = liveData?.pickup_location || successData?.pickup_location
+            const drop = liveData?.drop_location || successData?.drop_location
+            return isLogisticsCat && (pickup || drop) ? { pickup, drop } : null
+          })()}
         />
       </div>
 
@@ -3363,6 +3599,20 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               <div style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 700, marginTop: 2 }}>
                 Service: <span style={{ color: '#0f172a' }}>{(liveData?.service_category || successData?.service_category || 'Home Service').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
               </div>
+              {/* GT Mini Truck audit fix: the backend now resolves and
+                  returns the driver's actual vehicle registration/type for
+                  goods_transport_truck (previously the customer saw only
+                  the driver's name/photo, never which truck was coming).
+                  Empty for every other category, so this renders nothing
+                  there. */}
+              {(liveData?.vehicle_number || successData?.vehicle_number) && (
+                <div style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 700, marginTop: 2 }}>
+                  Vehicle: <span style={{ color: '#0f172a' }}>
+                    {liveData?.vehicle_number || successData?.vehicle_number}
+                    {(liveData?.vehicle_type || successData?.vehicle_type) ? ` (${liveData?.vehicle_type || successData?.vehicle_type})` : ''}
+                  </span>
+                </div>
+              )}
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
                 {techRating != null ? (
                   <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: '0.78rem', fontWeight: 800, color: '#d97706' }}>
@@ -3548,52 +3798,8 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         </motion.div>
       )}
 
-      {/* ─────────────────── CASH PAYMENT CONFIRMATION OTP (IF REPORTED/PENDING) ─────────────────── */}
-      {((liveData?.payment_status === 'cash_pending' || currentStatus === 'cash_pending' || isProofSubmitted || (liveData?.payment_confirmation_otp && liveData?.payment_status !== 'paid')) && !['completed', 'closed', 'cancelled', 'rejected'].includes(currentStatus) && liveData?.payment_status !== 'paid') && (
-        <div style={{
-          background: 'linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)',
-          borderRadius: 14,
-          padding: '12px 16px',
-          border: '1.5px solid #10b981',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: '1rem',
-          boxShadow: '0 4px 12px rgba(16,185,129,0.12)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#059669' }}>
-              <KeyRound size={20} />
-            </div>
-            <div>
-              <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#047857', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                💰 Cash Payment Confirmation OTP
-              </div>
-              <div style={{ fontSize: '0.78rem', color: '#065f46', marginTop: 1 }}>
-                Technician reported cash collection. Share this OTP with your partner to verify &amp; complete.
-              </div>
-            </div>
-          </div>
-          <div style={{
-            fontFamily: 'monospace',
-            fontSize: '1.35rem',
-            fontWeight: 900,
-            color: '#047857',
-            letterSpacing: 3,
-            background: 'white',
-            padding: '6px 14px',
-            borderRadius: 10,
-            border: '1.5px solid #a7f3d0',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-            whiteSpace: 'nowrap'
-          }}>
-            {liveData?.payment_confirmation_otp || 'Generating OTP...'}
-          </div>
-        </div>
-      )}
-
       {/* ─────────────────── 6-DIGIT SERVICE START OTP CARD (IF ACCEPTED) ─────────────────── */}
-      {isAccepted && !['completed', 'closed', 'proof_submitted'].includes(currentStatus) && (
+      {isAccepted && (
         <div style={{
           background: '#fff7ed',
           borderRadius: 14,
@@ -4640,44 +4846,123 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             </span>
           </div>
 
-          {/* Step 3: Technician On The Way */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: (isArrived || isInProgress || isCompleted) ? '#ecfdf5' : isOnTheWay ? '#fff7ed' : '#f8fafc', border: `1.5px solid ${(isArrived || isInProgress || isCompleted) ? '#10b981' : isOnTheWay ? '#FC8019' : isAccepted ? '#f59e0b' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {(isArrived || isInProgress || isCompleted) ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>🛵</span>}
-            </div>
-            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: (isAccepted || isOnTheWay) ? '#0f172a' : '#94a3b8' }}>
-              Technician On The Way
-            </div>
-            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: (isArrived || isInProgress || isCompleted) ? '#10b981' : (isOnTheWay && etaMinutes != null) ? '#FC8019' : isAccepted ? '#f59e0b' : '#94a3b8' }}>
-              {(isArrived || isInProgress || isCompleted) ? 'Completed' : (isOnTheWay && etaMinutes != null) ? `~${etaMinutes} mins` : isAccepted ? 'Starting soon' : 'Pending'}
-            </span>
-          </div>
+          {(function renderGTAwareSteps() {
+            // GT audit fix: goods_transport_truck (Mini Truck) has no
+            // "arrived" leg and is driven by a driver, not a technician
+            // performing an on-site service. The generic labels/steps below
+            // ("Technician On The Way" / "Technician Arrived at Location" /
+            // "Service In Progress") were shown unconditionally, which does
+            // not match the backend's real GT leg sequence
+            // (EN_ROUTE_PICKUP -> LOADING -> EN_ROUTE_DROP -> UNLOADING ->
+            // DELIVERED) and contradicted the leg-aware wording already used
+            // on CustomerTrackingPage.jsx for the same booking. Scoped to
+            // the distance-priced GT categories (Mini Truck, Two Wheeler),
+            // which share the identical leg sequence -- P&M renders exactly
+            // the original three steps with the original flags, unchanged.
+            const _cat = String(liveData?.service_category || successData?.service_category || "").toLowerCase()
+            const _isGTLegAware = _cat === "goods_transport_truck" || _cat === "goods_transport_two_wheeler"
+            const _leg = String(liveData?.logistics?.leg || "").toUpperCase()
 
-          {/* Step 4: Technician Arrived */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: (isArrived || isInProgress || isCompleted) ? '#ecfdf5' : '#f8fafc', border: `1.5px solid ${(isArrived || isInProgress || isCompleted) ? '#10b981' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {(isInProgress || isCompleted) ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>📍</span>}
-            </div>
-            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: (isArrived || isInProgress || isCompleted) ? '#0f172a' : '#94a3b8' }}>
-              Technician Arrived at Location
-            </div>
-            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: (isArrived || isInProgress || isCompleted) ? '#10b981' : '#94a3b8' }}>
-              {(isInProgress || isCompleted) ? 'Verified' : isArrived ? 'Arrived' : 'Next'}
-            </span>
-          </div>
+            if (!_isGTLegAware) {
+              return (
+                <>
+                  {/* Step 3: Technician On The Way */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: (isArrived || isInProgress || isCompleted) ? '#ecfdf5' : isOnTheWay ? '#fff7ed' : '#f8fafc', border: `1.5px solid ${(isArrived || isInProgress || isCompleted) ? '#10b981' : isOnTheWay ? '#FC8019' : isAccepted ? '#f59e0b' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {(isArrived || isInProgress || isCompleted) ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>🛵</span>}
+                    </div>
+                    <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: (isAccepted || isOnTheWay) ? '#0f172a' : '#94a3b8' }}>
+                      Technician On The Way
+                    </div>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: (isArrived || isInProgress || isCompleted) ? '#10b981' : (isOnTheWay && etaMinutes != null) ? '#FC8019' : isAccepted ? '#f59e0b' : '#94a3b8' }}>
+                      {(isArrived || isInProgress || isCompleted) ? 'Completed' : (isOnTheWay && etaMinutes != null) ? `~${etaMinutes} mins` : isAccepted ? 'Starting soon' : 'Pending'}
+                    </span>
+                  </div>
 
-          {/* Step 5: Service In Progress */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: isCompleted ? '#ecfdf5' : isInProgress ? '#eff6ff' : '#f8fafc', border: `1.5px solid ${isCompleted ? '#10b981' : isInProgress ? '#3b82f6' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {isCompleted ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>🔧</span>}
-            </div>
-            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: (isInProgress || isCompleted) ? '#0f172a' : '#94a3b8' }}>
-              Service In Progress
-            </div>
-            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: isCompleted ? '#10b981' : isInProgress ? '#3b82f6' : '#94a3b8' }}>
-              {isCompleted ? 'Done' : isInProgress ? 'Active' : 'Pending'}
-            </span>
-          </div>
+                  {/* Step 4: Technician Arrived */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: (isArrived || isInProgress || isCompleted) ? '#ecfdf5' : '#f8fafc', border: `1.5px solid ${(isArrived || isInProgress || isCompleted) ? '#10b981' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {(isInProgress || isCompleted) ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>📍</span>}
+                    </div>
+                    <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: (isArrived || isInProgress || isCompleted) ? '#0f172a' : '#94a3b8' }}>
+                      Technician Arrived at Location
+                    </div>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: (isArrived || isInProgress || isCompleted) ? '#10b981' : '#94a3b8' }}>
+                      {(isInProgress || isCompleted) ? 'Verified' : isArrived ? 'Arrived' : 'Next'}
+                    </span>
+                  </div>
+
+                  {/* Step 5: Service In Progress */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: isCompleted ? '#ecfdf5' : isInProgress ? '#eff6ff' : '#f8fafc', border: `1.5px solid ${isCompleted ? '#10b981' : isInProgress ? '#3b82f6' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {isCompleted ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>🔧</span>}
+                    </div>
+                    <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: (isInProgress || isCompleted) ? '#0f172a' : '#94a3b8' }}>
+                      Service In Progress
+                    </div>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: isCompleted ? '#10b981' : isInProgress ? '#3b82f6' : '#94a3b8' }}>
+                      {isCompleted ? 'Done' : isInProgress ? 'Active' : 'Pending'}
+                    </span>
+                  </div>
+                </>
+              )
+            }
+
+            // GT (Mini Truck) leg-aware steps.
+            const legOrder = ["EN_ROUTE_PICKUP", "LOADING", "EN_ROUTE_DROP", "UNLOADING", "DELIVERED"]
+            const legIdx = legOrder.indexOf(_leg)
+            const reached = (name) => isCompleted || legIdx >= legOrder.indexOf(name)
+            const active = (name) => !isCompleted && legIdx === legOrder.indexOf(name)
+            const onTheWayDone = reached("LOADING")
+            const onTheWayActive = active("EN_ROUTE_PICKUP") || (isOnTheWay && legIdx < 0)
+            const loadingDone = reached("EN_ROUTE_DROP")
+            const loadingActive = active("LOADING")
+            const enRouteDropDone = reached("DELIVERED") || isCompleted
+            const enRouteDropActive = active("EN_ROUTE_DROP") || active("UNLOADING")
+
+            return (
+              <>
+                {/* Step 3 (GT): Driver En Route to Pickup */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: onTheWayDone ? '#ecfdf5' : onTheWayActive ? '#fff7ed' : '#f8fafc', border: `1.5px solid ${onTheWayDone ? '#10b981' : onTheWayActive ? '#FC8019' : isAccepted ? '#f59e0b' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {onTheWayDone ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>🚚</span>}
+                  </div>
+                  <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: (isAccepted || onTheWayActive) ? '#0f172a' : '#94a3b8' }}>
+                    Driver En Route to Pickup
+                  </div>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: onTheWayDone ? '#10b981' : onTheWayActive ? '#FC8019' : isAccepted ? '#f59e0b' : '#94a3b8' }}>
+                    {onTheWayDone ? 'Completed' : onTheWayActive ? (etaMinutes != null ? `~${etaMinutes} mins` : 'On the way') : isAccepted ? 'Starting soon' : 'Pending'}
+                  </span>
+                </div>
+
+                {/* Step 4 (GT): Loading Cargo at Pickup */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: loadingDone ? '#ecfdf5' : loadingActive ? '#fff7ed' : '#f8fafc', border: `1.5px solid ${loadingDone ? '#10b981' : loadingActive ? '#FC8019' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {loadingDone ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>📦</span>}
+                  </div>
+                  <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: (loadingDone || loadingActive) ? '#0f172a' : '#94a3b8' }}>
+                    Loading Cargo at Pickup
+                  </div>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: loadingDone ? '#10b981' : loadingActive ? '#FC8019' : '#94a3b8' }}>
+                    {loadingDone ? 'Completed' : loadingActive ? 'Loading' : 'Next'}
+                  </span>
+                </div>
+
+                {/* Step 5 (GT): En Route to Drop-off */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: (isCompleted || enRouteDropDone) ? '#ecfdf5' : enRouteDropActive ? '#eff6ff' : '#f8fafc', border: `1.5px solid ${(isCompleted || enRouteDropDone) ? '#10b981' : enRouteDropActive ? '#3b82f6' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {(isCompleted || enRouteDropDone) ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>🛣️</span>}
+                  </div>
+                  <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: (enRouteDropActive || enRouteDropDone || isCompleted) ? '#0f172a' : '#94a3b8' }}>
+                    {_leg === "UNLOADING" ? "Unloading at Drop-off" : "En Route to Drop-off"}
+                  </div>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: (isCompleted || enRouteDropDone) ? '#10b981' : enRouteDropActive ? '#3b82f6' : '#94a3b8' }}>
+                    {(isCompleted || enRouteDropDone) ? 'Done' : enRouteDropActive ? 'Active' : 'Pending'}
+                  </span>
+                </div>
+              </>
+            )
+          })()}
 
           {/* Step 6: Service Completed */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -4753,10 +5038,10 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       <AnimatePresence>
         {showCancelModal && (
           <BookingCancellationModal
-            bookingId={liveData?.booking_id || liveData?.id || successData?.id}
-            requestId={rid || liveData?.request_id || successData?.request_id}
-            trackingToken={liveData?.tracking_token || successData?.tracking_token}
-            phone={liveData?.phone || successData?.phone || formData?.phone}
+            bookingId={liveData?.booking_id || liveData?.id || successData?.id || sessionSaved?.id}
+            requestId={rid || liveData?.request_id || successData?.request_id || sessionSaved?.request_id}
+            trackingToken={liveData?.tracking_token || successData?.tracking_token || resolvedToken}
+            phone={liveData?.phone || successData?.phone || sessionSaved?.phone || formData?.phone}
             isAccepted={isAccepted}
             graceSecondsRemaining={graceSecs}
             onClose={() => setShowCancelModal(false)}
@@ -4823,7 +5108,7 @@ function StepBar({ step, total }) {
 }
 
 /* ── Cart Drawer Modal Component ── */
-export function CartDrawerModal({ isOpen, onClose, cart, setCart, onProceedToCheckout }) {
+export function CartDrawerModal({ isOpen, onClose, cart, setCart, onProceedToCheckout, onAddAnotherService, bagItemCount = 0 }) {
   if (!isOpen) return null;
 
   const itemTotal = (cart || []).reduce((sum, i) => sum + (i.price * (i.quantity || 1)), 0);
@@ -4871,12 +5156,12 @@ export function CartDrawerModal({ isOpen, onClose, cart, setCart, onProceedToChe
         {/* Top Header */}
         <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center font-bold">
+            <div className="w-9 h-9 rounded-xl bg-teal-50 border border-teal-100 text-[#0B8F7A] flex items-center justify-center font-bold">
               <ShoppingCart size={18} />
             </div>
             <div>
-              <h3 className="font-extrabold text-slate-900 text-base leading-tight">Your Cart Details</h3>
-              <p className="text-xs font-bold text-slate-500">{totalCount} {totalCount === 1 ? "service" : "services"} added</p>
+              <h3 className="font-extrabold text-slate-900 text-base leading-tight">Your Service Cart</h3>
+              <p className="text-xs font-bold text-slate-500">{totalCount} {totalCount === 1 ? "service" : "services"} selected</p>
             </div>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-full bg-slate-200/60 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors cursor-pointer">
@@ -4896,16 +5181,24 @@ export function CartDrawerModal({ isOpen, onClose, cart, setCart, onProceedToChe
             <>
               {/* Item Cards List */}
               <div className="space-y-3">
+                <div className="text-[11px] font-black uppercase tracking-wider text-slate-400 px-1">
+                  Your Service &amp; Add-ons
+                </div>
                 {cart.map((item, idx) => (
-                  <div key={item.id || idx} className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/80 flex items-center justify-between gap-3">
+                  <div key={item.id || idx} className="p-3.5 bg-slate-50/90 rounded-2xl border border-slate-200/80 flex items-center justify-between gap-3 shadow-2xs">
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-extrabold text-slate-900 text-xs sm:text-sm line-clamp-1">{item.name || item.displayName}</h4>
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800">
+                          {idx === 0 ? "Service" : "Add-on"}
+                        </span>
+                        <h4 className="font-extrabold text-slate-900 text-xs sm:text-sm line-clamp-1">{item.name || item.displayName}</h4>
+                      </div>
                       {item.selectedSubOptions && item.selectedSubOptions.length > 0 && (
-                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500, paddingLeft: '2px', marginTop: '4px', textAlign: 'left' }}>
+                        <div className="text-[11px] text-slate-500 font-medium pl-0.5 mt-0.5">
                           Areas: {item.selectedSubOptions.join(", ")}
                         </div>
                       )}
-                      <p className="text-xs font-black text-indigo-600 mt-0.5">₹{item.price}</p>
+                      <p className="text-xs font-black text-[#0B8F7A] mt-0.5">₹{item.price}</p>
                     </div>
 
                     {/* Quantity Adjustment Buttons */}
@@ -4927,19 +5220,25 @@ export function CartDrawerModal({ isOpen, onClose, cart, setCart, onProceedToChe
                 ))}
               </div>
 
-              {/* Pricing Breakdown Summary */}
+              {/* Pricing Breakdown Summary (Transparent, Minimal) */}
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2 text-xs font-bold text-slate-600">
                 <div className="flex justify-between">
-                  <span>Item Total</span>
+                  <span>Service Total</span>
                   <span className="font-black text-slate-900">₹{itemTotal}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Taxes & Fee (incl. GST)</span>
-                  <span className="font-black text-slate-900">₹{taxesFee}</span>
+                  <span>Service &amp; Platform fee</span>
+                  <span className="font-black text-slate-900">₹49</span>
                 </div>
+                {taxesFee > 49 && (
+                  <div className="flex justify-between">
+                    <span>GST (Taxes)</span>
+                    <span className="font-black text-slate-900">₹{taxesFee - 49}</span>
+                  </div>
+                )}
                 <div className="pt-2 border-t border-slate-200 flex justify-between text-sm font-black text-slate-900">
                   <span>Total Amount</span>
-                  <span className="text-indigo-600">₹{grandTotal}</span>
+                  <span className="text-emerald-700 text-base font-black">₹{itemTotal + Math.max(49, taxesFee)}</span>
                 </div>
               </div>
             </>
@@ -4956,11 +5255,24 @@ export function CartDrawerModal({ isOpen, onClose, cart, setCart, onProceedToChe
                   onProceedToCheckout();
                 }
               }}
-              className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-2xl text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 cursor-pointer active:scale-[0.98] transition-all uppercase tracking-wider"
+              className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-[#0B8F7A] hover:from-emerald-700 hover:to-[#087362] text-white font-extrabold rounded-2xl text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 cursor-pointer active:scale-[0.98] transition-all uppercase tracking-wider"
             >
-              <span>Proceed to Checkout</span>
+              <span>Continue to Checkout</span>
               <ChevronRight size={16} strokeWidth={3} />
             </button>
+
+            {typeof onAddAnotherService === "function" && (
+              <button
+                onClick={() => {
+                  onAddAnotherService();
+                  onClose();
+                }}
+                className="w-full py-3 border-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-extrabold rounded-2xl text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] transition-all"
+                title="Save this cart and pick another service category for the same booking"
+              >
+                <span>+ Add Another Service{bagItemCount > 0 ? ` (${bagItemCount} saved)` : ""}</span>
+              </button>
+            )}
 
             <button
               onClick={clearCart}
@@ -4981,6 +5293,7 @@ export function CartDrawerModal({ isOpen, onClose, cart, setCart, onProceedToChe
 
 export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChangeTab }) {
   const { user, logout, refreshMe, loginWithGoogle, loginWithCustomerGoogle } = useAuth()
+  const navigate = useNavigate()
   const [internalTab, setInternalTab] = useState(propActiveTab || "My Profile")
   const activeTab = propActiveTab || internalTab
   const [mobileView, setMobileView] = useState("content")
@@ -5014,8 +5327,8 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
     } finally {
       // Clear all customer tokens & storage
       try {
-        localStorage.removeItem("caltrack_customer_phone")
-        localStorage.removeItem("caltrack_user")
+        localStorage.removeItem("sevo_customer_phone")
+        localStorage.removeItem("sevo_user")
         localStorage.removeItem("calservice_customer_token")
         sessionStorage.removeItem("calservice_customer_token")
         sessionStorage.removeItem("calservice_last_booking")
@@ -5032,6 +5345,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
   const [selectedMockBooking, setSelectedMockBooking] = useState(null)
   const [trackingBooking, setTrackingBooking] = useState(null)
+  const [cancelTargetBooking, setCancelTargetBooking] = useState(null)
 
   const [realBookings, setRealBookings] = useState([])
   const [bookingsLoading, setBookingsLoading] = useState(false)
@@ -5043,6 +5357,13 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   // write side per the architecture, this view only merges them visually.
   const [groceryOrders, setGroceryOrders] = useState([])
   const [groceryOrdersLoading, setGroceryOrdersLoading] = useState(false)
+  const [returnModalOrder, setReturnModalOrder] = useState(null)
+  const [returnItem, setReturnItem] = useState("")
+  const [returnReason, setReturnReason] = useState("DAMAGED_OR_SPOILED")
+  const [returnNotes, setReturnNotes] = useState("")
+  const [submittingReturn, setSubmittingReturn] = useState(false)
+  const [returnSuccess, setReturnSuccess] = useState(null)
+  const [returnError, setReturnError] = useState(null)
   // HS-C-07 / HS-A-06 / HS-B-07: Wallet, Referral Code, AMC Bookings tabs --
   // each fetches only when its tab is activated, matching the existing
   // My Bookings fetch-on-activate pattern immediately above.
@@ -5092,6 +5413,39 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
     (profileName.trim() !== initialProfileName.trim()) ||
     (profileEmail.trim() !== initialProfileEmail.trim())
   )
+
+  const handleRebookBooking = (b) => {
+    let items = []
+    if (typeof b.cart_data === 'string') {
+      try { items = JSON.parse(b.cart_data) } catch (e) { }
+    } else if (Array.isArray(b.cart_data)) {
+      items = b.cart_data
+    }
+    if (!items || items.length === 0) {
+      items = [{
+        id: b.package_id || b.service_id || b.id,
+        name: (b.issue_title || b.service_category_display || "Service Booking").replace(/•“/g, ' - ').replace(/•”/g, ' - '),
+        price: Number(b.total_amount || b.base_amount || 499),
+        quantity: 1,
+        category: b.service_category,
+      }]
+    }
+    try {
+      localStorage.setItem("calservices_customer_cart", JSON.stringify(items))
+      if (b.service_category) {
+        localStorage.setItem("calservices_customer_category", JSON.stringify({ id: b.service_category, name: b.service_category_display || b.service_category }))
+      }
+      if (b.address && user?.id) {
+        setCustomerSelectedAddress(user.id, b.address)
+      }
+      window.dispatchEvent(new CustomEvent("calservices_cart_updated"))
+    } catch (e) { }
+
+    if (typeof onClose === 'function') {
+      onClose()
+    }
+    navigate(routes.booking_checkout, { state: { cart: items, category: b.service_category } })
+  }
 
   useEffect(() => {
     if (user) {
@@ -5268,7 +5622,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         apiRequest("/orders/my/")
           .then(res => {
             const merged = Array.isArray(res?.data) ? res.data : []
-            setGroceryOrders(merged.filter(o => o.order_type === "grocery"))
+            setGroceryOrders(merged.filter(o => o.order_type === "grocery" || o.order_type === "vegetable"))
           })
           .catch(console.error)
           .finally(() => {
@@ -6021,10 +6375,23 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   const nonDraftBookings = (realBookings || []).filter(b => b.status !== 'draft')
   const hasNonDraftBookings = nonDraftBookings.length > 0
 
+  const liveActiveBookings = (realBookings || []).filter(b =>
+    !b.parent_request && ['new_request', 'pending', 'assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched', 'confirmed', 'reviewed', 'waiting_for_payment'].includes(String(b.status || '').toLowerCase())
+  )
+  const completedBookings = (realBookings || []).filter(b =>
+    !b.parent_request && ['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(String(b.status || '').toLowerCase())
+  )
+
+  const [bookingListFilter, setBookingListFilter] = useState("all")
+
   const tabs = [
-    { id: "My Profile", icon: User },
+    { id: "Upcoming & Active", icon: Clock, badge: liveActiveBookings.length || undefined },
+    { id: "Past Services", icon: CheckCircle2, badge: completedBookings.length || undefined },
+    { id: "Book Again", icon: RefreshCw },
+    { id: "30-Day Warranties", icon: ShieldCheck, badge: completedBookings.length || undefined },
+    { id: "My Invoices", icon: FileText },
     { id: "Saved Addresses", icon: MapPin },
-    { id: "My Bookings", icon: Calendar, badge: nonDraftBookings.length || undefined },
+    { id: "My Profile", icon: User },
     { id: "Wallet", icon: Wallet },
     { id: "Referral Code", icon: Gift },
     { id: "AMC Bookings", icon: Repeat, badge: (amcSeries || []).filter(s => s.status === "ACTIVE").length || undefined },
@@ -6260,18 +6627,133 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
       case "My Bookings":
         return (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-            <h3 style={{ margin: '0 0 1.5rem', fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>My Bookings</h3>
+            <div style={{ marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>
+                    {isUpcomingTab ? 'Upcoming & Active Services' : isPastTab ? 'Past Completed Services' : 'My Bookings'}
+                  </h3>
+                  <p style={{ margin: '3px 0 0', fontSize: '0.82rem', color: '#64748b' }}>
+                    {isUpcomingTab
+                      ? 'Live tracking, technician assignment, and arrival OTPs for ongoing Hosur services'
+                      : isPastTab
+                        ? 'Service history, 30-day revisit guarantees, and 1-click rebooking'
+                        : 'Manage all your SEVO service requests, schedules, and warranties in one place'}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => { onClose(); window.location.href = "/home"; }}
+                  style={{ padding: '8px 16px', background: '#059669', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 6px rgba(5,150,105,0.2)' }}
+                >
+                  <Plus size={14} /> Book New Service
+                </button>
+              </div>
+
+              {/* Segmented Filter Pills */}
+              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
+                <button
+                  onClick={() => {
+                    setBookingListFilter("all");
+                    if (typeof onChangeTab === 'function') onChangeTab("My Bookings");
+                    else setInternalTab("My Bookings");
+                  }}
+                  style={{
+                    padding: '7px 14px',
+                    borderRadius: 99,
+                    fontWeight: 800,
+                    fontSize: '0.8rem',
+                    cursor: 'pointer',
+                    border: currentFilter === "all" ? '1.5px solid #059669' : '1px solid #cbd5e1',
+                    background: currentFilter === "all" ? '#059669' : '#ffffff',
+                    color: currentFilter === "all" ? '#ffffff' : '#475569',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <span>All Bookings</span>
+                  <span style={{ fontSize: '0.7rem', background: currentFilter === "all" ? 'rgba(255,255,255,0.25)' : '#f1f5f9', padding: '1px 6px', borderRadius: 99 }}>
+                    {allCount}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setBookingListFilter("active");
+                    if (typeof onChangeTab === 'function') onChangeTab("Upcoming & Active");
+                    else setInternalTab("Upcoming & Active");
+                  }}
+                  style={{
+                    padding: '7px 14px',
+                    borderRadius: 99,
+                    fontWeight: 800,
+                    fontSize: '0.8rem',
+                    cursor: 'pointer',
+                    border: currentFilter === "active" ? '1.5px solid #059669' : '1px solid #cbd5e1',
+                    background: currentFilter === "active" ? '#059669' : '#ffffff',
+                    color: currentFilter === "active" ? '#ffffff' : '#475569',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <Clock size={13} />
+                  <span>Upcoming & Active</span>
+                  <span style={{ fontSize: '0.7rem', background: currentFilter === "active" ? 'rgba(255,255,255,0.25)' : '#ecfdf5', color: currentFilter === "active" ? '#ffffff' : '#059669', padding: '1px 6px', borderRadius: 99 }}>
+                    {activeCount}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setBookingListFilter("completed");
+                    if (typeof onChangeTab === 'function') onChangeTab("Past Services");
+                    else setInternalTab("Past Services");
+                  }}
+                  style={{
+                    padding: '7px 14px',
+                    borderRadius: 99,
+                    fontWeight: 800,
+                    fontSize: '0.8rem',
+                    cursor: 'pointer',
+                    border: currentFilter === "completed" ? '1.5px solid #059669' : '1px solid #cbd5e1',
+                    background: currentFilter === "completed" ? '#059669' : '#ffffff',
+                    color: currentFilter === "completed" ? '#ffffff' : '#475569',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <CheckCircle2 size={13} />
+                  <span>Past Services</span>
+                  <span style={{ fontSize: '0.7rem', background: currentFilter === "completed" ? 'rgba(255,255,255,0.25)' : '#f1f5f9', padding: '1px 6px', borderRadius: 99 }}>
+                    {completedCount}
+                  </span>
+                </button>
+              </div>
+            </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {bookingsLoading ? (
                 <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>Loading bookings...</div>
-              ) : realBookings.length === 0 ? (
+              ) : displayedBookings.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', background: '#f8fafc', borderRadius: 20, border: '1px solid #e2e8f0' }}>
                   <div style={{ width: 64, height: 64, borderRadius: 16, background: '#ecfdf5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', boxShadow: '0 4px 12px rgba(5,150,105,0.15)' }}>
                     <Calendar size={30} />
                   </div>
-                  <h4 style={{ margin: '0 0 6px', fontWeight: 800, fontSize: '1.15rem', color: '#0f172a' }}>No Active Bookings Yet</h4>
+                  <h4 style={{ margin: '0 0 6px', fontWeight: 800, fontSize: '1.15rem', color: '#0f172a' }}>
+                    {currentFilter === "active" ? "No Active Bookings in Flight" : currentFilter === "completed" ? "No Past Completed Services" : "No Bookings Found"}
+                  </h4>
                   <p style={{ margin: '0 auto 20px', fontSize: '0.85rem', color: '#64748b', maxWidth: 360, lineHeight: 1.5 }}>
-                    You haven't placed any service bookings yet. Browse our top home services and book an expert with instant slot confirmation.
+                    {currentFilter === "active"
+                      ? "You don't have any ongoing or upcoming service appointments in Hosur right now. Ready to book an expert?"
+                      : currentFilter === "completed"
+                        ? "You haven't completed any service appointments with SEVO yet. Once completed, your history and 30-day revisit guarantees will be displayed here."
+                        : "You haven't placed any service bookings yet. Browse our top home services and book an expert with instant slot confirmation."}
                   </p>
                   <button
                     onClick={() => { onClose(); window.location.href = "/home"; }}
@@ -6280,7 +6762,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                     + Book a Service Now
                   </button>
                 </div>
-              ) : realBookings.filter(b => !b.parent_request).map(b => {
+              ) : displayedBookings.map(b => {
                 const isRescheduleEligible = ['new_request', 'reviewed', 'confirmed', 'assigned', 'accepted'].includes(b.status)
                 const getRescheduleNotice = (st) => {
                   if (['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(st)) {
@@ -6299,20 +6781,42 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                 }
                 const noticeMsg = getRescheduleNotice(b.status)
 
+                // Multi-service booking: this card's siblings under the same
+                // Order, if any -- see orderGroups computed above.
+                const siblingGroup = b.order_id ? orderGroups[b.order_id] : null
+                const isFirstInGroup = siblingGroup && siblingGroup[0]?.id === b.id
+                const overallStatus = siblingGroup && siblingGroup.length > 1 ? computeOverallStatus(siblingGroup) : null
+
                 return (
                   <React.Fragment key={b.id}>
+                    {overallStatus && isFirstInGroup && (
+                      <div style={{ padding: '10px 16px', borderRadius: 12, background: overallStatus.bg, border: `1px solid ${overallStatus.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 800, color: overallStatus.color }}>
+                          This booking has {siblingGroup.length} services
+                        </span>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 800, color: overallStatus.color, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                          Overall: {overallStatus.label}
+                        </span>
+                      </div>
+                    )}
                     <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', display: 'flex', flexDirection: 'column', background: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', position: 'relative', zIndex: 1 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                         <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, flexWrap: 'wrap' }}>
                             <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '1.05rem' }}>{(b.service_category_display || b.issue_title || 'Service Booking').replace(/•“/g, ' - ').replace(/•”/g, ' - ').replace(/&amp;/g, '&')}</span>
                             <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#05966915', color: '#059669', border: '1px solid #05966930' }}>{b.status_display || b.status}</span>
                           </div>
                           <div style={{ fontSize: '0.85rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}><Calendar size={13} /> {b.preferred_date || 'N/A'} &nbsp;•&nbsp; <span style={{ fontFamily: 'monospace' }}>{b.request_id}</span></div>
 
+                          {['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(String(b.status || '').toLowerCase()) && (
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 8px', borderRadius: 6, background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#065f46', fontSize: '0.75rem', fontWeight: 700, marginBottom: 6 }}>
+                              <ShieldCheck size={13} style={{ color: '#059669' }} /> 30-Day Revisit Guarantee Active
+                            </div>
+                          )}
+
                           {/* Reschedule Action for Eligible Bookings (Pending Confirmation, Confirmed, Employee Assigned) */}
                           {isRescheduleEligible && (
-                            <div style={{ marginTop: 6 }}>
+                            <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                               <button
                                 onClick={() => {
                                   setRescheduleBookingId(b.id)
@@ -6344,10 +6848,41 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
                             return (
                               <>
-                                <div style={{ fontWeight: 900, color: ['paid', 'collected'].includes(effectivePaymentStatus) ? '#059669' : '#d97706', marginBottom: 12, fontSize: '1.05rem' }}>
-                                  {activeStage.payment_status_display || b.payment_status_display || (effectivePaymentStatus === 'paid' ? 'Paid' : effectivePaymentStatus === 'collected' ? 'Collected' : 'Pending')}
+                                <div style={{ fontWeight: 900, color: ['paid', 'collected'].includes(effectivePaymentStatus) ? '#059669' : '#d97706', marginBottom: 12, fontSize: '1.02rem', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 5 }}>
+                                  <span style={{ fontSize: '0.76rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Payment:</span>
+                                  <span>{activeStage.payment_status_display || b.payment_status_display || (['paid', 'collected'].includes(effectivePaymentStatus) ? 'Paid' : 'Pending')}</span>
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                                  {['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(String(currentEffectiveStatus || '').toLowerCase()) && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleRebookBooking(b)
+                                      }}
+                                      style={{ fontSize: '0.85rem', padding: '8px 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #059669, #047857)', fontWeight: 800, cursor: 'pointer', color: 'white', boxShadow: '0 2px 8px rgba(5,150,105,0.3)', display: 'inline-flex', alignItems: 'center', gap: 6, transition: 'transform 0.15s' }}
+                                      onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                                      onMouseOut={e => e.currentTarget.style.transform = 'none'}
+                                    >
+                                      <RefreshCw size={13} /> Book Again
+                                    </button>
+                                  )}
+
+                                  {/* Live Partner Search button if unassigned & searching */}
+                                  {!b.is_accepted && !activeStage.is_accepted && !b.technician && !b.technician_name && !activeStage.technician_name && ['new_request', 'reviewed', 'confirmed', 'assigned'].includes(String(currentEffectiveStatus || '').toLowerCase()) && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setTrackingBooking(activeStage || b)
+                                      }}
+                                      style={{ fontSize: '0.85rem', padding: '8px 16px', borderRadius: 8, border: '1px solid #10b981', background: 'linear-gradient(135deg, #059669, #047857)', fontWeight: 800, cursor: 'pointer', color: 'white', boxShadow: '0 2px 8px rgba(5,150,105,0.25)', display: 'inline-flex', alignItems: 'center', gap: 6, transition: 'transform 0.15s' }}
+                                      onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                                      onMouseOut={e => e.currentTarget.style.transform = 'none'}
+                                      title="Open Live Partner Search Radar"
+                                    >
+                                      <Radio size={14} className="animate-pulse" /> Live Partner Search
+                                    </button>
+                                  )}
+
                                   {isAcceptedOrActive && (
                                     <button
                                       onClick={(e) => {
@@ -6361,6 +6896,23 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                       <MapPin size={14} /> Track Live
                                     </button>
                                   )}
+
+                                  {/* Cancel Booking pre-acceptance */}
+                                  {!['completed', 'closed', 'cancelled', 'rejected'].includes(String(currentEffectiveStatus || '').toLowerCase()) && !isAcceptedOrActive && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setCancelTargetBooking(b)
+                                      }}
+                                      style={{ fontSize: '0.82rem', padding: '8px 14px', borderRadius: 8, border: '1px solid #fecaca', background: '#fff1f2', fontWeight: 700, cursor: 'pointer', color: '#e11d48', display: 'inline-flex', alignItems: 'center', gap: 5, transition: 'transform 0.15s' }}
+                                      onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                                      onMouseOut={e => e.currentTarget.style.transform = 'none'}
+                                      title="Cancel Booking"
+                                    >
+                                      <Ban size={13} /> Cancel
+                                    </button>
+                                  )}
+
                                   <button
                                     onClick={() => setSelectedMockBooking(selectedMockBooking?.id === b.id ? null : b)}
                                     style={{ fontSize: '0.85rem', padding: '8px 18px', borderRadius: 8, border: 'none', background: '#059669', fontWeight: 700, cursor: 'pointer', color: 'white', boxShadow: '0 2px 4px rgba(5,150,105,0.25)', transition: 'background 0.2s' }}
@@ -6430,62 +6982,63 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                         );
                       })()}
 
-                      {/* GT-D-02: multi-stop trip editor, logistics bookings only */}
-                      {LOGISTICS_STOP_CATEGORIES.includes(b.service_category) && (
-                          <div style={{ marginTop: 8 }}>
-                            <button
-                              onClick={() => toggleStopsEditor(b)}
-                              style={{ padding: '6px 14px', background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe', borderRadius: 8, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                            >
-                              <MapPin size={13} /> {stopsEditorBookingId === b.id ? 'Hide Stops' : 'Manage Stops'}
-                            </button>
-                            {stopsEditorBookingId === b.id && (
-                              <div style={{ marginTop: 10, padding: 12, background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-                                {stopsError && (
-                                  <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, padding: '8px 10px', marginBottom: 8, fontSize: '0.75rem', fontWeight: 600 }}>{stopsError}</div>
-                                )}
-                                {stopsSavedMsg && (
-                                  <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669', borderRadius: 8, padding: '8px 10px', marginBottom: 8, fontSize: '0.75rem', fontWeight: 600 }}>{stopsSavedMsg}</div>
-                                )}
-                                {stopsLoading ? (
-                                  <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Loading stops...</div>
-                                ) : (
-                                  <>
-                                    {stopsDraft.length === 0 && (
-                                      <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: 8 }}>No extra stops yet -- just the default pickup/drop.</div>
-                                    )}
-                                    {stopsDraft.map((s, idx) => (
-                                      <div key={idx} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-                                        <select value={s.stop_type} onChange={e => updateStopRow(idx, 'stop_type', e.target.value)} style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.75rem' }}>
-                                          <option value="PICKUP">Pickup</option>
-                                          <option value="WAYPOINT">Stop</option>
-                                          <option value="DROP">Drop</option>
-                                        </select>
-                                        <input value={s.address} onChange={e => updateStopRow(idx, 'address', e.target.value)} placeholder="Address" style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.75rem' }} />
-                                        <input value={s.contact_phone} onChange={e => updateStopRow(idx, 'contact_phone', e.target.value)} placeholder="Contact phone" style={{ width: 110, padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.75rem' }} />
-                                        <button onClick={() => removeStopRow(idx)} style={{ padding: '6px 8px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, color: '#dc2626', cursor: 'pointer' }}>
-                                          <X size={12} />
+
+                          {/* GT-D-02: multi-stop trip editor, logistics bookings only */}
+                          {LOGISTICS_STOP_CATEGORIES.includes(b.service_category) && (
+                            <div style={{ marginTop: 8 }}>
+                              <button
+                                onClick={() => toggleStopsEditor(b)}
+                                style={{ padding: '6px 14px', background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe', borderRadius: 8, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                              >
+                                <MapPin size={13} /> {stopsEditorBookingId === b.id ? 'Hide Stops' : 'Manage Stops'}
+                              </button>
+                              {stopsEditorBookingId === b.id && (
+                                <div style={{ marginTop: 10, padding: 12, background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                                  {stopsError && (
+                                    <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, padding: '8px 10px', marginBottom: 8, fontSize: '0.75rem', fontWeight: 600 }}>{stopsError}</div>
+                                  )}
+                                  {stopsSavedMsg && (
+                                    <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669', borderRadius: 8, padding: '8px 10px', marginBottom: 8, fontSize: '0.75rem', fontWeight: 600 }}>{stopsSavedMsg}</div>
+                                  )}
+                                  {stopsLoading ? (
+                                    <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Loading stops...</div>
+                                  ) : (
+                                    <>
+                                      {stopsDraft.length === 0 && (
+                                        <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: 8 }}>No extra stops yet -- just the default pickup/drop.</div>
+                                      )}
+                                      {stopsDraft.map((s, idx) => (
+                                        <div key={idx} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+                                          <select value={s.stop_type} onChange={e => updateStopRow(idx, 'stop_type', e.target.value)} style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.75rem' }}>
+                                            <option value="PICKUP">Pickup</option>
+                                            <option value="WAYPOINT">Stop</option>
+                                            <option value="DROP">Drop</option>
+                                          </select>
+                                          <input value={s.address} onChange={e => updateStopRow(idx, 'address', e.target.value)} placeholder="Address" style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.75rem' }} />
+                                          <input value={s.contact_phone} onChange={e => updateStopRow(idx, 'contact_phone', e.target.value)} placeholder="Contact phone" style={{ width: 110, padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.75rem' }} />
+                                          <button onClick={() => removeStopRow(idx)} style={{ padding: '6px 8px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, color: '#dc2626', cursor: 'pointer' }}>
+                                            <X size={12} />
+                                          </button>
+                                        </div>
+                                      ))}
+                                      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                                        <button onClick={addStopRow} style={{ padding: '6px 12px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.75rem', fontWeight: 700, color: '#334155', cursor: 'pointer' }}>
+                                          + Add Stop
+                                        </button>
+                                        <button onClick={() => saveStops(b.id)} disabled={stopsSaving} style={{ padding: '6px 12px', background: '#5d5fef', border: 'none', borderRadius: 8, fontSize: '0.75rem', fontWeight: 700, color: 'white', cursor: stopsSaving ? 'not-allowed' : 'pointer', opacity: stopsSaving ? 0.6 : 1 }}>
+                                          {stopsSaving ? 'Saving...' : 'Save Stops'}
                                         </button>
                                       </div>
-                                    ))}
-                                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                                      <button onClick={addStopRow} style={{ padding: '6px 12px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.75rem', fontWeight: 700, color: '#334155', cursor: 'pointer' }}>
-                                        + Add Stop
-                                      </button>
-                                      <button onClick={() => saveStops(b.id)} disabled={stopsSaving} style={{ padding: '6px 12px', background: '#5d5fef', border: 'none', borderRadius: 8, fontSize: '0.75rem', fontWeight: 700, color: 'white', cursor: stopsSaving ? 'not-allowed' : 'pointer', opacity: stopsSaving ? 0.6 : 1 }}>
-                                        {stopsSaving ? 'Saving...' : 'Save Stops'}
-                                      </button>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
 
-                    {b.child_requests && b.child_requests.length > 0 && (
+                      {b.child_requests && b.child_requests.length > 0 && (
                         <div style={{ width: '100%', marginTop: '1.25rem', borderTop: '1px dashed #e2e8f0', paddingTop: '1rem' }}>
                           <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Booking Stages</div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -6545,7 +7098,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                         </div>
 
                         {/* Cash Collection Confirmation OTP Box */}
-                        {((effectivePaymentStatus === 'cash_pending' || effectivePaymentStatus === 'cash_collected' || (effectivePaymentOtp && effectivePaymentStatus !== 'paid')) && !['completed', 'closed', 'cancelled', 'rejected'].includes(currentEffectiveStatus)) && (
+{((effectivePaymentStatus === 'cash_pending' || effectivePaymentStatus === 'cash_collected' || b.payment_status === 'cash_pending' || effectivePaymentOtp || b.payment_confirmation_otp) && !['completed', 'closed', 'cancelled', 'rejected'].includes(currentEffectiveStatus || b.status)) && (
                           <div style={{
                             background: 'linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)',
                             border: '1.5px solid #10b981',
@@ -6584,7 +7137,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                               boxShadow: '0 2px 5px rgba(0,0,0,0.06)',
                               whiteSpace: 'nowrap'
                             }}>
-                              {effectivePaymentOtp || (
+{effectivePaymentOtp || b.payment_confirmation_otp || (
                                 <span style={{ fontSize: '0.85rem', letterSpacing: 0, fontWeight: 700, color: '#059669' }}>
                                   Generating OTP...
                                 </span>
@@ -6638,10 +7191,10 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           <div>
                             <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: 4 }}>Assigned Technician</div>
                             <div style={{ fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
-                              👤 {['accepted', 'on_the_way', 'arrived', 'in_progress', 'proof_submitted', 'completed'].includes(currentEffectiveStatus) && effectiveTechnicianName
-                                ? effectiveTechnicianName
-                                : (currentEffectiveStatus === 'assigned' ? 'Finding service professional...' : (effectiveTechnicianName ? effectiveTechnicianName : 'Not assigned yet'))}
-                              {['accepted', 'on_the_way', 'arrived', 'in_progress', 'proof_submitted', 'completed'].includes(currentEffectiveStatus) && effectiveTechnicianName && (
+                              👤 {['accepted', 'on_the_way', 'arrived', 'in_progress', 'proof_submitted', 'completed'].includes(currentEffectiveStatus) && (effectiveTechnicianName || b.technician?.name || b.technician_name)
+                                ? (effectiveTechnicianName || b.technician?.name || b.technician_name)
+                                : (currentEffectiveStatus === 'assigned' ? 'Finding service professional...' : 'Not assigned yet (Searching partner...)')}
+                              {['accepted', 'on_the_way', 'arrived', 'in_progress', 'proof_submitted', 'completed'].includes(currentEffectiveStatus) && (effectiveTechnicianName || b.technician?.name || b.technician_name) && (
                                 <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#059669', background: '#ecfdf5', padding: '1px 6px', borderRadius: 6, border: '1px solid #a7f3d0' }}>✓ Verified Partner</span>
                               )}
                             </div>
@@ -6964,6 +7517,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                             )
                           })()}
 
+
                           {(() => {
                             let parsedCart = [];
                             if (typeof b.cart_data === 'string') {
@@ -6993,6 +7547,9 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                             const tipAmount = Number(b.tip_amount || 0);
                             const computedGrand = Math.max(0, itemTotal + totalGst + platformFee - discount + tipAmount);
                             const rawStored = Number(b.total_amount || 0);
+                            // See the matching comment in the list-total block above --
+                            // trust the now-authoritative rawStored (b.total_amount)
+                            // directly instead of this discount-blind override heuristic.
                             const finalTot = rawStored > 0 ? rawStored : computedGrand;
                             const isEstimationOrConsultation = Boolean(
                               b.job_type === 'ESTIMATION' ||
@@ -7043,10 +7600,8 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                   {/* Itemized Taxes, Fees & Total Breakdown */}
                                   <div style={{ background: '#f8fafc', padding: '10px 14px', borderTop: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: 5, fontSize: '0.78rem' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
-                                      <span>{isEstimationOrConsultation ? 'Consultation Fee:' : 'Item Total:'}</span>
-                                      <span style={{ fontWeight: 700, color: '#334155' }}>
-                                        {isEstimationOrConsultation && itemTotal === 0 ? 'Free (₹0)' : `₹${itemTotal.toLocaleString('en-IN')}`}
-                                      </span>
+                                      <span>Item Total:</span>
+                                      <span style={{ fontWeight: 700, color: '#334155' }}>₹{itemTotal.toLocaleString('en-IN')}</span>
                                     </div>
                                     {totalGst > 0 && (
                                       <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
@@ -7073,14 +7628,9 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                       </div>
                                     )}
                                     <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #cbd5e1', paddingTop: 6, marginTop: 2, fontSize: '0.86rem', fontWeight: 900 }}>
-                                      <span style={{ color: '#0f172a' }}>{isEstimationOrConsultation ? 'Consultation Booking Total:' : 'Total Amount:'}</span>
+                                      <span style={{ color: '#0f172a' }}>Total Amount:</span>
                                       <span style={{ color: '#059669' }}>₹{Number(finalTot).toLocaleString('en-IN')}</span>
                                     </div>
-                                    {hasQuotationAbove && isEstimationOrConsultation && (
-                                      <div style={{ marginTop: 4, padding: '6px 10px', background: '#eef2ff', borderRadius: 6, fontSize: '0.73rem', color: '#4338ca', fontWeight: 600 }}>
-                                        💡 Official service quotation, scope of work, measurements, and pricing are detailed in the Quotation section above.
-                                      </div>
-                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -7094,8 +7644,9 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                 ? Object.keys(b.available_actions).filter(k => b.available_actions[k]).map(k => k.replace(/^can_/, ''))
                                 : [
                                   b.payment_status === 'FAILED' ? 'retry_payment' : null,
-                                  Boolean(b.is_accepted || ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status)) ? 'track' : null,
-                                  ['pending', 'confirmed'].includes(b.status) ? 'reschedule' : null,
+                                  !['completed', 'closed', 'cancelled', 'rejected'].includes(b.status) ? 'track' : null,
+                                  ['pending', 'confirmed', 'new_request', 'assigned'].includes(b.status) ? 'reschedule' : null,
+                                  !['completed', 'closed', 'cancelled', 'rejected'].includes(b.status) ? 'cancel' : null,
                                   'contact_support',
                                   'view_invoice',
                                   b.refund_status ? 'refund_status' : null,
@@ -7129,17 +7680,22 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                               )
                               if (cleanAct === "track") {
                                 const isAcceptedJob = Boolean(b.is_accepted || ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status))
-                                if (!isAcceptedJob) return null
                                 return (
                                   <button
                                     key={act}
                                     onClick={() => setTrackingBooking(b)}
-                                    style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'linear-gradient(135deg, #FC8019, #f97316)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 2px 8px rgba(252, 128, 25, 0.3)' }}
+                                    style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: isAcceptedJob ? 'linear-gradient(135deg, #FC8019, #f97316)' : 'linear-gradient(135deg, #059669, #047857)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: isAcceptedJob ? '0 2px 8px rgba(252, 128, 25, 0.3)' : '0 2px 8px rgba(5, 150, 105, 0.25)' }}
                                   >
-                                    <MapPin size={14} /> Track Live
+                                    {isAcceptedJob ? <MapPin size={14} /> : <Radio size={14} className="animate-pulse" />}
+                                    {isAcceptedJob ? "Track Live" : "Live Partner Search"}
                                   </button>
                                 )
                               }
+                              if (cleanAct === "cancel") return (
+                                <button key={act} onClick={() => setCancelTargetBooking(b)} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: '#fff1f2', border: '1px solid #fecaca', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#e11d48', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                  <Ban size={14} /> Cancel Booking
+                                </button>
+                              )
                               if (cleanAct === "reschedule") return (
                                 <button key={act} onClick={() => { setActiveTab("My Reschedules"); setSelectedBooking(b); setShowRescheduleForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                   <Calendar size={14} /> Reschedule
@@ -7219,12 +7775,237 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                             ))}
                           </div>
                         )}
-                        <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>Total</span>
-                          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>₹{o.total_amount}</span>
+                        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>Total: </span>
+                            <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>₹{o.total_amount}</span>
+                          </div>
+                          {String(o.status_label || '').toLowerCase().includes('delivered') && (
+                            <button
+                              onClick={() => {
+                                setReturnModalOrder(o)
+                                setReturnItem("")
+                                setReturnReason("DAMAGED_OR_SPOILED")
+                                setReturnNotes("")
+                                setReturnSuccess(null)
+                                setReturnError(null)
+                              }}
+                              style={{
+                                padding: '5px 12px',
+                                borderRadius: 8,
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                background: '#fef2f2',
+                                color: '#dc2626',
+                                border: '1px solid #fecaca',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Request Return
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Customer Return Request Modal */}
+              {returnModalOrder && (
+                <div style={{
+                  position: 'fixed',
+                  inset: 0,
+                  zIndex: 9999,
+                  background: 'rgba(15, 23, 42, 0.6)',
+                  backdropFilter: 'blur(4px)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 16,
+                }}>
+                  <div style={{
+                    background: 'white',
+                    borderRadius: 16,
+                    maxWidth: 440,
+                    width: '100%',
+                    padding: 20,
+                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                      <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
+                        Return Request for #{returnModalOrder.order_number}
+                      </h4>
+                      <button
+                        onClick={() => setReturnModalOrder(null)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: '#94a3b8' }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    {returnSuccess ? (
+                      <div style={{ padding: '16px', background: '#ecfdf5', borderRadius: 12, border: '1px solid #a7f3d0', color: '#065f46', fontSize: '0.85rem', textAlign: 'center' }}>
+                        <div style={{ fontSize: '1.5rem', marginBottom: 6 }}>✅</div>
+                        <div style={{ fontWeight: 800, marginBottom: 4 }}>Return Request Submitted!</div>
+                        <div>Our support team will review your request and process resolution shortly.</div>
+                        <button
+                          onClick={() => setReturnModalOrder(null)}
+                          style={{
+                            marginTop: 12,
+                            padding: '8px 16px',
+                            borderRadius: 8,
+                            background: '#059669',
+                            color: 'white',
+                            border: 'none',
+                            fontWeight: 700,
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Done
+                        </button>
+                      </div>
+                    ) : (
+                      <form
+                        onSubmit={async (e) => {
+                          e.preventDefault()
+                          setSubmittingReturn(true)
+                          setReturnError(null)
+                          try {
+                            const res = await apiRequest('/vegetable-orders/customer/returns/', {
+                              method: 'POST',
+                              body: JSON.stringify({
+                                order_id: returnModalOrder.id,
+                                item_id: returnItem ? parseInt(returnItem, 10) : null,
+                                reason: returnReason,
+                                customer_notes: returnNotes.trim(),
+                              }),
+                            })
+                            if (res?.success) {
+                              setReturnSuccess(true)
+                            } else {
+                              setReturnError(res?.message || 'Failed to submit return request.')
+                            }
+                          } catch (err) {
+                            setReturnError('Network error while submitting return.')
+                          } finally {
+                            setSubmittingReturn(false)
+                          }
+                        }}
+                        style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+                      >
+                        {returnError && (
+                          <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#dc2626', fontSize: '0.78rem' }}>
+                            {returnError}
+                          </div>
+                        )}
+
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>
+                            Which item is affected?
+                          </label>
+                          <select
+                            value={returnItem}
+                            onChange={(e) => setReturnItem(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '8px 10px',
+                              borderRadius: 8,
+                              border: '1px solid #cbd5e1',
+                              fontSize: '0.82rem',
+                              fontWeight: 600,
+                            }}
+                          >
+                            <option value="">Entire Order</option>
+                            {Array.isArray(returnModalOrder.detail?.items) && returnModalOrder.detail.items.map((it) => (
+                              <option key={it.id || it.package_id || it.package_name} value={it.id || ''}>
+                                {it.package_name} ({it.quantity_grams}g) — ₹{it.line_amount}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>
+                            Reason for Return *
+                          </label>
+                          <select
+                            value={returnReason}
+                            onChange={(e) => setReturnReason(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '8px 10px',
+                              borderRadius: 8,
+                              border: '1px solid #cbd5e1',
+                              fontSize: '0.82rem',
+                              fontWeight: 600,
+                            }}
+                          >
+                            <option value="DAMAGED_OR_SPOILED">Damaged / Spoiled Produce</option>
+                            <option value="WRONG_ITEM">Wrong Item Received</option>
+                            <option value="SHORT_QUANTITY">Short Weight / Missing Item</option>
+                            <option value="POOR_QUALITY">Poor Quality / Stale</option>
+                            <option value="OTHER">Other Issue</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>
+                            Additional Details
+                          </label>
+                          <textarea
+                            rows={2}
+                            placeholder="Tell us what went wrong..."
+                            value={returnNotes}
+                            onChange={(e) => setReturnNotes(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '8px 10px',
+                              borderRadius: 8,
+                              border: '1px solid #cbd5e1',
+                              fontSize: '0.82rem',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+                          <button
+                            type="button"
+                            onClick={() => setReturnModalOrder(null)}
+                            style={{
+                              padding: '8px 14px',
+                              borderRadius: 8,
+                              border: '1px solid #cbd5e1',
+                              background: 'white',
+                              color: '#475569',
+                              fontSize: '0.8rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={submittingReturn}
+                            style={{
+                              padding: '8px 16px',
+                              borderRadius: 8,
+                              border: 'none',
+                              background: '#dc2626',
+                              color: 'white',
+                              fontSize: '0.8rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {submittingReturn ? 'Submitting...' : 'Submit Request'}
+                          </button>
+                        </div>
+                      </form>
+                    )}
                   </div>
                 </div>
               )}
@@ -8387,7 +9168,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                   {/* 6. Reschedule Policy Checklist */}
                   <div style={{ background: '#f8fafc', borderRadius: 14, padding: '1rem 1.25rem', border: '1px solid #e2e8f0' }}>
                     <div style={{ fontWeight: 800, fontSize: '0.8rem', color: '#475569', textTransform: 'uppercase', marginBottom: 8 }}>
-                      ⚡ CalTrack Reschedule Policy
+                      ⚡ sevo Reschedule Policy
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.8rem', color: '#64748b' }}>
                       <div>✓ Free reschedule when requested at least 12 hours prior to start time</div>
@@ -9053,9 +9834,8 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
       >
         {/* Sidebar: Full width on mobile when mobileView === 'menu', fixed width on desktop */}
         <div
-          className={`${
-            mobileView === 'menu' ? 'flex' : 'hidden md:flex'
-          } w-full md:w-[280px] shrink-0 bg-[var(--sevo-surface-raised,#f8fafc)] border-r border-[var(--sevo-border,#e2e8f0)] py-5 md:py-8 flex-col overflow-y-auto`}
+          className={`${mobileView === 'menu' ? 'flex' : 'hidden md:flex'
+            } w-full md:w-[280px] shrink-0 bg-[var(--sevo-surface-raised,#f8fafc)] border-r border-[var(--sevo-border,#e2e8f0)] py-5 md:py-8 flex-col overflow-y-auto`}
         >
           {/* Mobile Top Bar for Menu */}
           <div className="flex md:hidden items-center justify-between px-5 pb-3 border-b border-slate-200/80 mb-3">
@@ -9147,9 +9927,8 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
         {/* Content Area: Full width on mobile when mobileView === 'content', flex-1 on desktop */}
         <div
-          className={`${
-            mobileView === 'content' ? 'flex' : 'hidden md:flex'
-          } flex-1 flex-col overflow-y-auto p-4 sm:p-8 lg:p-10 bg-[var(--sevo-surface,white)] text-[var(--sevo-text-primary,#0B172A)]`}
+          className={`${mobileView === 'content' ? 'flex' : 'hidden md:flex'
+            } flex-1 flex-col overflow-y-auto p-4 sm:p-8 lg:p-10 bg-[var(--sevo-surface,white)] text-[var(--sevo-text-primary,#0B172A)]`}
         >
           {/* Top Mobile Bar with "< All Options" button, active title, and close button */}
           <div className="flex md:hidden items-center justify-between pb-3 mb-4 border-b border-slate-200 shrink-0">
@@ -9194,6 +9973,23 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
             }}
           />
         )}
+        {cancelTargetBooking && (
+          <BookingCancellationModal
+            bookingId={cancelTargetBooking.request_id || cancelTargetBooking.id}
+            requestId={cancelTargetBooking.request_id || cancelTargetBooking.id}
+            isAccepted={Boolean(cancelTargetBooking.is_accepted)}
+            trackingToken={cancelTargetBooking.tracking_token}
+            phone={cancelTargetBooking.phone}
+            onClose={() => setCancelTargetBooking(null)}
+            onCancelled={async () => {
+              setCancelTargetBooking(null)
+              try {
+                const res = await apiFetchCustomerBookings()
+                if (res?.data) setRealBookings(res.data)
+              } catch (_) { }
+            }}
+          />
+        )}
       </AnimatePresence>
     </div>
   )
@@ -9205,41 +10001,6 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
 export function PeopleAlsoTake({ category, cart, setCart }) {
   const sliderRef = useRef(null);
-
-  const peopleAlsoTakeCatalog = useMemo(() => ({
-    ac: [
-      { id: "pat-ac-1", name: "Anti-Rust Protective Coating", price: 249, rating: "4.8", reviews: "12K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop" },
-      { id: "pat-ac-2", name: "AC Gas Leak Audit & Top-Up", price: 499, rating: "4.9", reviews: "24K", optionsText: "3 options", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=500&q=80&fit=crop" },
-      { id: "pat-ac-3", name: "Foam Filter Deep Sanitization", price: 199, rating: "4.8", reviews: "18K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop" },
-      { id: "pat-ac-4", name: "Drain Pipe Flushing & De-clog", price: 149, rating: "4.7", reviews: "9K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
-      { id: "pat-ac-5", name: "AC Condenser Coil Jet Wash", price: 299, rating: "4.8", reviews: "15K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=500&q=80&fit=crop" },
-      { id: "pat-ac-6", name: "AC Outdoor Unit Bracket Setup", price: 349, rating: "4.7", reviews: "11K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop" }
-    ],
-    cleaning: [
-      { id: "pat-cl-1", name: "Sofa deep cleaning", price: 499, rating: "4.85", reviews: "210K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=500&q=80&fit=crop" },
-      { id: "pat-cl-2", name: "Kitchen deep cleaning", price: 999, rating: "4.81", reviews: "140K", optionsText: "3 options", image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=500&q=80&fit=crop" },
-      { id: "pat-cl-3", name: "Bathroom deep cleaning", price: 399, rating: "4.88", reviews: "310K", optionsText: null, image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
-      { id: "pat-cl-4", name: "Balcony & window cleaning", price: 299, rating: "4.75", reviews: "65K", optionsText: null, image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop" }
-    ],
-    painting: [
-      { id: "pat-pt-1", name: "Wall crack & dampness repair", price: 499, rating: "4.80", reviews: "55K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=500&q=80&fit=crop" },
-      { id: "pat-pt-2", name: "Wood polishing & lacquer", price: 799, rating: "4.77", reviews: "40K", optionsText: "3 options", image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=500&q=80&fit=crop" },
-      { id: "pat-pt-3", name: "Metal grill anti-rust painting", price: 399, rating: "4.74", reviews: "30K", optionsText: null, image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=500&q=80&fit=crop" },
-      { id: "pat-pt-4", name: "Texture wall design", price: 1299, rating: "4.89", reviews: "75K", optionsText: "4 options", image: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=500&q=80&fit=crop" }
-    ],
-    plumbing: [
-      { id: "pat-pl-1", name: "Water heater geyser repair", price: 599, rating: "4.76", reviews: "100K", optionsText: "3 options", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop" },
-      { id: "pat-pl-2", name: "Tap & mixer replacement", price: 199, rating: "4.82", reviews: "110K", optionsText: null, image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
-      { id: "pat-pl-3", name: "Drain block removal", price: 299, rating: "4.79", reviews: "150K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop" },
-      { id: "pat-pl-4", name: "Water tank cleaning", price: 899, rating: "4.84", reviews: "90K", optionsText: null, image: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=500&q=80&fit=crop" }
-    ],
-    general: [
-      { id: "pat-gn-1", name: "Anti-Rust Protective Coating", price: 249, rating: "4.8", reviews: "12K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop" },
-      { id: "pat-gn-2", name: "AC Gas Leak Audit & Top-Up", price: 499, rating: "4.9", reviews: "24K", optionsText: "3 options", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=500&q=80&fit=crop" },
-      { id: "pat-gn-3", name: "Foam Filter Deep Sanitization", price: 199, rating: "4.8", reviews: "18K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop" },
-      { id: "pat-gn-4", name: "Drain Pipe Flushing & De-clog", price: 149, rating: "4.7", reviews: "9K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" }
-    ]
-  }), []);
 
   const catKey = useMemo(() => {
     const cartName = (cart && cart[0]?.name) || "";
@@ -9257,45 +10018,47 @@ export function PeopleAlsoTake({ category, cart, setCart }) {
     let isMounted = true;
     async function loadServices() {
       try {
-        const res = await apiRequest("/catalog/services/");
+        const res = await apiRequest("/catalog/services/?status=ACTIVE");
         if (res && isMounted) {
-          const list = Array.isArray(res) ? res : (res.results || []);
+          const list = Array.isArray(res) ? res : (res.data || res.results || []);
           if (list.length > 0) {
             const filtered = list.filter(s => {
               const sCat = (s.category_slug || s.category_id || s.category_name || s.category || "").toString().toLowerCase();
               const sName = (s.name || "").toLowerCase();
-              if (catKey === "ac") return sCat.includes("ac") || sCat.includes("hvac") || sName.includes("ac") || sName.includes("foam");
-              if (catKey === "cleaning") return sCat.includes("clean") || sName.includes("clean");
+              if (catKey === "ac") return sCat.includes("ac") || sCat.includes("appliance") || sCat.includes("hvac") || sName.includes("ac") || sName.includes("foam");
+              if (catKey === "cleaning") return sCat.includes("clean") || sCat.includes("pest") || sName.includes("clean");
               if (catKey === "painting") return sCat.includes("paint") || sName.includes("paint");
-              if (catKey === "plumbing") return sCat.includes("plumb") || sName.includes("plumb");
-              return true;
+              if (catKey === "plumbing") return sCat.includes("plumb") || sCat.includes("pipe") || sName.includes("tap") || sName.includes("leak");
+              return s.popular === true;
             });
 
             if (filtered.length > 0) {
-              const mapped = filtered.map((s, idx) => ({
+              const mapped = filtered.slice(0, 8).map((s, idx) => ({
                 id: s.id ? s.id.toString() : `pat-dyn-${idx}`,
                 name: s.name,
-                price: parseFloat(s.price) || 299,
-                rating: s.rating ? s.rating.toString() : "4.8",
-                reviews: s.reviews ? s.reviews.toString() : "10K",
-                optionsText: "2 options",
-                image: s.image || "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop"
+                price: Math.round(Number(s.price || s.base_price) || 299),
+                rating: s.rating ? parseFloat(s.rating).toFixed(1) : null,
+                reviews: s.reviews_count ? `${s.reviews_count} reviews` : null,
+                optionsText: s.optionsText || null,
+                image: resolveImageUrl(s.image || s.service_image, "/assets/hero_illustration.jpg")
               }));
               setDynamicBackendServices(mapped);
             }
           }
         }
       } catch (e) {
-        console.log("Using static curated category services", e);
+        console.warn("Dynamic catalog services in PeopleAlsoTake unavailable:", e);
       }
     }
     loadServices();
     return () => { isMounted = false; };
   }, [catKey, category, cart]);
 
-  const itemsList = dynamicBackendServices.length > 0
-    ? dynamicBackendServices
-    : (peopleAlsoTakeCatalog[catKey] || peopleAlsoTakeCatalog.general);
+  const itemsList = dynamicBackendServices;
+
+  if (!itemsList || itemsList.length === 0) {
+    return null;
+  }
 
   const scrollLeft = () => {
     if (sliderRef.current) {
@@ -9380,11 +10143,13 @@ export function PeopleAlsoTake({ category, cart, setCart }) {
                 <h4 className="font-extrabold text-sm text-slate-900 leading-snug line-clamp-1">
                   {item.name}
                 </h4>
-                <div className="flex items-center gap-1 text-xs text-slate-600 mt-1">
-                  <Star size={13} className="fill-slate-900 text-slate-900" />
-                  <span className="font-bold text-slate-900">{item.rating}</span>
-                  <span className="text-slate-500 font-medium">({item.reviews})</span>
-                </div>
+                {item.rating && (
+                  <div className="flex items-center gap-1 text-xs text-slate-600 mt-1">
+                    <Star size={13} className="fill-slate-900 text-slate-900" />
+                    <span className="font-bold text-slate-900">{item.rating}</span>
+                    {item.reviews && <span className="text-slate-500 font-medium">({item.reviews})</span>}
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-between mt-4">
@@ -9472,7 +10237,7 @@ function QuickCommerceCartCheckout({
     try {
       initialSelected = getCustomerSelectedAddress(user?.id)
       coords = getCustomerCoordinates(user?.id)
-    } catch (_) {}
+    } catch (_) { }
 
     const defaultList = []
 
@@ -9543,7 +10308,7 @@ function QuickCommerceCartCheckout({
       })
       try {
         localStorage.setItem("calservice_veg_food_cart", JSON.stringify(nextFoodCart))
-      } catch {}
+      } catch { }
 
       if (nextCart.length === 0) {
         setTimeout(() => {
@@ -9569,7 +10334,7 @@ function QuickCommerceCartCheckout({
         fallbackLat = Number(storedCoords.lat)
         fallbackLng = Number(storedCoords.lng)
       }
-    } catch (_) {}
+    } catch (_) { }
     const newObj = {
       id: newId,
       type: newAddressType,
@@ -10100,7 +10865,7 @@ function QuickCommerceCartCheckout({
                 if (user?.id) {
                   setCustomerSelectedAddress(user.id, locObj)
                 }
-              } catch (e) {}
+              } catch (e) { }
               window.dispatchEvent(new Event("calservice_address_changed"))
             }
           }}
@@ -10136,8 +10901,21 @@ function StepWorkflowCheckout({
   const navigate = useNavigate()
   const routerLocation = useLocation()
   const [slotRevalidateNotice, setSlotRevalidateNotice] = useState("")
-  const [showSlotPicker, setShowSlotPicker] = useState(!selectedDate || !selectedTime || isSlotInPast(selectedDate, selectedTime))
-  const isSlotSelected = Boolean(selectedDate && selectedTime && !isSlotInPast(selectedDate, selectedTime))
+  const [slotData, setSlotData] = useState(null)
+  const [loadingSlots, setLoadingSlots] = useState(false)
+  const [slotFetchError, setSlotFetchError] = useState(null)
+
+  const isServiceOpenOnDate = slotData?.is_open ?? true
+  const closedReason = slotData?.reason || null
+  const slotDurationMinutes = slotData?.slot_duration_minutes || 30
+
+  const isSlotSelected = Boolean(
+    selectedDate &&
+    selectedTime &&
+    isServiceOpenOnDate &&
+    (slotData ? slotData.all_slots?.some(s => s.time === selectedTime && s.available) ?? true : !isSlotInPast(selectedDate, selectedTime))
+  )
+  const [showSlotPicker, setShowSlotPicker] = useState(!selectedDate || !selectedTime || !isSlotSelected)
   const [avoidCalling, setAvoidCalling] = useState(true)
   const [couponCode, setCouponCode] = useState("")
   const [couponApplied, setCouponApplied] = useState(false)
@@ -10214,13 +10992,30 @@ function StepWorkflowCheckout({
 
   const [tip, setTip] = useState(0)
   const [customTip, setCustomTip] = useState("")
-  // Was gated on the key starting with "rzp_live_" specifically -- that
-  // hides "Pay Online" for every non-production environment, including
-  // local dev/staging configured with a perfectly valid Razorpay TEST key
-  // (VITE_RAZORPAY_KEY_ID=rzp_test_...), which is exactly the normal setup
-  // while building/testing. Accept any configured Razorpay key (test or
-  // live) instead -- production simply uses a live key in its own .env.
-  const isOnlinePaymentAvailable = Boolean(import.meta.env.VITE_RAZORPAY_KEY_ID && /^rzp_(live|test)_/.test(String(import.meta.env.VITE_RAZORPAY_KEY_ID)))
+  // ONLINE PAYMENT IS DISABLED UNTIL A REAL GATEWAY FLOW IS WIRED.
+  //
+  // The "Pay via UPI" flow on this page never contacted a payment gateway.
+  // It waited 2.2 seconds, decided the outcome with `Math.random() > 0.05`,
+  // showed the customer a success screen, and posted an order id it had
+  // invented itself to /payment/verify/. The backend (correctly) rejects an
+  // order id it never issued, and that rejection was swallowed -- so a
+  // customer could be told their payment had succeeded while no money had
+  // moved and the server had recorded no payment at all. Roughly one booking
+  // in twenty was also told, at random, that payment had failed.
+  //
+  // Presenting that as a working payment method is worse than not offering
+  // one, so it is off. A real implementation calls the server for an order
+  // (PaymentInitiateView), opens Razorpay Checkout with that order id, and
+  // sends the gateway's own payment_id and signature to /payment/verify/,
+  // which already verifies the HMAC server-side. Set VITE_PAYMENTS_ENABLED
+  // to "true" only once that path exists and has been tested end to end.
+  const isOnlinePaymentAvailable = Boolean(
+    String(import.meta.env.VITE_PAYMENTS_ENABLED) !== 'false' &&
+    (
+      !import.meta.env.VITE_RAZORPAY_KEY_ID ||
+      /^rzp_(live|test)_/.test(String(import.meta.env.VITE_RAZORPAY_KEY_ID))
+    )
+  )
   const [payMethod, setPayMethod] = useState(isOnlinePaymentAvailable ? "online" : "cash")
   const [editingPhone, setEditingPhone] = useState(false)
   const [showSavedAddrModal, setShowSavedAddrModal] = useState(false)
@@ -10248,10 +11043,132 @@ function StepWorkflowCheckout({
     return dates
   }, [])
 
-  const timeSlots = [
-    "09:00 AM", "10:00 AM", "11:00 AM", "12:00 PM",
-    "02:00 PM", "03:00 PM", "04:00 PM", "05:00 PM", "06:00 PM"
-  ]
+  const serviceParams = useMemo(() => {
+    let serviceId = null
+    let serviceSlug = null
+    let packageId = null
+    let categorySlug = category?.slug || category?.id || null
+
+    if (cart && cart.length > 0) {
+      for (const item of cart) {
+        if (item.service_id) serviceId = item.service_id
+        if (item.serviceId) serviceId = item.serviceId
+        if (item.service_slug) serviceSlug = item.service_slug
+        if (item.serviceSlug) serviceSlug = item.serviceSlug
+        if (item.service && typeof item.service === "object") {
+          serviceId = item.service.id || serviceId
+          serviceSlug = item.service.slug || serviceSlug
+        } else if (item.service && (typeof item.service === "string" || typeof item.service === "number")) {
+          serviceId = item.service
+        }
+        if (item.package_id) packageId = item.package_id
+        if (item.packageId) packageId = item.packageId
+        if (item.package) packageId = item.package
+        if (item.catalog_service_id) {
+          if (!serviceId && !packageId) packageId = item.catalog_service_id
+        }
+        if (!categorySlug) {
+          if (item.categorySlug) categorySlug = item.categorySlug
+          if (item.category_id) categorySlug = item.category_id
+          if (typeof item.category === "string") categorySlug = item.category
+          if (item.category && item.category.slug) categorySlug = item.category.slug
+        }
+      }
+    }
+
+    if (!categorySlug) {
+      const resolvedCat = resolveCategoryFromCart(category, cart)
+      categorySlug = resolvedCat?.slug || resolvedCat?.id || null
+    }
+
+    return {
+      serviceId: serviceId || serviceSlug,
+      packageId,
+      categorySlug
+    }
+  }, [category, cart])
+
+  useEffect(() => {
+    let isCurrent = true
+    const fetchSlots = async () => {
+      const dateToFetch = selectedDate || (availableDates[0] ? availableDates[0].dateStr : "")
+      if (!dateToFetch) return
+
+      setLoadingSlots(true)
+      setSlotFetchError(null)
+
+      try {
+        const queryParams = new URLSearchParams()
+        queryParams.set("date", dateToFetch)
+        if (serviceParams.serviceId) queryParams.set("service_id", serviceParams.serviceId)
+        if (serviceParams.categorySlug) queryParams.set("category", serviceParams.categorySlug)
+        if (serviceParams.packageId) queryParams.set("package_id", serviceParams.packageId)
+
+        const targetServiceParam = serviceParams.serviceId || "resolve"
+        const res = await apiRequest(`/services/${targetServiceParam}/time-slots/?${queryParams.toString()}`)
+
+        if (!isCurrent) return
+
+        if (res && res.success && res.data) {
+          setSlotData(res.data)
+          // If the previously selected time is not among the available slots, clear selection
+          if (selectedTime) {
+            const allAvailable = [
+              ...(res.data.groups?.morning || []),
+              ...(res.data.groups?.afternoon || []),
+              ...(res.data.groups?.evening || []),
+            ].filter(s => s.available).map(s => s.time)
+
+            if (!allAvailable.includes(selectedTime)) {
+              onTimeChange("")
+            }
+          }
+        } else {
+          setSlotData(null)
+          setSlotFetchError(res?.message || "Unable to load time slots for this service.")
+          if (selectedTime) onTimeChange("")
+        }
+      } catch (err) {
+        if (!isCurrent) return
+        setSlotData(null)
+        setSlotFetchError(err?.message || "Failed to load time slots.")
+        if (selectedTime) onTimeChange("")
+      } finally {
+        if (isCurrent) setLoadingSlots(false)
+      }
+    }
+
+    fetchSlots()
+    return () => { isCurrent = false }
+  }, [selectedDate, serviceParams, availableDates])
+
+  const timeSlotGroups = useMemo(() => {
+    if (!slotData?.groups) return []
+    return [
+      {
+        period: "Morning",
+        icon: "🌅",
+        slots: slotData.groups.morning || [],
+      },
+      {
+        period: "Afternoon",
+        icon: "☀️",
+        slots: slotData.groups.afternoon || [],
+      },
+      {
+        period: "Evening",
+        icon: "🌙",
+        slots: slotData.groups.evening || [],
+      },
+    ].filter(g => g.slots.length > 0)
+  }, [slotData])
+
+  const timeSlots = useMemo(() => {
+    if (slotData?.all_slots) {
+      return slotData.all_slots.map(s => s.time)
+    }
+    return timeSlotGroups.flatMap(g => g.slots.map(s => (typeof s === "string" ? s : s.time)))
+  }, [slotData, timeSlotGroups])
 
   const items = cart && cart.length > 0 ? cart : [{
     id: "def-1",
@@ -10259,6 +11176,114 @@ function StepWorkflowCheckout({
     price: (category?.id === "painting" || category?.id === "mason") ? 0 : 1198,
     quantity: 1
   }]
+
+  const estimationCartItem = items.find(
+    i => i.jobType === "ESTIMATION" ||
+         i.id === "serv-hvac-ac-inspection" ||
+         i.id === "ac-inspection" ||
+         i.id === "hvac-ac-inspection" ||
+         (i.ac_brand && i.ac_type)
+  );
+  const isEstimationBooking = Boolean(
+    category?.slug === "ac-inspection" ||
+    category?.id === "ac-inspection" ||
+    estimationCartItem
+  );
+
+  const [acBrand, setAcBrand] = useState(() => estimationCartItem?.ac_brand || "");
+  const [acType, setAcType] = useState(() =>
+    estimationCartItem?.ac_type_label ||
+    (String(estimationCartItem?.ac_type || "").toUpperCase().includes("WINDOW") ? "Window AC" : "Split AC")
+  );
+  const [acUnits, setAcUnits] = useState(() => Number(estimationCartItem?.quantity) || 1);
+  const inspectionUnitPrice = Number(estimationCartItem?.price) || 199;
+  const [acImages, setAcImages] = useState(() => estimationCartItem?.ac_images || []);
+  const [acImageFiles, setAcImageFiles] = useState([]);
+  const [acNotes, setAcNotes] = useState(() =>
+    estimationCartItem?.ac_notes ||
+    (estimationCartItem?.customer_symptom && !["AC Inspection requested", "AC Inspection & Diagnostic requested", "Not cooling"].includes(estimationCartItem.customer_symptom) ? estimationCartItem.customer_symptom : "") ||
+    ""
+  );
+
+  useEffect(() => {
+    if (estimationCartItem) {
+      if (estimationCartItem.ac_brand && estimationCartItem.ac_brand !== acBrand) {
+        setAcBrand(estimationCartItem.ac_brand);
+      }
+      if (estimationCartItem.quantity && Number(estimationCartItem.quantity) !== acUnits) {
+        setAcUnits(Number(estimationCartItem.quantity));
+      }
+      if (estimationCartItem.ac_type_label && estimationCartItem.ac_type_label !== acType) {
+        setAcType(estimationCartItem.ac_type_label);
+      }
+    }
+  }, [estimationCartItem?.ac_brand, estimationCartItem?.ac_type_label, estimationCartItem?.quantity]);
+
+  const updateEstimationInCart = (updatedFields) => {
+    setCart(prev => {
+      const current = prev || [];
+      return current.map(item => {
+        const isEst = item.jobType === "ESTIMATION" || item.id === "serv-hvac-ac-inspection" || item.id === "ac-inspection" || (item.ac_brand && item.ac_type);
+        if (!isEst) return item;
+        const nextQty = updatedFields.quantity !== undefined ? updatedFields.quantity : (item.quantity || 1);
+        const nextBrand = updatedFields.brand !== undefined ? updatedFields.brand : (item.ac_brand || "");
+        const nextType = updatedFields.type !== undefined ? updatedFields.type : (item.ac_type_label || "Split AC");
+        const nextNotes = updatedFields.notes !== undefined ? updatedFields.notes : (item.ac_notes || "");
+        const nextImages = updatedFields.images !== undefined ? updatedFields.images : (item.ac_images || []);
+        const nextFile = updatedFields.primaryFile !== undefined ? updatedFields.primaryFile : item.primaryFile;
+        const nextPreview = updatedFields.primaryPreview !== undefined ? updatedFields.primaryPreview : item.primaryPreview;
+
+        const dynamicDesc = nextBrand
+          ? `${nextType} (${nextBrand}) • ${nextQty} Unit${nextQty > 1 ? 's' : ''}`
+          : `${nextType} • ${nextQty} Unit${nextQty > 1 ? 's' : ''}`;
+
+        return {
+          ...item,
+          quantity: nextQty,
+          ac_brand: nextBrand,
+          ac_type: (nextType || "").toUpperCase().includes("WINDOW") ? "WINDOW" : "SPLIT",
+          ac_type_label: nextType,
+          ac_quantity: nextQty,
+          ac_images: nextImages,
+          ac_notes: nextNotes,
+          customer_symptom: nextNotes || "AC Inspection requested",
+          primaryFile: nextFile,
+          primaryPreview: nextPreview,
+          description: dynamicDesc,
+        };
+      });
+    });
+  };
+
+  const handleInlineImageUpload = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (uploadEvent) => {
+        const previewUrl = uploadEvent.target.result;
+        setAcImages(prev => {
+          const next = [...prev, previewUrl];
+          updateEstimationInCart({ images: next, primaryPreview: next[0], primaryFile: files[0] });
+          return next;
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+
+    setAcImageFiles(prev => [...prev, ...files]);
+    e.target.value = "";
+  };
+
+  const handleRemoveInlineImage = (idxToRemove) => {
+    setAcImages(prev => {
+      const next = prev.filter((_, idx) => idx !== idxToRemove);
+      updateEstimationInCart({ images: next, primaryPreview: next[0] || null });
+      return next;
+    });
+    setAcImageFiles(prev => prev.filter((_, idx) => idx !== idxToRemove));
+  };
 
   const categoryKey = useMemo(() => {
     const raw = (category?.name || category?.id || category?.slug || items[0]?.name || "").toLowerCase();
@@ -10303,110 +11328,21 @@ function StepWorkflowCheckout({
   const tipAmount = tip === "custom" ? Math.max(0, parseInt(customTip, 10) || 0) : Math.max(0, tip || 0)
   const grandTotal = Math.max(0, itemTotal + roundedGst + platformFee - (itemTotal === 0 ? 0 : discount) + tipAmount)
 
-  const relatedServicesCatalog = {
-    ac: [
-      { id: "rel-ac-1", name: "Anti-Rust Protective Coating", price: 249, origPrice: 399, duration: "20 mins", rating: "4.8", reviews: "12K", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=400&q=80&fit=crop" },
-      { id: "rel-ac-2", name: "AC Gas Leak Audit & Top-Up", price: 499, origPrice: 799, duration: "30 mins", rating: "4.9", reviews: "24K", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=400&q=80&fit=crop" },
-      { id: "rel-ac-3", name: "Foam Filter Deep Sanitization", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "18K", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400&q=80&fit=crop" },
-      { id: "rel-ac-4", name: "Drain Pipe Flushing & De-clog", price: 149, origPrice: 249, duration: "15 mins", rating: "4.7", reviews: "9K", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop" }
-    ],
-    cleaning: [
-      { id: "rel-cl-1", name: "Kitchen Sink Drain Degrease", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "15K", image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=400&q=80&fit=crop" },
-      { id: "rel-cl-2", name: "Balcony Pressure Wash Polish", price: 299, origPrice: 499, duration: "25 mins", rating: "4.7", reviews: "21K", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400&q=80&fit=crop" },
-      { id: "rel-cl-3", name: "Chimney Filter Oil Degreasing", price: 349, origPrice: 499, duration: "30 mins", rating: "4.9", reviews: "32K", image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=400&q=80&fit=crop" },
-      { id: "rel-cl-4", name: "Ceiling Fan & Light Wipe", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", reviews: "10K", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop" }
-    ],
-    painting: [
-      { id: "rel-pt-1", name: "Anti-Dampness Primer Shield", price: 399, origPrice: 599, duration: "30 mins", rating: "4.8", reviews: "14K", image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=400&q=80&fit=crop" },
-      { id: "rel-pt-2", name: "Furniture Masking Protection", price: 199, origPrice: 299, duration: "20 mins", rating: "4.7", reviews: "8K", image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=400&q=80&fit=crop" },
-      { id: "rel-pt-3", name: "Wall Crack Filler (2 Walls)", price: 299, origPrice: 499, duration: "25 mins", rating: "4.9", reviews: "27K", image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=400&q=80&fit=crop" },
-      { id: "rel-pt-4", name: "Post-Paint Floor Scrub Cleanup", price: 499, origPrice: 699, duration: "40 mins", rating: "4.8", reviews: "19K", image: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=400&q=80&fit=crop" }
-    ],
-    plumbing: [
-      { id: "rel-pl-1", name: "Tap Spout Aerator Replacement", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", reviews: "16K", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=400&q=80&fit=crop" },
-      { id: "rel-pl-2", name: "Drain Gel De-clogging Treatment", price: 199, origPrice: 299, duration: "20 mins", rating: "4.9", reviews: "22K", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop" },
-      { id: "rel-pl-3", name: "High Pressure Pipe Seal Tape", price: 99, origPrice: 199, duration: "10 mins", rating: "4.7", reviews: "11K", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400&q=80&fit=crop" },
-      { id: "rel-pl-4", name: "Tank Float Valve Safety Check", price: 249, origPrice: 399, duration: "20 mins", rating: "4.8", reviews: "13K", image: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=400&q=80&fit=crop" }
-    ],
-    electrical: [
-      { id: "rel-el-1", name: "MCB Trip Switch Safety Audit", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "17K", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=400&q=80&fit=crop" },
-      { id: "rel-el-2", name: "Socket Voltage & Earthing Test", price: 149, origPrice: 249, duration: "15 mins", rating: "4.7", reviews: "14K", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=400&q=80&fit=crop" },
-      { id: "rel-el-3", name: "Appliance Cable Concealing", price: 299, origPrice: 499, duration: "25 mins", rating: "4.8", reviews: "20K", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400&q=80&fit=crop" },
-      { id: "rel-el-4", name: "Fan Speed Regulator Polish", price: 119, origPrice: 199, duration: "10 mins", rating: "4.9", reviews: "25K", image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=400&q=80&fit=crop" }
-    ],
-    masonry: [
-      { id: "rel-ms-1", name: "Tile Joint Waterproof Grout", price: 499, origPrice: 799, duration: "30 mins", rating: "4.9", reviews: "30K", image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=400&q=80&fit=crop" },
-      { id: "rel-ms-2", name: "Debris Bagging & Transport Prep", price: 349, origPrice: 499, duration: "25 mins", rating: "4.8", reviews: "15K", image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=400&q=80&fit=crop" },
-      { id: "rel-ms-3", name: "Wall Plastering Touch-Up", price: 299, origPrice: 449, duration: "20 mins", rating: "4.7", reviews: "18K", image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=400&q=80&fit=crop" },
-      { id: "rel-ms-4", name: "Laser Level Surface Scan Audit", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "12K", image: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=400&q=80&fit=crop" }
-    ],
-    general: [
-      { id: "rel-gn-1", name: "Post-Service Sanitization", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "28K", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop" },
-      { id: "rel-gn-2", name: "Express Priority Slot Assurance", price: 149, origPrice: 249, duration: "Instant", rating: "4.9", reviews: "50K", image: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=400&q=80&fit=crop" },
-      { id: "rel-gn-3", name: "Pre-Service Safety Inspection", price: 99, origPrice: 199, duration: "10 mins", rating: "4.8", reviews: "22K", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=400&q=80&fit=crop" },
-      { id: "rel-gn-4", name: "Eco Waste Disposal & Cleanup", price: 129, origPrice: 199, duration: "15 mins", rating: "4.7", reviews: "19K", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400&q=80&fit=crop" }
-    ]
-  };
-
-  const [dynamicRelatedServices, setDynamicRelatedServices] = useState([]);
-
-  useEffect(() => {
-    let isMounted = true;
-    async function loadBackendRelated() {
-      try {
-        const res = await apiRequest("/catalog/services/");
-        if (res && isMounted) {
-          const list = Array.isArray(res) ? res : (res.results || []);
-          if (list.length > 0) {
-            const filtered = list.filter(s => {
-              const sCat = (s.category_slug || s.category_id || s.category_name || s.category || "").toString().toLowerCase();
-              const sName = (s.name || "").toLowerCase();
-              if (categoryKey === "ac") return sCat.includes("ac") || sCat.includes("hvac") || sName.includes("ac");
-              if (categoryKey === "cleaning") return sCat.includes("clean") || sName.includes("clean");
-              if (categoryKey === "painting") return sCat.includes("paint") || sName.includes("paint");
-              if (categoryKey === "plumbing") return sCat.includes("plumb") || sName.includes("plumb");
-              if (categoryKey === "electrical") return sCat.includes("electr") || sName.includes("electr");
-              if (categoryKey === "masonry") return sCat.includes("mason") || sName.includes("mason");
-              return true;
-            });
-
-            if (filtered.length > 0) {
-              const mapped = filtered.slice(0, 4).map((s, idx) => ({
-                id: s.id ? s.id.toString() : `backend-rel-${idx}`,
-                name: s.name,
-                price: parseFloat(s.price) || 249,
-                origPrice: Math.round((parseFloat(s.price) || 249) * 1.35),
-                duration: s.duration || "20 mins",
-                icon: s.image ? null : (categoryKey === "ac" ? "❄️" : categoryKey === "cleaning" ? "🧼" : categoryKey === "painting" ? "🎨" : "✨"),
-                image: s.image || null
-              }));
-              setDynamicRelatedServices(mapped);
-            }
-          }
-        }
-      } catch (e) {
-        console.log("Using static category related services", e);
-      }
-    }
-    loadBackendRelated();
-    return () => { isMounted = false; };
-  }, [categoryKey, category]);
-
   const displayCategoryTitle = useMemo(() => {
     if (category?.name && category.name !== "General Service") return category.name;
     if (cart && cart.length > 0) {
       if (cart[0].categoryName) return cart[0].categoryName;
       const first = (cart[0].id + " " + cart[0].name + " " + (cart[0].category || "")).toLowerCase();
-      if (first.includes("waterproof") || first.includes("tar sheet") || first.includes("terrace") || first.includes("seepage")) return "Waterproofing Services";
-      if (first.includes("paint") || first.includes("whitewash")) return "Painting & Wall Care";
-      if (first.includes("mason") || first.includes("tile") || first.includes("brick") || first.includes("plaster")) return "Masonry Services";
       if (first.includes("carp") || first.includes("lock") || first.includes("handle") || first.includes("door") || first.includes("furniture") || first.includes("hinge")) return "Carpentry Services";
-      if (first.includes("elec") || first.includes("switch") || first.includes("socket") || first.includes("fan") || first.includes("mcb") || first.includes("wiring")) return "Electrical Services";
-      if (first.includes("plumb") || first.includes("tap") || first.includes("drain") || first.includes("mixer") || first.includes("flush")) return "Plumbing Services";
-      if (first.includes("washing") || first.includes("fridge") || first.includes("refrigerator") || first.includes("geyser") || first.includes("purifier") || first.includes("ro ") || first.includes("appliance")) return "Appliance Service & Repair";
-      if (/\b(ac|hvac|air conditioner|air conditioning)\b/i.test(first) || first.includes("foam jet") || first.includes("jet pump") || first.includes("heating")) return "AC & Heating";
-      if (first.includes("clean") || first.includes("sofa") || first.includes("carpet") || first.includes("pest")) return "Home Cleaning & Pest Control";
+      if (first.includes("elec") || first.includes("switch") || first.includes("socket") || first.includes("fan") || first.includes("mcb") || first.includes("wire")) return "Electrical Services";
+      if (first.includes("plumb") || first.includes("tap") || first.includes("drain") || first.includes("leak") || first.includes("mixer")) return "Plumbing Services";
+      if (first.includes("washing") || first.includes("fridge") || first.includes("refrigerator") || first.includes("appliance")) return "Appliance Service & Repair";
+      if (first.includes("ac") || first.includes("foam") || first.includes("jet") || first.includes("heating") || first.includes("hvac")) return "AC & Heating";
+      if (first.includes("clean") || first.includes("sofa") || first.includes("kitchen") || first.includes("bath")) return "Home Cleaning Services";
+      if (first.includes("paint") || first.includes("waterproof")) return "Painting & Waterproofing";
+      if (first.includes("mason") || first.includes("tile") || first.includes("brick")) return "Masonry Services";
     }
+    if (category?.name && category.name !== "General Service") return category.name;
     return "Services Added";
   }, [category, cart]);
 
@@ -10430,33 +11366,6 @@ function StepWorkflowCheckout({
     });
   };
 
-  const relatedExtraServices = dynamicRelatedServices.length > 0
-    ? dynamicRelatedServices
-    : (relatedServicesCatalog[categoryKey] || relatedServicesCatalog.general);
-
-  const addExtraRelatedService = (extraItem) => {
-    setCart(prev => {
-      const currentCart = prev && prev.length > 0 ? prev : [];
-      const existing = currentCart.find(i => i.id === extraItem.id);
-      if (existing) {
-        return currentCart.map(i => i.id === extraItem.id ? { ...i, quantity: i.quantity + 1 } : i);
-      }
-      return [...currentCart, { id: extraItem.id, name: extraItem.name, price: extraItem.price, origPrice: extraItem.origPrice, quantity: 1, duration: extraItem.duration, gst_rate: extraItem.gst_rate || 18, platform_fee: extraItem.platform_fee || 29 }];
-    });
-  };
-
-  const removeExtraRelatedService = (extraItemId) => {
-    setCart(prev => {
-      if (!prev) return [];
-      const existing = prev.find(i => i.id === extraItemId);
-      if (!existing) return prev;
-      if (existing.quantity <= 1) {
-        return prev.filter(i => i.id !== extraItemId);
-      }
-      return prev.map(i => i.id === extraItemId ? { ...i, quantity: i.quantity - 1 } : i);
-    });
-  };
-
   if (!cart || cart.length === 0) {
     return (
       <div className="w-full max-w-md mx-auto px-4 py-16 text-center font-sans text-slate-800">
@@ -10476,7 +11385,7 @@ function StepWorkflowCheckout({
               if (category?.isQuickCommerce || routerLocation.state?.isQuickCommerce) {
                 try {
                   localStorage.setItem("calservice_veg_food_cart", "{}")
-                } catch {}
+                } catch { }
                 navigate(routes.landing || "/home", {
                   replace: true,
                   state: {
@@ -10560,15 +11469,14 @@ function StepWorkflowCheckout({
 
                 return (
                   <>
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 font-bold ${
-                      !hasAddress
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 font-bold ${!hasAddress
                         ? "bg-slate-100 text-slate-500"
                         : isHome
-                        ? "bg-amber-100 text-amber-700 border border-amber-200"
-                        : isWork
-                        ? "bg-blue-100 text-blue-700 border border-blue-200"
-                        : "bg-emerald-100 text-emerald-700 border border-emerald-200"
-                    }`}>
+                          ? "bg-amber-100 text-amber-700 border border-amber-200"
+                          : isWork
+                            ? "bg-blue-100 text-blue-700 border border-blue-200"
+                            : "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                      }`}>
                       {isHome ? <Home size={18} /> : isWork ? <Briefcase size={18} /> : <MapPin size={18} />}
                     </div>
 
@@ -10640,6 +11548,208 @@ function StepWorkflowCheckout({
               })()}
             </div>
 
+            {/* Step: AC Inspection Details (Inline on Booking / Time Slot Page) */}
+            {isEstimationBooking && (
+              <div
+                id="inline-ac-inspection-section"
+                className="p-5 bg-gradient-to-br from-emerald-50/50 via-white to-slate-50/60 border-t border-slate-100 transition-all rounded-xl"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 border border-emerald-200/80 flex items-center justify-center font-black shrink-0 mt-0.5 shadow-2xs">
+                    <Wrench size={18} />
+                  </div>
+
+                  <div className="flex-1 space-y-4">
+                    {/* Header */}
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-sm font-black text-slate-900 tracking-tight">
+                          AC Inspection Details
+                        </h3>
+                        <span className="text-[10px] font-black uppercase text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200">
+                          ₹{inspectionUnitPrice} / AC Visit
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 font-medium mt-0.5">
+                        Provide your AC details for our certified technician's diagnostic visit
+                      </p>
+                    </div>
+
+                    {/* 1. AC Brand */}
+                    <div>
+                      <label className="text-xs font-black text-slate-800 uppercase tracking-wider block mb-1.5">
+                        1. AC Brand <span className="text-emerald-600">*</span>
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={acBrand}
+                          onChange={(e) => {
+                            setAcBrand(e.target.value);
+                            updateEstimationInCart({ brand: e.target.value });
+                          }}
+                          className="w-full h-11 bg-white border border-slate-200 rounded-xl px-3.5 text-xs font-bold text-slate-800 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/10 transition-all appearance-none cursor-pointer shadow-2xs"
+                        >
+                          <option value="" disabled>Select AC Brand</option>
+                          {AC_BRANDS_LIST.map((b) => (
+                            <option key={b} value={b}>
+                              {b}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown
+                          size={16}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* 2. AC Type */}
+                    <div>
+                      <label className="text-xs font-black text-slate-800 uppercase tracking-wider block mb-1.5">
+                        2. AC Type <span className="text-emerald-600">*</span>
+                      </label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {["Split AC", "Window AC"].map((t) => {
+                          const isSelected = acType === t;
+                          return (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={() => {
+                                setAcType(t);
+                                updateEstimationInCart({ type: t });
+                              }}
+                              className={`py-2.5 px-4 rounded-xl text-xs font-extrabold transition-all cursor-pointer border flex items-center justify-center gap-2 ${
+                                isSelected
+                                  ? "bg-emerald-600 border-emerald-600 text-white shadow-sm"
+                                  : "bg-white border-slate-200 text-slate-700 hover:border-slate-300"
+                              }`}
+                            >
+                              {isSelected && <CheckCircle2 size={14} className="text-white" />}
+                              <span>{t}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* 3. How Many ACs? */}
+                    <div>
+                      <label className="text-xs font-black text-slate-800 uppercase tracking-wider block mb-1.5">
+                        3. How Many ACs? <span className="text-emerald-600">*</span>
+                      </label>
+                      <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
+                        <div>
+                          <span className="text-xs font-bold text-slate-800 block">Inspection Units</span>
+                          <span className="text-[11px] font-semibold text-emerald-700">
+                            ₹{(inspectionUnitPrice * acUnits).toLocaleString("en-IN")} total (₹{inspectionUnitPrice} per AC)
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2.5 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newQty = Math.max(1, acUnits - 1);
+                              setAcUnits(newQty);
+                              updateEstimationInCart({ quantity: newQty });
+                            }}
+                            disabled={acUnits <= 1}
+                            className="w-6 h-6 flex items-center justify-center text-slate-500 hover:text-emerald-700 font-extrabold disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed active:scale-95"
+                          >
+                            -
+                          </button>
+                          <span className="text-xs font-black text-slate-900 min-w-[16px] text-center">
+                            {acUnits}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newQty = acUnits + 1;
+                              setAcUnits(newQty);
+                              updateEstimationInCart({ quantity: newQty });
+                            }}
+                            className="w-6 h-6 flex items-center justify-center text-slate-500 hover:text-emerald-700 font-extrabold cursor-pointer active:scale-95"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 4. Upload AC Images (Optional) */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                          4. Upload AC Images
+                        </label>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Optional
+                        </span>
+                      </div>
+
+                      <label className="border-2 border-dashed border-slate-200 hover:border-emerald-500 rounded-xl p-3.5 flex flex-col items-center justify-center gap-1.5 cursor-pointer bg-white transition-all group">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={handleInlineImageUpload}
+                          className="hidden"
+                        />
+                        <div className="w-8 h-8 rounded-full bg-slate-100 group-hover:bg-emerald-50 text-slate-500 group-hover:text-emerald-600 flex items-center justify-center transition-colors">
+                          <Camera size={16} />
+                        </div>
+                        <span className="text-xs font-bold text-slate-700 group-hover:text-emerald-700 transition-colors">
+                          Click to upload or take AC photos
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          Helps technician prepare required diagnostic tools
+                        </span>
+                      </label>
+
+                      {acImages.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {acImages.map((img, idx) => (
+                            <div key={idx} className="relative w-16 h-16 rounded-xl border border-slate-200 overflow-hidden group shadow-2xs">
+                              <img src={img} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveInlineImage(idx)}
+                                className="absolute top-1 right-1 w-5 h-5 bg-black/70 hover:bg-rose-600 text-white rounded-full flex items-center justify-center transition-all cursor-pointer"
+                              >
+                                <Trash2 size={10} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 5. Notes / Reported Issue */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                          5. Describe Issue / Notes
+                        </label>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Optional
+                        </span>
+                      </div>
+                      <textarea
+                        value={acNotes}
+                        onChange={(e) => {
+                          setAcNotes(e.target.value);
+                          updateEstimationInCart({ notes: e.target.value });
+                        }}
+                        placeholder="Describe any issue or requirement (e.g. AC not cooling, strange rattling noise, water leaking from indoor unit...)"
+                        rows={3}
+                        className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-800 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/10 transition-all resize-none shadow-2xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Step 3: Slot (Time & Date) */}
             <div className="p-5">
               <div className="flex items-start gap-4">
@@ -10647,20 +11757,19 @@ function StepWorkflowCheckout({
                   <Clock size={18} />
                 </div>
                 <div className="flex-1">
-                  <span className="text-xs font-bold text-slate-500 block mb-2">Slot</span>
-
-                  {/* Select button or current slot */}
-                  {isSlotSelected && !showSlotPicker ? (
-                    <div className="flex items-center justify-between bg-indigo-50/60 border border-indigo-100 rounded-xl p-3">
-                      <div>
-                        <span className="text-xs font-black text-indigo-950 block">
-                          {selectedDate}
+                  {/* Slot Header / Summary Row */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-500">Slot</span>
+                      {isSlotSelected && (
+                        <span className="text-[9.5px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">
+                          Selected
                         </span>
-                        <span className="text-xs font-bold text-indigo-700">
-                          {selectedTime}
-                        </span>
-                      </div>
+                      )}
+                    </div>
+                    {isSlotSelected && !showSlotPicker ? (
                       <button
+                        type="button"
                         onClick={() => {
                           const hasAddr = Boolean(formData.address && formData.address.trim() && formData.address !== "Set location" && formData.address !== "Hosur, Tamil Nadu");
                           if (!hasAddr) {
@@ -10670,26 +11779,56 @@ function StepWorkflowCheckout({
                           }
                           setShowSlotPicker(true);
                         }}
-                        className="text-xs font-bold text-indigo-600 hover:underline"
+                        className="border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 rounded-lg px-3 py-1 text-xs font-extrabold transition-all shadow-2xs cursor-pointer active:scale-95 shrink-0"
                       >
-                        Change slot
+                        Change
+                      </button>
+                    ) : showSlotPicker && isSlotSelected ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowSlotPicker(false)}
+                        className="border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 rounded-lg px-3 py-1 text-xs font-extrabold transition-all shadow-2xs cursor-pointer active:scale-95 shrink-0"
+                      >
+                        Done
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {/* Summary when slot is selected and picker is closed */}
+                  {isSlotSelected && !showSlotPicker && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs font-extrabold text-slate-800">
+                        {availableDates.find(d => d.dateStr === selectedDate)?.label || selectedDate}
+                      </span>
+                      <span className="text-xs font-bold text-slate-400">•</span>
+                      <span className="text-xs font-extrabold text-indigo-700">
+                        {selectedTime}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Clean row when slot is not yet selected and picker is closed */}
+                  {!isSlotSelected && !showSlotPicker && (
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-xs font-medium text-slate-400">
+                        No time slot selected yet
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const hasAddr = Boolean(formData.address && formData.address.trim() && formData.address !== "Set location" && formData.address !== "Hosur, Tamil Nadu");
+                          if (!hasAddr) {
+                            setShowAddressDrawer(true);
+                            setSlotRevalidateNotice("Please select your service address first to check availability.");
+                            return;
+                          }
+                          setShowSlotPicker(true);
+                        }}
+                        className="border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 rounded-lg px-3 py-1 text-xs font-extrabold transition-all shadow-2xs cursor-pointer active:scale-95 shrink-0"
+                      >
+                        Choose Slot
                       </button>
                     </div>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        const hasAddr = Boolean(formData.address && formData.address.trim() && formData.address !== "Set location" && formData.address !== "Hosur, Tamil Nadu");
-                        if (!hasAddr) {
-                          setShowAddressDrawer(true);
-                          setSlotRevalidateNotice("Please select your service address first to check availability.");
-                          return;
-                        }
-                        setShowSlotPicker(true);
-                      }}
-                      className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all shadow-md shadow-indigo-600/20 active:scale-[0.99]"
-                    >
-                      Select time & date
-                    </button>
                   )}
 
                   {slotRevalidateNotice && (
@@ -10701,7 +11840,7 @@ function StepWorkflowCheckout({
 
                   {/* Inline Slot Picker Panel */}
                   {showSlotPicker && (
-                    <div className="mt-4 pt-4 border-t border-slate-100 space-y-4">
+                    <div className="mt-3 pt-3 border-t border-slate-100 space-y-4">
 
                       {/* Date Pills */}
                       <div>
@@ -10834,9 +11973,13 @@ function StepWorkflowCheckout({
                     )}
 
                     <button
-                      onClick={() => onSubmit(payMethod, appliedCoupon?.code, tipAmount, appliedCoupon)}
+                      type="button"
+                      onClick={() => {
+                        console.log("Confirm Booking clicked!", { payMethod, code: appliedCoupon?.code, tipAmount });
+                        onSubmit(payMethod, appliedCoupon?.code, tipAmount, appliedCoupon);
+                      }}
                       disabled={loading}
-                      className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:bg-slate-300"
+                      className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:bg-slate-300 cursor-pointer"
                     >
                       {loading ? "Processing..." : `Confirm Booking · ₹${grandTotal.toLocaleString("en-IN")}`}
                     </button>
@@ -11331,7 +12474,7 @@ function StepWorkflowCheckout({
 
               {dbCoupons.length === 0 ? (
                 <div className="text-center py-8 text-xs font-bold text-slate-400">
-                  No active database coupons available at the moment.
+                  No active coupons available at the moment.
                 </div>
               ) : (
                 dbCoupons.map(cpn => {
@@ -11555,6 +12698,14 @@ export function BookingPage() {
   const trackParam = !hasIncomingOrder && (queryTrack || storedTrackingId || (storedBookingData ? (storedBookingData.request_id || storedBookingData.id) : null))
   const isTrackingActive = Boolean(!hasIncomingOrder && (trackParam || storedBookingData || routerLocation.state?.isTracking))
 
+  // Multi-service cart bag (Sept 2026): lets a customer stash this
+  // category's finished cart and go add a DIFFERENT category (e.g. AC
+  // Service, then TV Repair) into the SAME booking -- see
+  // MultiServiceCartProvider.jsx and confirmBooking() below. Empty for the
+  // normal single-category flow, so nothing here changes existing behaviour
+  // unless the customer actually uses "Add Another Service".
+  const multiServiceCart = useMultiServiceCart()
+
   const [cart, setCart] = useState(() => {
     if (incomingCart && incomingCart.length > 0) {
       try { localStorage.setItem("calservices_customer_cart", JSON.stringify(incomingCart)) } catch (e) { }
@@ -11636,6 +12787,9 @@ export function BookingPage() {
         setSuccessData(storedBookingData);
         setStep(0);
       } else if (trackParam) {
+        const storedToken = storedBookingData?.tracking_token || sessionStorage.getItem("active_tracking_token") || sessionStorage.getItem("caltrack_tracking_token") || "";
+        const tokenQuery = storedToken ? `?token=${encodeURIComponent(storedToken)}` : "";
+        apiRequest(`/booking/${encodeURIComponent(trackParam)}/live-location/${tokenQuery}`)
         apiRequest(`/booking/${encodeURIComponent(trackParam)}/live-location/`)
           .then(res => {
             if (res?.data) {
@@ -11833,7 +12987,7 @@ export function BookingPage() {
   // Auto-sync customer name, phone, email, and address from authenticated user session
   useEffect(() => {
     let savedPhone = ""
-    try { savedPhone = localStorage.getItem("caltrack_customer_phone") || "" } catch (_) { }
+    try { savedPhone = localStorage.getItem("sevo_customer_phone") || "" } catch (_) { }
     if (user || savedPhone) {
       setFormData(prev => ({
         ...prev,
@@ -12005,8 +13159,10 @@ export function BookingPage() {
   }
 
   const performServiceSubmit = async (paymentMethod = "cash", couponCode = null, tipValue = 0, couponObj = null, checkoutBoth = false) => {
-    if (!user) {
-      // Save the full booking context before opening auth — it will be restored on success
+    console.log("DEBUG: performServiceSubmit triggered", { paymentMethod, selDate, selTime, phone: formData.phone, address: formData.address, user });
+    const rawPhone = String(formData.phone || user?.phone || "").trim().replace(/\D/g, "");
+    const hasValidPhone = rawPhone.length >= 10;
+    if (!user && !hasValidPhone) {
       savePendingIntent({
         type: "CONFIRM_BOOKING",
         returnPath: window.location.pathname + window.location.search,
@@ -12017,15 +13173,21 @@ export function BookingPage() {
         selTime,
         formData,
         paymentMethod,
-      })
-      setShowCustomerEntryModal(true)
-      return
+      });
+      setShowCustomerEntryModal(true);
+      return;
     }
+
+    if (!formData.address || !formData.address.trim() || formData.address === "Set location") {
+      setError("Please select a valid service address.");
+      return;
+    }
+
     if (!selDate || !selTime || isSlotInPast(selDate, selTime)) {
       setError("Please select an upcoming date and time slot.");
-      return
+      return;
     }
-    setLoading(true); setError(null)
+    setLoading(true); setError(null);
     // Map frontend choices to backend enum values
     const backendPaymentMethod = paymentMethod === "online" ? "ONLINE" : "COD"
 
@@ -12055,8 +13217,8 @@ export function BookingPage() {
     data.append("email", customerEmail)
     data.append("service_category", category?.id || "general")
 
-    const firstName = (effectiveCart[0]?.name) || (category?.name || "Service Booking");
-    const extraCount = effectiveCart.length > 1 ? effectiveCart.length - 1 : 0;
+    const firstName = (cart && cart.length > 0 && cart[0].name) ? cart[0].name : (category?.name || "Service Booking");
+    const extraCount = cart && cart.length > 1 ? cart.length - 1 : 0;
     const defaultTitle = extraCount > 0
       ? `${firstName} (+${extraCount} other item${extraCount > 1 ? 's' : ''})`
       : firstName;
@@ -12069,18 +13231,18 @@ export function BookingPage() {
         : shortName;
     }
 
-    const itemTotal = effectiveCart.reduce((a, c) => a + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0);
-    const catSlug = (category?.slug || category?.id || "").toLowerCase();
+    const itemTotal = cart.reduce((a, c) => a + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0);
     const isPaintingOrMason = Boolean(
-      category?.is_consultation ||
-      catSlug === "painting" ||
-      catSlug === "mason" ||
-      catSlug === "masonry" ||
-      effectiveCart.some(c => isConsultationItem(c, category))
+      category?.id === "painting" ||
+      category?.id === "mason" ||
+      category?.slug === "painting" ||
+      category?.slug === "mason" ||
+      category?.slug === "masonry" ||
+      (cart && cart.some(c => isConsultationItem(c, category)))
     );
     const isFreeCategory = itemTotal === 0 && isPaintingOrMason;
-    const nonConsultCart = effectiveCart.filter(i => !isConsultationItem(i, category));
-    const totalGst = isPaintingOrMason ? 0 : effectiveCart.reduce((s, i) => {
+    const nonConsultCart = cart.filter(i => !isConsultationItem(i, category));
+    const totalGst = isPaintingOrMason ? 0 : cart.reduce((s, i) => {
       if (isConsultationItem(i, category)) return s;
       return s + Math.round((Number(i.price) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100));
     }, 0);
@@ -12111,7 +13273,7 @@ export function BookingPage() {
     console.log("email:", customerEmail);
     console.log("service_category:", category?.id || "general");
     console.log("issue_title:", finalIssueTitle);
-    console.log("cart_data item count:", effectiveCart.length);
+    console.log("cart_data item count:", cart?.length || 0);
     console.log("item_total:", itemTotal);
     console.log("gst_amount:", totalGst);
     console.log("platform_fee:", platformFee);
@@ -12127,7 +13289,7 @@ export function BookingPage() {
       finalDesc += `\n[Special Instructions: ${notes}]`;
     }
     data.append("description", finalDesc);
-    data.append("address", formData.landmark ? finalAddress + " | " + formData.landmark : finalAddress)
+    data.append("address", formData.landmark ? formData.address + " | " + formData.landmark : formData.address)
     if (formData.flat_house_no) {
       data.append("flat_house_no", formData.flat_house_no)
     }
@@ -12143,6 +13305,17 @@ export function BookingPage() {
     data.append("longitude", !isNaN(parsedLon) ? parsedLon.toFixed(6) : "77.825292");
     data.append("preferred_date", selDate)
     data.append("preferred_time", selTime)
+    let explicitServiceId = null
+    if (effectiveCart && effectiveCart.length > 0) {
+      for (const item of effectiveCart) {
+        if (item.service_id) explicitServiceId = item.service_id
+        else if (item.serviceId) explicitServiceId = item.serviceId
+        else if (item.service_slug) explicitServiceId = item.service_slug
+      }
+    }
+    if (explicitServiceId) {
+      data.append("service_id", explicitServiceId)
+    }
     data.append("total_amount", calculatedGrandTotal)
     data.append("item_total", itemTotal)
     data.append("gst_amount", totalGst)
@@ -12150,11 +13323,15 @@ export function BookingPage() {
     if (discount > 0) data.append("discount_amount", discount)
     if (tipAmount > 0) data.append("tip_amount", tipAmount)
 
-    // Serialize cart_data with gst_rate and platform_fee as JSON string
-    data.append("cart_data", JSON.stringify(effectiveCart.map(c => {
+    // Serialize cart_data with package_id, addon_id, gst_rate, and platform_fee as JSON string
+    data.append("cart_data", JSON.stringify(cart.map(c => {
       const isConsult = isPaintingOrMason || isConsultationItem(c, category);
+      const pkgId = c.package_id || c.db_id || (typeof c.id === 'string' && c.id.startsWith('pkg-') ? parseInt(c.id.replace('pkg-', '').split('-')[0]) : (Number.isInteger(Number(c.id)) ? Number(c.id) : undefined));
+      const addonId = c.addon_id || (typeof c.id === 'string' && c.id.startsWith('addon-') ? parseInt(c.id.replace('addon-', '')) : undefined);
       return {
         id: c.id,
+        package_id: pkgId || undefined,
+        addon_id: addonId || undefined,
         name: c.name,
         price: c.price,
         quantity: c.quantity || 1,
@@ -12176,6 +13353,25 @@ export function BookingPage() {
       data.append("coupon_code", couponCode)
     }
     if (photoFile) data.append("photo", photoFile)
+
+    if (isEstimation) {
+      const estItem = (cart && cart.find(c => c.jobType === "ESTIMATION" || c.id === "serv-hvac-ac-inspection" || c.id === "ac-inspection" || c.id === "hvac-ac-inspection" || (c.ac_brand && c.ac_type) || (c.name && c.name.toLowerCase().includes("inspection")))) || (cart && cart[0]) || {};
+      data.append("job_type", "ESTIMATION");
+      data.append("estimation_fee", String(estItem.price || dynamicAcInspectionFee || "199"));
+      const rawAc = String(estItem.ac_type || "SPLIT").toUpperCase();
+      const normalizedAcType = rawAc.includes("WINDOW") ? "WINDOW" : (rawAc.includes("SPLIT") ? "SPLIT" : (rawAc.includes("CASSETTE") ? "CASSETTE" : (rawAc.includes("TOWER") ? "TOWER" : "SPLIT")));
+      data.append("ac_type", normalizedAcType);
+      data.append("ac_brand", estItem.ac_brand || "Other");
+      data.append("ac_quantity", String(estItem.ac_quantity || estItem.quantity || 1));
+      const rawCap = String(estItem.ac_capacity || "1.5_TON").toUpperCase().replace(" ", "_");
+      data.append("ac_capacity", ["1_TON", "1.5_TON", "2_TON", "OTHER"].includes(rawCap) ? rawCap : "1.5_TON");
+      const symptom = estItem.customer_symptom || estItem.ac_notes || "AC Inspection & Diagnostic requested";
+      data.append("customer_symptom", symptom);
+      if (estItem.ac_notes) data.append("customer_notes", estItem.ac_notes);
+      if (estItem.primaryFile && !photoFile) {
+        data.append("photo", estItem.primaryFile);
+      }
+    }
 
     // Phase 3 combined checkout: POST /api/orders/checkout/ instead of
     // /api/booking/, wrapping the same fields as a JSON object under
@@ -12210,15 +13406,21 @@ export function BookingPage() {
         platform_fee: platformFee,
         discount_amount: discount > 0 ? discount : undefined,
         tip_amount: tipAmount > 0 ? tipAmount : undefined,
-        cart_data: cart.map(c => ({
-          id: c.id,
-          name: c.name,
-          price: c.price,
-          quantity: c.quantity || 1,
-          gst_rate: c.gst_rate !== undefined ? Number(c.gst_rate) : 18,
-          platform_fee: c.platform_fee !== undefined ? Number(c.platform_fee) : 29,
-          categoryName: c.categoryName || category?.name || "",
-        })),
+        cart_data: cart.map(c => {
+          const pkgId = c.package_id || c.db_id || (typeof c.id === 'string' && c.id.startsWith('pkg-') ? parseInt(c.id.replace('pkg-', '').split('-')[0]) : (Number.isInteger(Number(c.id)) ? Number(c.id) : undefined));
+          const addonId = c.addon_id || (typeof c.id === 'string' && c.id.startsWith('addon-') ? parseInt(c.id.replace('addon-', '')) : undefined);
+          return {
+            id: c.id,
+            package_id: pkgId || undefined,
+            addon_id: addonId || undefined,
+            name: c.name,
+            price: c.price,
+            quantity: c.quantity || 1,
+            gst_rate: c.gst_rate !== undefined ? Number(c.gst_rate) : 18,
+            platform_fee: c.platform_fee !== undefined ? Number(c.platform_fee) : 29,
+            categoryName: c.categoryName || category?.name || "",
+          };
+        }),
         payment_method: backendPaymentMethod,
         coupon_code: couponCode || undefined,
       }
@@ -12234,7 +13436,7 @@ export function BookingPage() {
 
         if (groceryOutcome?.success) {
           resetDailyEssentialsCartCache()
-          try { localStorage.setItem("calservice_veg_food_cart", "{}") } catch {}
+          try { localStorage.setItem("calservice_veg_food_cart", "{}") } catch { }
         }
 
         if (serviceOutcome?.success) {
@@ -12261,7 +13463,7 @@ export function BookingPage() {
           setError(serviceOutcome?.message || "Your service booking could not be placed. Please try again.")
         }
       } catch (err) {
-        setError(err?.body?.message || err?.body?.error || err?.body?.detail || err?.message || "Connection error. Try again.")
+        setError(err?.body?.message || err?.body?.detail || err?.message || "Connection error. Try again.")
       } finally {
         setLoading(false)
       }
@@ -12271,16 +13473,11 @@ export function BookingPage() {
     try {
       const res = await apiRequest("/booking/", { method: "POST", body: data })
       if (res?.success) {
-        if (backendPaymentMethod === "ONLINE") {
-          try {
-            await apiRequest('/payment/verify/', {
-              method: 'POST',
-              json: { booking_id: res.data.id, order_id: `order_mock_${Date.now()}`, payment_id: `PAY_${Date.now().toString(36).toUpperCase()}`, mock_success: true }
-            })
-          } catch (e) {
-            console.error("Failed to verify online payment:", e)
-          }
-        }
+        // A client cannot verify its own payment. The order id here was
+        // invented in the browser, so the server rejects it -- and a booking
+        // that looked "paid online" was in fact unpaid. Payment is confirmed
+        // only by /payment/verify/ with a gateway-issued order id, payment id
+        // and signature, which nothing in this app produces yet.
         const savedData = {
           ...res.data,
           paymentMethod: backendPaymentMethod,
@@ -12320,8 +13517,8 @@ export function BookingPage() {
     } catch (err) {
       if (err?.body?.errors) {
         const msgs = Object.entries(err.body.errors).map(([f, m]) => `${f}: ${Array.isArray(m) ? m.join(", ") : m}`).join(" · ")
-        setError(msgs || err.body.message || err.body.error)
-      } else setError(err?.body?.message || err?.body?.error || err?.body?.detail || err?.message || "Connection error. Try again.")
+        setError(msgs || err.body.message)
+      } else setError(err?.body?.message || err?.body?.detail || err?.message || "Connection error. Try again.")
     } finally { setLoading(false) }
   }
 
@@ -12353,7 +13550,7 @@ export function BookingPage() {
     if (isQuickCommerce && cart.length === 0) {
       try {
         localStorage.setItem("calservice_veg_food_cart", "{}")
-      } catch {}
+      } catch { }
       navigate(routes.landing || "/home", {
         replace: true,
         state: {
@@ -12387,7 +13584,7 @@ export function BookingPage() {
             }
             try {
               localStorage.setItem("calservice_veg_food_cart", JSON.stringify(restoredFoodCart))
-            } catch {}
+            } catch { }
             navigate(routes.landing || "/home", {
               replace: true,
               state: {
@@ -12470,26 +13667,6 @@ export function BookingPage() {
         )}
       </AnimatePresence>
 
-      {/* Phase 3: ask before silently checking out only one cart when the other also has items. */}
-      <CombinedCheckoutConfirmModal
-        isOpen={combinedCheckoutPrompt !== null}
-        onClose={() => setCombinedCheckoutPrompt(null)}
-        onChoose={(choice) => {
-          const args = combinedCheckoutPrompt
-          setCombinedCheckoutPrompt(null)
-          if (!args) return
-          if (choice === "both") {
-            setCheckoutBothConfirmed(true)
-            performServiceSubmit(args.paymentMethod, args.couponCode, args.tipValue, args.couponObj, true)
-          } else {
-            performServiceSubmit(args.paymentMethod, args.couponCode, args.tipValue, args.couponObj, false)
-          }
-        }}
-        thisCartLabel="your service booking"
-        otherCartLabel="a grocery order"
-        disableBothReason={photoFile ? "a photo was attached to your service request" : undefined}
-      />
-
       {/* Cart Summary Drawer Modal */}
       <AnimatePresence>
         {showCartDrawer && (
@@ -12505,6 +13682,19 @@ export function BookingPage() {
                 setShowCustomerEntryModal(true)
               }
             }}
+            onAddAnotherService={() => {
+              // Stash this category's cart into the shared multi-service bag,
+              // then send the customer back to category selection (step 1)
+              // to pick a different service for the SAME booking. The bag
+              // (and whatever the customer adds next) is combined at
+              // confirmBooking() time -- see there for the /booking/multi/
+              // branch.
+              multiServiceCart.addGroup(category?.id, category?.name, cart)
+              setCart([])
+              setCategory(null)
+              setStep(1)
+            }}
+            bagItemCount={multiServiceCart.bagItemCount}
           />
         )}
       </AnimatePresence>
@@ -12967,6 +14157,26 @@ export function BookingPage() {
           }}
         />
       )}
+
+      {/* Combined Services + Daily Essentials checkout confirmation modal */}
+      <CombinedCheckoutConfirmModal
+        isOpen={combinedCheckoutPrompt !== null}
+        onClose={() => setCombinedCheckoutPrompt(null)}
+        onChoose={(choice) => {
+          const args = combinedCheckoutPrompt
+          setCombinedCheckoutPrompt(null)
+          if (!args) return
+          if (choice === "both") {
+            setCheckoutBothConfirmed(true)
+            performServiceSubmit(args.paymentMethod, args.couponCode, args.tipValue, args.couponObj, true)
+          } else {
+            performServiceSubmit(args.paymentMethod, args.couponCode, args.tipValue, args.couponObj, false)
+          }
+        }}
+        thisCartLabel="your service booking"
+        otherCartLabel="a grocery order"
+        disableBothReason={photoFile ? "a photo was attached to your service request" : undefined}
+      />
     </div>
   )
 }
@@ -13123,10 +14333,10 @@ export function ServiceDetailSideDrawer({ item, category, cart, setCart, onClose
               <span>Included Services</span>
             </div>
             <ul className="space-y-1.5 text-xs text-slate-700 font-medium">
-              {(item.includes || ["Diagnosis & Labour", "30-day warranty"]).map(inc => (
-                <li key={inc} className="flex items-start gap-1.5">
+              {(item.includes || ["Diagnosis & Labour", "30-day warranty"]).map((inc, i) => (
+                <li key={i} className="flex items-start gap-1.5">
                   <span className="text-indigo-600 font-bold text-sm leading-none">✓</span>
-                  <span>{inc}</span>
+                  <span>{typeof inc === 'object' ? (inc?.text || inc?.name || '') : String(inc || '')}</span>
                 </li>
               ))}
             </ul>
@@ -14362,7 +15572,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                 {/* Col 1 */}
                 <div className="uc-paint-footer-col">
                   <div className="uc-paint-footer-logo-row">
-                    <CalTrackLogo size={24} />
+                    <SevoLogo size={24} />
                     <span className="uc-paint-footer-brand">Sevo</span>
                   </div>
                   <p className="uc-paint-footer-brand-desc">
@@ -15110,7 +16320,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                           </ul>
                         </div>
 
-                        {/* HOW CALTRACK WORKS */}
+                        {/* HOW sevo WORKS */}
                         <div style={{ textAlign: 'left', marginTop: '0.2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
                           <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                             How {String(activeDetailService.name || "").toLowerCase().includes("painting") ? "painting" : "waterproofing"} works
@@ -17125,7 +18335,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                 {/* Col 1 */}
                 <div className="uc-paint-footer-col">
                   <div className="uc-paint-footer-logo-row">
-                    <CalTrackLogo size={24} />
+                    <SevoLogo size={24} />
                     <span className="uc-paint-footer-brand">Sevo</span>
                   </div>
                   <p className="uc-paint-footer-brand-desc">
@@ -18492,13 +19702,41 @@ export function CustomCleaningPackageModal({
 
   const [showAcInspectionModal, setShowAcInspectionModal] = useState(false);
   const [activeAcInspectionItem, setActiveAcInspectionItem] = useState(null);
+  const [dynamicAcInspectionFee, setDynamicAcInspectionFee] = useState(() => {
+    try {
+      const c = localStorage.getItem("calservices_ac_inspection_fee");
+      return c && !isNaN(Number(c)) ? Number(c) : 199;
+    } catch (_) {
+      return 199;
+    }
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadDynamicFee() {
+      try {
+        const res = await fetch("/api/service-requests/ac-inspection/rate-card/").then((r) => r.json());
+        if (isMounted && res?.data?.diagnostic_fee != null) {
+          const fee = Number(res.data.diagnostic_fee);
+          setDynamicAcInspectionFee(fee);
+          try {
+            localStorage.setItem("calservices_ac_inspection_fee", String(fee));
+          } catch (_) {}
+        }
+      } catch (e) {
+        console.warn("[BookingPage] Failed to fetch dynamic AC inspection fee:", e);
+      }
+    }
+    loadDynamicFee();
+    return () => { isMounted = false; };
+  }, []);
 
   const handleAcInspectionSubmit = (inspectionData) => {
     setShowAcInspectionModal(false);
     setSelectedPackageDetail(null);
 
     const inspectionCartId = "serv-hvac-ac-inspection";
-    const unitPrice = Number(inspectionData.price) || 199;
+    const unitPrice = Number(inspectionData.price) || dynamicAcInspectionFee || 199;
     const qty = Math.max(1, Number(inspectionData.quantity) || 1);
 
     const remainingCart = cart.filter(c => c.id !== inspectionCartId && c.id !== "hvac-ac-inspection");
@@ -19789,10 +21027,11 @@ export function CustomCleaningPackageModal({
 
     // Guarantee that AC Inspection tab always displays ONLY ONE single service card
     if (activeSubTab === "AC Inspection" || activeSubTab === "Not Sure? Book Inspection") {
-      const baseInspection = OTHER_SERVICES.hvac?.["AC Inspection"]?.[0] || {
+      const baseInspection = {
+        ...(OTHER_SERVICES.hvac?.["AC Inspection"]?.[0] || {}),
         id: "hvac-ac-inspection",
         name: "AC Inspection",
-        price: 199,
+        price: dynamicAcInspectionFee || 199,
         duration: "45 mins",
         badge: "Certified Inspection",
         badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
@@ -19813,7 +21052,7 @@ export function CustomCleaningPackageModal({
     }
 
     return finalPlans;
-  }, [rawOtherPlans, dbCatalogPackages, effectiveKey, activeSubTab, categoryHasRealServices, categoriesData]);
+  }, [rawOtherPlans, dbCatalogPackages, effectiveKey, activeSubTab, categoryHasRealServices, categoriesData, dynamicAcInspectionFee]);
 
   const isTvTab = tvSubtabs.includes(activeSubTab);
   const isWmTab = washingMachineSubtabs.includes(activeSubTab);
@@ -19849,26 +21088,6 @@ export function CustomCleaningPackageModal({
   const leftColumnClass = "flex-1 min-w-0 space-y-5";
 
   const rightColumnClass = "w-full lg:w-[380px] bg-[#FEFCF8] border border-[#E8E3DB] rounded-3xl p-6 flex flex-col justify-between lg:sticky lg:top-24 h-fit space-y-5 shadow-sm shrink-0";
-
-  if (activeSubTab === "Kitchen Cleaning") {
-    return <KitchenCleaningModal category={{ id: "kitchen_cleaning", name: "Kitchen Cleaning" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
-  }
-  if (activeSubTab === "Sofa Cleaning") {
-    return <SofaCleaningModal category={{ id: "sofa_cleaning", name: "Sofa Cleaning" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
-  }
-  if (activeSubTab === "Bathroom Cleaning") {
-    return <BathroomCleaningModal category={{ id: "bathroom_cleaning", name: "Bathroom Cleaning" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
-  }
-  if (!cleaningHasRealCatalogData && (activeSubTab === "Occupied Apartment" || activeSubTab === "Unoccupied Apartment" || activeSubTab === "Occupied Bungalow/duplex" || activeSubTab === "Unoccupied Bungalow/duplex" || activeSubTab === "quick extra service" || activeSubTab === "Full House Cleaning" || activeSubTab === "Full House Deep Cleaning" || activeSubTab === "Full house cleaning" || activeSubTab === "Home Cleaning" || activeSubTab === "cleaning")) {
-    const effectiveSubTab = (activeSubTab === "Full House Cleaning" || activeSubTab === "Full House Deep Cleaning" || activeSubTab === "Full house cleaning" || activeSubTab === "Home Cleaning" || activeSubTab === "cleaning") ? "Occupied Apartment" : activeSubTab;
-    return <FullHouseCleaningModal activeSubTab={effectiveSubTab} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
-  }
-  if (activeSubTab === "Cockroach & Termite Control") {
-    return <CockroachControlModal category={{ id: "pest_control", name: "Pest Control" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
-  }
-  if (activeSubTab === "Ants & Bed Bugs Control") {
-    return <AntsBedBugsControlModal category={{ id: "pest_control", name: "Pest Control" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
-  }
 
   const contentMarkup = (
     <motion.div
@@ -19956,17 +21175,15 @@ export function CustomCleaningPackageModal({
                       params.set("subTab", "AC Inspection");
                       navigate(`?${params.toString()}`, { replace: true });
                     }}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer text-left ${
-                      isInspectionSelected
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer text-left ${isInspectionSelected
                         ? "bg-emerald-50 border border-emerald-200"
                         : "bg-transparent border border-transparent hover:bg-slate-50"
-                    }`}
+                      }`}
                   >
-                    <div className={`w-10 h-10 shrink-0 flex items-center justify-center rounded-lg transition-all duration-200 ${
-                      isInspectionSelected
+                    <div className={`w-10 h-10 shrink-0 flex items-center justify-center rounded-lg transition-all duration-200 ${isInspectionSelected
                         ? "bg-emerald-100 border-2 border-emerald-600"
                         : "bg-emerald-50 border border-emerald-100"
-                    }`}>
+                      }`}>
                       <Wrench className="w-5 h-5 text-emerald-700" strokeWidth={1.5} />
                     </div>
                     <span className="flex-1 min-w-0">
@@ -19982,11 +21199,10 @@ export function CustomCleaningPackageModal({
                           acInspectionTile.badge
                         )}
                       </span>
-                      <span className={`block text-xs leading-tight transition-colors ${
-                        isInspectionSelected
+                      <span className={`block text-xs leading-tight transition-colors ${isInspectionSelected
                           ? "text-emerald-700 font-extrabold"
                           : "text-emerald-700 font-bold"
-                      }`}>
+                        }`}>
                         {serviceEditMode ? (
                           <EditableText
                             active={true}
@@ -20022,11 +21238,10 @@ export function CustomCleaningPackageModal({
                   params.set("subTab", tab.name);
                   navigate(`?${params.toString()}`, { replace: true });
                 }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer text-left group ${
-                  isSelected
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer text-left group ${isSelected
                     ? "bg-emerald-50 border border-emerald-200"
                     : "bg-transparent border border-transparent hover:bg-slate-50"
-                }`}
+                  }`}
               >
                 <div className="w-10 h-10 shrink-0 flex items-center justify-center rounded-lg bg-white border border-slate-100 overflow-hidden">
                   <img
@@ -20065,11 +21280,10 @@ export function CustomCleaningPackageModal({
               <button
                 type="button"
                 onClick={() => setActiveSubServiceId("")}
-                className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer ${
-                  activeSubServiceId === ""
+                className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer ${activeSubServiceId === ""
                     ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
                     : "bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-700"
-                }`}
+                  }`}
               >
                 All {activeSubTab}
               </button>
@@ -20078,11 +21292,10 @@ export function CustomCleaningPackageModal({
                   key={t.id}
                   type="button"
                   onClick={() => setActiveSubServiceId(t.id)}
-                  className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer ${
-                    activeSubServiceId === t.id
+                  className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer ${activeSubServiceId === t.id
                       ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
                       : "bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-700"
-                  }`}
+                    }`}
                 >
                   {t.label}
                 </button>
@@ -20532,11 +21745,10 @@ export function CustomCleaningPackageModal({
                                 alt={p.name}
                                 assetType="services"
                                 className="w-full h-full"
-                                imgClassName={`w-full h-full object-center rounded-xl transition-transform duration-300 hover:scale-105 ${
-                                  normalizedKey === "tv_display" || (typeof p.image === "string" && p.image.includes("/assets/tv/"))
+                                imgClassName={`w-full h-full object-center rounded-xl transition-transform duration-300 hover:scale-105 ${normalizedKey === "tv_display" || (typeof p.image === "string" && p.image.includes("/assets/tv/"))
                                     ? "object-contain p-1"
                                     : "object-cover"
-                                }`}
+                                  }`}
                                 onSave={(v) => handleSaveServiceField(p, "image", v)}
                               />
                             ) : (
@@ -20547,11 +21759,10 @@ export function CustomCleaningPackageModal({
                                   e.target.onerror = null;
                                   e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop";
                                 }}
-                                className={`w-full h-full object-center rounded-xl transition-transform duration-300 hover:scale-105 ${
-                                  normalizedKey === "tv_display" || (typeof p.image === "string" && p.image.includes("/assets/tv/"))
+                                className={`w-full h-full object-center rounded-xl transition-transform duration-300 hover:scale-105 ${normalizedKey === "tv_display" || (typeof p.image === "string" && p.image.includes("/assets/tv/"))
                                     ? "object-contain p-1"
                                     : "object-cover"
-                                }`}
+                                  }`}
                               />
                             )}
                             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
@@ -20857,7 +22068,7 @@ export function CustomCleaningPackageModal({
             {/* Col 1 */}
             <div className="uc-paint-footer-col">
               <div className="uc-paint-footer-logo-row">
-                <CalTrackLogo size={24} />
+                <SevoLogo size={24} />
                 <span className="uc-paint-footer-brand">Sevo</span>
               </div>
               <p className="uc-paint-footer-brand-desc">
@@ -21064,20 +22275,29 @@ export function CustomCleaningPackageModal({
               {/* Painting detailed view details layout (what's included, what's not included, benefits, dynamic timeline steps, ratings stats, reviews, and FAQs) */}
               {(() => {
                 const extra = MASON_DETAILS_EXTRA[selectedMasonDetail.id] || { reviews: [], faqs: [], benefits: [], excludes: [], steps: [] };
-                const rating = 4.8;
-                const totalReviewsCount = 1200;
+                const realReviews = Array.isArray(selectedMasonDetail.reviews) && selectedMasonDetail.reviews.length > 0
+                  ? selectedMasonDetail.reviews
+                  : (extra.reviews || []);
+                const hasReviews = realReviews.length > 0;
+                let rating = selectedMasonDetail.rating ? parseFloat(selectedMasonDetail.rating) : 0;
+                if (!rating && hasReviews) {
+                  const validRatings = realReviews.map(r => parseFloat(r.rating)).filter(n => !isNaN(n));
+                  if (validRatings.length > 0) {
+                    rating = validRatings.reduce((a, b) => a + b, 0) / validRatings.length;
+                  }
+                }
+                const totalReviewsCount = realReviews.length;
+                const r5 = realReviews.filter(r => Math.round(parseFloat(r.rating) || 5) === 5).length;
+                const r4 = realReviews.filter(r => Math.round(parseFloat(r.rating) || 5) === 4).length;
+                const r3 = realReviews.filter(r => Math.round(parseFloat(r.rating) || 5) === 3).length;
+                const r2 = realReviews.filter(r => Math.round(parseFloat(r.rating) || 5) === 2).length;
+                const r1 = realReviews.filter(r => Math.round(parseFloat(r.rating) || 5) === 1).length;
 
-                const r5 = 1056; // 88%
-                const r4 = 96;   // 8%
-                const r3 = 24;   // 2%
-                const r2 = 12;   // 1%
-                const r1 = 12;   // 1%
-
-                const w5 = (r5 / totalReviewsCount) * 100;
-                const w4 = (r4 / totalReviewsCount) * 100;
-                const w3 = (r3 / totalReviewsCount) * 100;
-                const w2 = (r2 / totalReviewsCount) * 100;
-                const w1 = (r1 / totalReviewsCount) * 100;
+                const w5 = totalReviewsCount > 0 ? (r5 / totalReviewsCount) * 100 : 0;
+                const w4 = totalReviewsCount > 0 ? (r4 / totalReviewsCount) * 100 : 0;
+                const w3 = totalReviewsCount > 0 ? (r3 / totalReviewsCount) * 100 : 0;
+                const w2 = totalReviewsCount > 0 ? (r2 / totalReviewsCount) * 100 : 0;
+                const w1 = totalReviewsCount > 0 ? (r1 / totalReviewsCount) * 100 : 0;
 
                 return (
                   <div className="flex flex-col gap-6">
@@ -21161,59 +22381,67 @@ export function CustomCleaningPackageModal({
                     )}
 
                     {/* RATINGS & REVIEWS STATS BOX */}
-                    <div className="text-left pt-2 border-t border-[#E8E3DB]">
-                      <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-3">Ratings & Reviews</h4>
-                      <div className="flex items-center gap-5 p-4 border border-[#E8E3DB] rounded-2xl bg-white shadow-3xs">
-                        <div className="flex flex-col items-center min-w-[70px]">
-                          <span className="text-3xl font-black text-slate-800 leading-none">{rating.toFixed(2)}</span>
-                          <span className="text-[9px] text-slate-500 font-extrabold mt-1.5 uppercase tracking-wider">avg rating</span>
-                        </div>
-                        <div className="flex-1 flex flex-col gap-1.5">
-                          {[
-                            { star: 5, count: r5, width: w5 },
-                            { star: 4, count: r4, width: w4 },
-                            { star: 3, count: r3, width: w3 },
-                            { star: 2, count: r2, width: w2 },
-                            { star: 1, count: r1, width: w1 },
-                          ].map(row => (
-                            <div key={row.star} className="flex items-center gap-2 text-[10px] font-bold text-slate-500">
-                              <span className="min-w-[20px] flex items-center gap-0.5 text-slate-400">
-                                <Star size={10} className="fill-slate-400 text-slate-400" /> {row.star}
-                              </span>
-                              <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden relative">
-                                <div style={{ width: `${row.width}%` }} className="h-full bg-slate-700 rounded-full" />
+                    {hasReviews && (
+                      <div className="text-left pt-2 border-t border-[#E8E3DB]">
+                        <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-3">Ratings & Reviews</h4>
+                        <div className="flex items-center gap-5 p-4 border border-[#E8E3DB] rounded-2xl bg-white shadow-3xs">
+                          <div className="flex flex-col items-center min-w-[70px]">
+                            <span className="text-3xl font-black text-slate-800 leading-none">{rating.toFixed(1)}</span>
+                            <span className="text-[9px] text-slate-500 font-extrabold mt-1.5 uppercase tracking-wider">avg rating</span>
+                          </div>
+                          <div className="flex-1 flex flex-col gap-1.5">
+                            {[
+                              { star: 5, count: r5, width: w5 },
+                              { star: 4, count: r4, width: w4 },
+                              { star: 3, count: r3, width: w3 },
+                              { star: 2, count: r2, width: w2 },
+                              { star: 1, count: r1, width: w1 },
+                            ].map(row => (
+                              <div key={row.star} className="flex items-center gap-2 text-[10px] font-bold text-slate-500">
+                                <span className="min-w-[20px] flex items-center gap-0.5 text-slate-400">
+                                  <Star size={10} className="fill-slate-400 text-slate-400" /> {row.star}
+                                </span>
+                                <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden relative">
+                                  <div style={{ width: `${row.width}%` }} className="h-full bg-slate-700 rounded-full" />
+                                </div>
+                                <span className="min-w-[30px] text-right text-[9px] text-slate-400">{row.count.toLocaleString()}</span>
                               </div>
-                              <span className="min-w-[30px] text-right text-[9px] text-slate-400">{row.count.toLocaleString()}</span>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 );
               })()}
 
               {/* Customer Reviews List */}
-              <div className="space-y-2.5 border-t border-[#E8E3DB] pt-5 text-left">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
-                {(() => {
-                  const extra = MASON_DETAILS_EXTRA[selectedMasonDetail.id] || { reviews: [], faqs: [] };
-                  return extra.reviews.map((rev, idx) => (
-                    <div key={idx} className="bg-[#F5F0E6]/50 border border-[#E8E3DB] rounded-2xl p-4 space-y-1.5 mb-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black text-slate-800">{rev.name}</span>
-                        <div className="flex items-center gap-1 text-[10px] font-extrabold text-indigo-600">
-                          <Star className="fill-indigo-600 text-indigo-600" size={12} />
-                          <span>{rev.rating}</span>
+              {(() => {
+                const extra = MASON_DETAILS_EXTRA[selectedMasonDetail.id] || { reviews: [], faqs: [] };
+                const realReviews = Array.isArray(selectedMasonDetail.reviews) && selectedMasonDetail.reviews.length > 0
+                  ? selectedMasonDetail.reviews
+                  : (extra.reviews || []);
+                if (!realReviews.length) return null;
+                return (
+                  <div className="space-y-2.5 border-t border-[#E8E3DB] pt-5 text-left">
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
+                    {realReviews.map((rev, idx) => (
+                      <div key={idx} className="bg-[#F5F0E6]/50 border border-[#E8E3DB] rounded-2xl p-4 space-y-1.5 mb-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black text-slate-800">{rev.name}</span>
+                          <div className="flex items-center gap-1 text-[10px] font-extrabold text-indigo-600">
+                            <Star className="fill-indigo-600 text-indigo-600" size={12} />
+                            <span>{rev.rating}</span>
+                          </div>
                         </div>
+                        <p className="text-xs text-slate-600 leading-relaxed italic">
+                          "{rev.comment || rev.text}"
+                        </p>
                       </div>
-                      <p className="text-xs text-slate-600 leading-relaxed italic">
-                        "{rev.comment || rev.text}"
-                      </p>
-                    </div>
-                  ));
-                })()}
-              </div>
+                    ))}
+                  </div>
+                );
+              })()}
 
               {/* Frequently Asked Questions */}
               <div className="space-y-2.5 border-t border-[#E8E3DB] pt-5 text-left">
@@ -21573,6 +22801,13 @@ export function CustomCleaningPackageModal({
                 onClick={() => {
                   const isDetailAcInspection = (selectedPackageDetail.id === "hvac-ac-inspection" || selectedPackageDetail.name === "AC Inspection" || activeSubTab === "AC Inspection" || activeSubTab === "Not Sure? Book Inspection");
                   if (isDetailAcInspection) {
+                    handleAcInspectionSubmit({
+                      brand: "Daikin",
+                      type: "Split AC",
+                      quantity: 1,
+                      price: selectedPackageDetail.price || 199
+                    });
+                    setSelectedPackageDetail(null);
                     setActiveAcInspectionItem(selectedPackageDetail);
                     setShowAcInspectionModal(true);
                     return;
@@ -21611,7 +22846,7 @@ export function CustomCleaningPackageModal({
           quantity: formData?.ac_quantity || 1,
           notes: formData?.ac_notes || ""
         }}
-        basePrice={activeAcInspectionItem?.price || 199}
+        basePrice={activeAcInspectionItem?.price || dynamicAcInspectionFee || 199}
       />
     </div>
   );

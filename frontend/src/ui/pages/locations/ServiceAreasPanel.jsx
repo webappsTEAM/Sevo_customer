@@ -93,8 +93,8 @@ const REAL_SERVICE_FALLBACK = [
   { slug: "wall-breaking-demolition", name: "Wall Breaking & Demolition", category: "Mason", category_slug: "mason" },
 
   // Farm-Fresh Vegetables & Groceries
-  { slug: "vegetables", name: "Farm-Fresh Vegetable", category: "Farm-Fresh Vegetables & Groceries", category_slug: "vegetables_groceries" },
-  { slug: "groceries", name: "Groceries", category: "Farm-Fresh Vegetables & Groceries", category_slug: "vegetables_groceries" },
+  { slug: "vegetables", name: "Farm-Fresh Vegetable", category: "Vegetables", category_slug: "vegetables_groceries" },
+  { slug: "groceries", name: "Groceries", category: "Groceries", category_slug: "vegetables_groceries" },
 ]
 
 const SERVICE_OPTIONS = REAL_SERVICE_FALLBACK

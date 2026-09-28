@@ -8,6 +8,7 @@ import { AppShell } from "./shell/AppShell.jsx"
 import { SessionToast } from "./components/SessionToast.jsx"
 import { GlobalEditModeToggle } from "./components/GlobalEditModeToggle.jsx"
 import { MobileBottomNav } from "./components/common/MobileBottomNav.jsx"
+import { AIChatWidget } from "./components/ai/AIChatWidget.jsx"
 import { LoginPage } from "./pages/LoginPage.jsx"
 
 // Lazy-loaded Pages
@@ -67,6 +68,28 @@ const VegetableStockAdminPage = lazy(() =>
   import("./pages/inventory/VegetableStockAdminPage.jsx").then(m => ({ default: m.VegetableStockAdminPage || m.default }))
 )
 
+const VegetableAdminHomePage = lazy(() =>
+  import("./pages/vegetables/VegetableAdminHomePage.jsx").then(m => ({ default: m.default || m.VegetableAdminHomePage }))
+)
+const VegetableAdminOrdersPage = lazy(() =>
+  import("./pages/vegetables/VegetableAdminOrdersPage.jsx").then(m => ({ default: m.default || m.VegetableAdminOrdersPage }))
+)
+const VegetableAdminReturnsPage = lazy(() =>
+  import("./pages/vegetables/VegetableAdminReturnsPage.jsx").then(m => ({ default: m.default || m.VegetableAdminReturnsPage }))
+)
+const VegetableAdminClaimsPage = lazy(() =>
+  import("./pages/vegetables/VegetableAdminClaimsPage.jsx").then(m => ({ default: m.default || m.VegetableAdminClaimsPage }))
+)
+const VegetableAdminCatalogUploadsPage = lazy(() =>
+  import("./pages/vegetables/VegetableAdminCatalogUploadsPage.jsx").then(m => ({ default: m.default || m.VegetableAdminCatalogUploadsPage }))
+)
+const VegetableAdminCategoriesApprovalPage = lazy(() =>
+  import("./pages/vegetables/VegetableAdminCategoriesApprovalPage.jsx").then(m => ({ default: m.default || m.VegetableAdminCategoriesApprovalPage }))
+)
+const VegetableAdminCategoriesPage = lazy(() =>
+  import("./pages/vegetables/VegetableAdminCategoriesPage.jsx").then(m => ({ default: m.default || m.VegetableAdminCategoriesPage }))
+)
+
 const CatalogDashboardPage = lazy(() =>
   import("./pages/catalog/CatalogDashboardPage.jsx").then(m => ({ default: m.CatalogDashboardPage || m.default }))
 )
@@ -91,6 +114,9 @@ const CatalogVendorApprovalsPage = lazy(() =>
 const PaintingRateCardPage = lazy(() =>
   import("./pages/catalog/PaintingRateCardPage.jsx").then(m => ({ default: m.PaintingRateCardPage || m.default }))
 )
+const ACInspectionRateCardPage = lazy(() =>
+  import("./pages/catalog/ACInspectionRateCardPage.jsx").then(m => ({ default: m.ACInspectionRateCardPage || m.default }))
+)
 const GTPricingPage = lazy(() =>
   import("./pages/catalog/GTPricingPage.jsx").then(m => ({ default: m.GTPricingPage || m.default }))
 )
@@ -99,6 +125,9 @@ const AdminRecipesPage = lazy(() =>
 )
 const AdminRecommendationsPage = lazy(() =>
   import("./pages/catalog/AdminRecommendationsPage.jsx").then(m => ({ default: m.AdminRecommendationsPage || m.default }))
+)
+const TimeSlotManagementPage = lazy(() =>
+  import("./pages/TimeSlotManagementPage.jsx").then(m => ({ default: m.TimeSlotManagementPage || m.default }))
 )
 
 const CustomersDashboardPage = lazy(() => import("./pages/CustomersDashboardPage.jsx").then(m => ({ default: m.CustomersDashboardPage })))
@@ -119,6 +148,10 @@ const ReferralsPage = lazy(() =>
 
 const ServiceRequestsPage = lazy(() =>
   import("./pages/ServiceRequestsPage.jsx").then(m => ({ default: m.ServiceRequestsPage || m.default }))
+)
+
+const ACInspectionBookingsPage = lazy(() =>
+  import("./pages/ACInspectionBookingsPage.jsx").then(m => ({ default: m.ACInspectionBookingsPage || m.default }))
 )
 
 const FeedbackManagementPage = lazy(() =>
@@ -250,7 +283,7 @@ function RequireCareAgentOrAdmin() {
   return <Outlet />
 }
 
-const ONBOARDING_DISMISSED_KEY = "caltrack.onboarding.dismissed"
+const ONBOARDING_DISMISSED_KEY = "sevo.onboarding.dismissed"
 
 export function App() {
   const { isReady, user } = useAuth()
@@ -380,16 +413,20 @@ export function App() {
           <Route path={routes.truck_booking_hosur} element={<MiniTruckBookingHosurPage />} />
           <Route path={routes.logistics_booking} element={<LogisticsBookingPage />} />
           <Route path="/trucks/hosur" element={<MiniTruckBookingHosurPage />} />
+          <Route path="/trucks/:city" element={<LogisticsBookingPage />} />
           <Route path="/trucks" element={<MiniTruckBookingHosurPage />} />
           <Route path="/booking/trucks" element={<MiniTruckBookingHosurPage />} />
           <Route path={routes.two_wheeler_booking_hosur} element={<TwoWheelerBookingHosurPage />} />
           <Route path="/two-wheelers/hosur" element={<TwoWheelerBookingHosurPage />} />
+          <Route path="/two-wheelers/:city" element={<LogisticsBookingPage />} />
           <Route path="/two-wheelers" element={<TwoWheelerBookingHosurPage />} />
           <Route path="/booking/two-wheelers" element={<TwoWheelerBookingHosurPage />} />
           <Route path={routes.packers_movers_booking_hosur} element={<PackersMoversBookingHosurPage />} />
           <Route path="/packers-and-movers/hosur" element={<PackersMoversBookingHosurPage />} />
+          <Route path="/packers-and-movers/:city" element={<LogisticsBookingPage />} />
           <Route path="/packers-and-movers" element={<PackersMoversBookingHosurPage />} />
           <Route path="/packers-movers/hosur" element={<Navigate to="/packers-and-movers/hosur" replace />} />
+          <Route path="/packers-movers/:city" element={<LogisticsBookingPage />} />
           <Route path="/packers-movers" element={<Navigate to="/packers-and-movers" replace />} />
           <Route path="/booking/packers-and-movers" element={<PackersMoversBookingHosurPage />} />
           <Route path="/goods" element={<Navigate to="/home" state={{ openGoodsModal: true }} replace />} />
@@ -522,7 +559,10 @@ export function App() {
               <Route path={routes.catalog_change_log} element={<RequireModule module="catalog"><CatalogChangeLogPage /></RequireModule>} />
               <Route path={routes.catalog_vendor_approvals} element={<RequireModule module="catalog"><CatalogVendorApprovalsPage /></RequireModule>} />
               <Route path={routes.catalog_painting_rates} element={<RequireModule module="catalog"><PaintingRateCardPage /></RequireModule>} />
+              <Route path={routes.catalog_ac_inspection_rates} element={<RequireModule module="catalog"><ACInspectionRateCardPage /></RequireModule>} />
               <Route path={routes.catalog_gt_pricing} element={<RequireModule module="catalog"><GTPricingPage /></RequireModule>} />
+              <Route path={routes.time_slot_management} element={<RequireModule module="time_slots"><TimeSlotManagementPage /></RequireModule>} />
+              <Route path="/admin/time-slots" element={<RequireModule module="time_slots"><TimeSlotManagementPage /></RequireModule>} />
               <Route path={routes.marketing_coupons} element={<RequireModule module="marketing"><CouponsPage /></RequireModule>} />
               <Route path={routes.marketing_offers} element={<RequireModule module="marketing"><OffersPage /></RequireModule>} />
               <Route path={routes.marketing_referrals} element={<RequireModule module="marketing"><ReferralsPage /></RequireModule>} />
@@ -530,6 +570,13 @@ export function App() {
               <Route path={routes.admin_feedback} element={<RequireModule module="reviews"><FeedbackManagementPage /></RequireModule>} />
               <Route path={routes.inventory_vegetables} element={<RequireModule module="inventory"><VegetableStockAdminPage /></RequireModule>} />
               <Route path="/admin/vegetable-stock" element={<RequireModule module="inventory"><VegetableStockAdminPage /></RequireModule>} />
+              <Route path={routes.vegetable_admin_home} element={<RequireModule module="inventory"><VegetableAdminHomePage /></RequireModule>} />
+              <Route path={routes.vegetable_admin_orders} element={<RequireModule module="inventory"><VegetableAdminOrdersPage /></RequireModule>} />
+              <Route path={routes.vegetable_admin_returns} element={<RequireModule module="inventory"><VegetableAdminReturnsPage /></RequireModule>} />
+              <Route path={routes.vegetable_admin_claims} element={<RequireModule module="inventory"><VegetableAdminClaimsPage /></RequireModule>} />
+              <Route path={routes.vegetable_admin_catalog_uploads} element={<RequireModule module="inventory"><VegetableAdminCatalogUploadsPage /></RequireModule>} />
+              <Route path={routes.vegetable_admin_categories_approval} element={<RequireModule module="inventory"><VegetableAdminCategoriesApprovalPage /></RequireModule>} />
+              <Route path={routes.vegetable_admin_categories} element={<RequireModule module="inventory"><VegetableAdminCategoriesPage /></RequireModule>} />
             </Route>
 
             {/* Homepage Builder edits Customer Web content that is public to
@@ -549,6 +596,8 @@ export function App() {
               <Route path={routes.customers_payments} element={<CustomersPaymentsPage />} />
               <Route path={routes.customers_merges} element={<CustomerMergesPage />} />
               <Route path="/customers/bookings" element={<ServiceRequestsPage />} />
+              <Route path={routes.admin_ac_inspections} element={<ACInspectionBookingsPage />} />
+              <Route path="/customers/ac-inspections" element={<ACInspectionBookingsPage />} />
               <Route path="/customers/reschedules" element={<ServiceRequestsPage />} />
               <Route path="/customers/refunds" element={<ServiceRequestsPage />} />
               <Route path="/customers/documents" element={<ServiceRequestsPage />} />
@@ -581,6 +630,8 @@ export function App() {
           instead of each page needing to wire in its own toggle bar. Renders
           nothing for anyone who isn't a Super Admin. */}
       <GlobalEditModeToggle />
+      {/* Centralized AI Assistant Widget */}
+      <AIChatWidget />
       {/* App-Wide Shared Mobile Bottom Navigation with safe area support */}
       <MobileBottomNav />
     </>

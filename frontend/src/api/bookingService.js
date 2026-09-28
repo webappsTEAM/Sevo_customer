@@ -35,13 +35,13 @@ export async function cancelBooking(identifier, reason = "Customer requested can
     try {
       const urlParams = new URLSearchParams(window.location.search)
       token = urlParams.get("token") || sessionStorage.getItem("active_tracking_token") || localStorage.getItem("calservice_customer_token") || ""
-    } catch (_) {}
+    } catch (_) { }
   }
   if (!phone) {
     try {
       const savedObj = JSON.parse(sessionStorage.getItem("calservice_last_booking") || "{}")
-      phone = savedObj?.phone || localStorage.getItem("caltrack_customer_phone") || ""
-    } catch (_) {}
+      phone = savedObj?.phone || localStorage.getItem("sevo_customer_phone") || ""
+    } catch (_) { }
   }
 
   if (token) {

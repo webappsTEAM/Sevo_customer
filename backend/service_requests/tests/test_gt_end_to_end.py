@@ -82,6 +82,12 @@ class GoodsTransportEndToEndTests(TestCase):
             name="Tata Ace", starting_price=Decimal("400.00"),
             base_fare=Decimal("250.00"), per_km_rate=Decimal("18.00"),
             free_km=Decimal("2.00"), loading_unloading_charge=Decimal("100.00"),
+            # GT audit Update 18: real ServiceTier rows always carry a
+            # vehicle_class (migration 0010 backfilled every row; 0011 made a
+            # blank value fail closed). A goods-transport booking against a
+            # tier without one is now refused, because the Vendor side would
+            # have no purchased vehicle to match a driver against.
+            vehicle_class="truck",
             additional_stop_charge=Decimal("50.00"), minimum_fare=Decimal("200.00"),
         )
 

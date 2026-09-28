@@ -4,7 +4,7 @@ service_requests/services/prohibited_goods.py
 Server-Authoritative Cargo Safety & Prohibited Goods Gate for Goods & Transport.
 
 Enforces business and safety policy preventing dangerous, illegal, or hazardous
-cargo from being booked or dispatched through CalTrack Goods & Transport and
+cargo from being booked or dispatched through sevo Goods & Transport and
 Packers & Movers services.
 
 Covered Prohibited Categories:

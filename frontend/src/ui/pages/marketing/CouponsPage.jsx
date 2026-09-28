@@ -40,7 +40,8 @@ const AVAILABLE_CATEGORIES = [
   { id: "painting", name: "Painting & Waterproofing", desc: "Wall painting & waterproofing" },
   { id: "mason", name: "Mason Work", desc: "Civil, brick & plastering repairs" },
   { id: "appliance_repair", name: "Appliance Repair", desc: "Washing machine, fridge & microwave" },
-  { id: "groceries", name: "Groceries & Vegetables", desc: "Fresh produce & daily essentials" }
+  { id: "groceries", name: "Groceries", desc: "Fresh produce & daily essentials" },
+  { id: "vegetables", name: "Vegetables", desc: "Farm-fresh organic vegetables" }
 ];
 
 const AVAILABLE_SERVICES = [
@@ -371,7 +372,7 @@ export default function CouponsPage() {
       setIsModalOpen(false);
     } catch (e) {
       console.error("Failed to save coupon", e);
-      setStepError(e.message || "Failed to save coupon to database.");
+      setStepError(e.message || "Failed to save coupon.");
     } finally {
       setIsSubmitting(false);
     }
@@ -511,14 +512,14 @@ export default function CouponsPage() {
                   <td colSpan={8} className="py-12 text-center text-slate-400 font-bold">
                     <div className="flex items-center justify-center gap-2">
                       <div className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
-                      Loading coupons from database...
+                      Loading coupons...
                     </div>
                   </td>
                 </tr>
               ) : filteredCoupons.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-slate-400 font-semibold">
-                    No coupons found in database for active filter.
+                    No coupons found for the active filter.
                   </td>
                 </tr>
               ) : (

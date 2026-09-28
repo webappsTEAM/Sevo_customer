@@ -311,6 +311,30 @@ class ServiceZone(models.Model):
 
     zone_type = models.CharField(max_length=10, choices=ZONE_TYPE_CHOICES, default="circle")
 
+    # Coverage lifecycle. Only ACTIVE zones gate (allow) bookings; COMING_SOON
+    # and PAUSED zones stay visible to admins (and COMING_SOON can be surfaced
+    # to customers as "launching soon" messaging) but never count as coverage.
+    # `is_active` is kept as the derived, indexed flag every existing query in
+    # service_zone_engine / views_service_zones / MapPickerScreen already
+    # filters on -- save() keeps the two in lockstep so no caller can see a
+    # zone that is "active" by one field and "paused" by the other.
+    STATUS_ACTIVE = "active"
+    STATUS_COMING_SOON = "coming_soon"
+    STATUS_PAUSED = "paused"
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_COMING_SOON, "Coming Soon"),
+        (STATUS_PAUSED, "Paused"),
+    ]
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE, db_index=True,
+    )
+
+    # Optional vehicle-class restriction (values of
+    # logistics.ServiceTier.VehicleClass -- the Customer app's own GT vehicle
+    # taxonomy; no parallel list). Empty list = every vehicle class allowed.
+    vehicle_classes = models.JSONField(default=list, blank=True)
+
     # Circle zone fields
     center_lat = models.FloatField(null=True, blank=True)
     center_lng = models.FloatField(null=True, blank=True)
@@ -330,6 +354,25 @@ class ServiceZone(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.zone_type})"
+
+    def save(self, *args, **kwargs):
+        # Legacy callers (the Locations > Service Areas panel, older tests)
+        # only toggle is_active. An "active" status with is_active=False means
+        # someone switched the zone off through that path -> treat as PAUSED.
+        if self.status == self.STATUS_ACTIVE and self.is_active is False:
+            self.status = self.STATUS_PAUSED
+        self.is_active = self.status == self.STATUS_ACTIVE
+        if self.vehicle_classes is None:
+            self.vehicle_classes = []
+        super().save(*args, **kwargs)
+
+    def allows_vehicle_class(self, vehicle_class):
+        """True when this zone has no vehicle restriction, no class was asked
+        for, or the class is explicitly listed."""
+        allowed = [str(v).strip().lower() for v in (self.vehicle_classes or []) if str(v).strip()]
+        if not allowed or not vehicle_class:
+            return True
+        return str(vehicle_class).strip().lower() in allowed
 
     # ── Geometry helpers (no GeoDjango) ────────────────────────────────────
 

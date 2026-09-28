@@ -25,6 +25,22 @@ def async_dispatch_service_request(self, service_request_id: int):
         logger.info(f"Booking {sr.request_id} is already dispatched (Job ID: {sr.workforce_job_id}).")
         return {"success": True, "workforce_job_id": sr.workforce_job_id}
 
+    # Only dispatch bookings that are in a confirmed, active state.
+    # WAITING_FOR_PAYMENT bookings must not be sent to Workforce before payment clears.
+    # CANCELLED / REJECTED / terminal bookings must never be dispatched.
+    _DISPATCHABLE_STATUSES = {
+        ServiceRequest.Status.CONFIRMED,
+        ServiceRequest.Status.REVIEWED,
+        ServiceRequest.Status.UNASSIGNED,
+        ServiceRequest.Status.NEW_REQUEST,
+    }
+    if sr.status not in _DISPATCHABLE_STATUSES:
+        logger.warning(
+            f"async_dispatch_service_request: Booking {sr.request_id} is in status "
+            f"'{sr.status}' which is not dispatchable. Skipping dispatch."
+        )
+        return {"success": False, "error": f"Booking status '{sr.status}' is not dispatchable"}
+
     sr.dispatch_attempts += 1
     sr.last_dispatched_at = timezone.now()
 
@@ -82,4 +98,3 @@ def generate_due_amc_bookings():
     from service_requests.services import generate_due_bookings
     created, failed = generate_due_bookings()
     return f"AMC generation: {len(created)} booking(s) created, {len(failed)} series failed."
-

@@ -27,7 +27,7 @@ def _local(year, month, day, hour, minute=0):
     )
 
 
-@override_settings(BOOKING_SAME_DAY_CUTOFF_HOUR=18, BOOKING_MIN_LEAD_MINUTES=60)
+@override_settings(BOOKING_SAME_DAY_CUTOFF_HOUR=18, BOOKING_MIN_LEAD_MINUTES=30)
 class BookingWindowTests(TestCase):
     def test_before_cutoff_same_day_is_open(self):
         now = _local(2026, 9, 4, 17, 59)
@@ -67,11 +67,11 @@ class BookingWindowTests(TestCase):
 
     def test_slot_inside_lead_time_is_rejected(self):
         now = _local(2026, 9, 4, 14, 0)
-        self.assertIsNotNone(validate_booking_slot(datetime.date(2026, 9, 4), "14:30", now=now))
+        self.assertIsNotNone(validate_booking_slot(datetime.date(2026, 9, 4), "14:15", now=now))
 
     def test_slot_beyond_lead_time_is_accepted(self):
         now = _local(2026, 9, 4, 14, 0)
-        self.assertIsNone(validate_booking_slot(datetime.date(2026, 9, 4), "16:00", now=now))
+        self.assertIsNone(validate_booking_slot(datetime.date(2026, 9, 4), "14:30", now=now))
 
     def test_past_date_is_rejected(self):
         now = _local(2026, 9, 4, 10, 0)

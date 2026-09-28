@@ -67,7 +67,7 @@ def resolve_cargo_payload(
     category_obj = None
     if goods_category_id is not None:
         try:
-            category_obj = GoodsCategory.objects.filter(id=int(goods_category_id)).first()
+            category_obj = GoodsCategory.objects.filter(id=goods_category_id).first()
         except (ValueError, TypeError):
             category_obj = None
         if not category_obj:
@@ -77,7 +77,7 @@ def resolve_cargo_payload(
                 "field": "goods_category_id",
             })
     elif goods_category_slug:
-        slug_clean = str(goods_category_slug).strip()
+        slug_clean = goods_category_slug.strip()
         category_obj = GoodsCategory.objects.filter(
             Q(slug__iexact=slug_clean) | Q(name__iexact=slug_clean)
         ).first()
@@ -124,10 +124,12 @@ def resolve_cargo_payload(
     if cargo_items and isinstance(cargo_items, list):
         item_ids = []
         item_slugs = []
+        item_names = []
         for entry in cargo_items:
             if isinstance(entry, dict):
                 iid = entry.get("goods_item_id") or entry.get("goods_item") or entry.get("item_id") or entry.get("id")
                 islug = entry.get("item_slug") or entry.get("slug")
+                iname = entry.get("name") or entry.get("item_name")
                 if iid:
                     try:
                         item_ids.append(int(iid))
@@ -135,19 +137,25 @@ def resolve_cargo_payload(
                         pass
                 if islug:
                     item_slugs.append(str(islug).strip())
+                if iname:
+                    item_names.append(str(iname).strip())
 
         q_filter = Q()
         if item_ids:
             q_filter |= Q(id__in=item_ids)
         if item_slugs:
             q_filter |= Q(slug__in=item_slugs)
+        if item_names:
+            q_filter |= Q(name__in=item_names)
 
         items_by_id = {}
         items_by_slug = {}
+        items_by_name = {}
         if q_filter:
             for item_row in GoodsItem.objects.filter(q_filter).select_related("category"):
                 items_by_id[item_row.id] = item_row
                 items_by_slug[item_row.slug] = item_row
+                items_by_name[item_row.name.strip().lower()] = item_row
 
         # 3. Validate and resolve each item
         total_items_count = 0
@@ -162,7 +170,8 @@ def resolve_cargo_payload(
 
             iid = entry.get("goods_item_id") or entry.get("goods_item") or entry.get("item_id") or entry.get("id")
             islug = entry.get("item_slug") or entry.get("slug")
-            identifier = islug or iid or "unknown"
+            iname = entry.get("name") or entry.get("item_name")
+            identifier = islug or iid or iname or "unknown"
 
             # Strict quantity validation
             if "quantity" not in entry and "qty" not in entry:
@@ -242,6 +251,8 @@ def resolve_cargo_payload(
                     item = None
             if not item and islug:
                 item = items_by_slug.get(str(islug).strip())
+            if not item and iname:
+                item = items_by_name.get(str(iname).strip().lower())
 
             if not item:
                 validation_errors.append({
@@ -259,8 +270,8 @@ def resolve_cargo_payload(
                 })
                 continue
 
-            if getattr(item, "is_prohibited", False):
-                prohibited_item_names.append(item.name)
+            if getattr(item, "is_prohibited", False) or bool(entry.get("is_hazardous")) or bool(entry.get("is_prohibited")):
+                prohibited_item_names.append(item.name if item else str(identifier))
 
             # Category consistency notice
             if category_obj and item.category_id != category_obj.id:
@@ -348,7 +359,7 @@ def resolve_cargo_payload(
     is_2w_compatible = category_allows_2w and (not has_2w_incompatible_item)
     tw_query = ServiceTier.objects.filter(is_active=True, category="two_wheeler")
     if city:
-        tw_tier = tw_query.filter(city__iexact=str(city).strip()).first()
+        tw_tier = tw_query.filter(city__iexact=city.strip()).first()
     else:
         tw_tier = tw_query.first()
 

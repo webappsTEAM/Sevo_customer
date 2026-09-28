@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
 import { apiPasswordResetConfirm, extractAuthError } from "../../api/authService.js"
-import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
+import { SevoLogo, sevoLogo } from "../components/sevoLogo.jsx"
 import { Lock, Eye, EyeOff, RefreshCcw, AlertCircle, ShieldCheck, Check } from "lucide-react"
 
 export function ResetPasswordPage() {
@@ -91,7 +91,7 @@ export function ResetPasswordPage() {
         .font-display { font-family: 'Outfit', sans-serif; }
         .font-body { font-family: 'Plus Jakarta Sans', sans-serif; }
       `}</style>
-      
+
       {/* Holographic scanning grids & scanline telemetry */}
       <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: "radial-gradient(#4f46e5 2px, transparent 2px)", backgroundSize: "40px 40px" }} />
       <div className="absolute w-[600px] h-[600px] rounded-full bg-indigo-500/5 blur-[120px] pointer-events-none" />
@@ -100,7 +100,7 @@ export function ResetPasswordPage() {
       <div className="relative z-10 w-full max-w-[440px]">
         {/* Brand logo top-center */}
         <div className="flex justify-center mb-8">
-          <CalTrackLogo size="lg" showTagline={false} />
+          <SevoLogo size="lg" showTagline={false} />
         </div>
 
         <div className="bg-slate-900/60 backdrop-blur-xl rounded-[2rem] p-8 sm:p-10 border border-slate-800 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
@@ -116,11 +116,11 @@ export function ResetPasswordPage() {
                   <div className="w-32 h-32 rounded-full border border-indigo-500/30 animate-ping" style={{ animationDuration: "3s" }} />
                   <div className="w-24 h-24 rounded-full border border-cyan-500/25 animate-pulse" style={{ animationDuration: "2s" }} />
                   {[...Array(6)].map((_, i) => (
-                    <span 
-                      key={i} 
+                    <span
+                      key={i}
                       className="absolute w-1.5 h-1.5 bg-cyan-400 rounded-full animate-pulse"
-                      style={{ 
-                        top: `${20 + Math.random() * 60}%`, 
+                      style={{
+                        top: `${20 + Math.random() * 60}%`,
                         left: `${20 + Math.random() * 60}%`,
                         animationDelay: `${i * 0.25}s`,
                         animationDuration: `${1.2 + Math.random() * 1.8}s`
@@ -128,7 +128,7 @@ export function ResetPasswordPage() {
                     />
                   ))}
                 </div>
-                
+
                 {/* Shield unlock animation */}
                 <div className="w-20 h-20 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-450 shadow-[0_0_20px_rgba(16,185,129,0.25)] animate-pulse">
                   <ShieldCheck size={40} className="transform transition-transform scale-110" />
@@ -215,11 +215,10 @@ export function ResetPasswordPage() {
               <div className="p-4 rounded-2xl bg-slate-950/30 border border-slate-800 space-y-3 font-mono">
                 <div className="flex justify-between items-center text-[11px]">
                   <span className="text-slate-500 uppercase tracking-wider">Password Strength</span>
-                  <span className={`font-bold ${
-                    strengthPercent >= 80 ? "text-emerald-400" :
-                    strengthPercent >= 50 ? "text-amber-400" :
-                    password ? "text-rose-400" : "text-slate-600"
-                  }`}>
+                  <span className={`font-bold ${strengthPercent >= 80 ? "text-emerald-400" :
+                      strengthPercent >= 50 ? "text-amber-400" :
+                        password ? "text-rose-400" : "text-slate-600"
+                    }`}>
                     {strengthBar} {strengthPercent}%
                   </span>
                 </div>

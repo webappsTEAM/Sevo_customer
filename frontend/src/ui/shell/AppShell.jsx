@@ -9,7 +9,7 @@ import { ThemeToggle } from "./ThemeToggle.jsx"
 import ThemeSwitch from "@/components/ui/theme-switch"
 import { CommandPalette } from "./CommandPalette.jsx"
 import { NotificationCenter } from "./NotificationCenter.jsx"
-import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
+import { SevoLogo, sevoLogo } from "../components/sevoLogo.jsx"
 import { apiRequest, unwrapResults } from "../../api/client.js"
 import { NotificationService } from "../../utils/notifications.js"
 import { useWebSocket } from "../../hooks/useWebSocket.js"
@@ -64,6 +64,7 @@ const ADMIN_NAV_ITEMS = [
       { label: "Dashboard", to: "/customers/dashboard", icon: <BarChart3 size={16} />, color: "#6366F1" },
       { label: "Customers", to: "/customers/list", icon: <Users size={16} />, color: "#4F46E5" },
       { label: "Bookings", to: "/customers/bookings", icon: <CalendarDays size={16} />, color: "#38BDF8" },
+      { label: "AC Inspection Bookings", to: "/customers/ac-inspections", icon: <Wrench size={16} />, color: "#0EA5E9" },
       { label: "Reschedule Requests", to: "/customers/reschedules", icon: <Repeat2 size={16} />, color: "#F59E0B" },
       { label: "Refund Requests", to: "/customers/refunds", icon: <Banknote size={16} />, color: "#10B981" },
       { label: "Payments", to: "/customers/payments", icon: <Banknote size={16} />, color: "#10B981" },
@@ -86,8 +87,17 @@ const ADMIN_NAV_ITEMS = [
       { label: "Change Log", to: routes.catalog_change_log, icon: <FileText size={16} />, color: "#3B82F6" },
       { label: "Vendor Approvals", to: routes.catalog_vendor_approvals, icon: <UserCheck size={16} />, color: "#3B82F6" },
       { label: "Painting Rate Card", to: routes.catalog_painting_rates, icon: <Palette size={16} />, color: "#3B82F6" },
+      { label: "AC Inspection & Rates", to: routes.catalog_ac_inspection_rates, icon: <Wrench size={16} />, color: "#F59E0B" },
       { label: "Goods & Transport Rates", to: routes.catalog_gt_pricing, icon: <Truck size={16} />, color: "#3B82F6", module: "pricing" },
+      { label: "Time Slot Management", to: routes.time_slot_management, icon: <Clock size={16} />, color: "#F59E0B", module: "time_slots" },
     ]
+  },
+  {
+    label: "Time Slot Management",
+    to: routes.time_slot_management,
+    icon: <Clock size={20} />,
+    color: "#F59E0B",
+    module: "time_slots",
   },
   {
     label: "Marketing",
@@ -137,13 +147,20 @@ const ADMIN_NAV_ITEMS = [
     ]
   },
   {
-    label: "Warehouse Inventory",
-    to: routes.inventory,
-    icon: <Package size={20} />,
-    color: "#8B5CF6",
+    label: "Vegetable Inventory",
+    to: routes.inventory_vegetables,
+    icon: <Sprout size={20} />,
+    color: "#10B981",
     children: [
-      { label: "Stock Catalog", to: routes.inventory, icon: <Package size={16} />, color: "#8B5CF6" },
-      { label: "Vegetables", to: routes.inventory_vegetables, icon: <Sprout size={16} />, color: "#10B981" },
+      { label: "Home", to: routes.vegetable_admin_home, icon: <Home size={16} />, color: "#10B981" },
+      { label: "Orders", to: routes.vegetable_admin_orders, icon: <Package size={16} />, color: "#3B82F6" },
+      { label: "Returns", to: routes.vegetable_admin_returns, icon: <Repeat2 size={16} />, color: "#F59E0B" },
+      { label: "Claims", to: routes.vegetable_admin_claims, icon: <ShieldAlert size={16} />, color: "#EF4444" },
+      { label: "Inventory", to: routes.inventory_vegetables, icon: <Layers size={16} />, color: "#10B981" },
+      { label: "Catalog Uploads", to: routes.vegetable_admin_catalog_uploads, icon: <FolderOpen size={16} />, color: "#8B5CF6" },
+      { label: "Categories Approval", to: routes.vegetable_admin_categories_approval, icon: <ShieldCheck size={16} />, color: "#F59E0B" },
+      { label: "Categories", to: routes.vegetable_admin_categories, icon: <FolderOpen size={16} />, color: "#06B6D4" },
+      { label: "Coupons", to: routes.marketing_coupons, icon: <Ticket size={16} />, color: "#EC4899" },
     ]
   },
   { label: "Reports & Analytics", to: routes.reports, icon: <BarChart3 size={20} />, color: "#10B981" },
@@ -154,6 +171,7 @@ const ADMIN_NAV_ITEMS = [
     icon: <Settings size={20} />,
     color: "#64748B",
     children: [
+      { label: "Stock Catalog", to: routes.inventory, icon: <Package size={16} />, color: "#8B5CF6" },
       { label: "My Profile", to: "/settings?section=profile", icon: <User size={16} />, color: "#3B82F6" },
       { label: "Security", to: "/settings?section=security", icon: <Shield size={16} />, color: "#10B981" },
       { label: "Appearance", to: "/settings?section=appearance", icon: <Palette size={16} />, color: "#8B5CF6" },
@@ -233,6 +251,49 @@ function playStatusBeep(isOnline) {
   } catch (e) {
     console.warn("Status beep failed", e)
   }
+}
+
+function matchesRoute(currentPathname, routeTo) {
+  if (!routeTo || !currentPathname) return false
+  const basePath = routeTo.split("?")[0].split("#")[0]
+  if (basePath === "/") {
+    return currentPathname === "/"
+  }
+  return currentPathname === basePath || currentPathname.startsWith(basePath + "/")
+}
+
+function isItemActive(item, currentPathname) {
+  if (!item) return false
+  if (item.to === "/customers/dashboard" && (currentPathname === "/customers" || currentPathname.startsWith("/customers/"))) {
+    return true
+  }
+  if (matchesRoute(currentPathname, item.to)) return true
+  if (item.children && Array.isArray(item.children)) {
+    return item.children.some(child => matchesRoute(currentPathname, child.to))
+  }
+  return false
+}
+
+function isChildActive(child, location, siblingRoutes = []) {
+  const currentFullUrl = location.pathname + location.search
+  if (child.to.includes("?")) {
+    return currentFullUrl === child.to || currentFullUrl.startsWith(child.to + "&")
+  }
+  
+  if (location.pathname === child.to) return true
+
+  const isSiblingMoreSpecific = siblingRoutes.some(sib => {
+    if (sib === child.to) return false
+    const sibBase = sib.split("?")[0].split("#")[0]
+    const childBase = child.to.split("?")[0].split("#")[0]
+    return matchesRoute(location.pathname, sibBase) &&
+      sibBase.startsWith(childBase) &&
+      sibBase.length > childBase.length
+  })
+
+  if (isSiblingMoreSpecific) return false
+
+  return matchesRoute(location.pathname, child.to)
 }
 
 function SidebarTooltip({ tooltip }) {
@@ -326,7 +387,7 @@ export function AppShell() {
   const items = useMemo(() => {
     if (!user) return []
     const isAdminUser = user.role === "admin" || user.role === "manager" || isSuper
-    
+
     if (isSuper) {
       return [
         ...SUPER_ADMIN_NAV_ITEMS,
@@ -356,7 +417,7 @@ export function AppShell() {
   }, [user, isSuper])
 
   useEffect(() => {
-    localStorage.setItem("caltrack.sidebarCollapsed", sidebarCollapsed)
+    localStorage.setItem("sevo.sidebarCollapsed", sidebarCollapsed)
   }, [sidebarCollapsed])
 
   useEffect(() => {
@@ -367,22 +428,20 @@ export function AppShell() {
   }, [user, dispatch])
 
   useEffect(() => {
+    if (drillDownParent && isItemActive(drillDownParent, location.pathname)) {
+      return
+    }
+
     const parent = items.find(item => {
       if (!item.children) return false
-      if (item.to === "/") {
-        return location.pathname === "/"
-      }
-      if (item.to === "/customers/dashboard") {
-        return location.pathname.startsWith("/customers")
-      }
-      return location.pathname.startsWith(item.to)
+      return isItemActive(item, location.pathname)
     })
     if (parent) {
       setDrillDownParent(parent)
     } else {
       setDrillDownParent(null)
     }
-  }, [location.pathname, items])
+  }, [location.pathname, items, drillDownParent])
 
   const showTooltip = (label, e) => {
     if (!sidebarCollapsed) return
@@ -419,12 +478,12 @@ export function AppShell() {
   useEffect(() => {
     // Use native browser events instead of polling — fires instantly on network change,
     // zero CPU overhead when network is stable
-    const handleOnline  = () => setOffline(false)
+    const handleOnline = () => setOffline(false)
     const handleOffline = () => setOffline(true)
-    window.addEventListener("online",  handleOnline)
+    window.addEventListener("online", handleOnline)
     window.addEventListener("offline", handleOffline)
     return () => {
-      window.removeEventListener("online",  handleOnline)
+      window.removeEventListener("online", handleOnline)
       window.removeEventListener("offline", handleOffline)
     }
   }, [])
@@ -502,7 +561,7 @@ export function AppShell() {
       <header className="flex items-center justify-between h-[var(--header-height)] px-8 bg-[var(--sevo-surface)]/90 backdrop-blur-xl border-b border-[var(--sevo-border)] z-50 shrink-0 shadow-xs">
         <div className="flex items-center gap-8">
           <div className="flex items-center gap-3.5">
-            <CalTrackLogo size="sm" className="hover:scale-105 transition-transform" />
+            <SevoLogo size="sm" className="hover:scale-105 transition-transform" />
             <div className="h-6 w-px bg-[var(--sevo-border)] hidden sm:block" />
             <div className="flex flex-col">
               <span className="font-bold text-[var(--sevo-text-primary)] text-xs tracking-tight truncate max-w-[200px]" title={orgName && orgName !== "Sevo" ? orgName : "Operations Hub"}>
@@ -565,21 +624,21 @@ export function AppShell() {
                       user?.role === "manager"
                         ? { color: "#0ea5e9", background: "#e0f2fe" }
                         : user?.role === "support" || user?.isCareAgent
-                        ? { color: "#10b981", background: "#d1fae5" }
-                        : user?.role === "customer"
-                        ? { color: "#f59e0b", background: "#fef3c7" }
-                        : { color: "#4f46e5", background: "#ede9fe" }
+                          ? { color: "#10b981", background: "#d1fae5" }
+                          : user?.role === "customer"
+                            ? { color: "#f59e0b", background: "#fef3c7" }
+                            : { color: "#4f46e5", background: "#ede9fe" }
                     }
                   >
                     {user?.role === "admin"
                       ? "Administrator"
                       : user?.role === "manager"
-                      ? "Manager"
-                      : user?.role === "support" || user?.isCareAgent
-                      ? "Support"
-                      : user?.role === "customer"
-                      ? "Customer"
-                      : user?.role || "Staff"}
+                        ? "Manager"
+                        : user?.role === "support" || user?.isCareAgent
+                          ? "Support"
+                          : user?.role === "customer"
+                            ? "Customer"
+                            : user?.role || "Staff"}
                   </span>
                 </div>
               )}
@@ -607,21 +666,21 @@ export function AppShell() {
                             user?.role === "manager"
                               ? { color: "#0ea5e9", background: "#e0f2fe", border: "1px solid #bae6fd" }
                               : user?.role === "support" || user?.isCareAgent
-                              ? { color: "#10b981", background: "#d1fae5", border: "1px solid #a7f3d0" }
-                              : user?.role === "customer"
-                              ? { color: "#f59e0b", background: "#fef3c7", border: "1px solid #fde68a" }
-                              : { color: "#4f46e5", background: "#ede9fe", border: "1px solid #c4b5fd" }
+                                ? { color: "#10b981", background: "#d1fae5", border: "1px solid #a7f3d0" }
+                                : user?.role === "customer"
+                                  ? { color: "#f59e0b", background: "#fef3c7", border: "1px solid #fde68a" }
+                                  : { color: "#4f46e5", background: "#ede9fe", border: "1px solid #c4b5fd" }
                           }
                         >
                           {user?.role === "admin"
                             ? "Administrator"
                             : user?.role === "manager"
-                            ? "Manager"
-                            : user?.role === "support" || user?.isCareAgent
-                            ? "Support"
-                            : user?.role === "customer"
-                            ? "Customer"
-                            : user?.title || user?.role || "Staff"}
+                              ? "Manager"
+                              : user?.role === "support" || user?.isCareAgent
+                                ? "Support"
+                                : user?.role === "customer"
+                                  ? "Customer"
+                                  : user?.title || user?.role || "Staff"}
                         </span>
                       </div>
                     </div>
@@ -655,7 +714,7 @@ export function AppShell() {
         >
           <nav className="flex-1 overflow-y-auto py-6 flex flex-col items-center gap-4 scrollbar-hide">
             {items.map((item) => {
-              const active = (item.to === "/" && location.pathname === "/") || (item.to !== "/" && location.pathname.startsWith(item.to));
+              const active = isItemActive(item, location.pathname) || drillDownParent?.label === item.label;
               const color = item.color || "#0B8F7A";
               const hasChildren = !!item.children;
 
@@ -720,11 +779,7 @@ export function AppShell() {
                     .filter(child => (!child.adminOnly || isAdmin) && hasModuleAccess(user, child))
                     .map((child) => {
                       const childSiblings = drillDownParent.children.map(c => c.to)
-                      const isSiblingMoreSpecific = childSiblings.some(
-                        sib => sib !== child.to && location.pathname.startsWith(sib) && sib.startsWith(child.to)
-                      )
-                      const active = location.pathname === child.to ||
-                        (!isSiblingMoreSpecific && child.to !== '/settings' && location.pathname.startsWith(child.to));
+                      const active = isChildActive(child, location, childSiblings)
                       const color = child.color || drillDownParent.color || "#0B8F7A";
                       return (
                         <NavLink

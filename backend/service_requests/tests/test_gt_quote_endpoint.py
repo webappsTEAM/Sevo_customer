@@ -35,10 +35,17 @@ class LogisticsQuoteEndpointTests(TestCase):
             name="Tata Ace", starting_price=Decimal("400.00"),
             base_fare=Decimal("250.00"), per_km_rate=Decimal("18.00"),
             free_km=Decimal("2.00"), loading_unloading_charge=Decimal("100.00"),
+            # GT audit Update 18: real ServiceTier rows always carry a
+            # vehicle_class (migration 0010 backfilled every row; 0011 made a
+            # blank value fail closed). A goods-transport booking against a
+            # tier without one is now refused, because the Vendor side would
+            # have no purchased vehicle to match a driver against.
+            vehicle_class="truck",
         )
         self.flat_tier = ServiceTier.objects.create(
             category=LogisticsCategory.TRUCK, city="hosur", slug="flat-q",
             name="Flat Tier", starting_price=Decimal("650.00"),
+            vehicle_class="truck",
         )
 
     def _post(self, **overrides):
@@ -227,6 +234,65 @@ class LogisticsQuoteEndpointTests(TestCase):
         self.assertIsNotNone(breakdown.get("quote_hash"))
         self.assertIsNotNone(breakdown.get("created_at"))
         self.assertIsNotNone(breakdown.get("tier_id"))
+
+    @patch("service_requests.services.routing.get_route_eta")
+    def test_standard_gt_quote_price_lock_when_routing_result_changes(self, mock_route):
+        """
+        Gap 3 Regression Test:
+        Quote = X (generated with distance D1).
+        At booking time, routing returns D2 (e.g. 25km vs 10km) or fails to fallback.
+        Booking using the valid quote MUST remain X (exact price lock).
+        """
+        from service_requests.services.logistics_pricing import quote_logistics_fare, resolve_logistics_fare_v2
+
+        # Step 1: Initial quote at 10.0 km
+        mock_route.return_value = _route(distance_km=10.0, source="google_maps")
+        initial_quote = quote_logistics_fare(
+            tier=self.tier,
+            pickup_lat=Decimal("12.740900"),
+            pickup_lng=Decimal("77.825300"),
+            drop_lat=Decimal("12.935200"),
+            drop_lng=Decimal("77.624500"),
+        )
+        self.assertIsNotNone(initial_quote)
+        locked_fare = initial_quote["total"]
+        quote_id = initial_quote["quote_id"]
+        quote_hash = initial_quote["quote_hash"]
+        expires_at = initial_quote["expires_at"]
+
+        # Step 2: Route changes drastically before booking (e.g. 25.0 km or traffic detour)
+        mock_route.return_value = _route(distance_km=25.0, source="google_maps")
+
+        # If recomputed fresh without quote, the fare would be higher:
+        recalc = quote_logistics_fare(
+            tier=self.tier,
+            pickup_lat=Decimal("12.740900"),
+            pickup_lng=Decimal("77.825300"),
+            drop_lat=Decimal("12.935200"),
+            drop_lng=Decimal("77.624500"),
+        )
+        self.assertGreater(recalc["total"], locked_fare)
+
+        # Step 3: Booking with valid quote_id MUST preserve locked_fare X exactly
+        fare, breakdown = resolve_logistics_fare_v2(
+            service_category="goods_transport_truck",
+            logistics_tier=self.tier,
+            logistics_lane=None,
+            submitted_amount=locked_fare,
+            pickup_lat=Decimal("12.740900"),
+            pickup_lng=Decimal("77.825300"),
+            drop_lat=Decimal("12.935200"),
+            drop_lng=Decimal("77.624500"),
+            cart_data=[{
+                "quote_id": quote_id,
+                "quote_hash": quote_hash,
+                "expires_at": expires_at,
+            }]
+        )
+        self.assertEqual(fare, locked_fare)
+        self.assertEqual(breakdown["total"], locked_fare)
+        self.assertEqual(breakdown["quote_id"], quote_id)
+        self.assertEqual(breakdown["distance_km"], initial_quote["distance_km"])
 
     @patch("service_requests.services.routing.get_route_eta")
     def test_two_wheeler_city_capacity_isolation_via_quote_endpoint(self, mock_route):

@@ -58,6 +58,6 @@ function walkDir(dir) {
   }
 }
 
-const srcDir = 'c:/Users/user/Caltrackk/Caltrack/frontend/src';
+const srcDir = 'c:/Users/user/sevok/sevo/frontend/src';
 walkDir(srcDir);
 console.log('Finished scanning and cleaning all frontend/src files!');

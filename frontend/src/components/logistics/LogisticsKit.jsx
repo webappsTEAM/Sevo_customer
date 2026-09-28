@@ -66,14 +66,7 @@ export function TierCard({ tier, selected = false, onSelect, diagram = null }) {
         Starting from <span style={{ fontSize: 16, fontWeight: 700, color: "var(--fg)" }}>{rupee(tier.starting_price)}</span>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
-        <a
-          href="#"
-          onClick={(e) => e.preventDefault()}
-          style={{ fontSize: 13, fontWeight: 600, color: "var(--good)", textDecoration: "underline" }}
-        >
-          Know More
-        </a>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginTop: 8 }}>
         <button type="button" className="btn btnPrimary" onClick={() => onSelect?.(tier)}>
           {selected ? "Selected" : "Select & Book"}
         </button>

@@ -18,6 +18,15 @@ from service_requests.views import CustomerBookingCancelView
 
 
 class LatePaymentRefundHardeningTests(SimpleTestCase):
+    # CustomerBookingCancelView.post() opens a real DB transaction
+    # (atomic_transaction()) even when every model call inside it is mocked,
+    # because Django's transaction machinery talks to the connection
+    # directly. SimpleTestCase forbids DB access by default; declaring
+    # `databases` here (Django's documented escape hatch) allows the
+    # transaction wrapper to open/close without granting any real query the
+    # mocks don't already intercept.
+    databases = {"default"}
+
     def setUp(self):
         self.factory = APIRequestFactory()
 

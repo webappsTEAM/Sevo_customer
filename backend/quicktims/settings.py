@@ -7,8 +7,7 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment settings from .env (reloaded with correct DB password)
-_dotenv_override = os.getenv("SEVO_DOTENV_OVERRIDE", "1").strip() != "0"
-load_dotenv(BASE_DIR / ".env", override=_dotenv_override)
+load_dotenv(BASE_DIR / ".env", override=True)
 
 _SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 if not _SECRET_KEY:
@@ -31,14 +30,17 @@ DEBUG = os.getenv("DJANGO_DEBUG", "0").strip().lower() in ("1", "true", "yes")
 _allowed_hosts_env = os.getenv("DJANGO_ALLOWED_HOSTS")
 if _allowed_hosts_env:
     ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts_env.split(",") if h.strip()]
-    if "testserver" not in ALLOWED_HOSTS:
-        ALLOWED_HOSTS.append("testserver")
 else:
-    ALLOWED_HOSTS = ["*"] if DEBUG else ["localhost", "127.0.0.1", "testserver"]
+    ALLOWED_HOSTS = ["*"] if DEBUG else ["localhost", "127.0.0.1", "sevo.co.in", "www.sevo.co.in", "vendor.sevo.co.in"]
+for _prod_host in ("sevo.co.in", "www.sevo.co.in", "vendor.sevo.co.in"):
+    if _prod_host not in ALLOWED_HOSTS and "*" not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_prod_host)
+if "testserver" not in ALLOWED_HOSTS and "*" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append("testserver")
 
 # ── Subpath / Reverse-proxy settings ─────────────────────────────────────────
-# Required when Django is served under a subpath (e.g. /Caltrack/) behind Nginx.
-# Set FORCE_SCRIPT_NAME=/Caltrack in production .env
+# Required when Django is served under a subpath (e.g. /sevo/) behind Nginx.
+# Set FORCE_SCRIPT_NAME=/sevo in production .env
 FORCE_SCRIPT_NAME = os.getenv("FORCE_SCRIPT_NAME", "")
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
@@ -63,11 +65,13 @@ INSTALLED_APPS = [
     "logistics",
     "orders",
     "carts",
+    "vegetable_orders",
     "customer_care",
     "reports",
     "workforce_integration",
     "customer_analytics",
     "platform_control",
+    "ai_assistant",
 ]
 
 ASGI_APPLICATION = "quicktims.asgi.application"
@@ -98,21 +102,9 @@ SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
 # ---------------------------------------------------------------------------
 
 USE_POSTGRES = os.getenv("DB_NAME") or os.getenv("DB_HOST")
-_argv_str = " ".join(sys.argv).lower()
-IS_TESTING = (
-    "test" in sys.argv
-    or "pytest" in sys.modules
-    or "pytest" in _argv_str
-    or "unittest" in _argv_str
-    or os.getenv("DJANGO_TEST_SQLITE") == "1"
-    or os.getenv("SEVO_TESTING") == "1"
-)
+IS_TESTING = "test" in sys.argv or os.getenv("DJANGO_TEST_SQLITE") == "1"
 
 if IS_TESTING:
-    TESTING = True
-    PASSWORD_HASHERS = [
-        "django.contrib.auth.hashers.MD5PasswordHasher",
-    ]
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
@@ -165,19 +157,6 @@ else:
         }
     }
 
-_e2e_sqlite_path = os.getenv("SEVO_E2E_SQLITE_PATH")
-if _e2e_sqlite_path:
-    if DEBUG or IS_TESTING:
-        DATABASES["default"] = {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": Path(_e2e_sqlite_path),
-        }
-    else:
-        import logging
-        logging.getLogger(__name__).warning(
-            "SEVO_E2E_SQLITE_PATH is ignored because DEBUG is False and IS_TESTING is False."
-        )
-
 
 
 ROOT_URLCONF = "quicktims.urls"
@@ -218,7 +197,7 @@ USE_TZ = True
 # service_requests/booking_window.py, which the booking serializer calls -- the
 # frontend filter is a convenience, not the control. Tunable per environment.
 BOOKING_SAME_DAY_CUTOFF_HOUR = int(os.getenv("BOOKING_SAME_DAY_CUTOFF_HOUR", "18"))
-BOOKING_MIN_LEAD_MINUTES = int(os.getenv("BOOKING_MIN_LEAD_MINUTES", "60"))
+BOOKING_MIN_LEAD_MINUTES = int(os.getenv("BOOKING_MIN_LEAD_MINUTES", "30"))
 
 STATIC_URL = "static/"
 
@@ -236,7 +215,7 @@ if EMAIL_HOST:
     DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER)
 else:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-    DEFAULT_FROM_EMAIL = "noreply@caltrack.com"
+    DEFAULT_FROM_EMAIL = "noreply@sevo.com"
 
 AUTHENTICATION_BACKENDS = [
     "accounts.backends.EmailOrUsernameModelBackend",
@@ -355,7 +334,10 @@ _default_cors_origins = [
     "http://127.0.0.1:5176",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    # Production VPS
+    # Production VPS & New Domains
+    "https://sevo.co.in",
+    "https://www.sevo.co.in",
+    "https://vendor.sevo.co.in",
     "https://caldimproducts.com",
     "https://www.caldimproducts.com",
 ]
@@ -372,6 +354,7 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^http://.*\.127\.0\.0\.1:517[0-9]$",
     r"^http://localhost:517[0-9]$",
     r"^http://127\.0\.0\.1:517[0-9]$",
+    r"^https://.*\.sevo\.co\.in$",
 ]
 CORS_ALLOW_CREDENTIALS = True
 
@@ -393,7 +376,11 @@ _default_csrf_origins = [
     "http://*.127.0.0.1:5174",
     "http://*.127.0.0.1:5175",
     "http://*.127.0.0.1:5176",
-    # Production VPS
+    # Production VPS & New Domains
+    "https://sevo.co.in",
+    "https://www.sevo.co.in",
+    "https://vendor.sevo.co.in",
+    "https://*.sevo.co.in",
     "https://caldimproducts.com",
     "https://www.caldimproducts.com",
 ]
@@ -445,7 +432,7 @@ if _email_user and _email_pass:
     DEFAULT_FROM_EMAIL = _email_user
 else:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend" # Prints to console for dev
-    DEFAULT_FROM_EMAIL = "noreply@caltrack.com"
+    DEFAULT_FROM_EMAIL = "noreply@sevo.com"
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 AUTO_GENERATE_OTP = os.getenv("AUTO_GENERATE_OTP", "False").strip().lower() in ("1", "true", "yes")
@@ -469,8 +456,8 @@ RAZORPAYX_MOCK_MODE = os.getenv("RAZORPAYX_MOCK_MODE", "0").strip().lower() in (
 PAYMENT_SANDBOX_MODE = os.getenv("PAYMENT_SANDBOX_MODE", "0").strip().lower() in ("1", "true", "yes")
 
 # ── Workforce Integration ────────────────────────────────────────────────────
-WORKFORCE_API_BASE_URL = os.getenv("WORKFORCE_API_BASE_URL", "http://localhost:8001/api/workforce").rstrip("/")
-WORKFORCE_API_KEY = os.getenv("WORKFORCE_API_KEY", "").strip()
+WORKFORCE_API_BASE_URL = os.getenv("WORKFORCE_API_BASE_URL", "http://localhost:8001/api/workforce" if DEBUG else "https://vendor.sevo.co.in/api/workforce").rstrip("/")
+WORKFORCE_API_KEY = os.getenv("WORKFORCE_API_KEY", "wf_integration_key_default").strip()
 WORKFORCE_WEBHOOK_SECRET = os.getenv(
     "WORKFORCE_WEBHOOK_SECRET",
     "dev-insecure-workforce-webhook-secret-local-testing-only" if DEBUG else ""
@@ -501,6 +488,9 @@ GOOGLE_MAPS_API_KEY = (
     or os.getenv("VITE_GOOGLE_MAPS_API_KEY")
     or ""
 ).strip()
+
+# S-06: Road curvature factor for straight-line routing fallback.
+LOGISTICS_ROAD_CURVATURE_FACTOR = float(os.getenv("LOGISTICS_ROAD_CURVATURE_FACTOR", "1.00"))
 
 
 # ── Celery ────────────────────────────────────────────────────────────────────
@@ -552,20 +542,21 @@ if "test" in sys.argv or IS_TESTING:
         k: "10000/minute" for k in REST_FRAMEWORK.get("DEFAULT_THROTTLE_RATES", {})
     }
 
-
 # ── Test Database Safety Guard ───────────────────────────────────────────────
-# Aborts execution if testing mode is active but the final resolved database
-# engine is anything other than SQLite.
 if IS_TESTING:
-    _final_engine = DATABASES.get("default", {}).get("ENGINE", "")
+    _final_engine = str(DATABASES.get("default", {}).get("ENGINE", "") or "")
     if "sqlite3" not in _final_engine:
         raise RuntimeError(
             f"TEST DATABASE SAFETY GUARD FATAL: Testing mode detected (IS_TESTING=True), "
             f"but final DATABASES['default']['ENGINE'] is '{_final_engine}'. "
             "Tests must run on SQLite only to protect shared/production databases."
         )
+    REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
+        k: "10000/minute" for k in REST_FRAMEWORK.get("DEFAULT_THROTTLE_RATES", {})
+    }
 
-
-
-
+# ── Workforce & Marketplace Integration Settings ──────────────────────────────
+WORKFORCE_API_BASE_URL = (os.getenv("WORKFORCE_API_BASE_URL") or "http://127.0.0.1:8001/api/workforce").replace("localhost", "127.0.0.1").rstrip("/")
+SEVO_INTEGRATION_SECRET = (os.getenv("SEVO_INTEGRATION_SECRET") or os.getenv("WORKFORCE_WEBHOOK_SECRET") or "caldim_secure_webhook_token_2026").strip()
+WORKFORCE_WEBHOOK_SECRET = (os.getenv("WORKFORCE_WEBHOOK_SECRET") or "caldim_secure_webhook_token_2026").strip()
 

@@ -239,6 +239,73 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
             "timestamp": timezone.now().isoformat(),
         })
 
+    # ── Workforce Lifecycle Event Handlers ────────────────────────────────────
+    async def job_dispatched(self, event):
+        await self.send_json({"event": "job_dispatched", "data": event.get("data"), "timestamp": timezone.now().isoformat()})
+
+    async def employee_accepted(self, event):
+        await self.send_json({"event": "employee_accepted", "data": event.get("data"), "timestamp": timezone.now().isoformat()})
+
+    async def technician_accepted(self, event):
+        await self.send_json({"event": "technician_accepted", "data": event.get("data"), "timestamp": timezone.now().isoformat()})
+
+    async def employee_rejected(self, event):
+        await self.send_json({"event": "employee_rejected", "data": event.get("data"), "timestamp": timezone.now().isoformat()})
+
+    async def employee_on_the_way(self, event):
+        await self.send_json({"event": "employee_on_the_way", "data": event.get("data"), "timestamp": timezone.now().isoformat()})
+
+    async def technician_on_the_way(self, event):
+        await self.send_json({"event": "technician_on_the_way", "data": event.get("data"), "timestamp": timezone.now().isoformat()})
+
+    async def employee_arrived(self, event):
+        await self.send_json({"event": "employee_arrived", "data": event.get("data"), "timestamp": timezone.now().isoformat()})
+
+    async def technician_arrived(self, event):
+        await self.send_json({"event": "technician_arrived", "data": event.get("data"), "timestamp": timezone.now().isoformat()})
+
+    async def service_started(self, event):
+        await self.send_json({"event": "service_started", "data": event.get("data"), "timestamp": timezone.now().isoformat()})
+
+    async def service_completed(self, event):
+        await self.send_json({"event": "service_completed", "data": event.get("data"), "timestamp": timezone.now().isoformat()})
+
+    async def booking_cancelled(self, event):
+        await self.send_json({"event": "booking_cancelled", "data": event.get("data"), "timestamp": timezone.now().isoformat()})
+
+    async def booking_dispatch_delayed(self, event):
+        await self.send_json({"event": "booking_dispatch_delayed", "data": event.get("data"), "timestamp": timezone.now().isoformat()})
+
+    async def work_extension_created(self, event):
+        await self.send_json({"event": "work_extension_created", "data": event.get("data"), "timestamp": timezone.now().isoformat()})
+
+    async def payment_collected(self, event):
+        await self.send_json({"event": "payment_collected", "data": event.get("data"), "timestamp": timezone.now().isoformat()})
+
+    async def logistics_leg_changed(self, event):
+        await self.send_json({"event": "logistics_leg_changed", "data": event.get("data"), "timestamp": timezone.now().isoformat()})
+
+    async def job_rescheduled(self, event):
+        await self.send_json({"event": "job_rescheduled", "data": event.get("data"), "timestamp": timezone.now().isoformat()})
+
+    async def dispatch(self, message):
+        """
+        Custom dispatch ensuring all broadcasted lifecycle and telemetry events
+        reach the WebSocket client without being dropped due to missing method names.
+        """
+        handler_name = message.get("type", "").replace(".", "_")
+        handler = getattr(self, handler_name, None)
+        if handler and callable(handler):
+            await handler(message)
+        elif "type" in message and hasattr(self, "send_json"):
+            await self.send_json({
+                "event": message["type"],
+                "data": message.get("data"),
+                "timestamp": timezone.now().isoformat(),
+            })
+        else:
+            await super().dispatch(message)
+
     # ── Helper Methods ────────────────────────────────────────────────────────
 
     @sync_to_async
