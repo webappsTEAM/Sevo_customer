@@ -1,27 +1,11 @@
 import React, { useEffect, useState } from "react"
-import { useParams, useNavigate } from "react-router-dom"
+import { useParams, useNavigate, useLocation } from "react-router-dom"
 import { motion } from "framer-motion"
 import { MapPin, Clock, ArrowLeft, Bell } from "lucide-react"
 import { apiRequest } from "../../api/client.js"
 import { MiniTruckBookingHosurPage } from "./MiniTruckBookingHosurPage.jsx"
 import { TwoWheelerBookingHosurPage } from "./TwoWheelerBookingHosurPage.jsx"
 import { PackersMoversBookingHosurPage } from "./PackersMoversBookingHosurPage.jsx"
-
-// GT-B-06: "only 3 hardcoded Hosur-only city booking pages" -- this is the
-// generic {category, city} entry point the finding asked for. It does NOT
-// rewrite the three existing ~3000-line booking pages (that would be a much
-// larger, riskier refactor of working booking flows). Instead:
-//   - it looks up the requested city against the new City registry
-//     (GET /settings/cities/, added in the paired backend commit)
-//   - for a *launched* city it currently only has real content for Hosur,
-//     so it renders the matching existing page component for Hosur
-//   - for any other city (not launched yet, or simply unknown) it shows an
-//     honest "coming soon" state instead of silently pretending the booking
-//     flow works somewhere it has no real service-zone data
-//
-// This makes /logistics/:category/:city a real, working, data-driven route
-// today, and is the natural place to swap in a fully generic booking flow
-// per category+city later, once more cities have real ServiceZone data.
 
 const CATEGORY_MAP = {
   trucks: { label: "Mini Truck & Logistics", Component: MiniTruckBookingHosurPage },
@@ -30,8 +14,16 @@ const CATEGORY_MAP = {
 }
 
 export function LogisticsBookingPage() {
-  const { category, city: citySlugParam } = useParams()
+  const { category: catParam, city: citySlugParam } = useParams()
+  const location = useLocation()
   const navigate = useNavigate()
+
+  const category = catParam || (
+    location.pathname.includes("/truck") ? "trucks" :
+    location.pathname.includes("/two-wheeler") ? "two-wheelers" :
+    location.pathname.includes("/packer") || location.pathname.includes("/mover") ? "packers-and-movers" :
+    null
+  )
   const citySlug = (citySlugParam || "hosur").toLowerCase()
   const categoryInfo = CATEGORY_MAP[category] || null
 
@@ -43,7 +35,7 @@ export function LogisticsBookingPage() {
     apiRequest("/settings/cities/")
       .then((res) => {
         if (cancelled) return
-        setCities(Array.isArray(res?.results) ? res.results : [])
+        setCities(Array.isArray(res?.results) ? res.results : (Array.isArray(res) ? res : []))
       })
       .catch(() => {
         if (!cancelled) setCitiesError("Could not load city list.")
@@ -73,15 +65,12 @@ export function LogisticsBookingPage() {
     )
   }
 
-  const matchedCity = (cities || []).find((c) => c.slug === citySlug)
-  // Fall back to treating "hosur" as launched even if the API call failed or
-  // the city list is momentarily empty — this keeps the existing, working
-  // Hosur booking flow available regardless of the new endpoint's health.
-  const isLaunched = matchedCity ? matchedCity.is_launched : citySlug === "hosur"
+  const matchedCity = (cities || []).find((c) => c.slug === citySlug || (c.name && c.name.toLowerCase() === citySlug))
+  const isLaunched = matchedCity ? (matchedCity.is_launched !== false && matchedCity.is_active !== false) : citySlug === "hosur"
 
-  if (isLaunched && citySlug === "hosur") {
+  if (isLaunched) {
     const { Component } = categoryInfo
-    return <Component />
+    return <Component city={citySlug} cityName={matchedCity?.name} />
   }
 
   const cityLabel = matchedCity?.name || (citySlugParam ? citySlugParam.replace(/-/g, " ") : "your city")

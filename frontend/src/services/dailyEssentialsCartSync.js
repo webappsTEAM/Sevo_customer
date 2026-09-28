@@ -40,7 +40,14 @@ export async function fetchDailyEssentialsCart() {
   const items = (res && res.success && res.data && Array.isArray(res.data.items)) ? res.data.items : []
   cartItemIdByPackage = {}
   items.forEach((it) => {
-    if (it && it.package != null) cartItemIdByPackage[it.package] = it.id
+    if (it && it.package != null) {
+      const key = it.variant_id || it.variant ? `${it.package}_${it.variant_id || it.variant}` : `${it.package}`
+      cartItemIdByPackage[key] = it.id
+      // Also record package-only fallback if no variant
+      if (!it.variant_id && !it.variant) {
+        cartItemIdByPackage[it.package] = it.id
+      }
+    }
   })
   return items
 }
@@ -63,12 +70,12 @@ export function ensureDailyEssentialsCartHydrated() {
 }
 
 /**
- * Set the total backend quantity for one package. Resolves to POST (new
+ * Set the total backend quantity for one package (and optional variant). Resolves to POST (new
  * CartItem), PATCH (existing), or DELETE (quantity <= 0) as appropriate.
  * Returns { ok: true } or { ok: false, error, message } -- callers decide
  * how to surface a failure (toast, rollback, etc.); this never throws.
  */
-export async function syncPackageQuantity(packageId, nextQuantity, { customization } = {}) {
+export async function syncPackageQuantity(packageId, nextQuantity, { customization, variantId } = {}) {
   if (packageId == null) return { ok: false, message: "No package id to sync." }
   try {
     await ensureDailyEssentialsCartHydrated()
@@ -77,12 +84,14 @@ export async function syncPackageQuantity(packageId, nextQuantity, { customizati
     // proceed treating this package as "unknown to the server yet".
   }
 
-  const existingItemId = cartItemIdByPackage[packageId]
+  const lookupKey = variantId ? `${packageId}_${variantId}` : `${packageId}`
+  const existingItemId = cartItemIdByPackage[lookupKey] || (variantId ? null : cartItemIdByPackage[packageId])
   try {
     if (nextQuantity <= 0) {
       if (existingItemId) {
         await apiRequest(`/carts/daily_essentials/items/${existingItemId}/`, { method: "DELETE" })
-        delete cartItemIdByPackage[packageId]
+        delete cartItemIdByPackage[lookupKey]
+        if (!variantId) delete cartItemIdByPackage[packageId]
       }
       return { ok: true }
     }
@@ -98,15 +107,22 @@ export async function syncPackageQuantity(packageId, nextQuantity, { customizati
       return { ok: true }
     }
 
+    const payload = {
+      package_id: packageId,
+      quantity: nextQuantity,
+      ...(variantId ? { variant_id: variantId } : {}),
+      ...(customization ? { customization } : {}),
+    }
+
     const res = await apiRequest("/carts/daily_essentials/items/", {
       method: "POST",
-      json: { package_id: packageId, quantity: nextQuantity, ...(customization ? { customization } : {}) },
+      json: payload,
     })
     if (!res || res.success === false) {
       return { ok: false, message: res?.message || "Couldn't add that to your cart." }
     }
     if (res.data && res.data.id != null) {
-      cartItemIdByPackage[packageId] = res.data.id
+      cartItemIdByPackage[lookupKey] = res.data.id
     }
     return { ok: true }
   } catch (err) {

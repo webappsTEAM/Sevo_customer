@@ -1,26 +1,17 @@
-import React from "react"
+import React, { useState, useEffect } from "react"
 import { ChevronDown, Utensils, Pencil, Plus, Minus } from "lucide-react"
 import { EditableText, EditableImage } from "../SuperAdminEditControls.jsx"
 
 /**
  * VegetableProductCard
  * Renders individual vegetable produce card with photo, price, discount
- * ribbon, a Blinkit-style floating Add-to-Cart button, and 'What Can I
- * Make?' recipe trigger.
- *
- * Super Admin Edit Mode: when `editable` is true (only ever passed as true
- * for an authorized Super Admin — see VegetableFullScreenPage), name/price/
- * MRP become inline-editable via the shared EditableText control and the
- * product image becomes a real file-upload target via the shared
- * EditableImage control (../SuperAdminEditControls.jsx — the same
- * components every other Super Admin Edit Mode surface in this app uses),
- * with `onSaveField(item, field, value)` called on commit. For every normal
- * customer `editable` is absent/false and the card renders exactly as
- * before.
+ * ribbon, variant pill selector (when multi-pack), a Blinkit-style floating
+ * Add-to-Cart button, and 'What Can I Make?' recipe trigger.
  */
 export function VegetableProductCard({
   item,
   cartCount = 0,
+  foodCart = null,
   onUpdateQty,
   onOpenOptions,
   onDiscoverRecipes,
@@ -33,6 +24,42 @@ export function VegetableProductCard({
   const hasOptions = item.options && item.options.length > 0
   const isOutOfStock = item.in_stock === false || item.max_quantity === 0
 
+  // ── Multi-variant support ───────────────────────────────────────────
+  const variants = Array.isArray(item.variants) && item.variants.length > 0 ? item.variants : []
+  const hasMultipleVariants = variants.length > 1
+  const defaultVariant = variants.find((v) => v.is_default) || variants[0] || null
+
+  const [selectedVariantId, setSelectedVariantId] = useState(defaultVariant?.id || null)
+
+  useEffect(() => {
+    if (variants.length > 0 && (!selectedVariantId || !variants.some(v => v.id === selectedVariantId))) {
+      setSelectedVariantId(defaultVariant?.id || null)
+    }
+  }, [item.id, variants.length])
+
+  const activeVariant = variants.find((v) => v.id === selectedVariantId) || defaultVariant
+
+  // Active pricing and unit resolution
+  const activePrice = activeVariant ? Math.round(Number(activeVariant.base_price) || 0) : item.price
+  const activeMrp = activeVariant?.mrp ? Math.round(Number(activeVariant.mrp) || 0) : item.mrp
+  const activeUnit = activeVariant
+    ? (activeVariant.name || `${activeVariant.pack_value} ${activeVariant.unit}`)
+    : (item.unit || "500 g")
+
+  const activeDiscount = (activeMrp && activeMrp > activePrice)
+    ? `${Math.round(((activeMrp - activePrice) / activeMrp) * 100)}% OFF`
+    : item.discount
+
+  // Variant-specific cart key
+  const variantCartKey = hasMultipleVariants && activeVariant
+    ? `${item.name} (${activeUnit})`
+    : item.name
+
+  // Resolve current active item/variant quantity in cart
+  const resolvedCartCount = foodCart
+    ? (foodCart[variantCartKey] || (variants.length <= 1 ? (foodCart[item.name] || 0) : 0))
+    : (typeof cartCount === "object" && cartCount !== null ? (cartCount[variantCartKey] || 0) : cartCount)
+
   const handleCardClick = () => {
     if (editable) return
     if (onSelectProduct) {
@@ -42,12 +69,18 @@ export function VegetableProductCard({
     }
   }
 
+  const handleQtyChange = (delta) => {
+    if (onUpdateQty) {
+      onUpdateQty(variantCartKey, delta, { variant: activeVariant, packageId: item.id })
+    }
+  }
+
   return (
     <div
       className="group rounded-lg border border-slate-200 bg-white hover:shadow-[0_2px_12px_rgba(0,0,0,0.08)] flex flex-col justify-between transition-shadow duration-200 overflow-visible relative"
       style={{
         contentVisibility: "auto",
-        containIntrinsicSize: "0 240px",
+        containIntrinsicSize: "0 260px",
       }}
     >
       <div
@@ -89,9 +122,9 @@ export function VegetableProductCard({
           )}
 
           {/* Discount ribbon — Blinkit-style green badge, top-left */}
-          {item.discount && (
-            <div className="absolute top-0 left-0 bg-[#0C831F] text-white text-[9px] font-black px-1.5 py-1 rounded-tl-lg rounded-br-lg uppercase tracking-wide leading-none">
-              {item.discount}
+          {activeDiscount && (
+            <div className="absolute top-0 left-0 bg-[#0C831F] text-white text-[9px] font-black px-1.5 py-1 rounded-tl-lg rounded-br-lg uppercase tracking-wide leading-none shadow-xs">
+              {activeDiscount}
             </div>
           )}
 
@@ -119,9 +152,40 @@ export function VegetableProductCard({
               inputClassName="w-24"
             />
           </h5>
-          <p className="text-[10px] font-medium text-slate-500 mt-0.5">
-            {item.unit || "500 g"}
-          </p>
+
+          {/* Unit / Pack Size pills */}
+          {hasMultipleVariants ? (
+            <div
+              className="flex items-center gap-1 mt-1.5 overflow-x-auto pb-0.5 no-scrollbar"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {variants.map((v) => {
+                const isSelected = (activeVariant?.id === v.id)
+                const vLabel = v.name || `${v.pack_value} ${v.unit}`
+                return (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSelectedVariantId(v.id)
+                    }}
+                    className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold transition-all shrink-0 cursor-pointer border leading-none ${
+                      isSelected
+                        ? "bg-emerald-700 text-white border-emerald-700 shadow-xs ring-1 ring-emerald-600/30"
+                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900"
+                    }`}
+                  >
+                    {vLabel}
+                  </button>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-[10px] font-medium text-slate-500 mt-0.5">
+              {activeUnit}
+            </p>
+          )}
         </div>
       </div>
 
@@ -135,12 +199,12 @@ export function VegetableProductCard({
                   active={true}
                   type="number"
                   prefix="₹"
-                  value={item.price}
+                  value={activePrice}
                   onSave={(v) => onSaveField && onSaveField(item, "base_price", v)}
                   inputClassName="w-16"
                 />
               ) : (
-                <>₹{item.price}</>
+                <>₹{activePrice}</>
               )}
             </span>
             {editable ? (
@@ -149,14 +213,14 @@ export function VegetableProductCard({
                   active={true}
                   type="number"
                   prefix="₹"
-                  value={item.mrp || 0}
+                  value={activeMrp || 0}
                   onSave={(v) => onSaveField && onSaveField(item, "offer_price", v)}
                   inputClassName="w-16"
                 />
               </span>
             ) : (
-              item.mrp && item.mrp > item.price && (
-                <span className="text-[10px] text-slate-400 line-through">₹{item.mrp}</span>
+              activeMrp && activeMrp > activePrice && (
+                <span className="text-[10px] text-slate-400 line-through">₹{activeMrp}</span>
               )
             )}
           </div>
@@ -170,13 +234,13 @@ export function VegetableProductCard({
               Sold out
             </div>
           ) : hasOptions ? (
-            cartCount > 0 ? (
+            resolvedCartCount > 0 ? (
               <button
                 type="button"
                 onClick={() => onOpenOptions && onOpenOptions(item)}
                 className="px-2.5 py-1.5 rounded-lg bg-[#0C831F] text-white font-extrabold text-[11px] shadow-sm flex items-center gap-0.5 cursor-pointer"
               >
-                <span>{cartCount}</span>
+                <span>{resolvedCartCount}</span>
                 <ChevronDown className="w-3 h-3" />
               </button>
             ) : (
@@ -189,22 +253,22 @@ export function VegetableProductCard({
                 <ChevronDown className="w-3 h-3" />
               </button>
             )
-          ) : cartCount > 0 ? (
+          ) : resolvedCartCount > 0 ? (
             <div className="flex items-center bg-[#0C831F] text-white rounded-lg shadow-sm overflow-hidden">
               <button
                 type="button"
-                onClick={() => onUpdateQty && onUpdateQty(item.name, -1)}
+                onClick={() => handleQtyChange(-1)}
                 className="text-white hover:bg-white/10 font-bold text-xs cursor-pointer w-6 h-7 flex items-center justify-center active:scale-90"
                 aria-label="Decrease quantity"
               >
                 <Minus className="w-3 h-3" />
               </button>
               <span className="text-[11px] font-black min-w-[16px] text-center">
-                {cartCount}
+                {resolvedCartCount}
               </span>
               <button
                 type="button"
-                onClick={() => onUpdateQty && onUpdateQty(item.name, 1)}
+                onClick={() => handleQtyChange(1)}
                 className="text-white hover:bg-white/10 font-bold text-xs cursor-pointer w-6 h-7 flex items-center justify-center active:scale-90"
                 aria-label="Increase quantity"
               >
@@ -214,7 +278,7 @@ export function VegetableProductCard({
           ) : (
             <button
               type="button"
-              onClick={() => onUpdateQty && onUpdateQty(item.name, 1)}
+              onClick={() => handleQtyChange(1)}
               className="px-3.5 py-1.5 rounded-lg border border-[#0C831F] text-[#0C831F] hover:bg-[#0C831F] hover:text-white bg-white font-extrabold text-[11px] transition-colors cursor-pointer active:scale-95 shadow-sm"
             >
               ADD

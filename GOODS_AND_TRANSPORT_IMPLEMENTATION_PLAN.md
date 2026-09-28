@@ -4,7 +4,7 @@
 - **Flow A — Packers & Movers** (`PackersMoversBookingHosurPage.jsx`)
 - **Flow B — Goods Transport** = Truck + Two Wheeler together (`MiniTruckBookingHosurPage.jsx`, `TwoWheelerBookingHosurPage.jsx`)
 
-This plan does not treat `CALTRACK_PHASE_14_TRANSPORT_AND_MOVERS.md`'s Part A recommendation ("build Movers, treat Transport as a separate decision") as binding — TL has confirmed both flows are in scope. It also does not treat the doc's Part D entity set (Vehicle fleet, Trip, TripStop, Consignment, ManifestItem, EWayBill, InsurancePolicy) as something to build wholesale — that's ~255 days per the doc's own Part K estimate, and several pieces (e-way bill exemption, GST RCM mechanics) are marked `[COUNSEL]`, i.e. blocked on legal review, not engineering.
+This plan does not treat `sevo_PHASE_14_TRANSPORT_AND_MOVERS.md`'s Part A recommendation ("build Movers, treat Transport as a separate decision") as binding — TL has confirmed both flows are in scope. It also does not treat the doc's Part D entity set (Vehicle fleet, Trip, TripStop, Consignment, ManifestItem, EWayBill, InsurancePolicy) as something to build wholesale — that's ~255 days per the doc's own Part K estimate, and several pieces (e-way bill exemption, GST RCM mechanics) are marked `[COUNSEL]`, i.e. blocked on legal review, not engineering.
 
 ---
 

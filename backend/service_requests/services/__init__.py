@@ -24,7 +24,7 @@ import logging
 
 from service_requests.models import (
     RescheduleRequest, RescheduleStatus, RescheduleReason, TimeSlotChoices, RescheduleAttachment,
-    RescheduleRejectionReason,
+    RescheduleRejectionReason, RescheduleStatusHistory,
     RefundRequest, RefundStatus, RefundType, RefundReason, RefundInfoTarget, RefundEvidence,
     Complaint, ComplaintAttachment, ComplaintMessage, ComplaintStatusHistory,
     ServiceRequest, Payment,

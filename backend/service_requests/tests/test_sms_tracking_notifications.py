@@ -130,7 +130,7 @@ class SMSTrackingNotificationTests(TestCase):
     # 4. SMS contains correct tracking URL
     # ─────────────────────────────────────────────────────────────────────────
     def test_04_sms_contains_correct_tracking_url(self):
-        """Test 4: SMS content contains the canonical tracking URL."""
+        """Test 4: SMS content contains the canonisevoing URL."""
         with patch.object(MockSMSProvider, "send_sms", return_value=True) as mock_send_sms:
             send_booking_confirmation(self.booking)
             _, called_msg = mock_send_sms.call_args[0]
@@ -143,22 +143,22 @@ class SMSTrackingNotificationTests(TestCase):
     # 5. Tracking URL uses actual production frontend route/base path
     # ─────────────────────────────────────────────────────────────────────────
     def test_05_canonical_tracking_url_routing(self):
-        """Test 5: Canonical tracking helper builds correct dev and production paths without exposing sequential IDs."""
+        """Test 5: Canonisevoing helper builds correct dev and production paths without exposing sequential IDs."""
         # Dev URL
         with override_settings(DEBUG=True, FRONTEND_URL="http://localhost:5173"):
             dev_url = build_customer_tracking_url(self.booking)
             self.assertEqual(dev_url, f"http://localhost:5173/tracking/{self.booking.tracking_token}")
 
-        # Production URL with /Caltrack subpath
+        # Production URL with /sevo subpath
         with override_settings(DEBUG=False, FRONTEND_URL="https://calservices.com"):
-            with patch.dict(os.environ, {"FRONTEND_BASE_PATH": "/Caltrack"}, clear=False):
+            with patch.dict(os.environ, {"FRONTEND_BASE_PATH": "/sevo"}, clear=False):
                 prod_url = build_customer_tracking_url(self.booking)
-                self.assertEqual(prod_url, f"https://calservices.com/Caltrack/tracking/{self.booking.tracking_token}")
+                self.assertEqual(prod_url, f"https://calservices.com/sevo/tracking/{self.booking.tracking_token}")
 
-        # When FRONTEND_URL already includes /Caltrack
-        with override_settings(DEBUG=False, FRONTEND_URL="https://calservices.com/Caltrack"):
+        # When FRONTEND_URL already includes /sevo
+        with override_settings(DEBUG=False, FRONTEND_URL="https://calservices.com/sevo"):
             prod_url2 = build_customer_tracking_url(self.booking)
-            self.assertEqual(prod_url2, f"https://calservices.com/Caltrack/tracking/{self.booking.tracking_token}")
+            self.assertEqual(prod_url2, f"https://calservices.com/sevo/tracking/{self.booking.tracking_token}")
 
         # Crucial security assertion: sequential ID is never part of public tracking URL
         self.assertNotEqual(prod_url.rstrip("/").split("/")[-1], str(self.booking.id))

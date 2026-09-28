@@ -142,6 +142,15 @@ def _matches_service_slug(requested_slug: str, candidate_slug: str, candidate_na
         "two-wheeler": {"two-wheeler", "bike", "instant-bike-courier", "goods-transport-bike", "goods-transport-two-wheeler"},
         "packers-movers": {"packers-movers", "packers-and-movers", "house-shifting", "goods-transport-packers"},
         "packers-and-movers": {"packers-movers", "packers-and-movers", "house-shifting", "goods-transport-packers"},
+        # Legacy/non-canonical slugs historically sent by the customer
+        # AddressPicker (MapPickerScreen serviceSlug prop). The Service
+        # Coverage tab saves goods_transport_truck / goods_transport_two_wheeler
+        # / packers_movers. "goods"/"transport" are deliberately excluded from
+        # fuzzy token matching below, so these must be explicit aliases.
+        # "goods-transport" is category-generic: it matches either GT vehicle
+        # category but never Packers & Movers.
+        "goods-transport": {"goods-transport", "goods-transport-truck", "goods-transport-two-wheeler", "goods-transport-bike", "goods-and-transports", "goods-transports"},
+        "two-wheelers": {"two-wheelers", "two-wheeler", "bike", "instant-bike-courier", "goods-transport-bike", "goods-transport-two-wheeler"},
 
         # Home Cleaning & Pest Control
         "home-services-and-pest-control": {"full-house-cleaning", "bathroom-cleaning", "kitchen-cleaning", "sofa-cleaning", "cockroach-control", "termite-control", "ants-bed-bugs-control", "full-home-deep-clean", "cleaning", "home-pest-control", "pest-control"},
@@ -214,12 +223,35 @@ def _matches_service_slug(requested_slug: str, candidate_slug: str, candidate_na
     r_tokens = set(r.split("-"))
     c_tokens = set(c.split("-"))
 
-    # If any non-trivial word token (len >= 4) matches exactly
-    meaningful_common = {t for t in (r_tokens & c_tokens) if len(t) >= 4}
+    # If any non-trivial word token (len >= 4) matches exactly.
+    # "goods"/"transport" are shared by every Goods & Transport category, so
+    # they must not make a truck-only zone match a two-wheeler booking (or
+    # vice versa) -- category-specific coverage depends on this.
+    _GENERIC_TOKENS = {"goods", "transport", "transports"}
+    meaningful_common = {t for t in (r_tokens & c_tokens) if len(t) >= 4 and t not in _GENERIC_TOKENS}
     if meaningful_common:
         return True
 
     return False
+
+
+# Goods & Transport / Packers & Movers coverage must match what the customer
+# map picker draws. MapPickerScreen fetches zones via
+# /settings/service-zones/?services=<slug>, which returns ONLY zones with an
+# exact ServiceZoneService.service_slug match. For these canonical slugs the
+# check therefore ignores (a) zones with no service assignments ("open-access
+# zones", which are still honoured for home services) and (b) alias/token
+# fuzzy matching. Otherwise a point visibly outside the drawn boundary could
+# pass because some unrelated general zone covers it.
+STRICT_MATCH_SERVICE_SLUGS = frozenset({
+    "goods_transport_truck",
+    "goods_transport_two_wheeler",
+    "packers_movers",
+})
+
+
+def _requires_strict_match(service_slug: str) -> bool:
+    return (service_slug or "").strip().lower() in STRICT_MATCH_SERVICE_SLUGS
 
 
 def _get_company_id(company) -> Optional[int]:
@@ -236,6 +268,7 @@ def find_zone_for_service(
     lng: float,
     service_slug: str,
     company_id: int,
+    vehicle_class: str = "",
 ) -> ZoneCheckResult:
     """
     Find the best active zone that contains (lat, lng) AND allows service_slug.
@@ -297,10 +330,25 @@ def find_zone_for_service(
         )
 
     # Among containing zones, find ones that allow the requested service.
+    # GT / P&M canonical slugs use strict matching (see STRICT_MATCH_SERVICE_SLUGS).
     # 1. Specific match: zone has assignments and explicitly allows this slug (is_available=True)
     # 2. All-service match: zone has 0 assignments (open-access zone for all services)
     # 3. Blocked: zone has assignments but this slug is missing or is_available=False
-    slug = (service_slug or "").strip().lower()
+    slug = str(service_slug or "").strip().lower()
+    strict = _requires_strict_match(slug)
+    if slug and not strict:
+        # Drawn-set consistency for EVERY service: when at least one active
+        # zone is explicitly assigned this exact slug, the customer map
+        # picker draws ONLY those zones (/settings/service-zones/?services=
+        # <slug>), so only those zones may grant coverage. Otherwise an
+        # undrawn unassigned / alias-matched zone let a point far outside the
+        # drawn boundary pass. Slugs with no exact assignment anywhere keep
+        # the previous behaviour (the picker then draws all zones).
+        strict = any(
+            (svc.service_slug or "").strip().lower() == slug
+            for zone in active_zones
+            for svc in zone.zone_services.all()
+        )
     specific_matches = []
     all_service_matches = []
     in_zone_but_blocked = False
@@ -308,6 +356,11 @@ def find_zone_for_service(
     for zone in containing:
         assignments = list(zone.zone_services.all())
         if not assignments:
+            if strict:
+                # An unassigned zone is not drawn on the map for a service
+                # that has explicit zone assignments (always true for GT /
+                # P&M), so it must not grant coverage either.
+                continue
             # No restrictions configured on this zone → allows all services
             all_service_matches.append(zone)
         else:
@@ -315,10 +368,16 @@ def find_zone_for_service(
                 # Location-only check (no service specified) → any zone containing the point matches
                 specific_matches.append(zone)
             else:
-                matched_svcs = [
-                    svc for svc in assignments
-                    if _matches_service_slug(slug, svc.service_slug, getattr(svc, "service_name", ""))
-                ]
+                if strict:
+                    matched_svcs = [
+                        svc for svc in assignments
+                        if (svc.service_slug or "").strip().lower() == slug
+                    ]
+                else:
+                    matched_svcs = [
+                        svc for svc in assignments
+                        if _matches_service_slug(slug, svc.service_slug, getattr(svc, "service_name", ""))
+                    ]
 
                 if matched_svcs:
                     # Check if at least one matching service is available
@@ -328,6 +387,20 @@ def find_zone_for_service(
                         in_zone_but_blocked = True
                 else:
                     in_zone_but_blocked = True
+
+    # Optional per-zone vehicle restriction (ServiceZone.vehicle_classes).
+    # Applied only after the service check so the error names the real
+    # reason: the area IS served, just not by this vehicle.
+    if vehicle_class and (specific_matches or all_service_matches):
+        v_specific = [z for z in specific_matches if z.allows_vehicle_class(vehicle_class)]
+        v_all = [z for z in all_service_matches if z.allows_vehicle_class(vehicle_class)]
+        if not v_specific and not v_all:
+            return ZoneCheckResult(
+                allowed=False,
+                error_code="VEHICLE_NOT_AVAILABLE_IN_ZONE",
+                message="The selected vehicle type is not available at this location.",
+            )
+        specific_matches, all_service_matches = v_specific, v_all
 
     if specific_matches:
         best_zone = max(specific_matches, key=lambda z: z.pk)
@@ -438,3 +511,177 @@ def check_booking_eligibility(
 
     # Full zone + service check
     return find_zone_for_service(lat, lng, service_slug, company_id)
+
+
+# ── Service Coverage: Coming Soon lookup + Goods & Transport route check ────
+
+def find_coming_soon_zone(lat, lng, service_slug, company_id):
+    """
+    Return the most recent COMING_SOON zone that contains (lat, lng) and is
+    configured for service_slug (or for every service), else None.
+
+    Used only to make an out-of-coverage message more helpful -- a Coming
+    Soon zone never makes a location bookable.
+    """
+    from settings_hub.models import ServiceZone
+
+    try:
+        zones = list(
+            ServiceZone.objects
+            .filter(company_id=company_id, status=ServiceZone.STATUS_COMING_SOON)
+            .prefetch_related("zone_services")
+            .order_by("-pk")
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Coming-soon zone lookup failed: %s", exc)
+        return None
+    for zone in zones:
+        try:
+            if not zone.contains_point(lat, lng):
+                continue
+        except Exception:
+            continue
+        assignments = list(zone.zone_services.all())
+        if not assignments or not service_slug or any(
+            svc.is_available and _matches_service_slug(service_slug, svc.service_slug, svc.service_name)
+            for svc in assignments
+        ):
+            return zone
+    return None
+
+
+@dataclass
+class RouteCoverageResult:
+    """
+    Outcome of checking BOTH ends of a trip against service coverage.
+
+    failed_point -- "pickup" | "drop" | "" (empty when allowed)
+    """
+    allowed: bool
+    error_code: str = ""
+    message: str = ""
+    failed_point: str = ""
+    pickup_zone_id: Optional[int] = None
+    pickup_zone_name: str = ""
+    drop_zone_id: Optional[int] = None
+    drop_zone_name: str = ""
+    open_access: bool = False
+    coming_soon_zone: str = ""
+
+
+_POINT_LABEL = {"pickup": "pickup", "drop": "drop"}
+
+
+def _point_failure(point, result, *, service_label, vehicle_label, coming_soon_zone):
+    label = _POINT_LABEL[point]
+    code = result.error_code or "SERVICE_NOT_AVAILABLE_IN_AREA"
+    if code in ("LOCATION_REQUIRED", "INVALID_LOCATION"):
+        return RouteCoverageResult(
+            allowed=False,
+            error_code=f"{point.upper()}_{code}",
+            failed_point=point,
+            message=(
+                f"We couldn't read the {label} location. Please select the {label} "
+                f"address from the suggestions or on the map."
+            ),
+        )
+    if code == "VEHICLE_NOT_AVAILABLE_IN_ZONE":
+        return RouteCoverageResult(
+            allowed=False,
+            error_code=f"{point.upper()}_VEHICLE_NOT_AVAILABLE",
+            failed_point=point,
+            message=(
+                f"{vehicle_label or 'The selected vehicle'} is not available at your {label} "
+                f"location. Please choose a different vehicle type."
+            ),
+        )
+    if coming_soon_zone:
+        return RouteCoverageResult(
+            allowed=False,
+            error_code=f"{point.upper()}_COMING_SOON",
+            failed_point=point,
+            coming_soon_zone=coming_soon_zone.name,
+            message=(
+                f"{service_label} is coming soon to {coming_soon_zone.name}. Your {label} "
+                f"location isn't bookable yet."
+            ),
+        )
+    return RouteCoverageResult(
+        allowed=False,
+        error_code=f"{point.upper()}_OUT_OF_COVERAGE",
+        failed_point=point,
+        message=(
+            f"Your {label} location is outside our {service_label} service area. "
+            f"Please choose a {label} point within our coverage."
+        ),
+    )
+
+
+def check_route_coverage(
+    *,
+    pickup_lat,
+    pickup_lng,
+    drop_lat,
+    drop_lng,
+    service_slug: str,
+    company,
+    vehicle_class: str = "",
+    service_label: str = "Goods & Transport",
+    vehicle_label: str = "",
+) -> RouteCoverageResult:
+    """
+    Goods & Transport gate: BOTH pickup and drop must fall inside an ACTIVE
+    ServiceZone that serves `service_slug` (and, when a zone restricts
+    vehicles, `vehicle_class`). Pickup is checked first; the returned message
+    names which end failed.
+
+    Same open-access rule as check_booking_eligibility: when the company has
+    no ACTIVE zones at all, geofencing has not been set up and nothing is
+    blocked. Coming Soon / Paused zones never count as coverage.
+    """
+    company_id = _get_company_id(company)
+    if not company_id:
+        return RouteCoverageResult(allowed=True, open_access=True, message="No company context — open access.")
+
+    from settings_hub.models import ServiceZone
+    try:
+        has_zones = ServiceZone.objects.filter(company_id=company_id, is_active=True).exists()
+    except Exception:
+        return RouteCoverageResult(
+            allowed=True, open_access=True, error_code="SERVICE_ZONE_CHECK_FAILED",
+            message="Zone check unavailable — open access.",
+        )
+    if not has_zones:
+        return RouteCoverageResult(allowed=True, open_access=True, message="No service zones configured — open access.")
+
+    zone_ids = {}
+    for point, lat, lng in (("pickup", pickup_lat, pickup_lng), ("drop", drop_lat, drop_lng)):
+        if lat is None or lat == "" or lng is None or lng == "":
+            return _point_failure(
+                point, ZoneCheckResult(allowed=False, error_code="LOCATION_REQUIRED"),
+                service_label=service_label, vehicle_label=vehicle_label, coming_soon_zone=None,
+            )
+        try:
+            flat, flng = validate_coordinates(lat, lng)
+        except ValueError:
+            return _point_failure(
+                point, ZoneCheckResult(allowed=False, error_code="INVALID_LOCATION"),
+                service_label=service_label, vehicle_label=vehicle_label, coming_soon_zone=None,
+            )
+        result = find_zone_for_service(flat, flng, service_slug, company_id, vehicle_class=vehicle_class)
+        if not result.allowed:
+            coming_soon = None
+            if result.error_code != "VEHICLE_NOT_AVAILABLE_IN_ZONE":
+                coming_soon = find_coming_soon_zone(flat, flng, service_slug, company_id)
+            return _point_failure(
+                point, result,
+                service_label=service_label, vehicle_label=vehicle_label, coming_soon_zone=coming_soon,
+            )
+        zone_ids[point] = (result.zone_id, result.zone_name)
+
+    return RouteCoverageResult(
+        allowed=True,
+        pickup_zone_id=zone_ids["pickup"][0], pickup_zone_name=zone_ids["pickup"][1],
+        drop_zone_id=zone_ids["drop"][0], drop_zone_name=zone_ids["drop"][1],
+        message="Pickup and drop are both within service coverage.",
+    )

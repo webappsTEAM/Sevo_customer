@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from "framer-motion"
 import {
   ShieldCheck, CheckCircle2, XCircle, AlertCircle, Clock,
   FolderOpen, Sprout, Search, RefreshCw, Layers,
-  Sparkles, AlertTriangle, Eye, ChevronRight, Check, X, User
+  Sparkles, AlertTriangle, Eye, ChevronRight, Check, X, User,
+  PlusCircle
 } from "lucide-react"
 import { apiRequest, extractApiErrorMessage } from "../../../api/client.js"
 import { routes } from "../../routes.js"
@@ -48,7 +49,7 @@ export default function VegetableAdminCategoriesApprovalPage() {
     return vegetableRequests.filter((item) => {
       const q = searchQuery.toLowerCase().trim()
       if (q) {
-        const nameMatch = (item.name || "").toLowerCase().includes(q)
+        const nameMatch = (item.name || item.vegetable_name || "").toLowerCase().includes(q)
         const skuMatch = (item.sku || "").toLowerCase().includes(q)
         const catNameMatch = (item.category_name || item.category_parent_name || "").toLowerCase().includes(q)
         const catPathMatch = (item.category_full_path || "").toLowerCase().includes(q)
@@ -62,7 +63,7 @@ export default function VegetableAdminCategoriesApprovalPage() {
     })
   }, [vegetableRequests, searchQuery, statusFilter])
 
-  // Counts across vegetable product requests
+  // Counts across vegetable product & variant requests
   const totalPending = vegetableRequests.filter((v) => v.status === "PENDING").length
   const totalResubmitted = vegetableRequests.filter((v) => v.is_resubmission && v.status === "PENDING").length
   const totalApproved = vegetableRequests.filter((v) => v.status === "APPROVED").length
@@ -88,7 +89,11 @@ export default function VegetableAdminCategoriesApprovalPage() {
       setSubmitting(true)
       setActionError("")
 
-      const res = await apiRequest(`/inventory/vegetables/${reviewItem.id}/review/`, {
+      const endpoint = reviewItem.item_type === "VARIANT"
+        ? `/inventory/vegetables/variants/${reviewItem.id}/review/`
+        : `/inventory/vegetables/${reviewItem.id}/review/`
+
+      const res = await apiRequest(endpoint, {
         method: "POST",
         body: JSON.stringify({
           action: targetAction,
@@ -285,15 +290,19 @@ export default function VegetableAdminCategoriesApprovalPage() {
               <tbody className="divide-y divide-border/60">
                 {filteredRequests.map((item) => {
                   const isNewCategory = item.category_status === "PENDING"
+                  const isVariant = item.item_type === "VARIANT"
+                  const displayName = isVariant ? (item.vegetable_name || item.name) : (item.name || "").replace(" (Produce)", "")
+                  const packLabel = item.pack_size || (item.pack_value ? `${item.pack_value} ${item.unit}` : item.unit) || "500g"
+
                   return (
-                    <tr key={item.id} className="hover:bg-muted/20 transition-colors">
+                    <tr key={`${item.item_type || 'VEG'}-${item.id}`} className="hover:bg-muted/20 transition-colors">
                       {/* Column 1: Vegetable Product */}
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-3">
                           {item.image ? (
                             <img
                               src={item.image}
-                              alt={item.name}
+                              alt={displayName}
                               className="w-9 h-9 rounded-xl object-cover bg-muted border border-border/80 shrink-0"
                             />
                           ) : (
@@ -304,8 +313,14 @@ export default function VegetableAdminCategoriesApprovalPage() {
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-bold text-foreground">
-                                {item.name.replace(" (Produce)", "")}
+                                {displayName}
                               </span>
+
+                              {isVariant && (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30 inline-flex items-center gap-1">
+                                  <PlusCircle size={10} /> +New Variant ({packLabel})
+                                </span>
+                              )}
 
                               {isNewCategory && (
                                 <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/20 inline-flex items-center gap-1">
@@ -321,7 +336,7 @@ export default function VegetableAdminCategoriesApprovalPage() {
                             </div>
 
                             <div className="text-xs text-muted-foreground font-mono mt-0.5">
-                              {item.sku}
+                              {item.sku || `#${item.id}`}
                             </div>
                           </div>
                         </div>
@@ -352,15 +367,15 @@ export default function VegetableAdminCategoriesApprovalPage() {
                       <td className="py-3.5 px-4">
                         <div>
                           <div className="font-bold text-xs text-foreground">
-                            ₹{Math.round(Number(item.price || 0))}
-                            {item.mrp && Number(item.mrp) > Number(item.price) && (
+                            ₹{Math.round(Number(item.price ?? item.base_price ?? 0))}
+                            {item.mrp && Number(item.mrp) > Number(item.price ?? item.base_price ?? 0) && (
                               <span className="text-[11px] text-muted-foreground line-through ml-1.5 font-normal">
                                 ₹{Math.round(Number(item.mrp))}
                               </span>
                             )}
                           </div>
                           <div className="text-[11px] text-muted-foreground">
-                            Pack: {item.pack_size || item.unit || "500g"}
+                            Pack: {packLabel}
                           </div>
                         </div>
                       </td>
@@ -446,7 +461,7 @@ export default function VegetableAdminCategoriesApprovalPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-                        Review Vegetable Request
+                        {reviewItem.item_type === "VARIANT" ? "Review Product Variant Request" : "Review Vegetable Request"}
                       </h2>
                       {reviewItem.is_resubmission && (
                         <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
@@ -482,45 +497,140 @@ export default function VegetableAdminCategoriesApprovalPage() {
 
               {/* Details Display */}
               <div className="space-y-4 text-sm">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-muted/30 p-4 rounded-2xl border border-border/60">
-                  <div>
-                    <span className="text-xs text-muted-foreground font-medium">Product Name:</span>
-                    <p className="font-bold text-foreground text-base">
-                      {reviewItem.name.replace(" (Produce)", "")}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-xs text-muted-foreground font-medium">SKU:</span>
-                    <p className="font-mono text-xs font-bold text-foreground mt-1">
-                      {reviewItem.sku}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-xs text-muted-foreground font-medium">Category Hierarchy:</span>
-                    <p className="font-semibold text-foreground text-xs mt-1">
-                      {reviewItem.category_full_path ||
-                        (reviewItem.category_parent_name
-                          ? `${reviewItem.category_parent_name} → ${reviewItem.category_name}`
-                          : reviewItem.category_name)}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-xs text-muted-foreground font-medium">Price / MRP:</span>
-                    <p className="font-bold text-foreground">
-                      ₹{Math.round(Number(reviewItem.price || 0))}
-                      {reviewItem.mrp && ` (MRP: ₹${Math.round(Number(reviewItem.mrp))})`}
-                      <span className="text-xs font-normal text-muted-foreground ml-1.5">
-                        • {reviewItem.pack_size || reviewItem.unit}
-                      </span>
-                    </p>
-                  </div>
-                  {reviewItem.description && (
-                    <div className="sm:col-span-2">
-                      <span className="text-xs text-muted-foreground font-medium">Description:</span>
-                      <p className="text-xs text-foreground mt-0.5">{reviewItem.description}</p>
+                {reviewItem.item_type === "VARIANT" ? (
+                  /* ── Variant Review: Comparison View ── */
+                  <div className="space-y-4">
+                    {/* Target Produce Box */}
+                    <div className="bg-muted/30 p-4 rounded-2xl border border-border/60 flex items-center gap-3">
+                      {reviewItem.image ? (
+                        <img
+                          src={reviewItem.image}
+                          alt={reviewItem.vegetable_name}
+                          className="w-12 h-12 rounded-xl object-cover border border-border shrink-0"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold shrink-0">
+                          <Sprout size={20} />
+                        </div>
+                      )}
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Parent Produce Product</span>
+                        <h4 className="font-bold text-foreground text-sm">
+                          {reviewItem.vegetable_name || reviewItem.name}
+                        </h4>
+                        <p className="text-xs text-muted-foreground">
+                          Category: <span className="font-semibold text-foreground">{reviewItem.category_full_path || reviewItem.category_name}</span>
+                        </p>
+                      </div>
                     </div>
-                  )}
-                </div>
+
+                    {/* Proposed Variant Highlight Card */}
+                    <div className="p-4 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wider text-cyan-800 dark:text-cyan-300 flex items-center gap-1.5">
+                          <PlusCircle size={14} /> Proposed New Pack Variant
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-xs font-black bg-cyan-500/20 text-cyan-900 dark:text-cyan-200">
+                          {reviewItem.pack_size || `${reviewItem.pack_value} ${reviewItem.unit}`}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 pt-1">
+                        <div>
+                          <span className="text-xs text-muted-foreground">Selling Price:</span>
+                          <p className="text-lg font-black text-foreground">₹{Math.round(Number(reviewItem.price ?? reviewItem.base_price ?? 0))}</p>
+                        </div>
+                        <div>
+                          <span className="text-xs text-muted-foreground">MRP:</span>
+                          <p className="text-lg font-bold text-muted-foreground line-through">₹{Math.round(Number(reviewItem.mrp || 0))}</p>
+                        </div>
+                      </div>
+
+                      {(() => {
+                        const vPrice = Math.round(Number(reviewItem.price ?? reviewItem.base_price ?? 0))
+                        const vMrp = Math.round(Number(reviewItem.mrp || 0))
+                        if (vMrp > vPrice && vPrice > 0) {
+                          const disc = Math.round(((vMrp - vPrice) / vMrp) * 100)
+                          if (disc > 0) {
+                            return (
+                              <div className="pt-2 flex items-center gap-2 border-t border-cyan-500/20 mt-2">
+                                <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                                  {disc}% OFF
+                                </span>
+                                <span className="text-xs text-muted-foreground font-medium">Customer saves ₹{vMrp - vPrice}</span>
+                              </div>
+                            )
+                          }
+                        }
+                        return null
+                      })()}
+                    </div>
+                  </div>
+                ) : (
+                  /* ── Produce Review ── */
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-muted/30 p-4 rounded-2xl border border-border/60">
+                      <div>
+                        <span className="text-xs text-muted-foreground font-medium">Product Name:</span>
+                        <p className="font-bold text-foreground text-base">
+                          {reviewItem.name.replace(" (Produce)", "")}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-muted-foreground font-medium">SKU:</span>
+                        <p className="font-mono text-xs font-bold text-foreground mt-1">
+                          {reviewItem.sku}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-muted-foreground font-medium">Category Hierarchy:</span>
+                        <p className="font-semibold text-foreground text-xs mt-1">
+                          {reviewItem.category_full_path ||
+                            (reviewItem.category_parent_name
+                              ? `${reviewItem.category_parent_name} → ${reviewItem.category_name}`
+                              : reviewItem.category_name)}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-muted-foreground font-medium">Default Price / MRP:</span>
+                        <p className="font-bold text-foreground">
+                          ₹{Math.round(Number(reviewItem.price || 0))}
+                          {reviewItem.mrp && ` (MRP: ₹${Math.round(Number(reviewItem.mrp))})`}
+                          <span className="text-xs font-normal text-muted-foreground ml-1.5">
+                            • {reviewItem.pack_size || reviewItem.unit}
+                          </span>
+                        </p>
+                      </div>
+                      {reviewItem.description && (
+                        <div className="sm:col-span-2">
+                          <span className="text-xs text-muted-foreground font-medium">Description:</span>
+                          <p className="text-xs text-foreground mt-0.5">{reviewItem.description}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Proposed Variants List (if multiple) */}
+                    {reviewItem.variants && reviewItem.variants.length > 0 && (
+                      <div className="p-4 rounded-2xl bg-card border border-border space-y-2">
+                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">
+                          Proposed Pack Variants ({reviewItem.variants.length}):
+                        </span>
+                        <div className="divide-y divide-border border border-border rounded-xl overflow-hidden">
+                          {reviewItem.variants.map((v, idx) => (
+                            <div key={idx} className="p-2.5 flex items-center justify-between text-xs bg-card">
+                              <span className="font-bold text-foreground">{v.name || `${v.pack_value} ${v.unit}`}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-emerald-600 dark:text-emerald-400">₹{Math.round(Number(v.base_price || v.price))}</span>
+                                {v.mrp && <span className="text-muted-foreground line-through text-[11px]">₹{Math.round(Number(v.mrp))}</span>}
+                                {v.is_default && <span className="text-[9px] font-black uppercase text-primary bg-primary/10 px-1 py-0.2 rounded">Default</span>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Notice if category was bundled and is also pending */}
                 {reviewItem.category_status === "PENDING" && (

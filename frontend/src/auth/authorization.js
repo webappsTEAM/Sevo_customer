@@ -1,5 +1,5 @@
 /**
- * Centralized Frontend Authorization Service for CalTrack.
+ * Centralized Frontend Authorization Service for sevo.
  *
  * Principles:
  * 1. isSuperAdmin(user) grants universal unrestricted access across all modules.

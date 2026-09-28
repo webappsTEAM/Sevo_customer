@@ -355,6 +355,22 @@ export function AIChatWidget() {
     }
   }, [isOpen, messages, loading, showHistoryView])
 
+  // Global trigger: allows any page/section/banner to open AI Mitra and optionally pass an initial prompt
+  useEffect(() => {
+    const handleOpenAiMitra = (e) => {
+      setIsOpen(true)
+      setShowHistoryView(false)
+      const promptText = e?.detail?.prompt
+      if (promptText) {
+        setTimeout(() => {
+          handleSendMessage(promptText)
+        }, 100)
+      }
+    }
+    window.addEventListener("open-ai-mitra", handleOpenAiMitra)
+    return () => window.removeEventListener("open-ai-mitra", handleOpenAiMitra)
+  }, [conversationId, loading])
+
   const handleSendMessage = async (textToSend) => {
     const query = (textToSend || input || "").trim()
     if (!query || loading) return

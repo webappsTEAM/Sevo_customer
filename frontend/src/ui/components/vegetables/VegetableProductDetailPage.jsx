@@ -29,8 +29,14 @@ export function VegetableProductDetailPage({
   onSelectProduct,
   deliveryBadge = "8 MINS",
 }) {
+  const variants = Array.isArray(vegetable.variants) && vegetable.variants.length > 0 ? vegetable.variants : []
+  const defaultVariant = variants.find(v => v.is_default) || variants[0] || null
+
   const [selectedImage, setSelectedImage] = useState(vegetable.image)
-  const [selectedUnitOption, setSelectedUnitOption] = useState("standard")
+  const [selectedUnitOption, setSelectedUnitOption] = useState(() => {
+    if (defaultVariant) return `variant_${defaultVariant.id}`
+    return "standard"
+  })
   const [recipes, setRecipes] = useState([])
   const [recipesLoading, setRecipesLoading] = useState(false)
   const [activeRecipe, setActiveRecipe] = useState(null)
@@ -38,10 +44,15 @@ export function VegetableProductDetailPage({
   const [detailLoading, setDetailLoading] = useState(false)
   const [recommendations, setRecommendations] = useState([])
 
-  // Reset selected image when vegetable changes
+  // Reset selected image and unit when vegetable changes
   useEffect(() => {
     if (vegetable) {
       setSelectedImage(vegetable.image)
+      if (variants.length > 0) {
+        setSelectedUnitOption(`variant_${(defaultVariant || variants[0]).id}`)
+      } else {
+        setSelectedUnitOption("standard")
+      }
       window.scrollTo({ top: 0, behavior: "smooth" })
     }
   }, [vegetable])
@@ -124,7 +135,7 @@ export function VegetableProductDetailPage({
 
   if (!vegetable) return null
 
-  // 1. Pack-specific calculations & custom pack support
+  // 1. Pack-specific calculations & custom pack / variant support
   const baseUnit = vegetable.unit || "500 g"
   const customPacks = Array.isArray(vegetable.custom_packs) ? vegetable.custom_packs.filter(p => p.enabled !== false) : []
   
@@ -140,13 +151,22 @@ export function VegetableProductDetailPage({
   const doubleDiscount = `${Math.round(((doubleMrp - doublePrice) / doubleMrp) * 100)}% OFF`
 
   // Resolve active pack info
+  const activeVariant = variants.find(v => `variant_${v.id}` === selectedUnitOption)
   const selectedCustomPack = customPacks.find(p => p.id === selectedUnitOption)
   let currentKey = standardKey
   let activePrice = standardPrice
   let activeMrp = standardMrp
   let activeUnitLabel = baseUnit
+  let activeVariantObj = null
 
-  if (selectedUnitOption === "double") {
+  if (activeVariant) {
+    const vUnit = activeVariant.name || `${activeVariant.pack_value} ${activeVariant.unit}`
+    currentKey = variants.length > 1 ? `${vegetable.name} (${vUnit})` : vegetable.name
+    activePrice = Math.round(Number(activeVariant.base_price) || 0)
+    activeMrp = activeVariant.mrp ? Math.round(Number(activeVariant.mrp) || 0) : null
+    activeUnitLabel = vUnit
+    activeVariantObj = activeVariant
+  } else if (selectedUnitOption === "double") {
     currentKey = doubleKey
     activePrice = doublePrice
     activeMrp = doubleMrp
@@ -349,101 +369,148 @@ export function VegetableProductDetailPage({
                   Choose Pack Size
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-2 gap-3.5">
-                  {/* Option 1: Standard Unit */}
-                  {vegetable.standard_pack_enabled !== false && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedUnitOption("standard")}
-                      className={`p-3.5 rounded-2xl border-2 text-left cursor-pointer transition-all relative ${
-                        selectedUnitOption === "standard"
-                          ? "border-emerald-600 bg-emerald-50/60 shadow-xs"
-                          : "border-slate-200 bg-white hover:border-slate-300"
-                      }`}
-                    >
-                      {standardDiscount && (
-                        <span className="absolute -top-2.5 right-3 text-[9px] font-black uppercase text-white bg-emerald-600 px-2 py-0.5 rounded-md shadow-xs">
-                          {standardDiscount}
-                        </span>
-                      )}
-                      <div className="text-xs font-black text-slate-900">
-                        Standard Pack ({baseUnit})
-                      </div>
-                      <div className="text-base font-black text-emerald-800 mt-1 flex items-baseline gap-1.5 flex-wrap">
-                        <span>₹{standardPrice}</span>
-                        {standardMrp && standardMrp > standardPrice && (
-                          <span className="text-[11px] text-slate-400 font-medium">
-                            MRP <span className="line-through">₹{standardMrp}</span>
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  )}
+                  {variants.length > 0 ? (
+                    variants.map((v) => {
+                      const vPrice = Math.round(Number(v.base_price) || 0)
+                      const vMrp = v.mrp ? Math.round(Number(v.mrp) || 0) : null
+                      const vDiscount = (vMrp && vMrp > vPrice) ? `${Math.round(((vMrp - vPrice) / vMrp) * 100)}% OFF` : null
+                      const isSelected = selectedUnitOption === `variant_${v.id}`
+                      const vLabel = v.name || `${v.pack_value} ${v.unit}`
 
-                  {/* Option 2: Family Saver Pack */}
-                  {vegetable.enable_family_saver !== false && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedUnitOption("double")}
-                      className={`p-3.5 rounded-2xl border-2 text-left cursor-pointer transition-all relative ${
-                        selectedUnitOption === "double"
-                          ? "border-emerald-600 bg-emerald-50/60 shadow-xs"
-                          : "border-slate-200 bg-white hover:border-slate-300"
-                      }`}
-                    >
-                      <span className="absolute -top-2.5 right-3 text-[9px] font-black uppercase text-white bg-indigo-600 px-2 py-0.5 rounded-md shadow-xs">
-                        Family Saver
-                      </span>
-                      <div className="text-xs font-black text-slate-900">
-                        2 × {baseUnit}
-                      </div>
-                      <div className="text-base font-black text-slate-900 mt-1 flex items-baseline gap-1.5 flex-wrap">
-                        <span>₹{doublePrice}</span>
-                        {doubleMrp && doubleMrp > doublePrice && (
-                          <span className="text-[11px] text-slate-400 font-medium">
-                            MRP <span className="line-through">₹{doubleMrp}</span>
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  )}
-
-                  {/* Option 3+: Custom Packs / Grams */}
-                  {customPacks.map((cp) => {
-                    const cpPrice = Math.round(Number(cp.price) || 0)
-                    const cpMrp = cp.mrp ? Math.round(Number(cp.mrp)) : null
-                    const cpDiscount = cp.tag || (cpMrp && cpMrp > cpPrice ? `${Math.round(((cpMrp - cpPrice) / cpMrp) * 100)}% OFF` : null)
-                    const isSelected = selectedUnitOption === cp.id
-
-                    return (
-                      <button
-                        key={cp.id}
-                        type="button"
-                        onClick={() => setSelectedUnitOption(cp.id)}
-                        className={`p-3.5 rounded-2xl border-2 text-left cursor-pointer transition-all relative ${
-                          isSelected
-                            ? "border-emerald-600 bg-emerald-50/60 shadow-xs"
-                            : "border-slate-200 bg-white hover:border-slate-300"
-                        }`}
-                      >
-                        {cpDiscount && (
-                          <span className="absolute -top-2.5 right-3 text-[9px] font-black uppercase text-white bg-emerald-600 px-2 py-0.5 rounded-md shadow-xs">
-                            {cpDiscount}
-                          </span>
-                        )}
-                        <div className="text-xs font-black text-slate-900">
-                          {cp.title || `Pack (${cp.unit})`}
-                        </div>
-                        <div className="text-base font-black text-emerald-800 mt-1 flex items-baseline gap-1.5 flex-wrap">
-                          <span>₹{cpPrice}</span>
-                          {cpMrp && cpMrp > cpPrice && (
-                            <span className="text-[11px] text-slate-400 font-medium">
-                              MRP <span className="line-through">₹{cpMrp}</span>
+                      return (
+                        <button
+                          key={v.id}
+                          type="button"
+                          onClick={() => setSelectedUnitOption(`variant_${v.id}`)}
+                          className={`p-3.5 rounded-2xl border-2 text-left cursor-pointer transition-all relative ${
+                            isSelected
+                              ? "border-emerald-600 bg-emerald-50/60 shadow-xs ring-2 ring-emerald-500/20"
+                              : "border-slate-200 bg-white hover:border-slate-300"
+                          }`}
+                        >
+                          {vDiscount && (
+                            <span className="absolute -top-2.5 right-3 text-[9px] font-black uppercase text-white bg-emerald-600 px-2 py-0.5 rounded-md shadow-xs">
+                              {vDiscount}
                             </span>
                           )}
-                        </div>
-                      </button>
-                    )
-                  })}
+                          <div className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                            <span>{vLabel}</span>
+                            {v.is_default && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 bg-slate-100 text-slate-600 rounded">
+                                Default
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-base font-black text-emerald-800 mt-1 flex items-baseline gap-1.5 flex-wrap">
+                            <span>₹{vPrice}</span>
+                            {vMrp && vMrp > vPrice && (
+                              <span className="text-[11px] text-slate-400 font-medium">
+                                MRP <span className="line-through">₹{vMrp}</span>
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      )
+                    })
+                  ) : (
+                    <>
+                      {/* Option 1: Standard Unit */}
+                      {vegetable.standard_pack_enabled !== false && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedUnitOption("standard")}
+                          className={`p-3.5 rounded-2xl border-2 text-left cursor-pointer transition-all relative ${
+                            selectedUnitOption === "standard"
+                              ? "border-emerald-600 bg-emerald-50/60 shadow-xs"
+                              : "border-slate-200 bg-white hover:border-slate-300"
+                          }`}
+                        >
+                          {standardDiscount && (
+                            <span className="absolute -top-2.5 right-3 text-[9px] font-black uppercase text-white bg-emerald-600 px-2 py-0.5 rounded-md shadow-xs">
+                              {standardDiscount}
+                            </span>
+                          )}
+                          <div className="text-xs font-black text-slate-900">
+                            Standard Pack ({baseUnit})
+                          </div>
+                          <div className="text-base font-black text-emerald-800 mt-1 flex items-baseline gap-1.5 flex-wrap">
+                            <span>₹{standardPrice}</span>
+                            {standardMrp && standardMrp > standardPrice && (
+                              <span className="text-[11px] text-slate-400 font-medium">
+                                MRP <span className="line-through">₹{standardMrp}</span>
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      )}
+
+                      {/* Option 2: Family Saver Pack */}
+                      {vegetable.enable_family_saver !== false && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedUnitOption("double")}
+                          className={`p-3.5 rounded-2xl border-2 text-left cursor-pointer transition-all relative ${
+                            selectedUnitOption === "double"
+                              ? "border-emerald-600 bg-emerald-50/60 shadow-xs"
+                              : "border-slate-200 bg-white hover:border-slate-300"
+                          }`}
+                        >
+                          <span className="absolute -top-2.5 right-3 text-[9px] font-black uppercase text-white bg-indigo-600 px-2 py-0.5 rounded-md shadow-xs">
+                            Family Saver
+                          </span>
+                          <div className="text-xs font-black text-slate-900">
+                            2 × {baseUnit}
+                          </div>
+                          <div className="text-base font-black text-slate-900 mt-1 flex items-baseline gap-1.5 flex-wrap">
+                            <span>₹{doublePrice}</span>
+                            {doubleMrp && doubleMrp > doublePrice && (
+                              <span className="text-[11px] text-slate-400 font-medium">
+                                MRP <span className="line-through">₹{doubleMrp}</span>
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      )}
+
+                      {/* Option 3+: Custom Packs / Grams */}
+                      {customPacks.map((cp) => {
+                        const cpPrice = Math.round(Number(cp.price) || 0)
+                        const cpMrp = cp.mrp ? Math.round(Number(cp.mrp)) : null
+                        const cpDiscount = cp.tag || (cpMrp && cpMrp > cpPrice ? `${Math.round(((cpMrp - cpPrice) / cpMrp) * 100)}% OFF` : null)
+                        const isSelected = selectedUnitOption === cp.id
+
+                        return (
+                          <button
+                            key={cp.id}
+                            type="button"
+                            onClick={() => setSelectedUnitOption(cp.id)}
+                            className={`p-3.5 rounded-2xl border-2 text-left cursor-pointer transition-all relative ${
+                              isSelected
+                                ? "border-emerald-600 bg-emerald-50/60 shadow-xs"
+                                : "border-slate-200 bg-white hover:border-slate-300"
+                            }`}
+                          >
+                            {cpDiscount && (
+                              <span className="absolute -top-2.5 right-3 text-[9px] font-black uppercase text-white bg-emerald-600 px-2 py-0.5 rounded-md shadow-xs">
+                                {cpDiscount}
+                              </span>
+                            )}
+                            <div className="text-xs font-black text-slate-900">
+                              {cp.title || `Pack (${cp.unit})`}
+                            </div>
+                            <div className="text-base font-black text-emerald-800 mt-1 flex items-baseline gap-1.5 flex-wrap">
+                              <span>₹{cpPrice}</span>
+                              {cpMrp && cpMrp > cpPrice && (
+                                <span className="text-[11px] text-slate-400 font-medium">
+                                  MRP <span className="line-through">₹{cpMrp}</span>
+                                </span>
+                              )}
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -475,7 +542,7 @@ export function VegetableProductDetailPage({
                     <div className="flex items-center bg-emerald-700 text-white rounded-xl px-2 py-1.5 shadow-sm">
                       <button
                         type="button"
-                        onClick={() => onUpdateCartQty && onUpdateCartQty(currentKey, -1)}
+                        onClick={() => onUpdateCartQty && onUpdateCartQty(currentKey, -1, { variant: activeVariantObj, packageId: vegetable.id })}
                         className="text-white hover:text-emerald-200 font-black text-base cursor-pointer px-2.5 active:scale-90"
                         aria-label="Decrease quantity"
                       >
@@ -486,7 +553,7 @@ export function VegetableProductDetailPage({
                       </span>
                       <button
                         type="button"
-                        onClick={() => onUpdateCartQty && onUpdateCartQty(currentKey, 1)}
+                        onClick={() => onUpdateCartQty && onUpdateCartQty(currentKey, 1, { variant: activeVariantObj, packageId: vegetable.id })}
                         className="text-white hover:text-emerald-200 font-black text-base cursor-pointer px-2.5 active:scale-90"
                         aria-label="Increase quantity"
                       >
@@ -496,7 +563,7 @@ export function VegetableProductDetailPage({
                   ) : (
                     <button
                       type="button"
-                      onClick={() => onUpdateCartQty && onUpdateCartQty(currentKey, 1)}
+                      onClick={() => onUpdateCartQty && onUpdateCartQty(currentKey, 1, { variant: activeVariantObj, packageId: vegetable.id })}
                       className="px-6 sm:px-8 py-3 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-black text-sm shadow-md transition-all cursor-pointer active:scale-95 flex items-center gap-2"
                     >
                       <ShoppingCart className="w-4 h-4" />

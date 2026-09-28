@@ -10,7 +10,7 @@ import {
   ClipboardList, CalendarDays, UserCheck, DoorOpen, Wallet, User, SlidersHorizontal, ShoppingCart,
   Sparkles, Apple, ShoppingBag, Carrot, HeartPulse, CheckCircle2, Plus, Minus, Check, Repeat2, AlertCircle,
   Users, Wrench, ThumbsUp, Bell, IndianRupee, Bug, Utensils, Pencil, LayoutGrid, Gift, Quote, Trash2,
-  FileText, CreditCard, MoreHorizontal
+  FileText, CreditCard, MoreHorizontal, Bot, MessageSquare
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { HeroServiceVisualization } from "../components/HeroServiceVisualization.jsx"
@@ -4935,6 +4935,71 @@ export function LandingPage() {
               if (offerImageModalIdx !== null) saveHomeConfigField(`offers.items.${offerImageModalIdx}.image`, url)
             }}
           />
+        </section>
+
+        {/* ── 6B. AI Mitra Interactive Smart Assistant Banner ────────────────── */}
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+          <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-slate-900 via-[#003830] to-[#0B8F7A] text-white p-6 sm:p-8 shadow-xl border border-teal-500/20">
+            {/* Background glowing orbs */}
+            <div className="absolute -top-24 -right-24 w-72 h-72 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-teal-400/20 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+              <div className="max-w-2xl space-y-3">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-bold tracking-wide">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <Bot className="w-3.5 h-3.5" />
+                  Meet AI Mitra &bull; 24/7 Smart Companion
+                </div>
+                <h3 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+                  Instant Answers &amp; Doorstep Booking with AI Mitra
+                </h3>
+                <p className="text-slate-200 text-xs sm:text-sm leading-relaxed">
+                  Ask about transparent service pricing, book AC repair or home deep cleaning, check appointment status, or explore policies in seconds.
+                </p>
+
+                {/* Quick Suggestion Chips */}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {[
+                    "What packages and pricing do you offer for AC service and cleaning?",
+                    "How does service delivery and technician verification work?",
+                    "Show my active bookings and orders",
+                    "What is your cancellation and refund policy?"
+                  ].map((chip, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        window.dispatchEvent(new CustomEvent("open-ai-mitra", { detail: { prompt: chip } }))
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-xs text-slate-100 transition-all cursor-pointer backdrop-blur-xs text-left"
+                    >
+                      <Sparkles className="w-3 h-3 text-emerald-300 shrink-0" />
+                      <span>{chip}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action Button */}
+              <div className="w-full lg:w-auto shrink-0 flex flex-col sm:flex-row lg:flex-col gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent("open-ai-mitra", { detail: {} }))
+                  }}
+                  className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-400 to-teal-300 text-slate-950 font-black text-sm sm:text-base hover:shadow-lg hover:shadow-emerald-500/25 transition-all transform active:scale-98 cursor-pointer shrink-0"
+                >
+                  <MessageSquare className="w-5 h-5 text-slate-950" />
+                  <span>Chat with AI Mitra</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+                <div className="text-center lg:text-right text-[11px] text-teal-200/80">
+                  ⚡ Powered by Intelligent Multi-Agent Knowledge
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
 
         {/* ── 7. "Recommended for You" 5-Card Service Row ─────────────────────────── */}

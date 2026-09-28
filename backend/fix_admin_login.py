@@ -1,4 +1,4 @@
-import os
+ import os
 import django
 from dotenv import load_dotenv
 

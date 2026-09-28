@@ -16,7 +16,7 @@ from server-side facts:
   - stops actually visited, from TripStop.completed_at -- real recorded
     progress, not a claim in the completion payload;
   - additional work the customer already approved, from the existing
-    WorkExtension flow, which is the mechanism CALTRACK_PHASE_14 H.1
+    WorkExtension flow, which is the mechanism sevo_PHASE_14 H.1
     explicitly designates for deviations.
 
 Nothing here trusts a client-supplied amount. A completion payload can
@@ -199,6 +199,21 @@ def reconcile_booking_fare(booking, actual_distance_km=None, notes=""):
                     "quoted_extra_stops": quoted_extra,
                     "actual_extra_stops": actual_extra,
                 })
+
+    # --- 2b. Waiting charge, if an admin has configured one -----------
+    # GTWaitingChargePolicy defaults to is_enabled=False (see its
+    # docstring in models.py) -- this returns Decimal('0') and adjusts
+    # nothing until a policy is actually configured with real numbers.
+    from ..models import get_gt_waiting_charge
+    waiting_charge = get_gt_waiting_charge(booking)
+    if waiting_charge:
+        final_amount = _money(final_amount + waiting_charge)
+        adjustments.append({
+            "code": "WAITING_CHARGE",
+            "label": "Waiting time charge",
+            "amount": str(waiting_charge),
+            "source": "gt_waiting_charge_policy",
+        })
 
     # --- 3. Additional work the customer approved ---------------------
     extensions_total = _approved_extensions_total(booking)

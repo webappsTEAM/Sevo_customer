@@ -54,8 +54,11 @@ export function AddressBottomSheet({
   const hasAddress = Boolean(activeAddr?.formatted_address)
   const isOutOfZone = zoneStatus && zoneStatus.inZone === false
   const isServiceBlocked = zoneStatus && zoneStatus.inZone === true && zoneStatus.serviceAllowed === false
-  const isAvailable = zoneStatus && zoneStatus.inZone === true && (zoneStatus.serviceAllowed === undefined || zoneStatus.serviceAllowed === true)
-  const confirmEnabled = (hasAddress || selectedSavedId) && !loading && !error && !isOutOfZone && !isServiceBlocked
+  const isZoneChecking = Boolean(zoneStatus && zoneStatus.checking)
+  const isZoneCheckFailed = Boolean(zoneStatus && zoneStatus.checkFailed)
+  const isAvailable = zoneStatus && zoneStatus.inZone === true && !isZoneChecking && !isZoneCheckFailed && (zoneStatus.serviceAllowed === undefined || zoneStatus.serviceAllowed === null || zoneStatus.serviceAllowed === true)
+  // Confirm only after the backend verified the pin (fail closed).
+  const confirmEnabled = (hasAddress || selectedSavedId) && !loading && !error && !isOutOfZone && !isServiceBlocked && (!zoneStatus || isAvailable)
 
   // Format clean primary & secondary location display
   let cleanPrimary = "Detecting location..."
@@ -157,6 +160,21 @@ export function AddressBottomSheet({
               </div>
             </div>
           </div>
+        )}
+
+        {/* 2b. Availability not verified yet / verification failed (fail closed) */}
+        {isZoneCheckFailed && !isOutOfZone && !isServiceBlocked && (
+          <div style={styles.serviceBlockedWarning}>
+            <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <AlertTriangle size={18} style={{ color: "#d97706", flexShrink: 0, marginTop: 2 }} />
+              <div style={{ fontSize: 11, color: "#b45309", lineHeight: 1.4 }}>
+                {zoneStatus.message || "We couldn't verify service availability for this location. Please try again."}
+              </div>
+            </div>
+          </div>
+        )}
+        {isZoneChecking && hasAddress && (
+          <div style={{ fontSize: 11, color: "#64748b", padding: "4px 2px" }}>Checking service availability…</div>
         )}
 
         {/* 3. Service Available Green Confirmation Badge */}

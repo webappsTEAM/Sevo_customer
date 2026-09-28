@@ -192,7 +192,10 @@ def run():
         initial_grams = initial_packs * pack_grams
 
         # Check existing linked stock item
-        item = getattr(pkg, "stock_item", None)
+        try:
+            item = getattr(pkg, "stock_item", None)
+        except Exception:
+            item = None
         if not item:
             # Check by SKU or Name
             item = InventoryItem.objects.filter(sku=sku).first()

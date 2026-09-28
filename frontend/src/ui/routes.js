@@ -63,10 +63,12 @@ export const routes = {
   catalog_change_log: "/catalog/change-log",
   catalog_vendor_approvals: "/catalog/vendor-approvals",
   catalog_painting_rates: "/catalog/painting-rates",
+  catalog_ac_inspection_rates: "/catalog/ac-inspection-rates",
   catalog_gt_pricing: "/catalog/goods-transport-rates",
   marketing_coupons: "/marketing/coupons",
   marketing_offers: "/marketing/offers",
   marketing_referrals: "/marketing/referrals",
+  time_slot_management: "/admin/time-slots",
   homepage_customizer: "/admin/homepage-customizer",
   // Public customer live tracking page — accessible at /track/:bookingId?token=<uuid>
   // The tracking_token query param is the authorization credential (not in the path).
@@ -76,6 +78,7 @@ export const routes = {
   customers_detail: "/customers/:id",
   customers_payments: "/customers/payments",
   customers_merges: "/customers/merges",
+  admin_ac_inspections: "/customers/ac-inspections",
   // Public Legal & Policies
   terms: "/terms",
   terms_and_conditions: "/terms-and-conditions",
