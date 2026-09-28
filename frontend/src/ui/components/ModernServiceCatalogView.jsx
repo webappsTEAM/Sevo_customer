@@ -14,14 +14,10 @@ import { apiRequest } from "../../api/client.js"
 import { useAuth } from "../../state/auth/useAuth.js"
 import { isSuperAdmin } from "../../auth/authorization.js"
 import { useEditMode } from "../../state/editMode/useEditMode.js"
-<<<<<<< HEAD
 import { EditableText, EditableImage, useCanEditCustomerUI } from "./SuperAdminEditControls.jsx"
 import { ACInspectionDetailsModal } from "./estimation/ACInspectionDetailsModal.jsx"
 import { ACInspectionCustomizerModal } from "./estimation/ACInspectionCustomizerModal.jsx"
 import { fetchACInspectionConfig, DEFAULT_AC_INSPECTION_CONFIG, updateACConfigDB } from "../../services/estimation/acInspectionData.js"
-=======
-import { EditableText, EditableImage } from "./SuperAdminEditControls.jsx"
->>>>>>> e17da473130eaa586567d64ab59caed963ad2255
 import { getCustomerSelectedAddress } from "../../utils/customerLocationStorage.js"
 
 // Feature icons map for dynamic icon resolution
@@ -71,7 +67,6 @@ export function ModernServiceCatalogView({
   const [selectedPackage, setSelectedPackage] = useState(null)
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false)
   const [detailsPackage, setDetailsPackage] = useState(null) // package currently shown in the "See details" modal
-<<<<<<< HEAD
   const [isChangeServiceModalOpen, setIsChangeServiceModalOpen] = useState(false)
   const [showAcInspectionModal, setShowAcInspectionModal] = useState(false)
   const [showInspectionDetailsModal, setShowInspectionDetailsModal] = useState(false)
@@ -99,8 +94,7 @@ export function ModernServiceCatalogView({
     } catch (e) {}
     return true
   })
-=======
->>>>>>> e17da473130eaa586567d64ab59caed963ad2255
+
 
   // categoryProp (from LandingPage's URL-based lookup against the old static
   // categoriesData.js list) almost never matches a real category for
@@ -178,12 +172,10 @@ export function ModernServiceCatalogView({
   // live catalog page instead of only being changeable from the admin panel.
   const { user } = useAuth()
   const { isEditMode: serviceEditMode } = useEditMode()
-<<<<<<< HEAD
   const canEditCustomerUI = useCanEditCustomerUI()
   const isSuperAdminOrStaff = Boolean(isSuperAdmin(user) || ["admin", "staff", "manager", "super_admin", "superadmin"].includes(String(user?.role || "").toLowerCase()))
   const canSuperAdminEdit = Boolean(canEditCustomerUI || serviceEditMode || isSuperAdminOrStaff)
-=======
->>>>>>> e17da473130eaa586567d64ab59caed963ad2255
+
 
   const handleSaveServiceField = async (item, field, value) => {
     if (!item?.id) return
@@ -549,7 +541,6 @@ export function ModernServiceCatalogView({
         const aliasSubTab = urlSubTab ? (SUBTAB_ALIASES[normKey(urlSubTab)] || normKey(urlSubTab)) : ""
         let initialSub = initialSubFromCatKey || null
         if (urlSubTab) {
-<<<<<<< HEAD
           const isUrlInspection = urlSubTab.toLowerCase().includes("inspection")
           const isConfigDisabled = (() => {
             try {
@@ -564,40 +555,31 @@ export function ModernServiceCatalogView({
             initialSub = null
           } else {
             setIsInspectionSelected(false)
-            const found = relevantSubs.find(s =>
-              normKey(s.name) === normKey(urlSubTab) ||
-              normKey(s.slug) === normKey(urlSubTab) ||
-              normKey(s.name).includes(normKey(urlSubTab)) ||
-              normKey(urlSubTab).includes(normKey(s.slug))
-            )
+            const found = matchedSubs.find(s => {
+              const sNormName = normKey(s.name)
+              const sNormSlug = normKey(s.slug)
+              return (
+                sNormName === normKey(urlSubTab) ||
+                sNormSlug === normKey(urlSubTab) ||
+                sNormName === aliasSubTab ||
+                sNormSlug === aliasSubTab ||
+                sNormName.includes(aliasSubTab) ||
+                sNormSlug.includes(aliasSubTab) ||
+                aliasSubTab.includes(sNormSlug) ||
+                (sNormSlug.length > 3 && aliasSubTab.includes(sNormSlug))
+              )
+            })
             if (found) {
               initialSub = found
-            } else if (isUrlInspection && relevantSubs.length > 0) {
-              initialSub = relevantSubs[0]
+            } else if (isUrlInspection && matchedSubs.length > 0) {
+              initialSub = matchedSubs[0]
             }
           }
-=======
-          const found = matchedSubs.find(s => {
-            const sNormName = normKey(s.name)
-            const sNormSlug = normKey(s.slug)
-            return (
-              sNormName === normKey(urlSubTab) ||
-              sNormSlug === normKey(urlSubTab) ||
-              sNormName === aliasSubTab ||
-              sNormSlug === aliasSubTab ||
-              sNormName.includes(aliasSubTab) ||
-              sNormSlug.includes(aliasSubTab) ||
-              aliasSubTab.includes(sNormSlug) ||
-              (sNormSlug.length > 3 && aliasSubTab.includes(sNormSlug))
-            )
-          })
-          if (found) initialSub = found
         }
         if (!initialSub) {
           // Default to first subservice that actually has packages, otherwise fallback to first
           const withPkgs = matchedSubs.find(s => allPkgs.some(p => String(p.service_id) === String(s.id) || p.service_name?.toLowerCase() === s.name?.toLowerCase() || p.service_slug?.toLowerCase() === s.slug?.toLowerCase()))
           initialSub = withPkgs || matchedSubs[0]
->>>>>>> e17da473130eaa586567d64ab59caed963ad2255
         }
         setActiveSubService(initialSub)
 
@@ -723,7 +705,6 @@ export function ModernServiceCatalogView({
       onCheckout(cartItems)
     }
   }
-<<<<<<< HEAD
   const handleProceedToCheckout = handleProceedToSchedule
 
   useEffect(() => {
@@ -890,46 +871,19 @@ export function ModernServiceCatalogView({
     if (!isInspectionEnabled) return
     handleSelectInspection()
   }
-=======
->>>>>>> e17da473130eaa586567d64ab59caed963ad2255
+
 
   return (
     <div className="w-full min-h-screen bg-[#F8FAF9] text-slate-800 pb-28 lg:pb-16">
       {/* ── 1. Top Breadcrumb & Category Hero Banner ── */}
       <div className="bg-white border-b border-slate-200/80">
-<<<<<<< HEAD
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
-            {/* Left: Back button + Title + Subservice breadcrumb */}
-            <div className="flex items-center gap-3 min-w-0">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex items-center gap-1.5 px-3 py-1.5 -ml-1 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-bold text-xs transition-colors cursor-pointer shrink-0"
-                aria-label="Back to home"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                <span>Back to Home</span>
-              </button>
-              <span className="text-slate-300 font-bold hidden sm:inline">/</span>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight truncate">
-                    {category?.name || "Professional Services"}
-                  </h1>
-                  {activeSubService && (
-                    <>
-                      <span className="text-slate-300 font-bold hidden sm:inline">•</span>
-                      <span className="text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-lg truncate hidden sm:inline">
-                        {activeSubService.name}
-=======
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-6">
           {/* Breadcrumb - Compact on mobile */}
           <nav className="flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs text-slate-500 font-medium mb-1.5 sm:mb-3 overflow-x-auto scrollbar-none whitespace-nowrap">
             <button
               type="button"
               onClick={onClose}
-              className="hover:text-emerald-700 transition-colors shrink-0"
+              className="hover:text-emerald-700 transition-colors shrink-0 cursor-pointer"
             >
               Home
             </button>
@@ -967,7 +921,6 @@ export function ModernServiceCatalogView({
                       </div>
                       <span className="sm:hidden text-[10px] font-bold text-slate-700 whitespace-nowrap leading-none">
                         {f.label}
->>>>>>> e17da473130eaa586567d64ab59caed963ad2255
                       </span>
                       <div className="hidden sm:block leading-tight">
                         <div className="text-[11px] font-black text-slate-800">{f.label1}</div>
@@ -1007,62 +960,6 @@ export function ModernServiceCatalogView({
         </div>
       </div>
 
-<<<<<<< HEAD
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4 sm:mt-6">
-        {/* ── Horizontal Sub-Service Switcher (Clean, intuitive, zero-admin feel) ── */}
-        {services.length > 0 && !isGoodsTransportCategory && (
-          <div className="w-full overflow-x-auto scrollbar-none py-1 flex items-center gap-2 pb-3 mb-5 border-b border-slate-200/80">
-            {services.map(sub => {
-              const isSelected = !effectiveIsInspectionSelected && activeSubService?.id === sub.id
-              return (
-                <button
-                  key={sub.id}
-                  type="button"
-                  onClick={() => {
-                    setIsInspectionSelected(false)
-                    setActiveSubService(sub)
-                    setSearchParams((prev) => {
-                      const next = new URLSearchParams(prev)
-                      next.set("subtab", sub.name)
-                      next.set("subTab", sub.name)
-                      return next
-                    }, { replace: true })
-                  }}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-bold shrink-0 transition-all cursor-pointer ${
-                    isSelected
-                      ? "bg-emerald-700 border-emerald-700 text-white shadow-xs font-black ring-2 ring-emerald-700/20"
-                      : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
-                  }`}
-                >
-                  {sub.image && (
-                    <img
-                      src={resolveImageUrl(sub.image)}
-                      alt={sub.name}
-                      className="w-4 h-4 object-contain rounded-full bg-white/80"
-                    />
-                  )}
-                  <span>{sub.name}</span>
-                </button>
-              )
-            })}
-            {isAcApplianceCategory && isInspectionEnabled && (
-              <button
-                type="button"
-                onClick={handleDirectBookInspection}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full border text-xs font-bold shrink-0 shadow-xs cursor-pointer transition-all ${
-                  effectiveIsInspectionSelected
-                    ? "border-amber-500 bg-amber-500 text-slate-950 font-black ring-2 ring-amber-400/30"
-                    : "border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900"
-                }`}
-                title="Need Diagnosis? Book Inspection"
-              >
-                <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
-                <span>Need Diagnosis? Book Inspection</span>
-              </button>
-            )}
-          </div>
-        )}
-=======
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 mt-3 sm:mt-6">
         {/* ── 2/3. Main Layout: vertical Services sidebar + content + Booking Summary ── */}
         <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 lg:gap-8 items-start">
@@ -1072,12 +969,13 @@ export function ModernServiceCatalogView({
               {/* Mobile Horizontal Subservice Pill Tab Bar (Sticky on mobile, Blinkit style) */}
               <div className="lg:hidden w-full overflow-x-auto scrollbar-none py-1.5 sm:py-2 -mx-3 px-3 sm:mx-0 sm:px-0 flex items-center gap-1.5 sm:gap-2 border-b border-slate-200/80 bg-white/95 backdrop-blur-md sticky top-0 z-20">
                 {services.map(sub => {
-                  const isSelected = activeSubService?.id === sub.id
+                  const isSelected = !effectiveIsInspectionSelected && activeSubService?.id === sub.id
                   return (
                     <button
                       key={sub.id}
                       type="button"
                       onClick={() => {
+                        setIsInspectionSelected(false)
                         setActiveSubService(sub)
                         setSearchParams((prev) => {
                           const next = new URLSearchParams(prev)
@@ -1103,18 +1001,21 @@ export function ModernServiceCatalogView({
                     </button>
                   )
                 })}
-                {isAcApplianceCategory && (
+                {isAcApplianceCategory && isInspectionEnabled && (
                   <button
                     type="button"
-                    onClick={() => navigate("/ac-inspection")}
-                    className="flex items-center gap-1 px-3.5 py-1.5 rounded-full border border-amber-300 bg-amber-50 text-amber-800 text-xs font-bold shrink-0 shadow-xs cursor-pointer"
+                    onClick={handleDirectBookInspection}
+                    className={`flex items-center gap-1 px-3.5 py-1.5 rounded-full border text-xs font-bold shrink-0 shadow-xs cursor-pointer transition-all ${
+                      effectiveIsInspectionSelected
+                        ? "border-amber-500 bg-amber-500 text-slate-950 font-black ring-2 ring-amber-400/30"
+                        : "border-amber-300 bg-amber-50 text-amber-800"
+                    }`}
                   >
                     <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
                     <span>Book Inspection</span>
                   </button>
                 )}
               </div>
->>>>>>> e17da473130eaa586567d64ab59caed963ad2255
 
               {/* Desktop Vertical Services Sidebar */}
               <div className="hidden lg:flex lg:w-[240px] shrink-0 flex-col gap-1 lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
@@ -1122,7 +1023,7 @@ export function ModernServiceCatalogView({
                   Services
                 </h3>
                 {services.map(sub => {
-                  const isSelected = activeSubService?.id === sub.id
+                  const isSelected = !effectiveIsInspectionSelected && activeSubService?.id === sub.id
                   const IconComp = resolveServiceIcon(sub.name)
 
                   return (
@@ -1130,6 +1031,7 @@ export function ModernServiceCatalogView({
                       key={sub.id}
                       type="button"
                       onClick={() => {
+                        setIsInspectionSelected(false)
                         setActiveSubService(sub)
                         setSearchParams((prev) => {
                           const next = new URLSearchParams(prev)
@@ -1171,8 +1073,8 @@ export function ModernServiceCatalogView({
                 {isAcApplianceCategory && (
                   <button
                     type="button"
-                    onClick={() => navigate("/ac-inspection")}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-dashed border-amber-300 bg-amber-50/60 hover:bg-amber-50 transition-all cursor-pointer text-left"
+                    onClick={handleDirectBookInspection}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all cursor-pointer text-left ${effectiveIsInspectionSelected ? "border-amber-500 bg-amber-100/80 shadow-xs ring-2 ring-amber-400/30" : "border-dashed border-amber-300 bg-amber-50/60 hover:bg-amber-50"}`}
                   >
                     <div className="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center bg-white text-amber-600 border border-amber-200 shadow-xs">
                       <AlertCircle className="w-5 h-5" />
@@ -1289,6 +1191,7 @@ export function ModernServiceCatalogView({
                       key={sub.id}
                       type="button"
                       onClick={() => {
+                        setIsInspectionSelected(false)
                         setActiveSubService(sub)
                         setSearchParams((prev) => {
                           const next = new URLSearchParams(prev)
@@ -1315,33 +1218,25 @@ export function ModernServiceCatalogView({
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-<<<<<<< HEAD
                     {isGoodsTransportCategory
                       ? "Choose Your Vehicle"
                       : effectiveIsInspectionSelected
                         ? (inspectionConfig?.title || "AC Inspection & Diagnostic Visit")
                         : "Choose a Package"}
-=======
-                    {isGoodsTransportCategory ? "Choose Your Vehicle" : "Choose a Package"}
->>>>>>> e17da473130eaa586567d64ab59caed963ad2255
+
                   </h3>
                   {isGoodsTransportCategory && (
                     <p className="text-xs text-slate-500 font-medium mt-0.5">
                       Select the right vehicle for your goods
                     </p>
                   )}
-<<<<<<< HEAD
                   {effectiveIsInspectionSelected && (
                     <p className="text-xs text-slate-500 font-medium mt-0.5">
                       {inspectionConfig?.subtitle || "Certified doorstep diagnostic and itemized quote before repair"}
                     </p>
                   )}
                 </div>
-                {!effectiveIsInspectionSelected && displayedPackages.length > 1 && (
-=======
-                </div>
-                {currentServicePackages.length > 1 && (
->>>>>>> e17da473130eaa586567d64ab59caed963ad2255
+                {!effectiveIsInspectionSelected && currentServicePackages.length > 1 && (
                   <button
                     type="button"
                     onClick={() => setIsCompareModalOpen(true)}
@@ -1353,36 +1248,6 @@ export function ModernServiceCatalogView({
                 )}
               </div>
 
-<<<<<<< HEAD
-              {/* Quick Jump Bar -- only rendered when there are 3 or more distinct sections, acting as smooth anchor jumps without hiding packages */}
-              {!isGoodsTransportCategory && !effectiveIsInspectionSelected && packageSections.length > 2 && (
-                <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none pt-1">
-                  {packageSections.map(section => {
-                    if (!section.label) return null
-                    return (
-                      <button
-                        key={section.id}
-                        type="button"
-                        onClick={() => {
-                          const el = document.getElementById(`section-${section.id}`)
-                          if (el) {
-                            el.scrollIntoView({ behavior: "smooth", block: "start" })
-                          }
-                        }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap border bg-white border-slate-200 text-slate-700 hover:border-emerald-500 hover:text-emerald-700 shrink-0 shadow-2xs hover:bg-emerald-50/50"
-                      >
-                        <span>{section.label}</span>
-                        <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600">
-                          {section.packages.length}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-
-=======
->>>>>>> e17da473130eaa586567d64ab59caed963ad2255
               {/* Package List. Goods & Transport gets a "vehicle card" grid
                   (image up top, capacity/spec bullets, Starting-from price,
                   Know More + Proceed to Booking) matching the look of the
@@ -1390,7 +1255,6 @@ export function ModernServiceCatalogView({
                   category keeps the horizontal-row layout. Same underlying
                   data/handlers (getCartQty/addToCart/setDetailsPackage/etc)
                   either way, just a different skin. */}
-<<<<<<< HEAD
               {isAcApplianceCategory && effectiveIsInspectionSelected ? (
                 <div className="flex flex-col gap-3.5">
                   {/* ── Admin Storefront Quick Control Strip ── */}
@@ -1603,36 +1467,11 @@ export function ModernServiceCatalogView({
                   </div>
                 </div>
               ) : (
-                /* Package Sections -- groups packages under meaningful variant sections */
-                <div className="space-y-6">
-                  {packageSections.map(section => (
-                    <div key={section.id} id={`section-${section.id}`} className="space-y-3">
-                      {section.label && (
-                        <div className="pt-2 pb-1 border-b border-slate-100 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
-                          <h4 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                            <span>{section.label}</span>
-                          </h4>
-                          {section.description && (
-                            <span className="text-xs text-slate-500 font-medium">
-                              {section.description}
-                            </span>
-                          )}
-                        </div>
-                      )}
-
-                      <div className={isGoodsTransportCategory
-                        ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-                        : "flex flex-col gap-3.5"
-                      }>
-                        {section.packages.map(pkg => {
-=======
-              <div className={isGoodsTransportCategory
-                ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-                : "flex flex-col gap-3.5"
-              }>
-                {currentServicePackages.map(pkg => {
->>>>>>> e17da473130eaa586567d64ab59caed963ad2255
+                <div className={isGoodsTransportCategory
+                  ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                  : "flex flex-col gap-3.5"
+                }>
+                  {currentServicePackages.map(pkg => {
                   const qty = getCartQty(pkg)
                   const isSelected = qty > 0
 
@@ -1961,6 +1800,7 @@ export function ModernServiceCatalogView({
                   )
                 })}
               </div>
+            )}
             </div>
 
           </div>
@@ -2515,6 +2355,27 @@ export function ModernServiceCatalogView({
             </button>
           </div>
         </div>
+      )}
+      {/* AC Inspection Modals */}
+      {showInspectionDetailsModal && (
+        <ACInspectionDetailsModal
+          isOpen={showInspectionDetailsModal}
+          onClose={() => setShowInspectionDetailsModal(false)}
+          config={inspectionConfig}
+          onBookInspection={handleDirectBookInspection}
+          onIncrementInspection={() => setInspectionCartQty(inspectionQty + 1)}
+          onDecrementInspection={() => setInspectionCartQty(Math.max(0, inspectionQty - 1))}
+          inCart={inspectionQty > 0}
+          cartQty={inspectionQty}
+        />
+      )}
+      {showInspectionCustomizerModal && (
+        <ACInspectionCustomizerModal
+          isOpen={showInspectionCustomizerModal}
+          onClose={() => setShowInspectionCustomizerModal(false)}
+          currentConfig={inspectionConfig}
+          onSaved={(newCfg) => setInspectionConfig(newCfg)}
+        />
       )}
     </div>
   )

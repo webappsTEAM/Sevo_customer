@@ -16,13 +16,7 @@ import { routes } from "../routes.js"
 import { HeroServiceVisualization } from "../components/HeroServiceVisualization.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
-import { AllServicesDrawer } from "../components/AllServicesDrawer.jsx"
-<<<<<<< HEAD
 import { BkStyles, CustomerAccountModal, CartDrawerModal } from "./BookingPage.jsx"
-import { CATEGORIES as BOOKING_CATEGORIES } from "./categoriesData.js"
-=======
-import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, MasonPackageModal, BkStyles, CustomerAccountModal, AddAddressSearchModal, CartDrawerModal } from "./BookingPage.jsx"
->>>>>>> e17da473130eaa586567d64ab59caed963ad2255
 import { ModernServiceCatalogView } from "../components/ModernServiceCatalogView.jsx"
 import { estimationRepository } from "../../services/estimation/estimationRepository.js"
 import { SelectServiceAddressDrawer } from "../components/AddressPicker/index.js"
@@ -2536,31 +2530,12 @@ export function LandingPage() {
         const isPrev = searchParams.get("preview") === "true" || window.parent !== window
         const isEd = searchParams.get("edit") === "true" || homeEditMode
         const prevParams = isPrev ? `&preview=true${isEd ? "&edit=true" : ""}` : ""
-        if (screen === "pillars") {
-          setIsHomeServicesCombinedModalOpen(true)
-          setIsHomePestModalOpen(false)
-        } else if (screen === "homepest" || screen === "subcategories") {
-<<<<<<< HEAD
-          setIsAllServicesOpen(false)
+        if (screen === "pillars" || screen === "homepest" || screen === "subcategories") {
           navigate(`?category=home_pest_control${prevParams}`)
         } else if (screen === "kitchen") {
-          setIsAllServicesOpen(false)
           navigate(`?category=kitchen_cleaning${prevParams}`)
         } else if (screen === "home") {
-          setIsAllServicesOpen(false)
           navigate(`/home?preview=true${isEd ? "&edit=true" : ""}`)
-=======
-          setIsHomePestModalOpen(true)
-          setIsHomeServicesCombinedModalOpen(false)
-        } else if (screen === "kitchen") {
-          setIsHomeServicesCombinedModalOpen(false)
-          setIsHomePestModalOpen(false)
-          navigate("?category=kitchen_cleaning")
-        } else if (screen === "home") {
-          setIsHomeServicesCombinedModalOpen(false)
-          setIsHomePestModalOpen(false)
-          navigate("/home?preview=true")
->>>>>>> e17da473130eaa586567d64ab59caed963ad2255
         }
       }
     }
@@ -5380,7 +5355,6 @@ export function LandingPage() {
           </div>
         </section>
 
-<<<<<<< HEAD
         {/* ── Vendor Hire Banner ── */}
         {(homeConfig.vendorBanner?.enabled !== false) && (
           <section className="max-w-7xl mx-auto px-4 sm:px-6 my-10">
@@ -5435,47 +5409,6 @@ export function LandingPage() {
             </div>
           </section>
         )}
-=======
-        {/* ── 10. Newsletter / Email Subscription Banner (Dark Emerald #004d40) ──── */}
-        <section className="hidden md:block max-w-7xl mx-auto px-4 sm:px-6 py-6">
-          <div className="bg-[#004d40] text-white rounded-3xl p-6 sm:p-8 shadow-lg flex flex-col lg:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-4 text-center lg:text-left">
-              <div className="w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center shrink-0 border border-white/20">
-                <Mail className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h3 className="text-lg sm:text-xl font-black">
-                  Stay Updated with Best Offers!
-                </h3>
-                <p className="text-teal-100 text-xs sm:text-sm mt-0.5 font-medium">
-                  Subscribe to our newsletter
-                </p>
-              </div>
-            </div>
-
-            <form onSubmit={handleNewsletterSubmit} className="w-full max-w-md flex items-center bg-white rounded-full p-1.5 shadow-inner">
-              <input
-                type="email"
-                required
-                value={newsletterEmail}
-                onChange={(e) => setNewsletterEmail(e.target.value)}
-                placeholder="Enter your email"
-                className="flex-1 bg-transparent px-4 text-xs sm:text-sm text-slate-800 outline-none placeholder:text-slate-400 font-medium"
-              />
-              <button
-                type="submit"
-                className="px-5 py-2 rounded-full bg-[#004d40] hover:bg-[#00382f] text-white text-xs font-black transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
-              >
-                {newsletterSubscribed ? "Subscribed!" : "Subscribe"}
-              </button>
-            </form>
-
-            <span className="text-xs text-teal-100 font-medium max-w-[200px] text-center lg:text-right hidden lg:block">
-              Get exclusive deals &amp; updates straight to your inbox.
-            </span>
-          </div>
-        </section>
->>>>>>> e17da473130eaa586567d64ab59caed963ad2255
 
         {/* ── 11. Comprehensive SEVO Footer (6 Columns Matching Spec) ──────────── */}
         <footer id="about-us" className="hidden md:block bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 pt-12 border-t border-slate-200 dark:border-slate-800 scroll-mt-24 pb-16 lg:pb-0 transition-colors duration-200">
