@@ -51,7 +51,7 @@ class GeminiProvider(BaseLLMProvider):
         contents: List[Dict[str, Any]] = []
         for m in messages:
             raw_role = m.get("role", "user")
-            content_str = str(m.get("content") or "").strip()
+            content_str = (m.get("content") or "").strip()
             if not content_str:
                 continue
 

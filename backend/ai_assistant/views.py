@@ -1,7 +1,7 @@
 import os
 import json
 import uuid
-from typing import Dict, Any, List
+from typing import Dict, Any, List, cast
 from rest_framework import status, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -918,7 +918,7 @@ class AIHandoffClaimView(APIView):
 
     def post(self, request, pk):
         try:
-            with transaction.atomic():
+            with cast(Any, transaction.atomic()):
                 conv = Conversation.objects.select_for_update().get(id=pk)
                 meta = conv.metadata or {}
                 if not meta.get("handed_to_human"):
@@ -1016,7 +1016,7 @@ class AIHandoffCreateTicketView(APIView):
 
     def post(self, request, pk):
         try:
-            with transaction.atomic():
+            with cast(Any, transaction.atomic()):
                 conv = Conversation.objects.select_for_update().get(id=pk)
                 meta = conv.metadata or {}
                 if not meta.get("handed_to_human"):

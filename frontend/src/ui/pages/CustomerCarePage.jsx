@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import {
   Headset, RefreshCw, Search, Filter, Plus, X, Lock, Send, IndianRupee,
   PhoneCall, FileText, Activity, Check, Clock, User, Calendar, AlertCircle,
-  CornerDownRight, Paperclip, ChevronRight, AlertTriangle, CheckCircle2,
+  CornerDownRight, Paperclip, ChevronRight, AlertTriangle, CheckCircle, CheckCircle2,
   Users, BarChart3, HelpCircle, Shield, ArrowUpRight,
   Bot, MessageSquare, Image as ImageIcon, ExternalLink, UserCheck, MessageCircle
 } from "lucide-react"
