@@ -1,4 +1,14 @@
-/**
+import React from 'react';
+  
+  const QuickCommercePricing = () =>  {
+	return (
+	  <div>
+	  </div>
+	);
+  }
+  
+  export default QuickCommercePricing;
+  /**
  * Quick Commerce Pricing Configuration & Calculations
  * Single source of truth for Blinkit-style tiered pricing across:
  * - Cart Drawer (VegCartDrawerModal.jsx)
