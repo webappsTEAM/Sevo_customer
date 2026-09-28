@@ -928,6 +928,16 @@ export function MarketplacePage() {
                   Sign In
                 </button>
               )}
+              {user && (
+                <Link
+                  to={routes.account_bookings}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-colors cursor-pointer"
+                  title="My Orders"
+                >
+                  <Package className="w-4 h-4" />
+                  <span className="hidden sm:inline">Orders</span>
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={() => setCartDrawerOpen(true)}
@@ -2053,43 +2063,6 @@ export function MarketplacePage() {
               </div>
             </motion.div>
           </div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Persistent Active Order Floating Tracker Pill ── */}
-      <AnimatePresence>
-        {!trackingModalOpen && activeOrder && !["DELIVERED", "CANCELLED"].includes(activeOrder.status) && (
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 30 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 max-w-md w-[calc(100%-2rem)]"
-          >
-            <button
-              type="button"
-              onClick={() => setTrackingModalOpen(true)}
-              className="w-full bg-slate-900/95 hover:bg-slate-900 text-white backdrop-blur-md rounded-2xl p-3.5 shadow-2xl border border-slate-700/60 flex items-center justify-between gap-3 transition-all group cursor-pointer"
-            >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <span className="relative flex h-2.5 w-2.5 shrink-0">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                </span>
-                <div className="text-left truncate">
-                  <div className="text-xs font-black truncate">
-                    Order #{activeOrder.order_number} • <span className="text-emerald-400">{activeOrder.status_label || "Active"}</span>
-                  </div>
-                  <div className="text-[11px] text-slate-400 truncate">
-                    {activeOrder.seller_name || "Marketplace"} • Tap to view live tracking
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-1 bg-emerald-600 group-hover:bg-emerald-500 text-white text-xs font-extrabold px-3 py-1.5 rounded-xl shrink-0 transition-colors shadow-sm">
-                <span>Track</span>
-                <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-              </div>
-            </button>
-          </motion.div>
         )}
       </AnimatePresence>
 
