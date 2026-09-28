@@ -302,6 +302,122 @@ class Phase10BCategoryBrowsingTests(TestCase):
         self.assertNotIn("Bearer", resp_str)
         self.assertNotIn("secret", resp_str.lower())
 
+    @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.get_categories")
+    def test_09b_category_endpoint_top_level_filter(self, mock_get_cats):
+        """GET /api/marketplace/categories/?top_level=true returns only root categories without leaves."""
+        multi_root_tree = [
+            {
+                "id": 1,
+                "name": "Groceries",
+                "slug": "groceries",
+                "parent_id": None,
+                "sort_order": 1,
+                "icon": "ShoppingBag",
+                "icon_key": "ShoppingBag",
+                "image_url": "https://example.com/groceries.jpg",
+                "is_leaf": False,
+                "has_children": True,
+                "product_count": 0,
+                "total_product_count": 4,
+                "children": [
+                    {
+                        "id": 2,
+                        "name": "Dairy & Eggs",
+                        "slug": "dairy-eggs",
+                        "parent_id": 1,
+                        "sort_order": 1,
+                        "icon_key": "Milk",
+                        "image_url": "https://example.com/dairy.jpg",
+                        "is_leaf": True,
+                        "has_children": False,
+                        "product_count": 4,
+                        "total_product_count": 4,
+                        "children": [],
+                    }
+                ],
+            },
+            {
+                "id": 10,
+                "name": "Beverages",
+                "slug": "beverages",
+                "parent_id": None,
+                "sort_order": 2,
+                "icon": "CupSoda",
+                "icon_key": "CupSoda",
+                "image_url": "https://example.com/beverages.jpg",
+                "is_leaf": True,
+                "has_children": False,
+                "product_count": 5,
+                "total_product_count": 5,
+                "children": [],
+            }
+        ]
+        mock_get_cats.return_value = {
+            "success": True,
+            "data": multi_root_tree,
+        }
+
+        # 1. Top level query
+        resp = self.client.get("/api/marketplace/categories/?top_level=true")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.data.get("data", [])
+        self.assertEqual(len(data), 2)
+        root_names = [c["name"] for c in data]
+        self.assertEqual(root_names, ["Groceries", "Beverages"])
+        # Confirm leaf child (Dairy & Eggs) is excluded from root results and children key is stripped
+        self.assertNotIn("Dairy & Eggs", root_names)
+        self.assertNotIn("children", data[0])
+
+        # 2. Level=root query (alias)
+        cache.clear()
+        resp_root = self.client.get("/api/marketplace/categories/?level=root")
+        self.assertEqual(resp_root.status_code, status.HTTP_200_OK)
+        data_root = resp_root.data.get("data", [])
+        self.assertEqual(len(data_root), 2)
+
+        # 3. Standard full-tree query remains unaffected
+        cache.clear()
+        resp_tree = self.client.get("/api/marketplace/categories/")
+        self.assertEqual(resp_tree.status_code, status.HTTP_200_OK)
+        data_tree = resp_tree.data.get("data", [])
+        self.assertEqual(len(data_tree), 2)
+        self.assertIn("children", data_tree[0])
+        self.assertEqual(len(data_tree[0]["children"]), 1)
+        self.assertEqual(data_tree[0]["children"][0]["name"], "Dairy & Eggs")
+
+    @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.get_categories")
+    def test_09c_category_endpoint_image_url_and_icon_key(self, mock_get_cats):
+        """GET /api/marketplace/categories/ preserves image_url and icon_key fields."""
+        mock_get_cats.return_value = {
+            "success": True,
+            "data": [
+                {
+                    "id": 1,
+                    "name": "Groceries",
+                    "slug": "groceries",
+                    "parent_id": None,
+                    "sort_order": 1,
+                    "icon": "",
+                    "icon_key": "shopping_bag",
+                    "image": "",
+                    "image_url": "https://example.com/groceries_photo.webp",
+                    "is_leaf": True,
+                    "has_children": False,
+                    "product_count": 2,
+                    "total_product_count": 2,
+                    "children": [],
+                }
+            ],
+        }
+
+        resp = self.client.get("/api/marketplace/categories/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        cat = resp.data["data"][0]
+        self.assertEqual(cat["image_url"], "https://example.com/groceries_photo.webp")
+        self.assertEqual(cat["image"], "https://example.com/groceries_photo.webp")
+        self.assertEqual(cat["icon_key"], "shopping_bag")
+        self.assertEqual(cat["icon"], "shopping_bag")
+
     # ── 3. Product List Filtering Tests ───────────────────────────────────────
 
     @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.fetch_products")

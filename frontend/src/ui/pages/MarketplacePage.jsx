@@ -7,7 +7,11 @@ import {
   ShieldCheck, Sparkles, Filter, Trash2, Plus, Minus,
   RefreshCw, ChevronDown, Check, Info, AlertCircle, ShoppingBag,
   Layers, FolderTree, Tag, SlidersHorizontal, ArrowUpRight,
-  ListFilter, Grid, ChevronLeft
+  ListFilter, Grid, ChevronLeft,
+  Apple, Carrot, Milk, Coffee, Utensils, CupSoda, Cookie,
+  Fish, Egg, Beef, Shirt, Dumbbell, Laptop, Smartphone,
+  Tv, Bath, Baby, Home, Package, Boxes, Droplet, Hammer,
+  PaintRoller, Wrench, HeartPulse, Croissant
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { useAuth } from "../../state/auth/useAuth.js"
@@ -30,6 +34,91 @@ import {
 } from "../../services/marketplaceApi.js"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
+
+// Icon resolver for category icon_key / icon fallback
+const CATEGORY_ICON_LOOKUP = {
+  grid: Grid,
+  all: Grid,
+  shoppingbag: ShoppingBag,
+  shopping_bag: ShoppingBag,
+  apple: Apple,
+  fruit: Apple,
+  fruits: Apple,
+  carrot: Carrot,
+  vegetable: Carrot,
+  vegetables: Carrot,
+  groceries: ShoppingBag,
+  grocery: ShoppingBag,
+  dairy: Milk,
+  milk: Milk,
+  beverages: CupSoda,
+  beverage: CupSoda,
+  drinks: CupSoda,
+  coffee: Coffee,
+  tea: Coffee,
+  snacks: Cookie,
+  snack: Cookie,
+  cookie: Cookie,
+  cookies: Cookie,
+  biscuit: Cookie,
+  meat: Beef,
+  chicken: Beef,
+  fish: Fish,
+  seafood: Fish,
+  egg: Egg,
+  eggs: Egg,
+  bakery: Croissant,
+  bread: Croissant,
+  personalcare: Bath,
+  personal_care: Bath,
+  cleaning: Sparkles,
+  household: Home,
+  babycare: Baby,
+  baby_care: Baby,
+  baby: Baby,
+  electronics: Laptop,
+  mobile: Smartphone,
+  appliances: Tv,
+  appliance: Tv,
+  fashion: Shirt,
+  clothing: Shirt,
+  health: HeartPulse,
+  fitness: Dumbbell,
+  package: Package,
+  boxes: Boxes,
+  store: Store,
+  tag: Tag,
+  layers: Layers,
+  default: ShoppingBag,
+}
+
+function getCategoryIconComponent(iconKey, categoryName = "") {
+  if (iconKey) {
+    const key = String(iconKey).toLowerCase().replace(/[-_\s]+/g, "")
+    if (CATEGORY_ICON_LOOKUP[key]) return CATEGORY_ICON_LOOKUP[key]
+  }
+  const name = String(categoryName || "").toLowerCase()
+  if (name.includes("veg") || name.includes("carrot")) return Carrot
+  if (name.includes("fruit") || name.includes("apple")) return Apple
+  if (name.includes("dairy") || name.includes("milk") || name.includes("curd")) return Milk
+  if (name.includes("bev") || name.includes("drink") || name.includes("juice") || name.includes("soda") || name.includes("cola")) return CupSoda
+  if (name.includes("snack") || name.includes("cookie") || name.includes("biscuit") || name.includes("chip") || name.includes("namkeen")) return Cookie
+  if (name.includes("meat") || name.includes("chicken") || name.includes("mutton")) return Beef
+  if (name.includes("fish") || name.includes("prawn") || name.includes("sea")) return Fish
+  if (name.includes("egg")) return Egg
+  if (name.includes("bake") || name.includes("bread") || name.includes("cake")) return Croissant
+  if (name.includes("clean") || name.includes("detergent") || name.includes("wash")) return Sparkles
+  if (name.includes("care") || name.includes("bath") || name.includes("soap") || name.includes("shampoo")) return Bath
+  if (name.includes("baby") || name.includes("diaper")) return Baby
+  if (name.includes("cloth") || name.includes("fashion") || name.includes("wear")) return Shirt
+  if (name.includes("electro") || name.includes("tech") || name.includes("gadget")) return Laptop
+  if (name.includes("phone") || name.includes("mobile")) return Smartphone
+  if (name.includes("appliance") || name.includes("tv")) return Tv
+  if (name.includes("fit") || name.includes("gym")) return Dumbbell
+  if (name.includes("health") || name.includes("pharma") || name.includes("med")) return HeartPulse
+  
+  return ShoppingBag
+}
 
 // Helper to recursively find category by slug or id in a tree
 function findCategoryInTree(nodes, slugOrId) {
@@ -60,83 +149,238 @@ function getCategoryPathFromTree(nodes, slugOrId, currentPath = []) {
   return []
 }
 
-// Category Tree Node Component for Left Rail & Mobile Drawer
-function CategoryTreeItem({ node, selectedSlug, expandedIds, toggleExpand, onSelect, level = 0 }) {
-  const isSelected = selectedSlug === node.slug || String(selectedSlug) === String(node.id)
-  const isExpanded = expandedIds.has(node.id)
-  const hasChildren = Array.isArray(node.children) && node.children.length > 0
-  const productCount = node.total_product_count !== undefined ? node.total_product_count : (node.product_count || 0)
+// Subcategory Nested Sidebar Item Component (Instamart Style Stacked)
+function SubcategorySidebarTile({ child, isSelected, onSelect }) {
+  const [imgError, setImgError] = useState(false)
+  const imageUrl = child?.image_url || child?.image || null
+  const iconKey = child?.icon_key || child?.icon || child?.slug || ""
+  const name = child?.name || ""
+  const count = child?.total_product_count !== undefined ? child.total_product_count : (child?.product_count || 0)
+
+  const IconComponent = useMemo(() => {
+    return getCategoryIconComponent(iconKey, name)
+  }, [iconKey, name])
+
+  const showImage = Boolean(imageUrl && !imgError)
+
+  return (
+    <div
+      onClick={(e) => {
+        e.stopPropagation()
+        onSelect(child)
+      }}
+      role="button"
+      tabIndex={0}
+      aria-current={isSelected ? "page" : undefined}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          e.stopPropagation()
+          onSelect(child)
+        }
+      }}
+      className={`group relative flex flex-col items-center text-center p-2 rounded-2xl transition-all duration-200 cursor-pointer border select-none ${
+        isSelected
+          ? "bg-emerald-100/90 border-emerald-500 text-emerald-950 font-bold shadow-2xs ring-1 ring-emerald-500/20"
+          : "bg-white/90 border-slate-200/70 hover:bg-slate-50 hover:border-slate-300 text-slate-700 hover:text-slate-900"
+      }`}
+    >
+      {/* Active Left Indicator Bar */}
+      {isSelected && (
+        <span className="absolute left-0 top-2.5 bottom-2.5 w-1 rounded-r-full bg-emerald-600" />
+      )}
+
+      {/* Subcategory Thumbnail / Icon Box (Fixed Square Container Matching Top-Level w-16 h-16) */}
+      <div className="relative">
+        <div
+          className={`w-16 h-16 rounded-2xl shrink-0 flex items-center justify-center overflow-hidden transition-transform duration-200 group-hover:scale-[1.03] border ${
+            isSelected
+              ? "bg-white border-emerald-300 text-emerald-700"
+              : "bg-slate-50 border-slate-200/70 text-slate-500 group-hover:bg-white group-hover:border-slate-300"
+          }`}
+        >
+          {showImage ? (
+            <img
+              src={imageUrl}
+              alt={name}
+              className="w-full h-full object-cover object-center"
+              onError={() => setImgError(true)}
+              loading="lazy"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center p-3">
+              <IconComponent className={`w-7 h-7 transition-colors ${isSelected ? "text-emerald-700" : "text-slate-400 group-hover:text-slate-600"}`} />
+            </div>
+          )}
+        </div>
+
+        {/* Count Badge on Image Corner */}
+        {count > 0 && (
+          <span
+            className={`absolute -bottom-1.5 -right-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full tabular-nums shadow-xs transition-colors ring-2 ${
+              isSelected
+                ? "bg-emerald-600 text-white ring-white"
+                : "bg-slate-700 text-white ring-white group-hover:bg-slate-800"
+            }`}
+          >
+            {count}
+          </span>
+        )}
+      </div>
+
+      {/* Subcategory Label Centered Below Image */}
+      <div className="mt-2 w-full px-0.5">
+        <span className={`text-[11.5px] leading-snug line-clamp-2 block text-center transition-colors ${
+          isSelected ? "font-extrabold text-emerald-950" : "font-semibold text-slate-700 group-hover:text-slate-900"
+        }`}>
+          {name}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// Instamart-Style Visual Category Sidebar Tile Component (Stacked Vertical Layout)
+function CategorySidebarTile({
+  cat,
+  isSelected,
+  selectedSlug,
+  onSelect,
+  isExpanded = false,
+  toggleExpand,
+  isAll = false,
+  totalCount = 0
+}) {
+  const [imgError, setImgError] = useState(false)
+  const imageUrl = isAll ? null : (cat?.image_url || cat?.image || null)
+  const iconKey = isAll ? "grid" : (cat?.icon_key || cat?.icon || cat?.slug || "")
+  const name = isAll ? "All Products" : (cat?.name || "")
+  const count = isAll ? totalCount : (cat?.total_product_count !== undefined ? cat.total_product_count : (cat?.product_count || 0))
+  const hasChildren = !isAll && Array.isArray(cat?.children) && cat.children.length > 0
+
+  const IconComponent = useMemo(() => {
+    if (isAll) return Grid
+    return getCategoryIconComponent(iconKey, name)
+  }, [isAll, iconKey, name])
+
+  const showImage = Boolean(imageUrl && !imgError)
+
+  const handleTileClick = () => {
+    onSelect(isAll ? null : cat)
+    if (hasChildren && !isExpanded && toggleExpand) {
+      toggleExpand(cat.id || cat.slug)
+    }
+  }
 
   return (
     <div className="select-none">
       <div
-        className={`group flex items-center justify-between gap-1.5 px-3 py-2 rounded-xl text-xs transition-all cursor-pointer ${
-          isSelected
-            ? "bg-emerald-600 text-white shadow-sm font-bold"
-            : "text-slate-700 hover:bg-slate-100 hover:text-slate-900 font-medium"
-        }`}
-        style={{ paddingLeft: `${Math.max(12, level * 14 + 12)}px` }}
-        onClick={() => onSelect(node)}
+        onClick={handleTileClick}
         role="button"
         tabIndex={0}
         aria-current={isSelected ? "page" : undefined}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault()
-            onSelect(node)
+            handleTileClick()
           }
         }}
+        className={`group relative flex flex-col items-center text-center p-2.5 rounded-2xl transition-all duration-200 cursor-pointer border ${
+          isSelected
+            ? "bg-emerald-50/95 border-emerald-500/80 shadow-xs ring-1 ring-emerald-500/30 text-emerald-950 font-bold"
+            : "bg-white border-slate-200/80 hover:bg-slate-50/90 hover:border-slate-300 text-slate-700 hover:text-slate-900"
+        }`}
       >
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          {hasChildren ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                toggleExpand(node.id)
-              }}
-              className={`p-0.5 rounded hover:bg-black/10 transition-colors ${
-                isSelected ? "text-white" : "text-slate-400 group-hover:text-slate-600"
-              }`}
-              aria-label={isExpanded ? `Collapse ${node.name}` : `Expand ${node.name}`}
-            >
-              {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-            </button>
-          ) : level > 0 ? (
-            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isSelected ? "bg-white" : "bg-slate-300"}`} />
-          ) : (
-            <ShoppingBag className={`w-3.5 h-3.5 shrink-0 ${isSelected ? "text-white" : "text-slate-400"}`} />
-          )}
-          <span className="truncate">{node.name}</span>
-        </div>
+        {/* Active Left Indicator Bar */}
+        {isSelected && (
+          <span className="absolute left-0 top-2.5 bottom-2.5 w-1.5 bg-emerald-600 rounded-r-full" />
+        )}
 
-        {productCount > 0 && (
-          <span
-            className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full shrink-0 ${
+        {/* Expand / Collapse Chevron Button for Categories with Children */}
+        {hasChildren && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              toggleExpand?.(cat.id || cat.slug)
+            }}
+            className={`absolute top-1.5 right-1.5 p-1 rounded-lg transition-colors cursor-pointer z-10 ${
               isSelected
-                ? "bg-emerald-700/90 text-white"
-                : "bg-slate-200/80 text-slate-600 group-hover:bg-slate-300"
+                ? "text-emerald-800 hover:bg-emerald-200/70"
+                : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+            }`}
+            aria-label={isExpanded ? `Collapse ${name}` : `Expand ${name}`}
+          >
+            {isExpanded ? (
+              <ChevronDown className="w-3.5 h-3.5 stroke-[2.5]" />
+            ) : (
+              <ChevronRight className="w-3.5 h-3.5 stroke-[2.5]" />
+            )}
+          </button>
+        )}
+
+        {/* Instamart Photo Thumbnail / Icon Box (Fixed Square Container w-16 h-16) */}
+        <div className="relative">
+          <div
+            className={`w-16 h-16 rounded-2xl shrink-0 flex items-center justify-center overflow-hidden transition-transform duration-200 group-hover:scale-[1.03] border ${
+              isSelected
+                ? "bg-white border-emerald-300 shadow-xs text-emerald-700"
+                : "bg-slate-50 border-slate-200/80 text-slate-600 group-hover:bg-white group-hover:border-slate-300"
             }`}
           >
-            {productCount}
+            {showImage ? (
+              <img
+                src={imageUrl}
+                alt={name}
+                className="w-full h-full object-cover object-center"
+                onError={() => setImgError(true)}
+                loading="lazy"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center p-3">
+                <IconComponent className={`w-7 h-7 transition-colors ${isSelected ? "text-emerald-700" : "text-slate-500 group-hover:text-slate-700"}`} />
+              </div>
+            )}
+          </div>
+
+          {/* Product Count Badge on Image Corner */}
+          {count > 0 && (
+            <span
+              className={`absolute -bottom-1.5 -right-1.5 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full tabular-nums shadow-xs transition-colors ring-2 ${
+                isSelected
+                  ? "bg-emerald-600 text-white ring-white"
+                  : "bg-slate-800 text-white ring-white group-hover:bg-slate-900"
+              }`}
+            >
+              {count}
+            </span>
+          )}
+        </div>
+
+        {/* Category Label Below Image */}
+        <div className="mt-2 w-full px-0.5">
+          <span className={`text-xs leading-snug line-clamp-2 block text-center transition-colors ${
+            isSelected ? "font-black text-emerald-950" : "font-semibold text-slate-800 group-hover:text-slate-950"
+          }`}>
+            {name}
           </span>
-        )}
+        </div>
       </div>
 
-      {/* Nested Children Accordion */}
+      {/* Nested Expandable Subcategory List (Indented Single Column) */}
       {hasChildren && isExpanded && (
-        <div className="relative ml-2 pl-1 border-l border-slate-200 space-y-0.5 mt-0.5">
-          {node.children.map((child) => (
-            <CategoryTreeItem
-              key={child.id || child.slug}
-              node={child}
-              selectedSlug={selectedSlug}
-              expandedIds={expandedIds}
-              toggleExpand={toggleExpand}
-              onSelect={onSelect}
-              level={level + 1}
-            />
-          ))}
+        <div className="ml-2 pl-2 border-l-2 border-slate-200/80 space-y-1.5 mt-1.5 pb-1">
+          {cat.children.map((child) => {
+            const isChildSelected = selectedSlug === child.slug || String(selectedSlug) === String(child.id)
+            return (
+              <SubcategorySidebarTile
+                key={child.id || child.slug}
+                child={child}
+                isSelected={isChildSelected}
+                onSelect={onSelect}
+              />
+            )
+          })}
         </div>
       )}
     </div>
@@ -217,11 +461,15 @@ export function MarketplacePage() {
     return getCategoryPathFromTree(categoryTree, currentCategorySlug)
   }, [categoryTree, currentCategorySlug, activeCategoryNode])
 
-  // Deduplicated / aggregated root categories for clean pill bar and side rail
+  // Deduplicated / aggregated root categories only (no leaf/child categories) for Instamart sidebar & top pill bar
   const uniqueRootCategories = useMemo(() => {
     if (!Array.isArray(categoryTree)) return []
     const seen = new Map()
     for (const cat of categoryTree) {
+      // Exclude leaf/child categories -- only include root categories (parent_id is null/None)
+      if (cat.parent_id !== null && cat.parent_id !== undefined && cat.parent_id !== "" && cat.parent_id !== "null") {
+        continue
+      }
       const key = (cat.slug || cat.name || "").toLowerCase().trim()
       if (!seen.has(key)) {
         seen.set(key, { ...cat })
@@ -234,6 +482,10 @@ export function MarketplacePage() {
           const currentChildren = existing.children || []
           existing.children = [...currentChildren, ...cat.children]
         }
+        if (!existing.image_url && cat.image_url) existing.image_url = cat.image_url
+        if (!existing.image && cat.image) existing.image = cat.image
+        if (!existing.icon_key && cat.icon_key) existing.icon_key = cat.icon_key
+        if (!existing.icon && cat.icon) existing.icon = cat.icon
       }
     }
     return Array.from(seen.values())
@@ -252,17 +504,19 @@ export function MarketplacePage() {
         const next = new Set(prev)
         breadcrumbs.forEach((crumb) => {
           if (crumb.id) next.add(crumb.id)
+          if (crumb.slug) next.add(crumb.slug)
         })
         return next
       })
     }
   }, [breadcrumbs])
 
-  const toggleCategoryExpand = (id) => {
+  const toggleCategoryExpand = (idOrSlug) => {
+    if (!idOrSlug) return
     setExpandedCategoryIds((prev) => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      if (next.has(idOrSlug)) next.delete(idOrSlug)
+      else next.add(idOrSlug)
       return next
     })
   }
@@ -786,60 +1040,8 @@ export function MarketplacePage() {
           </div>
         </header>
 
-        {/* Hero Store Banner */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
-          <div className="bg-gradient-to-r from-emerald-950 via-teal-900 to-slate-950 rounded-3xl p-6 sm:p-8 text-white relative overflow-hidden shadow-xl border border-emerald-800/30">
-            <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-              <div className="max-w-xl">
-                <div className="inline-flex items-center gap-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-3 py-1 rounded-full text-xs font-bold backdrop-blur-sm mb-3">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  <span>100% Quality & Freshness Guarantee</span>
-                </div>
-                <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight leading-tight text-white">
-                  Direct from Certified <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-200">Seller Hub Partners</span>
-                </h2>
-                <p className="text-slate-300 text-xs sm:text-sm mt-2 leading-relaxed">
-                  Shop authentic branded groceries, dairy, staples, and packaged goods dispatched directly from verified local suppliers.
-                </p>
-                <div className="flex flex-wrap items-center gap-2.5 mt-4 text-xs font-semibold text-emerald-100">
-                  <span className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-xl backdrop-blur-sm border border-white/10 shadow-sm">
-                    <Truck className="w-3.5 h-3.5 text-emerald-400" /> Express Delivery
-                  </span>
-                  <span className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-xl backdrop-blur-sm border border-white/10 shadow-sm">
-                    <PackageCheck className="w-3.5 h-3.5 text-emerald-400" /> Sealed & Tamper-Proof
-                  </span>
-                  <span className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-xl backdrop-blur-sm border border-white/10 shadow-sm">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-300" /> Best Price Assured
-                  </span>
-                </div>
-              </div>
-
-              {/* Verified Stores Card */}
-              <div className="hidden md:flex flex-col gap-2.5 bg-white/10 backdrop-blur-md border border-white/15 p-5 rounded-2xl shrink-0 w-64 shadow-lg">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-slate-200 font-medium">Marketplace Hub</span>
-                  <span className="text-[11px] font-black text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-500/40">
-                    Live Verified
-                  </span>
-                </div>
-                <div className="text-xl font-black text-white flex items-center gap-2">
-                  <Store className="w-5 h-5 text-emerald-400" />
-                  <span>{availableSellers.length > 0 ? availableSellers.length : 1} Local Store{availableSellers.length > 1 ? "s" : ""}</span>
-                </div>
-                <p className="text-[11px] text-slate-300 border-t border-white/10 pt-2 leading-relaxed">
-                  Dispatched straight from local vendor warehouses for quick delivery and freshness.
-                </p>
-              </div>
-            </div>
-
-            {/* Ambient Background glows */}
-            <div className="absolute right-0 top-0 bottom-0 w-96 bg-gradient-to-l from-emerald-500/20 via-teal-500/10 to-transparent pointer-events-none" />
-            <div className="absolute -left-12 -bottom-12 w-48 h-48 bg-emerald-600/20 rounded-full blur-3xl pointer-events-none" />
-          </div>
-        </section>
-
         {/* Products Grid Section with Left Category Rail */}
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {/* Category Not Found Banner */}
           {categoryNotFound && (
             <div className="mb-6 bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between gap-4 text-amber-900">
@@ -859,78 +1061,67 @@ export function MarketplacePage() {
             </div>
           )}
 
-          <div className="flex items-start gap-6 lg:gap-8">
-            {/* Desktop Left Category Rail */}
-            <aside className="w-64 lg:w-72 shrink-0 hidden lg:block sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-1 space-y-4">
-              <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-sm">
-                <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <ListFilter className="w-4 h-4 text-emerald-600" />
-                    <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
+          <div className="flex items-start gap-4 lg:gap-6">
+            {/* Desktop Left Category Rail (Instamart Compact Rail) */}
+            <aside className="w-28 sm:w-32 lg:w-36 shrink-0 hidden lg:block sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-0.5 space-y-2">
+              <div className="bg-white rounded-2xl border border-slate-200/80 p-2 shadow-sm space-y-2">
+                <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+                  <div className="flex items-center gap-1.5">
+                    <ListFilter className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span className="text-[11px] font-black text-slate-900 uppercase tracking-wider truncate">
                       Categories
                     </span>
                   </div>
                   {currentCategorySlug !== "all" && (
                     <button
                       onClick={() => handleSelectCategory(null)}
-                      className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer"
+                      className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer"
                     >
                       Reset
                     </button>
                   )}
                 </div>
 
-                {/* All Products Rail Item */}
-                <div
-                  className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-all cursor-pointer mb-1 ${
-                    currentCategorySlug === "all"
-                      ? "bg-emerald-600 text-white font-bold shadow-sm"
-                      : "text-slate-700 hover:bg-slate-100 font-medium"
-                  }`}
-                  onClick={() => handleSelectCategory(null)}
-                  role="button"
-                  tabIndex={0}
-                  aria-current={currentCategorySlug === "all" ? "page" : undefined}
-                >
-                  <div className="flex items-center gap-2">
-                    <Grid className={`w-3.5 h-3.5 ${currentCategorySlug === "all" ? "text-white" : "text-slate-500"}`} />
-                    <span>All Products</span>
-                  </div>
-                  {totalCatalogProductsCount > 0 && (
-                    <span
-                      className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
-                        currentCategorySlug === "all" ? "bg-emerald-700 text-white" : "bg-slate-100 text-slate-600"
-                      }`}
-                    >
-                      {totalCatalogProductsCount}
-                    </span>
-                  )}
-                </div>
+                {/* All Products Tile */}
+                <CategorySidebarTile
+                  isAll={true}
+                  isSelected={currentCategorySlug === "all"}
+                  onSelect={handleSelectCategory}
+                  totalCount={totalCatalogProductsCount}
+                />
 
-                {/* Category Tree Items */}
+                {/* Category Image Tiles */}
                 {categoriesLoading ? (
-                  <div className="space-y-2 py-2 animate-pulse">
+                  <div className="space-y-2 py-1 animate-pulse">
                     {[...Array(6)].map((_, i) => (
-                      <div key={i} className="h-8 bg-slate-100 rounded-xl" />
+                      <div key={i} className="h-14 bg-slate-100 rounded-2xl" />
                     ))}
                   </div>
                 ) : categoriesUnavailable ? (
-                  <div className="py-4 text-center text-xs text-slate-400">
+                  <div className="py-6 text-center text-xs text-slate-400">
                     <span>Categories temporarily unavailable</span>
                   </div>
                 ) : (
-                  <div className="space-y-1">
-                    {uniqueRootCategories.map((cat) => (
-                      <CategoryTreeItem
-                        key={cat.id || cat.slug}
-                        node={cat}
-                        selectedSlug={currentCategorySlug}
-                        expandedIds={expandedCategoryIds}
-                        toggleExpand={toggleCategoryExpand}
-                        onSelect={handleSelectCategory}
-                        level={0}
-                      />
-                    ))}
+                  <div className="space-y-1.5 pt-0.5">
+                    {uniqueRootCategories.map((cat) => {
+                      const catKey = cat.id || cat.slug
+                      const isDirectSelected = currentCategorySlug === cat.slug || String(currentCategorySlug) === String(cat.id)
+                      const isAncestorOfSelected = breadcrumbs.some((b) => b.slug === cat.slug || String(b.id) === String(cat.id))
+                      const isSelected = isDirectSelected || isAncestorOfSelected
+                      const isExpanded = expandedCategoryIds.has(cat.id) || expandedCategoryIds.has(cat.slug)
+
+                      return (
+                        <CategorySidebarTile
+                          key={catKey}
+                          cat={cat}
+                          isSelected={isSelected}
+                          selectedSlug={currentCategorySlug}
+                          isExpanded={isExpanded}
+                          toggleExpand={toggleCategoryExpand}
+                          onSelect={handleSelectCategory}
+                        />
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -1547,64 +1738,57 @@ export function MarketplacePage() {
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 250 }}
-              className="absolute left-0 top-0 bottom-0 w-4/5 max-w-xs bg-white shadow-2xl flex flex-col z-10 font-sans"
+              className="absolute left-0 top-0 bottom-0 w-36 sm:w-44 bg-white shadow-2xl flex flex-col z-10 font-sans"
               role="dialog"
               aria-modal="true"
               aria-label="Categories menu"
             >
-              <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-                <div className="flex items-center gap-2">
-                  <ListFilter className="w-4 h-4 text-emerald-600" />
-                  <h3 className="font-extrabold text-slate-900 text-sm">Browse Categories</h3>
+              <div className="p-3 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <div className="flex items-center gap-1.5">
+                  <ListFilter className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <h3 className="font-extrabold text-slate-900 text-xs">Categories</h3>
                 </div>
                 <button
                   type="button"
                   onClick={() => setCategoryDrawerOpen(false)}
-                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200 transition-colors cursor-pointer"
+                  className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200 transition-colors cursor-pointer"
                   aria-label="Close categories menu"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-3 space-y-1">
-                {/* All Products Item */}
-                <div
-                  className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all cursor-pointer mb-2 ${
-                    currentCategorySlug === "all"
-                      ? "bg-emerald-600 text-white font-bold"
-                      : "text-slate-700 hover:bg-slate-100 font-medium"
-                  }`}
-                  onClick={() => handleSelectCategory(null)}
-                  role="button"
-                  tabIndex={0}
-                  aria-current={currentCategorySlug === "all" ? "page" : undefined}
-                >
-                  <div className="flex items-center gap-2">
-                    <Grid className="w-4 h-4" />
-                    <span>All Products</span>
-                  </div>
-                  {totalCatalogProductsCount > 0 && (
-                    <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
-                      currentCategorySlug === "all" ? "bg-emerald-700 text-white" : "bg-slate-100 text-slate-600"
-                    }`}>
-                      {totalCatalogProductsCount}
-                    </span>
-                  )}
-                </div>
+              <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+                {/* All Products Tile */}
+                <CategorySidebarTile
+                  isAll={true}
+                  isSelected={currentCategorySlug === "all"}
+                  onSelect={handleSelectCategory}
+                  totalCount={totalCatalogProductsCount}
+                />
 
                 {/* Categories */}
-                {uniqueRootCategories.map((cat) => (
-                  <CategoryTreeItem
-                    key={cat.id || cat.slug}
-                    node={cat}
-                    selectedSlug={currentCategorySlug}
-                    expandedIds={expandedCategoryIds}
-                    toggleExpand={toggleCategoryExpand}
-                    onSelect={handleSelectCategory}
-                    level={0}
-                  />
-                ))}
+                <div className="space-y-1.5 pt-0.5">
+                  {uniqueRootCategories.map((cat) => {
+                    const catKey = cat.id || cat.slug
+                    const isDirectSelected = currentCategorySlug === cat.slug || String(currentCategorySlug) === String(cat.id)
+                    const isAncestorOfSelected = breadcrumbs.some((b) => b.slug === cat.slug || String(b.id) === String(cat.id))
+                    const isSelected = isDirectSelected || isAncestorOfSelected
+                    const isExpanded = expandedCategoryIds.has(cat.id) || expandedCategoryIds.has(cat.slug)
+
+                    return (
+                      <CategorySidebarTile
+                        key={catKey}
+                        cat={cat}
+                        isSelected={isSelected}
+                        selectedSlug={currentCategorySlug}
+                        isExpanded={isExpanded}
+                        toggleExpand={toggleCategoryExpand}
+                        onSelect={handleSelectCategory}
+                      />
+                    )
+                  })}
+                </div>
               </div>
             </motion.div>
           </div>
