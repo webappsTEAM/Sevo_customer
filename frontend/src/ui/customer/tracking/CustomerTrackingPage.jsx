@@ -460,12 +460,9 @@ export function CustomerTrackingPage({
               const isQuoteAccepted = ["CUSTOMER_ACCEPTED", "APPROVED", "CONVERTED", "ACCEPTED", "ADMIN_APPROVED"].includes(qStatus)
               const isChangesRequested = ["CHANGE_REQUESTED", "CHANGES_REQUESTED", "REQUESTED_CHANGES", "REQUOTE", "RE_QUOTE"].includes(qStatus)
               const isDeclined = ["DECLINED", "CUSTOMER_DECLINED", "REJECTED", "ADMIN_REJECTED", "CANCELLED", "EXPIRED"].includes(qStatus)
-              const isPending = [
-                "SENT", "SENT_TO_CUSTOMER", "PENDING", "PENDING_APPROVAL", "PENDING_REVIEW", 
-                "PENDING REVIEW", "PENDING_ADMIN_REVIEW", "PENDING ADMIN REVIEW", 
-                "AWAITING_CUSTOMER", "AWAITING_APPROVAL", "QUOTATION_SENT", "QUOTE_SENT", 
-                "DRAFT", "VIEWED", "NEW", "OPEN"
-              ].includes(qStatus) || (!isQuoteAccepted && !isChangesRequested && !isDeclined)
+              const isUnderReview = ["PENDING_REVIEW", "PENDING REVIEW", "PENDING_ADMIN_REVIEW", "PENDING ADMIN REVIEW", "UNDER_REVIEW", "DRAFT", "CRM_REVIEW", "PRE_SEND_REVIEW"].includes(qStatus)
+              if (isUnderReview || !["SENT", "SENT_TO_CUSTOMER", "OPEN", "VIEWED", "AWAITING_CUSTOMER", "QUOTATION_SENT", "QUOTE_SENT", "PENDING_CUSTOMER_APPROVAL", "CUSTOMER_ACCEPTED", "APPROVED", "CONVERTED", "ACCEPTED", "ADMIN_APPROVED", "CHANGE_REQUESTED", "CHANGES_REQUESTED", "REQUESTED_CHANGES", "REQUOTE", "RE_QUOTE", "DECLINED", "CUSTOMER_DECLINED", "REJECTED", "ADMIN_REJECTED", "CANCELLED", "EXPIRED"].includes(qStatus)) return null
+                const isPending = (["SENT", "SENT_TO_CUSTOMER", "OPEN", "VIEWED", "AWAITING_CUSTOMER", "QUOTATION_SENT", "QUOTE_SENT", "PENDING_CUSTOMER_APPROVAL"].includes(qStatus) || (!isQuoteAccepted && !isChangesRequested && !isDeclined && !isUnderReview)) && !isUnderReview
               
               const totalEst = q.grand_total || q.total_amount || q.net_payable || 0
               const itemsList = Array.isArray(q.items) ? q.items : []
@@ -507,10 +504,10 @@ export function CustomerTrackingPage({
                       padding: '4px 10px',
                       borderRadius: 8,
                       fontWeight: 800,
-                      background: isPending ? "#EFF6FF" : isQuoteAccepted ? "#ECFDF5" : isChangesRequested ? "#FFFBEB" : "#FEF2F2",
-                      color: isPending ? "#1E40AF" : isQuoteAccepted ? "#065F46" : isChangesRequested ? "#92400E" : "#991B1B"
+                      background: isUnderReview ? "#FEF3C7" : isPending ? "#EFF6FF" : isQuoteAccepted ? "#ECFDF5" : isChangesRequested ? "#FFFBEB" : "#FEF2F2",
+                      color: isUnderReview ? "#92400E" : isPending ? "#1E40AF" : isQuoteAccepted ? "#065F46" : isChangesRequested ? "#92400E" : "#991B1B"
                     }}>
-                      {isPending ? "Pending Your Approval" : isQuoteAccepted ? "Accepted / Approved" : isChangesRequested ? "Changes Requested" : isDeclined ? "Declined" : qStatus.replace(/_/g, " ")}
+                      {isUnderReview ? "Under SEVO Review" : isPending ? "Pending Your Approval" : isQuoteAccepted ? "Accepted / Approved" : isChangesRequested ? "Changes Requested" : isDeclined ? "Declined" : qStatus.replace(/_/g, " ")}
                     </span>
                   </div>
 
@@ -539,6 +536,21 @@ export function CustomerTrackingPage({
                   </div>
 
                   {/* Status alert message */}
+                  {isUnderReview && (
+                    <div style={{
+                      padding: '10px 14px',
+                      borderRadius: 10,
+                      marginBottom: 12,
+                      textAlign: 'left',
+                      background: "#FFFBEB",
+                      border: "1px solid #FEF3C7",
+                      color: "#92400E",
+                      fontSize: '0.82rem',
+                      fontWeight: 700
+                    }}>
+                      🕒 Quotation submitted by technician is currently under review by SEVO Operations / CRM team. Once verified and approved, it will be delivered for your review and acceptance.
+                    </div>
+                  )}
                   {(isQuoteAccepted || isChangesRequested || isDeclined) && (
                     <div style={{
                       padding: '8px 12px',

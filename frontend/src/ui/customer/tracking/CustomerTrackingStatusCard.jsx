@@ -1,14 +1,11 @@
-/**
- * CustomerTrackingStatusCard.jsx — Floating Rapido-Style Status Card & Technician Details Panel
- */
-
 import React, { useState } from "react"
 import { motion } from "framer-motion"
 import {
   Phone, MessageSquare, Star, CheckCircle2, Clock,
-  MapPin, KeyRound, Bike, Copy, Check, Wrench, Shield, Truck
+  MapPin, KeyRound, Bike, Copy, Check, Wrench, Shield, Truck, PauseCircle, Calendar
 } from "lucide-react"
 import { formatEta, formatDistance } from "./trackingUtils.js"
+import CashPaymentOtpCard from "../../components/CashPaymentOtpCard.jsx"
 
 export function CustomerTrackingStatusCard({
   data,
@@ -30,6 +27,7 @@ export function CustomerTrackingStatusCard({
   )
   const isArrived = status === "arrived"
   const isInProgress = status === "in_progress"
+  const isOnHold = status === "on_hold" || Boolean(data?.project_timeline?.is_on_hold)
   const isCompleted = ["completed", "closed", "feedback_pending", "feedback_received"].includes(status)
 
   const vendorName = data?.vendor?.name || ""
@@ -87,9 +85,15 @@ export function CustomerTrackingStatusCard({
   let dynamicTag = ""
   let dynamicTitle = ""
   let dynamicSub = null
-  let dynamicTheme = isArrived || isCompleted ? "green" : isInProgress ? "blue" : hasGps ? "orange" : isAccepted ? "purple" : "gray"
+  let dynamicTheme = isArrived || isCompleted ? "green" : isOnHold ? "orange" : isInProgress ? "blue" : hasGps ? "orange" : isAccepted ? "purple" : "gray"
 
-  if (isCompleted || logisticsLeg === "DELIVERED" || logisticsLeg === "COMPLETED") {
+  if (isOnHold) {
+    const holdMsg = data?.project_timeline?.hold_reason || "Service temporarily paused"
+    dynamicTag = "SERVICE ON HOLD"
+    dynamicTitle = `${techName || "Technician"} paused work: ${holdMsg}`
+    dynamicSub = "Work will automatically resume as scheduled. No additional charges apply."
+    dynamicTheme = "orange"
+  } else if (isCompleted || logisticsLeg === "DELIVERED" || logisticsLeg === "COMPLETED") {
     dynamicTag = isLogistics ? "GOODS DELIVERED" : "SERVICE COMPLETED"
     dynamicTitle = isLogistics ? "Goods Delivered Successfully" : "Service Completed"
     dynamicSub = isLogistics ? "All items have been safely transported & delivered." : "Thank you for choosing Sevo!"
@@ -108,6 +112,7 @@ export function CustomerTrackingStatusCard({
     ) : (
       isLogistics ? "Awaiting payment verification to close booking." : "Awaiting payment verification to complete service."
     )
+    dynamicTheme = "green"
     dynamicTheme = "green"
   } else if (logisticsLeg === "REASSEMBLY") {
     dynamicTag = "REASSEMBLY IN PROGRESS"
@@ -260,51 +265,26 @@ export function CustomerTrackingStatusCard({
                 <span>{data.technician.current_location_name}</span>
               </div>
             )}
+
+            {/* Multi-Day Project Duration Tracker */}
+            {data?.project_timeline?.estimated_duration_days > 1 && !isCompleted && (
+              <div style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 6, background: '#eff6ff', border: '1px solid #bfdbfe', padding: '3px 8px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 800, color: '#1e40af' }}>
+                <Calendar size={12} />
+                <span>Day {data.project_timeline.current_day} of {data.project_timeline.estimated_duration_days} (Multi-Day Service)</span>
+              </div>
+            )}
           </div>
         </div>
 
         {isCashPending && paymentConfirmationOtp && (
-          <div style={{
-            margin: "0 14px 14px 14px",
-            padding: "12px 14px",
-            background: "#ecfdf5",
-            border: "1.5px solid #10b981",
-            borderRadius: "10px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}>
-            <div>
-              <div style={{ fontSize: "11px", fontWeight: "700", color: "#065f46", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                Cash Payment OTP
-              </div>
-              <div style={{ fontSize: "11px", color: "#047857", marginTop: "1px" }}>
-                Share with technician to confirm cash collection:
-              </div>
-              <div style={{ fontSize: "20px", fontWeight: "900", color: "#064e3b", letterSpacing: "0.2em", fontFamily: "monospace", marginTop: "2px" }}>
-                {paymentConfirmationOtp}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={copyPaymentOtp}
-              style={{
-                padding: "6px 12px",
-                background: "#059669",
-                color: "white",
-                border: "none",
-                borderRadius: "6px",
-                fontSize: "12px",
-                fontWeight: "600",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "4px"
-              }}
-            >
-              {copiedPaymentOtp ? <Check size={14} /> : <Copy size={14} />}
-              <span>{copiedPaymentOtp ? "Copied" : "Copy"}</span>
-            </button>
+          <div style={{ margin: "0 12px 12px 12px" }}>
+            <CashPaymentOtpCard
+              otp={paymentConfirmationOtp}
+              amount={data?.milestones?.advance_paid ? data?.milestones?.balance_amount : (data?.milestones?.advance_amount || data?.total_amount)}
+              milestoneType={data?.milestones?.advance_paid ? "FINAL_BALANCE" : "ADVANCE"}
+              expiresAt={data?.cash_otp_expires_at}
+              onCopied={() => setCopiedPaymentOtp(true)}
+            />
           </div>
         )}
       </div>

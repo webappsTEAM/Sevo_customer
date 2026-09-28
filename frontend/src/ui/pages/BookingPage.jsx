@@ -3645,12 +3645,9 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         const isAccepted = ["CUSTOMER_ACCEPTED", "APPROVED", "CONVERTED", "ACCEPTED", "ADMIN_APPROVED"].includes(qStatus)
         const isChangesRequested = ["CHANGE_REQUESTED", "CHANGES_REQUESTED", "REQUESTED_CHANGES", "REQUOTE", "RE_QUOTE"].includes(qStatus)
         const isDeclined = ["DECLINED", "CUSTOMER_DECLINED", "REJECTED", "ADMIN_REJECTED", "CANCELLED", "EXPIRED"].includes(qStatus)
-        const isPending = [
-          "SENT", "SENT_TO_CUSTOMER", "PENDING", "PENDING_APPROVAL", "PENDING_REVIEW", 
-          "PENDING REVIEW", "PENDING_ADMIN_REVIEW", "PENDING ADMIN REVIEW", 
-          "AWAITING_CUSTOMER", "AWAITING_APPROVAL", "QUOTATION_SENT", "QUOTE_SENT", 
-          "DRAFT", "VIEWED", "NEW", "OPEN"
-        ].includes(qStatus) || (!isAccepted && !isChangesRequested && !isDeclined)
+        const isUnderReview = ["PENDING_REVIEW", "PENDING REVIEW", "PENDING_ADMIN_REVIEW", "PENDING ADMIN REVIEW", "UNDER_REVIEW", "DRAFT", "CRM_REVIEW", "PRE_SEND_REVIEW"].includes(qStatus)
+              if (isUnderReview || !["SENT", "SENT_TO_CUSTOMER", "OPEN", "VIEWED", "AWAITING_CUSTOMER", "QUOTATION_SENT", "QUOTE_SENT", "PENDING_CUSTOMER_APPROVAL", "CUSTOMER_ACCEPTED", "APPROVED", "CONVERTED", "ACCEPTED", "ADMIN_APPROVED", "CHANGE_REQUESTED", "CHANGES_REQUESTED", "REQUESTED_CHANGES", "REQUOTE", "RE_QUOTE", "DECLINED", "CUSTOMER_DECLINED", "REJECTED", "ADMIN_REJECTED", "CANCELLED", "EXPIRED"].includes(qStatus)) return null
+                const isPending = (["SENT", "SENT_TO_CUSTOMER", "OPEN", "VIEWED", "AWAITING_CUSTOMER", "QUOTATION_SENT", "QUOTE_SENT", "PENDING_CUSTOMER_APPROVAL"].includes(qStatus) || (!isAccepted && !isChangesRequested && !isDeclined && !isUnderReview)) && !isUnderReview
         
         const totalEst = q.net_payable ?? (q.grand_total ?? (q.total_amount ?? 0))
         const itemsList = Array.isArray(q.items) ? q.items : []
@@ -3692,10 +3689,10 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                 padding: '4px 10px',
                 borderRadius: 8,
                 fontWeight: 800,
-                background: isPending ? "#EFF6FF" : isAccepted ? "#ECFDF5" : isChangesRequested ? "#FFFBEB" : "#FEF2F2",
-                color: isPending ? "#1E40AF" : isAccepted ? "#065F46" : isChangesRequested ? "#92400E" : "#991B1B"
+                background: isUnderReview ? "#FEF3C7" : isPending ? "#EFF6FF" : isAccepted ? "#ECFDF5" : isChangesRequested ? "#FFFBEB" : "#FEF2F2",
+                color: isUnderReview ? "#92400E" : isPending ? "#1E40AF" : isAccepted ? "#065F46" : isChangesRequested ? "#92400E" : "#991B1B"
               }}>
-                {isPending ? "Pending Your Approval" : isAccepted ? "Accepted / Approved" : isChangesRequested ? "Changes Requested" : isDeclined ? "Declined" : qStatus.replace(/_/g, " ")}
+                {isUnderReview ? "Under SEVO Review" : isPending ? "Pending Your Approval" : isAccepted ? "Accepted / Approved" : isChangesRequested ? "Changes Requested" : isDeclined ? "Declined" : qStatus.replace(/_/g, " ")}
               </span>
             </div>
 
@@ -3723,13 +3720,47 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               )}
             </div>
 
-            {/* Advance & Balance Payment Schedule if applicable */}
-            {(Number(q.advance_amount ?? 0) > 0 || Number(q.balance_amount ?? 0) > 0 || Number(q.advance_percent ?? 0) > 0 || Number(totalEst) > 0) && (
-              <div style={{ padding: '8px 12px', background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0', marginBottom: 12, display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
-                <span>💰 Advance (Booking/Materials): <strong style={{ color: '#0f172a' }}>₹{Number(q.advance_amount !== undefined && q.advance_amount !== null && q.advance_amount !== "" ? q.advance_amount : (q.invoice?.advance_amount ?? (Number(totalEst) * (Number(q.advance_percent || 0) / 100)))) || 0}</strong></span>
-                <span>Balance on Completion: <strong style={{ color: '#0f172a' }}>₹{Number(q.balance_amount !== undefined && q.balance_amount !== null && q.balance_amount !== "" ? q.balance_amount : (q.invoice?.balance_amount ?? (Number(totalEst) - Number(q.advance_amount || 0)))) || Number(totalEst)}</strong></span>
-              </div>
-            )}
+            {/* 2-Column Milestone Payment Schedule */}
+            {(() => {
+              const numTotal = Number(totalEst) || 0;
+              const advPercent = Number(q.advance_percent || 50);
+              const advAmount = Number(q.advance_amount !== undefined && q.advance_amount !== null && q.advance_amount !== "" ? q.advance_amount : (numTotal * (advPercent / 100)));
+              const balAmount = Number(q.balance_amount !== undefined && q.balance_amount !== null && q.balance_amount !== "" ? q.balance_amount : (numTotal - advAmount));
+              const consultAdjusted = Number(q.inspection_fee_adjusted || q.consultation_fee_adjusted || 0);
+
+              return (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: 6, letterSpacing: '0.04em' }}>
+                    Payment Milestones Breakdown
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div style={{ padding: '10px 12px', background: '#eff6ff', borderRadius: 10, border: '1.5px solid #bfdbfe' }}>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#1e40af', textTransform: 'uppercase' }}>
+                        Milestone 1: {advPercent}% Advance
+                      </div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#1e3a8a', marginTop: 2 }}>
+                        ₹{advAmount.toLocaleString('en-IN')}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#3b82f6', marginTop: 2 }}>
+                        {consultAdjusted > 0 ? `Includes ₹${consultAdjusted} consultation credit` : 'Payable upon work commencement'}
+                      </div>
+                    </div>
+
+                    <div style={{ padding: '10px 12px', background: '#f0fdf4', borderRadius: 10, border: '1.5px solid #bbf7d0' }}>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#166534', textTransform: 'uppercase' }}>
+                        Milestone 2: Balance on Completion
+                      </div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#14532d', marginTop: 2 }}>
+                        ₹{balAmount.toLocaleString('en-IN')}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#15803d', marginTop: 2 }}>
+                        Payable after final inspection & proof
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Status-specific alert message (Only shown if NOT pending and has resolved state) */}
             {(isAccepted || isChangesRequested || isDeclined) && (
@@ -6299,31 +6330,49 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           )}
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontWeight: 900, color: ['paid', 'collected'].includes(b.payment_status) ? '#059669' : '#d97706', marginBottom: 12, fontSize: '1.05rem' }}>
-                            {b.payment_status_display || (b.payment_status === 'paid' ? 'Paid' : b.payment_status === 'collected' ? 'Collected' : 'Pending')}
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
-                            {Boolean(b.is_accepted || ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status)) && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setTrackingBooking(b)
-                                }}
-                                style={{ fontSize: '0.85rem', padding: '8px 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #FC8019, #f97316)', fontWeight: 800, cursor: 'pointer', color: 'white', boxShadow: '0 2px 8px rgba(252,128,25,0.3)', display: 'inline-flex', alignItems: 'center', gap: 6, transition: 'transform 0.15s' }}
-                                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
-                                onMouseOut={e => e.currentTarget.style.transform = 'none'}
-                              >
-                                <MapPin size={14} /> Track Live
-                              </button>
-                            )}
-                            <button
-                              onClick={() => setSelectedMockBooking(selectedMockBooking?.id === b.id ? null : b)}
-                              style={{ fontSize: '0.85rem', padding: '8px 18px', borderRadius: 8, border: 'none', background: '#059669', fontWeight: 700, cursor: 'pointer', color: 'white', boxShadow: '0 2px 4px rgba(5,150,105,0.25)', transition: 'background 0.2s' }}
-                              onMouseOver={e => e.currentTarget.style.background = '#047857'}
-                              onMouseOut={e => e.currentTarget.style.background = '#059669'}
-                            >
-                              {selectedMockBooking?.id === b.id ? 'Hide Details' : 'View Details'}
-                          </button>
+                          {(() => {
+                            const activeStage = (b.child_requests && b.child_requests.length > 0)
+                              ? (b.child_requests.filter(c => !['cancelled', 'rejected'].includes(c.status)).slice(-1)[0] || b)
+                              : b;
+                            const currentEffectiveStatus = activeStage.status || b.status;
+                            const isAcceptedOrActive = Boolean(
+                              activeStage.is_accepted || b.is_accepted ||
+                              ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched', 'proof_submitted'].includes(currentEffectiveStatus) ||
+                              ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched', 'proof_submitted'].includes(b.status)
+                            );
+                            const effectivePaymentStatus = activeStage.payment_status || b.payment_status;
+
+                            return (
+                              <>
+                                <div style={{ fontWeight: 900, color: ['paid', 'collected'].includes(effectivePaymentStatus) ? '#059669' : '#d97706', marginBottom: 12, fontSize: '1.05rem' }}>
+                                  {activeStage.payment_status_display || b.payment_status_display || (effectivePaymentStatus === 'paid' ? 'Paid' : effectivePaymentStatus === 'collected' ? 'Collected' : 'Pending')}
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+                                  {isAcceptedOrActive && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setTrackingBooking(activeStage || b)
+                                      }}
+                                      style={{ fontSize: '0.85rem', padding: '8px 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #FC8019, #f97316)', fontWeight: 800, cursor: 'pointer', color: 'white', boxShadow: '0 2px 8px rgba(252,128,25,0.3)', display: 'inline-flex', alignItems: 'center', gap: 6, transition: 'transform 0.15s' }}
+                                      onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                                      onMouseOut={e => e.currentTarget.style.transform = 'none'}
+                                    >
+                                      <MapPin size={14} /> Track Live
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => setSelectedMockBooking(selectedMockBooking?.id === b.id ? null : b)}
+                                    style={{ fontSize: '0.85rem', padding: '8px 18px', borderRadius: 8, border: 'none', background: '#059669', fontWeight: 700, cursor: 'pointer', color: 'white', boxShadow: '0 2px 4px rgba(5,150,105,0.25)', transition: 'background 0.2s' }}
+                                    onMouseOver={e => e.currentTarget.style.background = '#047857'}
+                                    onMouseOut={e => e.currentTarget.style.background = '#059669'}
+                                  >
+                                    {selectedMockBooking?.id === b.id ? 'Hide Details' : 'View Details'}
+                                  </button>
+                                </div>
+                              </>
+                            );
+                          })()}
                         </div>
 
                       {/* Quotation Ready Action Banner */}
@@ -6455,25 +6504,48 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                   <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0f172a' }}>Stage {idx + 2}: Quoted Work ({child.issue_title})</div>
                                   <div style={{ fontSize: '0.75rem', color: '#64748b' }}>ID: {child.request_id} • {child.preferred_date}</div>
                                 </div>
-                                <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#05966915', color: '#059669', border: '1px solid #05966930' }}>
-                                  {child.status_display || child.status}
-                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#05966915', color: '#059669', border: '1px solid #05966930' }}>
+                                    {child.status_display || child.status}
+                                  </span>
+                                  {['accepted', 'on_the_way', 'arrived', 'in_progress', 'proof_submitted'].includes(child.status) && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setTrackingBooking(child)
+                                      }}
+                                      style={{ fontSize: '0.72rem', padding: '4px 10px', borderRadius: 6, border: 'none', background: 'linear-gradient(135deg, #FC8019, #f97316)', fontWeight: 800, cursor: 'pointer', color: 'white', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                    >
+                                      <MapPin size={11} /> Track
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             ))}
                           </div>
                         </div>
                       )}
-                    </div>
 
-                    {selectedMockBooking?.id === b.id && (
+                    {selectedMockBooking?.id === b.id && (() => {
+                      const activeStage = (b.child_requests && b.child_requests.length > 0)
+                        ? (b.child_requests.filter(c => !['cancelled', 'rejected'].includes(c.status)).slice(-1)[0] || b)
+                        : b;
+                      const currentEffectiveStatus = activeStage.status || b.status;
+                      const effectiveTechnicianName = activeStage.technician?.name || activeStage.technician_name || b.technician?.name || b.technician_name;
+                      const effectiveTechnicianPhone = activeStage.technician?.phone || activeStage.technician_phone || activeStage.assigned_employee?.phone || b.technician?.phone || b.technician_phone || b.assigned_employee?.phone;
+                      const effectiveStartOtp = activeStage.start_otp || b.start_otp;
+                      const effectivePaymentOtp = activeStage.payment_confirmation_otp || b.payment_confirmation_otp;
+                      const effectivePaymentStatus = activeStage.payment_status || b.payment_status;
+
+                      return (
                       <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 16px 16px', padding: '1.5rem', marginTop: '-16px', position: 'relative', zIndex: 0 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, borderBottom: '1px solid #e2e8f0', paddingBottom: 10 }}>
                           <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem' }}>📋 Full Booking Overview</div>
-                          <span style={{ fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 800, color: '#059669', background: '#05966910', padding: '4px 10px', borderRadius: 8 }}>{b.request_id}</span>
+                          <span style={{ fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 800, color: '#059669', background: '#05966910', padding: '4px 10px', borderRadius: 8 }}>{activeStage.request_id || b.request_id}</span>
                         </div>
 
                         {/* Cash Collection Confirmation OTP Box */}
-                        {((b.payment_status === 'cash_pending' || (b.payment_confirmation_otp && b.payment_status !== 'paid')) && !['completed', 'closed', 'cancelled', 'rejected'].includes(b.status) && b.payment_status !== 'paid') && (
+                        {((effectivePaymentStatus === 'cash_pending' || effectivePaymentStatus === 'cash_collected' || (effectivePaymentOtp && effectivePaymentStatus !== 'paid')) && !['completed', 'closed', 'cancelled', 'rejected'].includes(currentEffectiveStatus)) && (
                           <div style={{
                             background: 'linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)',
                             border: '1.5px solid #10b981',
@@ -6512,7 +6584,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                               boxShadow: '0 2px 5px rgba(0,0,0,0.06)',
                               whiteSpace: 'nowrap'
                             }}>
-                              {b.payment_confirmation_otp || (
+                              {effectivePaymentOtp || (
                                 <span style={{ fontSize: '0.85rem', letterSpacing: 0, fontWeight: 700, color: '#059669' }}>
                                   Generating OTP...
                                 </span>
@@ -6522,7 +6594,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                         )}
 
                         {/* Service Start OTP Box */}
-                        {['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'proof_submitted'].includes(b.status) && b.start_otp && !['completed', 'closed'].includes(b.status) && (
+                        {['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'proof_submitted'].includes(currentEffectiveStatus) && effectiveStartOtp && !['completed', 'closed'].includes(currentEffectiveStatus) && (
                           <div style={{
                             background: '#fff7ed',
                             border: '1.5px dashed #f97316',
@@ -6557,7 +6629,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                               boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
                               whiteSpace: 'nowrap'
                             }}>
-                              {b.start_otp || '------'}
+                              {effectiveStartOtp || '------'}
                             </div>
                           </div>
                         )}
@@ -6566,19 +6638,19 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           <div>
                             <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: 4 }}>Assigned Technician</div>
                             <div style={{ fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
-                              👤 {['accepted', 'on_the_way', 'arrived', 'in_progress', 'completed'].includes(b.status) && (b.technician?.name || b.technician_name)
-                                ? (b.technician?.name || b.technician_name)
-                                : (b.status === 'assigned' ? 'Finding service professional...' : 'Not assigned yet')}
-                              {['accepted', 'on_the_way', 'arrived', 'in_progress', 'completed'].includes(b.status) && (b.technician?.name || b.technician_name) && (
+                              👤 {['accepted', 'on_the_way', 'arrived', 'in_progress', 'proof_submitted', 'completed'].includes(currentEffectiveStatus) && effectiveTechnicianName
+                                ? effectiveTechnicianName
+                                : (currentEffectiveStatus === 'assigned' ? 'Finding service professional...' : (effectiveTechnicianName ? effectiveTechnicianName : 'Not assigned yet'))}
+                              {['accepted', 'on_the_way', 'arrived', 'in_progress', 'proof_submitted', 'completed'].includes(currentEffectiveStatus) && effectiveTechnicianName && (
                                 <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#059669', background: '#ecfdf5', padding: '1px 6px', borderRadius: 6, border: '1px solid #a7f3d0' }}>✓ Verified Partner</span>
                               )}
                             </div>
-                            {(b.technician?.phone || b.technician_phone || b.assigned_employee?.phone) && (
+                            {effectiveTechnicianPhone && (
                               <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 700, marginTop: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <a href={`tel:${b.technician?.phone || b.technician_phone || b.assigned_employee?.phone}`} style={{ color: '#059669', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                  <Phone size={12} /> {b.technician?.phone || b.technician_phone || b.assigned_employee?.phone}
+                                <a href={`tel:${effectiveTechnicianPhone}`} style={{ color: '#059669', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                  <Phone size={12} /> {effectiveTechnicianPhone}
                                 </a>
-                                <a href={`https://wa.me/91${(b.technician?.phone || b.technician_phone || b.assigned_employee?.phone).replace(/\D/g, '')}`} target="_blank" rel="noreferrer" style={{ color: '#25D366', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <a href={`https://wa.me/91${String(effectiveTechnicianPhone).replace(/\D/g, '')}`} target="_blank" rel="noreferrer" style={{ color: '#25D366', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                   <MessageSquare size={12} /> WhatsApp
                                 </a>
                               </div>
@@ -6588,14 +6660,14 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           <div>
                             <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: 4 }}>Scheduled Date & Time</div>
                             <div style={{ fontWeight: 700, color: '#0f172a' }}>
-                              📅 {b.preferred_date || 'Not scheduled'} {b.preferred_time ? `(${b.preferred_time})` : ''}
+                              📅 {activeStage.preferred_date || b.preferred_date || 'Not scheduled'} {(activeStage.preferred_time || b.preferred_time) ? `(${activeStage.preferred_time || b.preferred_time})` : ''}
                             </div>
                           </div>
 
                           <div>
                             <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: 4 }}>Payment Details</div>
                             <div style={{ fontWeight: 700, color: '#0f172a' }}>
-                              {b.payment_status_display || (b.payment_status === 'paid' ? 'Paid' : 'Pending')} · {b.payment_method_display || (b.payment_method === 'COD' ? 'Cash on Service' : 'Online Payment')}
+                              {activeStage.payment_status_display || b.payment_status_display || (effectivePaymentStatus === 'paid' ? 'Paid' : 'Pending')} · {activeStage.payment_method_display || b.payment_method_display || (b.payment_method === 'COD' ? 'Cash on Service' : 'Online Payment')}
                             </div>
                             <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#059669', marginTop: 2 }}>
                               Total: ₹{(() => {
@@ -6667,12 +6739,9 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                             const isAccepted = ["CUSTOMER_ACCEPTED", "APPROVED", "CONVERTED", "ACCEPTED", "ADMIN_APPROVED"].includes(qStatus)
                             const isChangesRequested = ["CHANGE_REQUESTED", "CHANGES_REQUESTED", "REQUESTED_CHANGES", "REQUOTE", "RE_QUOTE"].includes(qStatus)
                             const isDeclined = ["DECLINED", "CUSTOMER_DECLINED", "REJECTED", "ADMIN_REJECTED", "CANCELLED", "EXPIRED"].includes(qStatus)
-                            const isPending = [
-                              "SENT", "SENT_TO_CUSTOMER", "PENDING", "PENDING_APPROVAL", "PENDING_REVIEW", 
-                              "PENDING REVIEW", "PENDING_ADMIN_REVIEW", "PENDING ADMIN REVIEW", 
-                              "AWAITING_CUSTOMER", "AWAITING_APPROVAL", "QUOTATION_SENT", "QUOTE_SENT", 
-                              "DRAFT", "VIEWED", "NEW", "OPEN"
-                            ].includes(qStatus) || (!isAccepted && !isChangesRequested && !isDeclined)
+                            const isUnderReview = ["PENDING_REVIEW", "PENDING REVIEW", "PENDING_ADMIN_REVIEW", "PENDING ADMIN REVIEW", "UNDER_REVIEW", "DRAFT", "CRM_REVIEW", "PRE_SEND_REVIEW"].includes(qStatus)
+              if (isUnderReview || !["SENT", "SENT_TO_CUSTOMER", "OPEN", "VIEWED", "AWAITING_CUSTOMER", "QUOTATION_SENT", "QUOTE_SENT", "PENDING_CUSTOMER_APPROVAL", "CUSTOMER_ACCEPTED", "APPROVED", "CONVERTED", "ACCEPTED", "ADMIN_APPROVED", "CHANGE_REQUESTED", "CHANGES_REQUESTED", "REQUESTED_CHANGES", "REQUOTE", "RE_QUOTE", "DECLINED", "CUSTOMER_DECLINED", "REJECTED", "ADMIN_REJECTED", "CANCELLED", "EXPIRED"].includes(qStatus)) return null
+                const isPending = (["SENT", "SENT_TO_CUSTOMER", "OPEN", "VIEWED", "AWAITING_CUSTOMER", "QUOTATION_SENT", "QUOTE_SENT", "PENDING_CUSTOMER_APPROVAL"].includes(qStatus) || (!isAccepted && !isChangesRequested && !isDeclined && !isUnderReview)) && !isUnderReview
                             const historyList = Array.isArray(b.quotation_history) ? b.quotation_history : [activeQ].filter(Boolean)
 
                             return (
@@ -6686,10 +6755,10 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                     padding: '3px 8px',
                                     borderRadius: 6,
                                     fontWeight: 800,
-                                    background: isPending ? "#EFF6FF" : isAccepted ? "#ECFDF5" : isChangesRequested ? "#FFFBEB" : "#FEF2F2",
-                                    color: isPending ? "#1E40AF" : isAccepted ? "#065F46" : isChangesRequested ? "#92400E" : "#991B1B"
+                                    background: isUnderReview ? "#FEF3C7" : isPending ? "#EFF6FF" : isAccepted ? "#ECFDF5" : isChangesRequested ? "#FFFBEB" : "#FEF2F2",
+                                    color: isUnderReview ? "#92400E" : isPending ? "#1E40AF" : isAccepted ? "#065F46" : isChangesRequested ? "#92400E" : "#991B1B"
                                   }}>
-                                    {isPending ? "Pending Customer Approval" : isAccepted ? "Accepted / Approved" : isChangesRequested ? "Changes Requested" : isDeclined ? "Declined" : qStatus.replace(/_/g, " ")}
+                                    {isUnderReview ? "Under SEVO Review" : isPending ? "Pending Customer Approval" : isAccepted ? "Accepted / Approved" : isChangesRequested ? "Changes Requested" : isDeclined ? "Declined" : qStatus.replace(/_/g, " ")}
                                   </span>
                                 </div>
 
@@ -7096,7 +7165,8 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           </div>
                         </div>
                       </motion.div>
-                    )}
+                    );
+                    })()}
                   </React.Fragment>
                 )
               })}

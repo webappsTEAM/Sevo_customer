@@ -3498,12 +3498,9 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         const isAccepted = ["CUSTOMER_ACCEPTED", "APPROVED", "CONVERTED", "ACCEPTED", "ADMIN_APPROVED"].includes(qStatus)
         const isChangesRequested = ["CHANGE_REQUESTED", "CHANGES_REQUESTED", "REQUESTED_CHANGES", "REQUOTE", "RE_QUOTE"].includes(qStatus)
         const isDeclined = ["DECLINED", "CUSTOMER_DECLINED", "REJECTED", "ADMIN_REJECTED", "CANCELLED", "EXPIRED"].includes(qStatus)
-        const isPending = [
-          "SENT", "SENT_TO_CUSTOMER", "PENDING", "PENDING_APPROVAL", "PENDING_REVIEW", 
-          "PENDING REVIEW", "PENDING_ADMIN_REVIEW", "PENDING ADMIN REVIEW", 
-          "AWAITING_CUSTOMER", "AWAITING_APPROVAL", "QUOTATION_SENT", "QUOTE_SENT", 
-          "DRAFT", "VIEWED", "NEW", "OPEN"
-        ].includes(qStatus) || (!isAccepted && !isChangesRequested && !isDeclined)
+        const isUnderReview = ["PENDING_REVIEW", "PENDING REVIEW", "PENDING_ADMIN_REVIEW", "PENDING ADMIN REVIEW", "UNDER_REVIEW", "DRAFT", "CRM_REVIEW", "PRE_SEND_REVIEW"].includes(qStatus)
+              if (isUnderReview || !["SENT", "SENT_TO_CUSTOMER", "OPEN", "VIEWED", "AWAITING_CUSTOMER", "QUOTATION_SENT", "QUOTE_SENT", "PENDING_CUSTOMER_APPROVAL", "CUSTOMER_ACCEPTED", "APPROVED", "CONVERTED", "ACCEPTED", "ADMIN_APPROVED", "CHANGE_REQUESTED", "CHANGES_REQUESTED", "REQUESTED_CHANGES", "REQUOTE", "RE_QUOTE", "DECLINED", "CUSTOMER_DECLINED", "REJECTED", "ADMIN_REJECTED", "CANCELLED", "EXPIRED"].includes(qStatus)) return null
+                const isPending = (["SENT", "SENT_TO_CUSTOMER", "OPEN", "VIEWED", "AWAITING_CUSTOMER", "QUOTATION_SENT", "QUOTE_SENT", "PENDING_CUSTOMER_APPROVAL"].includes(qStatus) || (!isAccepted && !isChangesRequested && !isDeclined && !isUnderReview)) && !isUnderReview
         
         const totalEst = q.grand_total || q.total_amount || q.net_payable || 0
         const itemsList = Array.isArray(q.items) ? q.items : []
@@ -3545,10 +3542,10 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                 padding: '4px 10px',
                 borderRadius: 8,
                 fontWeight: 800,
-                background: isPending ? "#EFF6FF" : isAccepted ? "#ECFDF5" : isChangesRequested ? "#FFFBEB" : "#FEF2F2",
-                color: isPending ? "#1E40AF" : isAccepted ? "#065F46" : isChangesRequested ? "#92400E" : "#991B1B"
+                background: isUnderReview ? "#FEF3C7" : isPending ? "#EFF6FF" : isAccepted ? "#ECFDF5" : isChangesRequested ? "#FFFBEB" : "#FEF2F2",
+                color: isUnderReview ? "#92400E" : isPending ? "#1E40AF" : isAccepted ? "#065F46" : isChangesRequested ? "#92400E" : "#991B1B"
               }}>
-                {isPending ? "Pending Your Approval" : isAccepted ? "Accepted / Approved" : isChangesRequested ? "Changes Requested" : isDeclined ? "Declined" : qStatus.replace(/_/g, " ")}
+                {isUnderReview ? "Under SEVO Review" : isPending ? "Pending Your Approval" : isAccepted ? "Accepted / Approved" : isChangesRequested ? "Changes Requested" : isDeclined ? "Declined" : qStatus.replace(/_/g, " ")}
               </span>
             </div>
 

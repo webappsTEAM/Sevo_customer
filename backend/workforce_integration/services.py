@@ -592,9 +592,10 @@ class WorkforceIntegrationService:
             with connection.cursor() as cursor:
                 cursor.execute("""
                     SELECT id FROM workforce_quote 
-                    WHERE job_id IN (%s, %s)
+                    WHERE (job_id IN (%s, %s)
                        OR quote_number = %s
-                       OR quote_number LIKE %s
+                       OR quote_number LIKE %s)
+                      AND status IN ('SENT_TO_CUSTOMER', 'CUSTOMER_ACCEPTED', 'APPROVED', 'CONVERTED', 'CHANGES_REQUESTED', 'CHANGE_REQUESTED', 'DECLINED', 'CUSTOMER_DECLINED')
                     ORDER BY id ASC
                 """, [sr_id, wf_id, req_id, f"{req_id}%"])
                 rows = cursor.fetchall()
@@ -622,17 +623,17 @@ class WorkforceIntegrationService:
             with connection.cursor() as cursor:
                 cursor.execute("""
                     SELECT id FROM workforce_quote 
-                    WHERE decision_token = %s 
+                    WHERE (decision_token = %s 
                        OR quote_number = %s 
-                       OR quote_number LIKE %s
+                       OR quote_number LIKE %s)
+                      AND status IN ('SENT_TO_CUSTOMER', 'CUSTOMER_ACCEPTED', 'APPROVED', 'CONVERTED', 'CHANGES_REQUESTED', 'CHANGE_REQUESTED', 'DECLINED', 'CUSTOMER_DECLINED')
                     ORDER BY 
                       CASE 
                         WHEN status = 'SENT_TO_CUSTOMER' THEN 1
                         WHEN status IN ('CUSTOMER_ACCEPTED', 'APPROVED', 'CONVERTED') THEN 2
                         WHEN status IN ('CHANGES_REQUESTED', 'CHANGE_REQUESTED') THEN 3
                         WHEN status IN ('DECLINED', 'CUSTOMER_DECLINED') THEN 4
-                        WHEN status = 'DRAFT' THEN 5
-                        ELSE 6
+                        ELSE 5
                       END ASC,
                       updated_at DESC, id DESC LIMIT 1
                 """, [str(token), str(token), f"{str(token).split('-V')[0]}%"])
@@ -710,17 +711,17 @@ class WorkforceIntegrationService:
                 with connection.cursor() as cursor:
                     cursor.execute("""
                         SELECT id FROM workforce_quote 
-                        WHERE job_id IN (%s, %s)
+                        WHERE (job_id IN (%s, %s)
                            OR quote_number = %s
-                           OR quote_number LIKE %s
+                           OR quote_number LIKE %s)
+                          AND status IN ('SENT_TO_CUSTOMER', 'CUSTOMER_ACCEPTED', 'APPROVED', 'CONVERTED', 'CHANGES_REQUESTED', 'CHANGE_REQUESTED', 'DECLINED', 'CUSTOMER_DECLINED')
                         ORDER BY 
                           CASE 
                             WHEN status = 'SENT_TO_CUSTOMER' THEN 1
                             WHEN status IN ('CUSTOMER_ACCEPTED', 'APPROVED', 'CONVERTED') THEN 2
                             WHEN status IN ('CHANGES_REQUESTED', 'CHANGE_REQUESTED') THEN 3
                             WHEN status IN ('DECLINED', 'CUSTOMER_DECLINED') THEN 4
-                            WHEN status = 'DRAFT' THEN 5
-                            ELSE 6
+                            ELSE 5
                           END ASC,
                           updated_at DESC,
                           id DESC

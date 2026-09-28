@@ -538,15 +538,10 @@ class BookingCreateView(APIView):
                 is_mason_booking = True
 
         if is_painting_booking or is_mason_booking:
-            dist_km = 0.0
-            if _lat is not None and _lng is not None:
-                dist_m = _haversine_meters(12.7409, 77.8253, _lat, _lng)
-                if dist_m is not None:
-                    dist_km = dist_m / 1000.0
-            if dist_km > 15.0:
-                corrected_fare = Decimal("300.00")
-            else:
-                corrected_fare = Decimal("0.00")
+            _vendor_target = serializer.validated_data.get("vendor_id") or request.data.get("vendor_id")
+            corrected_fare, dist_km, wh_lat, wh_lng, free_radius_km = _get_consultation_fee_and_distance(
+                _service_category, _lat, _lng, vendor_id=_vendor_target
+            )
         payment_method = (request.data.get("payment_method") or "COD").upper()
         if payment_method == "ONLINE":
             initial_status = ServiceRequest.Status.WAITING_FOR_PAYMENT
@@ -1488,28 +1483,71 @@ def _haversine_meters(lat1, lon1, lat2, lon2):
         return None
 
 
+def _get_consultation_fee_and_distance(service_category, customer_lat, customer_lng, vendor_id=None):
+    """
+    Dynamically computes the consultation fee and distance using database configuration
+    (ConsultationPricingConfig) and the actual registered VendorWarehouse coordinates.
+    """
+    from service_requests.models import ConsultationPricingConfig, VendorWarehouse
+    from decimal import Decimal
+
+    norm_cat = (service_category or "").strip().lower()
+    config = (
+        ConsultationPricingConfig.objects.filter(service_category=norm_cat, is_active=True).first()
+        or ConsultationPricingConfig.objects.filter(service_category__in=["painting", "mason", "general", "consultation"], is_active=True).first()
+    )
+    free_radius_km = float(config.free_radius_km) if config else 15.0
+    standard_fee = Decimal(str(config.standard_fee)) if config else Decimal("300.00")
+
+    wh_lat, wh_lng = 12.7409, 77.8253  # default fallback hub
+    if vendor_id:
+        wh = VendorWarehouse.objects.filter(vendor_id=vendor_id, is_active=True).order_by("-is_primary").first()
+        if wh and wh.latitude is not None and wh.longitude is not None:
+            wh_lat, wh_lng = float(wh.latitude), float(wh.longitude)
+    else:
+        wh = VendorWarehouse.objects.filter(is_primary=True, is_active=True).first()
+        if wh and wh.latitude is not None and wh.longitude is not None:
+            wh_lat, wh_lng = float(wh.latitude), float(wh.longitude)
+
+    dist_km = 0.0
+    if customer_lat is not None and customer_lng is not None:
+        dist_m = _haversine_meters(wh_lat, wh_lng, float(customer_lat), float(customer_lng))
+        if dist_m is not None:
+            dist_km = dist_m / 1000.0
+
+    fee = Decimal("0.00") if dist_km <= free_radius_km else standard_fee
+    return fee, dist_km, wh_lat, wh_lng, free_radius_km
+
+
+
 def _build_tracking_payload(sr, has_full_access):
     """
     Constructs the canonical live tracking response payload for a booking.
     Sensitive data (technician phone, Service Start OTP) is strictly omitted
     unless has_full_access is True.
+    Dynamically delegates to the active child execution request for multi-stage/quotation bookings.
     """
-    dest_lat = float(sr.latitude) if sr.latitude is not None else None
-    dest_lng = float(sr.longitude) if sr.longitude is not None else None
-    dest_address = sr.address or ""
+    from django.utils import timezone
+    # GT-MULTI-STAGE: If this booking has child requests (e.g. Stage 1 Consultation produced Stage 2 Execution),
+    # resolve the active operational stage for live GPS, technician assignment, status, and OTPs.
+    active_child = None
+    if hasattr(sr, "child_requests"):
+        try:
+            active_child = sr.child_requests.exclude(status__in=["cancelled", "rejected"]).order_by("id").last()
+        except Exception:
+            active_child = None
+
+    target_sr = active_child if (active_child and sr.status in ["quotation_sent", "completed", "closed", "feedback_pending", "feedback_received"]) else sr
+
+    dest_lat = float(target_sr.latitude) if target_sr.latitude is not None else (float(sr.latitude) if sr.latitude is not None else None)
+    dest_lng = float(target_sr.longitude) if target_sr.longitude is not None else (float(sr.longitude) if sr.longitude is not None else None)
+    dest_address = target_sr.address or sr.address or ""
 
     # GT-D-02: sr.latitude/sr.longitude are the PICKUP point (see the
     # field comment above sr.address). Bookings that used TripStop
     # (multi-stop routes, GT-B-05) have real per-stop coordinates; use
     # them to target whichever leg logistics_leg says is current.
-    # Bookings with no TripStop rows (the common single-pickup/
-    # single-drop case) now fall back to sr.drop_latitude/drop_longitude
-    # (added alongside this fix) when the booking is past pickup -- see
-    # the field comment on those two columns. Only if NEITHER a TripStop
-    # nor a drop coordinate exists does this still show the pickup point
-    # post-pickup, which is the one remaining, honestly-unresolvable gap:
-    # older bookings created before drop coordinates were captured.
-    if sr.service_category in LOGISTICS_CATEGORIES:
+    if target_sr.service_category in LOGISTICS_CATEGORIES:
         post_pickup_legs = {
             ServiceRequest.LogisticsLeg.EN_ROUTE_DROP,
             ServiceRequest.LogisticsLeg.UNLOADING,
@@ -1521,12 +1559,12 @@ def _build_tracking_payload(sr, has_full_access):
             ServiceRequest.LogisticsLeg.COMPLETED,
         }
         try:
-            stops = list(sr.trip_stops.all().order_by("sequence"))
+            stops = list(target_sr.trip_stops.all().order_by("sequence"))
         except Exception:
             stops = []
         if stops:
             target_stop = None
-            if sr.logistics_leg in post_pickup_legs:
+            if target_sr.logistics_leg in post_pickup_legs:
                 drop_stops = [s for s in stops if s.stop_type == TripStop.StopType.DROP]
                 target_stop = drop_stops[-1] if drop_stops else stops[-1]
             else:
@@ -1537,92 +1575,80 @@ def _build_tracking_payload(sr, has_full_access):
                 dest_lng = float(target_stop.longitude)
                 dest_address = target_stop.address or dest_address
         elif (
-            sr.logistics_leg in post_pickup_legs
-            and sr.drop_latitude is not None
-            and sr.drop_longitude is not None
+            target_sr.logistics_leg in post_pickup_legs
+            and target_sr.drop_latitude is not None
+            and target_sr.drop_longitude is not None
         ):
-            dest_lat = float(sr.drop_latitude)
-            dest_lng = float(sr.drop_longitude)
-            dest_address = sr.drop_address or dest_address
+            dest_lat = float(target_sr.drop_latitude)
+            dest_lng = float(target_sr.drop_longitude)
+            dest_address = target_sr.drop_address or dest_address
 
     # 0. Sync and resolve employee details & live GPS from ServiceRequest model and assigned employee
-    #
-    # These three used to be denormalised columns on ServiceRequest. When
-    # those columns were dropped, the writer moved to TechnicianLocation but
-    # this reader was left initialising them to 0/0/None and never assigning
-    # them again -- so every tracking payload reported heading 0, speed 0 and
-    # accuracy null regardless of what the technician's device actually sent.
-    # TechnicianLocation is the authoritative per-fix record, so read the
-    # latest fix from there.
     db_heading = 0.0
     db_speed = 0.0
     db_accuracy = None
     try:
         from service_requests.services.technician_tracking import latest_fix
 
-        _fix = latest_fix(sr)
+        _fix = latest_fix(target_sr) or (latest_fix(sr) if target_sr != sr else None)
         if _fix is not None:
             db_heading = float(_fix.heading or 0.0)
             db_speed = float(_fix.speed or 0.0)
             db_accuracy = _fix.accuracy
-    except Exception as _fix_err:  # never let telemetry break the tracking page
+    except Exception as _fix_err:
         logger.warning("Could not read latest technician fix for %s: %s",
-                       getattr(sr, "request_id", sr.pk), _fix_err)
+                       getattr(target_sr, "request_id", target_sr.pk), _fix_err)
 
-    assigned_emp = getattr(sr, "assigned_employee", None)
+    assigned_emp = getattr(target_sr, "assigned_employee", None) or getattr(sr, "assigned_employee", None)
     if assigned_emp:
-        if not sr.technician_name:
-            sr.technician_name = getattr(assigned_emp, "full_name", None) or (assigned_emp.user.get_full_name() if getattr(assigned_emp, "user", None) else "")
-        if not sr.technician_phone and getattr(assigned_emp, "phone", None):
-            sr.technician_phone = assigned_emp.phone
-        if not sr.technician_photo and getattr(assigned_emp, "photo", None):
-            sr.technician_photo = assigned_emp.photo
+        if not target_sr.technician_name:
+            target_sr.technician_name = getattr(assigned_emp, "full_name", None) or (assigned_emp.user.get_full_name() if getattr(assigned_emp, "user", None) else "")
+        if not target_sr.technician_phone and getattr(assigned_emp, "phone", None):
+            target_sr.technician_phone = assigned_emp.phone
+        if not target_sr.technician_photo and getattr(assigned_emp, "photo", None):
+            target_sr.technician_photo = assigned_emp.photo
 
     # Fetch technician live tracking snapshot from external Workforce Integration for any active booking.
-    # Always fetch so live telemetry (eta_minutes, distance_km, location) from the external system enriches the payload.
     tracking = None
-    active_statuses = {"accepted", "on_the_way", "en_route", "arrived", "in_progress"}
-    if sr.status in active_statuses or getattr(sr, "workforce_job_id", None):
-        # Must be the numeric pk: the vendor's tracking routes are <int:pk>, so
-        # passing request_id (an alphanumeric like "HM0001") never matched any
-        # route. Every call fell through all three candidate URLs and returned
-        # None, burning three cross-service round trips per cache miss while
-        # silently disabling the ETA enrichment it exists to provide.
-        tracking = WorkforceIntegrationService.get_technician_tracking(sr.id)
+    active_statuses = {"accepted", "on_the_way", "en_route", "arrived", "in_progress", "proof_submitted", "payment_pending", "cash_pending"}
+    for candidate in [target_sr, sr]:
+        if candidate and (candidate.status in active_statuses or getattr(candidate, "workforce_job_id", None)):
+            tracking = WorkforceIntegrationService.get_technician_tracking(candidate.id)
+            if tracking:
+                break
 
     # Authoritative acceptance check:
-    # ASSIGNED != ACCEPTED.
-    # When Admin assigns an employee (status="assigned"), the job is offered but NOT accepted yet.
-    # Customer must NOT see technician identity, GPS, ETA, route, or OTP until explicit acceptance.
     POST_ACCEPT_STATUSES = [
         "accepted", "on_the_way", "en_route", "arrived", "service_started",
         "in_progress", "on_hold", "proof_submitted", "payment_pending",
         "cash_pending", "waiting_for_payment", "settling", "completed",
         "closed", "feedback_pending", "feedback_received"
     ]
+    effective_status = target_sr.status
     technician_assigned = bool(
-        sr.status in (["assigned"] + POST_ACCEPT_STATUSES)
-        or sr.workforce_job_id or sr.external_assignment_id
+        effective_status in (["assigned"] + POST_ACCEPT_STATUSES)
+        or target_sr.workforce_job_id or target_sr.external_assignment_id
+        or target_sr.technician_name
         or sr.technician_name
     )
     technician_accepted = bool(
-        sr.status in POST_ACCEPT_STATUSES
-        or (sr.technician_name and sr.status not in ["draft", "new_request", "unassigned", "assigned", "cancelled", "rejected"])
+        effective_status in POST_ACCEPT_STATUSES
+        or (target_sr.technician_name and effective_status not in ["draft", "new_request", "unassigned", "assigned", "cancelled", "rejected"])
+        or (sr.technician_name and sr.status in POST_ACCEPT_STATUSES)
     )
     is_accepted = technician_accepted
-    tracking_available = bool(sr.status in ["accepted", "on_the_way", "en_route", "arrived", "in_progress", "proof_submitted", "cash_pending", "waiting_for_payment"])
-    is_terminal = sr.status in ["completed", "closed", "cancelled", "rejected", "feedback_pending", "feedback_received"]
+    tracking_available = bool(effective_status in ["accepted", "on_the_way", "en_route", "arrived", "in_progress", "proof_submitted", "cash_pending", "waiting_for_payment"])
+    is_terminal = effective_status in ["completed", "closed", "cancelled", "rejected", "feedback_pending", "feedback_received"]
 
     vendor_data = None
     if is_accepted:
         comp_name = "Sevo"
-        comp_id = sr.company_id or 1
-        if sr.company_id:
+        comp_id = target_sr.company_id or sr.company_id or 1
+        comp_obj = target_sr.company or sr.company
+        if comp_obj:
             try:
-                comp = sr.company
-                if comp:
-                    comp_name = getattr(comp, "company_name", None) or getattr(comp, "name", None) or comp_name
-                    comp_id = comp.id
+                comp_name = getattr(comp_obj, "company_name", None) or getattr(comp_obj, "name", None) or comp_name
+                comp_id = comp_obj.id
             except Exception:
                 pass
         vendor_data = {
@@ -1641,15 +1667,12 @@ def _build_tracking_payload(sr, has_full_access):
     freshness = "WAITING_FOR_PROFESSIONAL" if not is_accepted else "WAITING_FOR_LOCATION"
 
     if is_accepted:
-        # Workforce backend returns 'assigned_technician'; older integration may use 'technician'.
-        # Prefer whichever is populated.
         tech_obj = (
             (tracking.get("technician") or tracking.get("assigned_technician") or {})
             if (tracking and isinstance(tracking, dict))
             else {}
         )
 
-        # 1. Real technician details in strict order: (1) Workforce API, (2) BookingAssignment, (3) ServiceRequest
         tech_name = None
         tech_phone = None
         tech_photo = None
@@ -1665,39 +1688,37 @@ def _build_tracking_payload(sr, has_full_access):
             tech_jobs = tech_obj.get("jobs_completed") or None
             tech_job_id = tech_obj.get("id") or tech_obj.get("job_id") or None
 
-        if not tech_name and hasattr(sr, "assignments"):
-            assignment = sr.assignments.filter(
-                status__in=["accepted", "on_the_way", "en_route", "arrived", "in_progress", "completed", "closed"]
-            ).order_by("-id").first()
-            if assignment:
-                tech_name = assignment.technician_name or None
-                tech_phone = assignment.technician_phone or tech_phone or None
-                tech_photo = assignment.technician_photo or tech_photo or None
-                tech_rating = float(assignment.technician_rating) if assignment.technician_rating is not None else tech_rating
-                tech_job_id = assignment.workforce_job_id or assignment.assignment_id or tech_job_id
+        for candidate_sr in [target_sr, sr]:
+            if not tech_name and hasattr(candidate_sr, "assignments"):
+                assignment = candidate_sr.assignments.filter(
+                    status__in=["accepted", "on_the_way", "en_route", "arrived", "in_progress", "completed", "closed"]
+                ).order_by("-id").first()
+                if assignment:
+                    tech_name = assignment.technician_name or None
+                    tech_phone = assignment.technician_phone or tech_phone or None
+                    tech_photo = assignment.technician_photo or tech_photo or None
+                    tech_rating = float(assignment.technician_rating) if assignment.technician_rating is not None else tech_rating
+                    tech_job_id = assignment.workforce_job_id or assignment.assignment_id or tech_job_id
 
-        if not tech_name:
-            tech_name = sr.technician_name or None
-            tech_phone = sr.technician_phone or tech_phone or None
-            tech_photo = sr.technician_photo or tech_photo or None
-            tech_rating = float(sr.technician_rating) if sr.technician_rating is not None else tech_rating
-            tech_jobs = getattr(sr, "technician_jobs_completed", None) or tech_jobs
-            tech_job_id = sr.workforce_job_id or sr.external_assignment_id or tech_job_id
+            if not tech_name:
+                tech_name = candidate_sr.technician_name or None
+                tech_phone = candidate_sr.technician_phone or tech_phone or None
+                tech_photo = candidate_sr.technician_photo or tech_photo or None
+                tech_rating = float(candidate_sr.technician_rating) if candidate_sr.technician_rating is not None else tech_rating
+                tech_jobs = getattr(candidate_sr, "technician_jobs_completed", None) or tech_jobs
+                tech_job_id = candidate_sr.workforce_job_id or candidate_sr.external_assignment_id or tech_job_id
 
-        if not tech_name and getattr(sr, "assigned_employee", None):
-            emp = sr.assigned_employee
-            tech_name = getattr(emp, "full_name", None) or (emp.user.get_full_name() if getattr(emp, "user", None) else "") or None
-            tech_phone = getattr(emp, "phone", None) or (getattr(getattr(emp, "user", None), "phone", None)) or tech_phone
-            tech_photo = getattr(emp, "photo", None) or tech_photo
-            tech_rating = float(getattr(emp, "rating", None)) if getattr(emp, "rating", None) is not None else tech_rating
-            tech_jobs = getattr(emp, "total_jobs", None) or tech_jobs
+            if not tech_name and getattr(candidate_sr, "assigned_employee", None):
+                emp = candidate_sr.assigned_employee
+                tech_name = getattr(emp, "full_name", None) or (emp.user.get_full_name() if getattr(emp, "user", None) else "") or None
+                tech_phone = getattr(emp, "phone", None) or (getattr(getattr(emp, "user", None), "phone", None)) or tech_phone
+                tech_photo = getattr(emp, "photo", None) or tech_photo
+                tech_rating = float(getattr(emp, "rating", None)) if getattr(emp, "rating", None) is not None else tech_rating
+                tech_jobs = getattr(emp, "total_jobs", None) or tech_jobs
 
         if not tech_phone:
-            tech_phone = sr.technician_phone or None
+            tech_phone = target_sr.technician_phone or sr.technician_phone or None
 
-        # 2. Real live GPS coordinates strictly from database or workforce telemetry — NO fake coordinates
-        # Location is top-level 'location' in older callers, nested inside
-        # 'assigned_technician.location' in the current WorkforceJobLiveTrackingView response.
         loc = (
             tracking.get("location")
             or (tracking.get("assigned_technician") or {}).get("location")
@@ -1707,41 +1728,40 @@ def _build_tracking_payload(sr, has_full_access):
             tech_lat = None
             tech_lng = None
         else:
-            tech_lat = float(sr.technician_latitude) if sr.technician_latitude is not None else (float(loc.get("latitude")) if (loc and loc.get("latitude") is not None) else None)
-            tech_lng = float(sr.technician_longitude) if sr.technician_longitude is not None else (float(loc.get("longitude")) if (loc and loc.get("longitude") is not None) else None)
+            tech_lat = float(target_sr.technician_latitude) if target_sr.technician_latitude is not None else (
+                float(sr.technician_latitude) if sr.technician_latitude is not None else (
+                    float(loc.get("latitude")) if (loc and loc.get("latitude") is not None) else None
+                )
+            )
+            tech_lng = float(target_sr.technician_longitude) if target_sr.technician_longitude is not None else (
+                float(sr.technician_longitude) if sr.technician_longitude is not None else (
+                    float(loc.get("longitude")) if (loc and loc.get("longitude") is not None) else None
+                )
+            )
 
-        current_loc_name = sr.technician_location_name or loc.get("location_name") or None
+        current_loc_name = target_sr.technician_location_name or sr.technician_location_name or loc.get("location_name") or None
 
-        # Heading & speed
         resolved_heading = db_heading if db_heading > 0 else (float(loc.get("heading")) if (loc and loc.get("heading") is not None) else 0.0)
         resolved_speed = db_speed if db_speed > 0 else (float(loc.get("speed")) if (loc and loc.get("speed") is not None) else 0.0)
 
-        # 3. GPS Freshness calculation strictly based on real coordinates availability
         if is_terminal:
-            freshness = "COMPLETED" if sr.status not in ["cancelled", "rejected"] else "CANCELLED"
+            freshness = "COMPLETED" if effective_status not in ["cancelled", "rejected"] else "CANCELLED"
         elif tech_lat is not None and tech_lng is not None:
             freshness = "LIVE"
         else:
             freshness = "UNAVAILABLE"
 
-        # 4. Real Distance and ETA Calculation — only computed when real GPS exists
-        if sr.status == "arrived":
+        if effective_status == "arrived":
             distance_m = 0
             distance_km = 0.0
             eta_seconds = 0
             eta_minutes = 0
-        elif is_terminal or sr.status == "in_progress":
+        elif is_terminal or effective_status == "in_progress":
             distance_m = 0
             distance_km = 0.0
             eta_seconds = 0
             eta_minutes = 0
         elif tech_lat is not None and tech_lng is not None and dest_lat is not None and dest_lng is not None:
-            # X-10: server-side routing/ETA. Prefers a real Google Maps
-            # Distance Matrix road-network result; falls back to the
-            # straight-line haversine + assumed-speed estimate used here
-            # previously on ANY Maps failure (no key, network error,
-            # timeout, bad API status) -- never silently pretending to be
-            # more precise than the data actually is.
             route = get_route_eta(tech_lat, tech_lng, dest_lat, dest_lng)
             if route is not None:
                 distance_km = route["distance_km"]
@@ -1759,12 +1779,7 @@ def _build_tracking_payload(sr, has_full_access):
         if tracking and isinstance(tracking, dict) and tracking.get("distance_km") is not None:
             distance_km = tracking.get("distance_km")
 
-        # Never present a service slug as a person's name. Technician names
-        # are snapshotted from whatever the accepting system had -- which
-        # falls back to a username, and usernames here are sometimes service
-        # slugs like "pest_control". Showing that to a customer as "your
-        # technician" is worse than showing nothing specific.
-        tech_name = _humanised_technician_name(tech_name, sr.service_category)
+        tech_name = _humanised_technician_name(tech_name, target_sr.service_category or sr.service_category)
 
         technician_data = {
             "id": tech_job_id,
@@ -1777,7 +1792,7 @@ def _build_tracking_payload(sr, has_full_access):
             "longitude": tech_lng,
             "heading": resolved_heading if tech_lat is not None else 0.0,
             "speed": resolved_speed if tech_lat is not None else 0.0,
-            "status": sr.status,
+            "status": effective_status,
             "eta_minutes": eta_minutes,
             "distance_km": distance_km,
             "jobs_completed": tech_jobs,
@@ -1802,53 +1817,39 @@ def _build_tracking_payload(sr, has_full_access):
                 "freshness": freshness,
             }
 
-    # OTP is exposed to customer once partner ACCEPTS and booking is not cancelled/rejected
-    start_otp = sr.start_otp if (is_accepted and sr.status not in ["cancelled", "rejected"]) else None
+    # Ensure start OTP exists and is exposed once accepted and not cancelled
+    if not target_sr.start_otp and effective_status not in ["cancelled", "rejected"]:
+        target_sr.start_otp = _generate_secure_start_otp()
+        ServiceRequest.objects.filter(id=target_sr.id).update(start_otp=target_sr.start_otp)
 
-    # Retrieve Cash Payment Confirmation OTP if one was generated for this booking
+    start_otp = target_sr.start_otp if (is_accepted and effective_status not in ["cancelled", "rejected"]) else (
+        sr.start_otp if (is_accepted and sr.status not in ["cancelled", "rejected"]) else None
+    )
+
+    # Retrieve Cash Payment Confirmation OTP if one was generated for this booking or any related stage
     payment_confirmation_otp = None
-    if sr.status not in ["cancelled", "rejected"]:
-        try:
-            import re
-            from django.db import connection
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    "SELECT message FROM workforce_notification "
-                    "WHERE related_object_id IN (%s, %s) "
-                    "AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
-                    "ORDER BY created_at DESC LIMIT 1;",
-                    [str(sr.id), str(sr.request_id or "")],
-                )
-                row = cursor.fetchone()
-                if row and row[0]:
-                    m = re.search(r'OTP\s+([0-9]{6})', row[0])
-                    if m:
-                        payment_confirmation_otp = m.group(1)
-        except Exception:
-            pass
+    all_sr_ids = [str(x) for x in [target_sr.id, target_sr.request_id, sr.id, sr.request_id] if x]
+    try:
+        import re
+        from django.db import connection
+        with connection.cursor() as cursor:
+            placeholders = ", ".join(["%s"] * len(all_sr_ids))
+            cursor.execute(
+                f"SELECT message FROM workforce_notification "
+                f"WHERE related_object_id IN ({placeholders}) "
+                f"AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
+                f"ORDER BY created_at DESC LIMIT 1;",
+                all_sr_ids,
+            )
+            row = cursor.fetchone()
+            if row and row[0]:
+                m = re.search(r'OTP\s+([0-9]{6})', row[0])
+                if m:
+                    payment_confirmation_otp = m.group(1)
+    except Exception:
+        pass
 
-    payment_confirmation_otp = None
-    if sr.payment_status in ("cash_pending", "cash_collected", "pending"):
-        try:
-            import re
-            from django.db import connection
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    "SELECT message FROM workforce_notification "
-                    "WHERE related_object_id = %s "
-                    "AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
-                    "ORDER BY created_at DESC LIMIT 1;",
-                    [str(sr.id)],
-                )
-                row = cursor.fetchone()
-                if row and row[0]:
-                    m = re.search(r'OTP\s+([0-9]{6})', row[0])
-                    if m:
-                        payment_confirmation_otp = m.group(1)
-        except Exception:
-            pass
-
-    created_at_raw = getattr(sr, 'created_at', None) or getattr(sr, 'submitted_at', None)
+    created_at_raw = getattr(target_sr, 'created_at', None) or getattr(sr, 'created_at', None) or getattr(sr, 'submitted_at', None)
     if created_at_raw and hasattr(created_at_raw, 'isoformat'):
         created_at_str = created_at_raw.isoformat()
     elif created_at_raw:
@@ -1857,16 +1858,14 @@ def _build_tracking_payload(sr, has_full_access):
         created_at_str = None
 
     try:
-        total_amt = float(sr.total_amount) if sr.total_amount is not None else 0.0
+        amt_to_use = target_sr.total_amount if (target_sr.total_amount is not None and float(target_sr.total_amount) > 0) else sr.total_amount
+        total_amt = float(amt_to_use) if amt_to_use is not None else 0.0
     except (ValueError, TypeError):
         total_amt = 0.0
 
-    # HS-D-07: "no job timeline the customer can see after the fact" --
-    # BookingStatusEvent is already populated on every real transition
-    # (see state_machine.py record_transition(), called from apply_transition()
-    # across ~20 call sites) but nothing ever exposed it to the customer;
-    # the tracking payload only ever carried current-state fields. This is a
-    # read-only addition -- no new writes, just serializing what already exists.
+    target_history_events = target_sr.status_events.all() if hasattr(target_sr, "status_events") else []
+    parent_history_events = sr.status_events.all() if (target_sr != sr and hasattr(sr, "status_events")) else []
+    all_events = list(parent_history_events) + list(target_history_events)
     status_history = [
         {
             "from_status": ev.from_status,
@@ -1875,13 +1874,13 @@ def _build_tracking_payload(sr, has_full_access):
             "reason_note": ev.reason_note,
             "occurred_at": ev.occurred_at.isoformat() if ev.occurred_at else None,
         }
-        for ev in sr.status_events.all().order_by("occurred_at")
-    ] if hasattr(sr, "status_events") else []
+        for ev in sorted(all_events, key=lambda e: e.occurred_at or timezone.now())
+    ]
 
     quote_obj = None
     quotation_history = []
-    if sr.status not in ["draft", "new_request"] and not (sr.service_category or "").startswith("goods_transport") and (sr.service_category or "") != "packers_movers":
-        for b_cand in [sr.request_id, sr.id, getattr(sr, "workforce_job_id", None)]:
+    if not (sr.service_category or "").startswith("goods_transport") and (sr.service_category or "") != "packers_movers":
+        for b_cand in [sr.request_id, sr.id, target_sr.request_id, target_sr.id, getattr(target_sr, "workforce_job_id", None), getattr(sr, "workforce_job_id", None)]:
             if b_cand:
                 q_res = WorkforceIntegrationService.get_quote_by_booking_id(str(b_cand))
                 if q_res and q_res.get("quote"):
@@ -1895,30 +1894,63 @@ def _build_tracking_payload(sr, has_full_access):
                 if quote_obj or quotation_history:
                     break
 
+    # Milestone payments & project duration tracking
+    total_paid = Decimal("0.00")
+    try:
+        from service_requests.models import Payment
+        paid_qs = Payment.objects.filter(
+            service_request__in=[target_sr, sr],
+            status=ServiceRequest.PaymentStatus.PAID
+        )
+        total_paid = sum((p.amount for p in paid_qs), Decimal("0.00"))
+    except Exception:
+        pass
+
+    q_total = Decimal(str(quote_obj.get("net_payable") or quote_obj.get("grand_total") or quote_obj.get("total_amount") or total_amt)) if quote_obj else Decimal(str(total_amt))
+    q_advance = Decimal(str(quote_obj.get("advance_amount") or (q_total * Decimal("0.50")))) if quote_obj else Decimal("0.00")
+    q_balance = max(Decimal("0.00"), q_total - total_paid) if total_paid > 0 else (Decimal(str(quote_obj.get("balance_amount") or (q_total - q_advance))) if quote_obj else Decimal("0.00"))
+    is_advance_paid = (total_paid >= q_advance and q_advance > 0) or (target_sr.payment_status in ["paid", "advance_paid", "collected"])
+    is_fully_paid = (total_paid >= q_total and q_total > 0) or (target_sr.payment_status in ["paid", "collected"] and target_sr.status in ["completed", "closed"])
+
+    duration_days = int(quote_obj.get("estimated_duration_days") or quote_obj.get("duration_days") or 1) if quote_obj else 1
+    current_day = 1
+    start_date = getattr(target_sr, "accepted_at", None) or getattr(target_sr, "created_at", None)
+    if start_date:
+        days_elapsed = (timezone.now().date() - start_date.date()).days + 1
+        current_day = max(1, min(days_elapsed, duration_days))
+
+    is_on_hold = (target_sr.status == "on_hold" or sr.status == "on_hold")
+    hold_reason = ""
+    if is_on_hold:
+        hold_ev = status_history[-1] if status_history and status_history[-1].get("to_status") == "on_hold" else None
+        hold_reason = hold_ev.get("reason_note") if hold_ev else (target_sr.cancellation_note or "Service temporarily paused due to weather / site condition")
+
     return {
-        "booking_id": sr.id,
+        "booking_id": target_sr.id,
+        "parent_booking_id": sr.id if target_sr != sr else None,
+        "request_id": target_sr.request_id,
+        "parent_request_id": sr.request_id if target_sr != sr else None,
         "status_history": status_history,
-        "request_id": sr.request_id,
-        "job_id": sr.id,
-        "status": sr.status,
+        "job_id": target_sr.id,
+        "status": target_sr.status,
         "is_accepted": is_accepted,
         "tracking_available": tracking_available,
         "technician_assigned": technician_assigned,
         "technician_accepted": technician_accepted,
-        "service_category": sr.service_category or "",
-        "issue_title": sr.issue_title or "",
-        "description": sr.description or "",
-        "customer_name": sr.customer_name or "",
-        "phone": sr.phone or "",
+        "service_category": target_sr.service_category or sr.service_category or "",
+        "issue_title": target_sr.issue_title or sr.issue_title or "",
+        "description": target_sr.description or sr.description or "",
+        "customer_name": target_sr.customer_name or sr.customer_name or "",
+        "phone": target_sr.phone or sr.phone or "",
         "created_at": created_at_str,
-        "preferred_date": str(sr.preferred_date) if sr.preferred_date else "",
-        "preferred_time": sr.preferred_time or "",
+        "preferred_date": str(target_sr.preferred_date or sr.preferred_date or ""),
+        "preferred_time": target_sr.preferred_time or sr.preferred_time or "",
         "total_amount": total_amt,
-        "payment_method": sr.payment_method or "COD",
-        "payment_status": sr.payment_status or "pending",
-        "cart_data": sr.cart_data or [],
+        "payment_method": target_sr.payment_method or sr.payment_method or "COD",
+        "payment_status": target_sr.payment_status or sr.payment_status or "pending",
+        "cart_data": target_sr.cart_data or sr.cart_data or [],
         "vendor": vendor_data,
-        "logistics": _build_logistics_progress(sr),
+        "logistics": _build_logistics_progress(target_sr),
         "service_location": {
             "address": dest_address,
             "latitude": dest_lat,
@@ -1942,16 +1974,30 @@ def _build_tracking_payload(sr, has_full_access):
         "eta_minutes": eta_minutes,
         "start_otp": start_otp,
         "payment_confirmation_otp": payment_confirmation_otp,
-        "tracking_token": str(sr.tracking_token) if (has_full_access and sr.tracking_token) else None,
+        "tracking_token": str(target_sr.tracking_token or sr.tracking_token) if (has_full_access and (target_sr.tracking_token or sr.tracking_token)) else None,
         "vehicle_number": tracking.get("vehicle_number") if (tracking and isinstance(tracking, dict)) else "",
         "vehicle_type": tracking.get("vehicle_type") if (tracking and isinstance(tracking, dict)) else "",
-        "pickup_address": sr.address or "",
-        "drop_address": sr.drop_address or "",
-        "drop_contact_name": sr.drop_contact_name or "",
-        "drop_contact_phone": sr.drop_contact_phone if has_full_access else "",
-        "fare_breakdown": getattr(sr, "fare_breakdown", None) or {},
+        "pickup_address": target_sr.address or sr.address or "",
+        "drop_address": target_sr.drop_address or sr.drop_address or "",
+        "drop_contact_name": target_sr.drop_contact_name or sr.drop_contact_name or "",
+        "drop_contact_phone": target_sr.drop_contact_phone if has_full_access else (sr.drop_contact_phone if has_full_access else ""),
+        "fare_breakdown": getattr(target_sr, "fare_breakdown", None) or getattr(sr, "fare_breakdown", None) or {},
         "quote": quote_obj,
         "quotation_history": quotation_history,
+        "milestones": {
+            "grand_total": float(q_total),
+            "advance_amount": float(q_advance),
+            "balance_amount": float(q_balance),
+            "total_paid": float(total_paid),
+            "advance_paid": is_advance_paid,
+            "balance_paid": is_fully_paid,
+        },
+        "project_timeline": {
+            "estimated_duration_days": duration_days,
+            "current_day": current_day,
+            "is_on_hold": is_on_hold,
+            "hold_reason": hold_reason,
+        },
     }
 
 
@@ -1961,15 +2007,12 @@ class CustomerBookingLiveLocationView(APIView):
     Returns service destination + technician live tracking data from workforce integration.
 
     Security model:
-    - Authorization required: ?token=<tracking_token> matching the booking, OR
+    - Authorization required: ?token=<tracking_token> matching the booking (or parent/child stage), OR
       authenticated booking owner (customer), OR authenticated admin.
     - If a token is provided and does not match the booking -> 403 Forbidden.
     - If no token is provided and user is unauthenticated -> 401 Unauthorized.
     """
     permission_classes = [permissions.AllowAny]
-    # Fixes EC-06: scoped separately from the blanket anon/user rate so a
-    # live-tracking poll loop has room to work without opening the endpoint
-    # up to unbounded scraping.
     throttle_classes  = []
 
     def get(self, request, pk=None, identifier=None):
@@ -1983,11 +2026,21 @@ class CustomerBookingLiveLocationView(APIView):
             return _error("Booking not found.", 404)
 
         provided_token = request.query_params.get("token") or request.data.get("token")
+        
+        valid_tokens = set()
+        if sr.tracking_token:
+            valid_tokens.add(str(sr.tracking_token).lower())
+        if sr.parent_request and sr.parent_request.tracking_token:
+            valid_tokens.add(str(sr.parent_request.tracking_token).lower())
+        if hasattr(sr, "child_requests"):
+            for child in sr.child_requests.all():
+                if child.tracking_token:
+                    valid_tokens.add(str(child.tracking_token).lower())
+
         token_matches = bool(
             provided_token and
-            sr.tracking_token and
-            str(sr.tracking_token).lower() == str(provided_token).strip().lower() and
-            not _tracking_token_is_expired(sr)  # Fixes EC-08
+            str(provided_token).strip().lower() in valid_tokens and
+            not _tracking_token_is_expired(sr)
         )
         is_admin_user = bool(request.user and request.user.is_authenticated and is_admin_role(request.user))
         is_owner = bool(request.user and request.user.is_authenticated and sr.customer_id and sr.customer_id == request.user.id)
