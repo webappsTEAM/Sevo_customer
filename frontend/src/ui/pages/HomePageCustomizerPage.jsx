@@ -79,6 +79,26 @@ function buildPreviewSrc(path, screen, editMode) {
   return `${path}${sep}preview=true${screenExtra}${editMode ? "&edit=true" : ""}`
 }
 
+// Fixed 2026-09-28 per explicit request ("If user uploaded Top card(Quick
+// access) that should be list on the Show ON for setting"): the Banners/
+// Advertisement tabs' "Show On" dropdown used to hardcode the option text
+// "Services only" / "Groceries only" — copy that drifts the moment the
+// admin renames those quick-access cards in the Mobile Top Cards tab (e.g.
+// to "Home Services"), leaving the dropdown showing a label that no longer
+// matches anything in the app. The underlying VALUES ("services" /
+// "groceries" / "both") stay exactly the values the customer app's
+// homepage_repository.dart already parses — only the on-screen text is
+// now sourced from whichever live top card the admin actually labeled as
+// the Services / Groceries quick-access entry, keyword-matched the same
+// way [Category.flowType] classifies categories on the mobile side.
+function flowOptionLabel(topCards, mode, fallback) {
+  const keyword = mode === "groceries" ? "grocer" : "servic"
+  const match = (topCards || []).find(
+    (c) => (c.label || "").toLowerCase().includes(keyword)
+  )
+  return match?.label ? `${match.label} only` : fallback
+}
+
 export default function HomePageCustomizerPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTabParam = searchParams.get("tab") || "hero"
@@ -1295,8 +1315,8 @@ export default function HomePageCustomizerPage() {
                           className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold bg-white"
                         >
                           <option value="both">Both (Services &amp; Groceries)</option>
-                          <option value="services">Services only</option>
-                          <option value="groceries">Groceries only</option>
+                          <option value="services">{flowOptionLabel(config.mobile?.topCards, "services", "Services only")}</option>
+                          <option value="groceries">{flowOptionLabel(config.mobile?.topCards, "groceries", "Groceries only")}</option>
                         </select>
                       </div>
                     </div>
@@ -1414,8 +1434,8 @@ export default function HomePageCustomizerPage() {
                           className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold bg-white"
                         >
                           <option value="both">Both (Services &amp; Groceries)</option>
-                          <option value="services">Services only</option>
-                          <option value="groceries">Groceries only</option>
+                          <option value="services">{flowOptionLabel(config.mobile?.topCards, "services", "Services only")}</option>
+                          <option value="groceries">{flowOptionLabel(config.mobile?.topCards, "groceries", "Groceries only")}</option>
                         </select>
                       </div>
                     </div>
