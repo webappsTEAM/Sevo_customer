@@ -665,6 +665,7 @@ export function VegetableProductDetailPage({
                 <VegetableProductCard
                   key={`sim-${item.id}`}
                   item={item}
+                  foodCart={foodCart}
                   cartCount={foodCart[item.name] || 0}
                   onUpdateQty={onUpdateCartQty}
                   onSelectProduct={(veg) => onSelectProduct && onSelectProduct(veg)}

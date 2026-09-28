@@ -186,14 +186,11 @@ export default function PlatformDashboardPage() {
         </Link>
 
         {/* Enter the real Customer UI (not a copy) with authorized inline
-            Edit Mode — see VegetableFullScreenPage / VegetableProductCard.
-            Opens in a new tab so the Super Admin's platform session here is
+            Edit Mode — opens in a new tab so the Super Admin's platform session here is
             undisturbed; the customer page is protected by the same
-            AuthProvider session, and edit affordances only render because
-            isSuperAdmin(user) is true — a normal customer visiting the same
-            URL sees the ordinary storefront with no edit controls. */}
+            AuthProvider session, and edit affordances render for authorized admins. */}
         <a
-          href="/vegetables?admin_edit=1"
+          href="/home"
           target="_blank"
           rel="noopener noreferrer"
           className="p-6 bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:border-indigo-500/50 hover:shadow-md transition-all group"

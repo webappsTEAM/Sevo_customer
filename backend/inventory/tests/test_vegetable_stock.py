@@ -165,6 +165,7 @@ class VegetableStockTestSuite(TestCase):
             "latitude": 12.9716,
             "longitude": 77.5946,
             "preferred_date": (timezone.localdate() + timedelta(days=1)).strftime("%Y-%m-%d"),
+            "preferred_time": "10:00 AM - 12:00 PM",
             "cart_data": [
                 {"id": self.pkg_tomato.id, "name": self.pkg_tomato.name, "quantity": 2, "unit": "kg"}
             ],
@@ -589,14 +590,136 @@ class VegetableStockWriteLockdownTestSuite(TestCase):
         )
         self.assertEqual(res.status_code, 403)
 
-    def test_update_details_endpoint_refuses_write(self):
+    def test_update_details_endpoint_updates_stock_and_details(self):
+        # 1. Update WEIGHT basis item with live stock and reorder level
         res = self.client.patch(
             f"/api/inventory/vegetable-stock/{self.pkg.id}/update-details/",
-            {"price": "99.00"}, format="json",
+            {
+                "price": "45.00",
+                "mrp": "55.00",
+                "current_stock_quantity": 500,
+                "current_stock_unit": "g",
+                "reorder_level_quantity": 200,
+                "reorder_level_unit": "g",
+                "unit_basis": "WEIGHT",
+            },
+            format="json",
         )
-        self.assertEqual(res.status_code, 403)
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.data["success"])
+        self.assertEqual(res.data["data"]["today_available_display"], "500 g")
+        self.assertEqual(res.data["data"]["reorder_level_display"], "200 g")
+        self.assertEqual(res.data["data"]["state"], "in_stock")
+
         self.pkg.refresh_from_db()
-        self.assertEqual(self.pkg.base_price, Decimal("40.00"))  # unchanged
+        self.item.refresh_from_db()
+        self.assertEqual(self.pkg.base_price, Decimal("45.00"))
+        self.assertEqual(self.item.stock_quantity_grams, 500)
+        self.assertEqual(self.item.reorder_threshold, 200)
+
+        # 2. Update COUNT basis item
+        from inventory.models import VegetableCategory, ApprovalStatus
+        cat = VegetableCategory.objects.filter(status=ApprovalStatus.APPROVED, subcategories__isnull=True).first()
+        count_pkg = Package.objects.create(
+            name="Fresh Lime",
+            slug="fresh-lime",
+            service=self.pkg.service,
+            base_price=Decimal("5.00"),
+            duration="1 pc",
+        )
+        count_item = Vegetable.objects.create(
+            org=self.company,
+            package=count_pkg,
+            category=cat,
+            name="Fresh Lime (Produce)",
+            sku="VEG-LIME",
+            unit_basis="COUNT",
+            unit="pcs",
+            stock_quantity_grams=0,
+            status=ApprovalStatus.APPROVED,
+        )
+        count_pkg.stock_item = count_item
+        count_pkg.save(update_fields=["stock_item"])
+
+        res_count = self.client.patch(
+            f"/api/inventory/vegetable-stock/{count_pkg.id}/update-details/",
+            {
+                "current_stock_quantity": 20,
+                "current_stock_unit": "pcs",
+                "reorder_level_quantity": 5,
+                "reorder_level_unit": "pcs",
+                "unit_basis": "COUNT",
+            },
+            format="json",
+        )
+        self.assertEqual(res_count.status_code, 200)
+        self.assertTrue(res_count.data["success"])
+        self.assertEqual(res_count.data["data"]["today_available_display"], "20 pcs")
+        self.assertEqual(res_count.data["data"]["reorder_level_display"], "5 pcs")
+
+        count_item.refresh_from_db()
+        self.assertEqual(count_item.stock_quantity_grams, 20)
+        self.assertEqual(count_item.reorder_threshold, 5)
+
+    def test_update_details_endpoint_updates_image(self):
+        new_img_url = "https://images.unsplash.com/photo-spine-gourd.jpg"
+        res = self.client.patch(
+            f"/api/inventory/vegetable-stock/{self.pkg.id}/update-details/",
+            {"image": new_img_url}, format="json",
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.data["success"])
+        self.pkg.refresh_from_db()
+        self.item.refresh_from_db()
+        self.assertEqual(self.pkg.image, new_img_url)
+        self.assertEqual(self.item.image, new_img_url)
+
+    def test_vegetable_details_update_serializer_units_validation(self):
+        from inventory.serializers import VegetableDetailsUpdateSerializer
+        # 1. Valid WEIGHT units
+        s_weight = VegetableDetailsUpdateSerializer(
+            data={
+                "opening_stock_quantity": 10, "opening_stock_unit": "kg",
+                "current_stock_quantity": 500, "current_stock_unit": "g",
+                "restock_level_quantity": 2, "restock_level_unit": "kg",
+                "reorder_level_quantity": 1, "reorder_level_unit": "kg",
+                "unit_basis": "WEIGHT",
+            }
+        )
+        self.assertTrue(s_weight.is_valid(), s_weight.errors)
+
+        # 2. Incompatible COUNT unit on WEIGHT basis item
+        s_mismatch = VegetableDetailsUpdateSerializer(
+            data={
+                "current_stock_quantity": 10, "current_stock_unit": "pcs",
+                "unit_basis": "WEIGHT",
+            }
+        )
+        self.assertFalse(s_mismatch.is_valid())
+        self.assertIn("current_stock_unit", s_mismatch.errors)
+
+        # 3. Valid COUNT units across all six allowed variants
+        for count_unit in ["pcs", "bunch", "packet", "dozen"]:
+            s_count = VegetableDetailsUpdateSerializer(
+                data={
+                    "opening_stock_quantity": 20, "opening_stock_unit": count_unit,
+                    "current_stock_quantity": 15, "current_stock_unit": count_unit,
+                    "restock_level_quantity": 10, "restock_level_unit": count_unit,
+                    "reorder_level_quantity": 5, "reorder_level_unit": count_unit,
+                    "unit_basis": "COUNT",
+                }
+            )
+            self.assertTrue(s_count.is_valid(), f"Failed for unit {count_unit}: {s_count.errors}")
+
+        # 4. Incompatible WEIGHT unit on COUNT basis item
+        s_count_mismatch = VegetableDetailsUpdateSerializer(
+            data={
+                "current_stock_quantity": 10, "current_stock_unit": "kg",
+                "unit_basis": "COUNT",
+            }
+        )
+        self.assertFalse(s_count_mismatch.is_valid())
+        self.assertIn("current_stock_unit", s_count_mismatch.errors)
 
     def test_update_details_endpoint_updates_image(self):
         new_img_url = "https://images.unsplash.com/photo-spine-gourd.jpg"
