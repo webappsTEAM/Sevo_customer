@@ -7,7 +7,11 @@ import {
   ShieldCheck, Sparkles, Filter, Trash2, Plus, Minus,
   RefreshCw, ChevronDown, Check, Info, AlertCircle, ShoppingBag,
   Layers, FolderTree, Tag, SlidersHorizontal, ArrowUpRight,
-  ListFilter, Grid, ChevronLeft
+  ListFilter, Grid, ChevronLeft,
+  Apple, Carrot, Milk, Coffee, Utensils, CupSoda, Cookie,
+  Fish, Egg, Beef, Shirt, Dumbbell, Laptop, Smartphone,
+  Tv, Bath, Baby, Home, Package, Boxes, Droplet, Hammer,
+  PaintRoller, Wrench, HeartPulse, Croissant
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { useAuth } from "../../state/auth/useAuth.js"
@@ -30,6 +34,91 @@ import {
 } from "../../services/marketplaceApi.js"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
+
+// Icon resolver for category icon_key / icon fallback
+const CATEGORY_ICON_LOOKUP = {
+  grid: Grid,
+  all: Grid,
+  shoppingbag: ShoppingBag,
+  shopping_bag: ShoppingBag,
+  apple: Apple,
+  fruit: Apple,
+  fruits: Apple,
+  carrot: Carrot,
+  vegetable: Carrot,
+  vegetables: Carrot,
+  groceries: ShoppingBag,
+  grocery: ShoppingBag,
+  dairy: Milk,
+  milk: Milk,
+  beverages: CupSoda,
+  beverage: CupSoda,
+  drinks: CupSoda,
+  coffee: Coffee,
+  tea: Coffee,
+  snacks: Cookie,
+  snack: Cookie,
+  cookie: Cookie,
+  cookies: Cookie,
+  biscuit: Cookie,
+  meat: Beef,
+  chicken: Beef,
+  fish: Fish,
+  seafood: Fish,
+  egg: Egg,
+  eggs: Egg,
+  bakery: Croissant,
+  bread: Croissant,
+  personalcare: Bath,
+  personal_care: Bath,
+  cleaning: Sparkles,
+  household: Home,
+  babycare: Baby,
+  baby_care: Baby,
+  baby: Baby,
+  electronics: Laptop,
+  mobile: Smartphone,
+  appliances: Tv,
+  appliance: Tv,
+  fashion: Shirt,
+  clothing: Shirt,
+  health: HeartPulse,
+  fitness: Dumbbell,
+  package: Package,
+  boxes: Boxes,
+  store: Store,
+  tag: Tag,
+  layers: Layers,
+  default: ShoppingBag,
+}
+
+function getCategoryIconComponent(iconKey, categoryName = "") {
+  if (iconKey) {
+    const key = String(iconKey).toLowerCase().replace(/[-_\s]+/g, "")
+    if (CATEGORY_ICON_LOOKUP[key]) return CATEGORY_ICON_LOOKUP[key]
+  }
+  const name = String(categoryName || "").toLowerCase()
+  if (name.includes("veg") || name.includes("carrot")) return Carrot
+  if (name.includes("fruit") || name.includes("apple")) return Apple
+  if (name.includes("dairy") || name.includes("milk") || name.includes("curd")) return Milk
+  if (name.includes("bev") || name.includes("drink") || name.includes("juice") || name.includes("soda") || name.includes("cola")) return CupSoda
+  if (name.includes("snack") || name.includes("cookie") || name.includes("biscuit") || name.includes("chip") || name.includes("namkeen")) return Cookie
+  if (name.includes("meat") || name.includes("chicken") || name.includes("mutton")) return Beef
+  if (name.includes("fish") || name.includes("prawn") || name.includes("sea")) return Fish
+  if (name.includes("egg")) return Egg
+  if (name.includes("bake") || name.includes("bread") || name.includes("cake")) return Croissant
+  if (name.includes("clean") || name.includes("detergent") || name.includes("wash")) return Sparkles
+  if (name.includes("care") || name.includes("bath") || name.includes("soap") || name.includes("shampoo")) return Bath
+  if (name.includes("baby") || name.includes("diaper")) return Baby
+  if (name.includes("cloth") || name.includes("fashion") || name.includes("wear")) return Shirt
+  if (name.includes("electro") || name.includes("tech") || name.includes("gadget")) return Laptop
+  if (name.includes("phone") || name.includes("mobile")) return Smartphone
+  if (name.includes("appliance") || name.includes("tv")) return Tv
+  if (name.includes("fit") || name.includes("gym")) return Dumbbell
+  if (name.includes("health") || name.includes("pharma") || name.includes("med")) return HeartPulse
+  
+  return ShoppingBag
+}
 
 // Helper to recursively find category by slug or id in a tree
 function findCategoryInTree(nodes, slugOrId) {
@@ -60,83 +149,238 @@ function getCategoryPathFromTree(nodes, slugOrId, currentPath = []) {
   return []
 }
 
-// Category Tree Node Component for Left Rail & Mobile Drawer
-function CategoryTreeItem({ node, selectedSlug, expandedIds, toggleExpand, onSelect, level = 0 }) {
-  const isSelected = selectedSlug === node.slug || String(selectedSlug) === String(node.id)
-  const isExpanded = expandedIds.has(node.id)
-  const hasChildren = Array.isArray(node.children) && node.children.length > 0
-  const productCount = node.total_product_count !== undefined ? node.total_product_count : (node.product_count || 0)
+// Subcategory Nested Sidebar Item Component (Instamart Style Stacked)
+function SubcategorySidebarTile({ child, isSelected, onSelect }) {
+  const [imgError, setImgError] = useState(false)
+  const imageUrl = child?.image_url || child?.image || null
+  const iconKey = child?.icon_key || child?.icon || child?.slug || ""
+  const name = child?.name || ""
+  const count = child?.total_product_count !== undefined ? child.total_product_count : (child?.product_count || 0)
+
+  const IconComponent = useMemo(() => {
+    return getCategoryIconComponent(iconKey, name)
+  }, [iconKey, name])
+
+  const showImage = Boolean(imageUrl && !imgError)
+
+  return (
+    <div
+      onClick={(e) => {
+        e.stopPropagation()
+        onSelect(child)
+      }}
+      role="button"
+      tabIndex={0}
+      aria-current={isSelected ? "page" : undefined}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          e.stopPropagation()
+          onSelect(child)
+        }
+      }}
+      className={`group relative flex flex-col items-center text-center p-2 rounded-2xl transition-all duration-200 cursor-pointer border select-none ${
+        isSelected
+          ? "bg-emerald-100/90 border-emerald-500 text-emerald-950 font-bold shadow-2xs ring-1 ring-emerald-500/20"
+          : "bg-white/90 border-slate-200/70 hover:bg-slate-50 hover:border-slate-300 text-slate-700 hover:text-slate-900"
+      }`}
+    >
+      {/* Active Left Indicator Bar */}
+      {isSelected && (
+        <span className="absolute left-0 top-2.5 bottom-2.5 w-1 rounded-r-full bg-emerald-600" />
+      )}
+
+      {/* Subcategory Thumbnail / Icon Box (Fixed Square Container Matching Top-Level w-16 h-16) */}
+      <div className="relative">
+        <div
+          className={`w-16 h-16 rounded-2xl shrink-0 flex items-center justify-center overflow-hidden transition-transform duration-200 group-hover:scale-[1.03] border ${
+            isSelected
+              ? "bg-white border-emerald-300 text-emerald-700"
+              : "bg-slate-50 border-slate-200/70 text-slate-500 group-hover:bg-white group-hover:border-slate-300"
+          }`}
+        >
+          {showImage ? (
+            <img
+              src={imageUrl}
+              alt={name}
+              className="w-full h-full object-cover object-center"
+              onError={() => setImgError(true)}
+              loading="lazy"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center p-3">
+              <IconComponent className={`w-7 h-7 transition-colors ${isSelected ? "text-emerald-700" : "text-slate-400 group-hover:text-slate-600"}`} />
+            </div>
+          )}
+        </div>
+
+        {/* Count Badge on Image Corner */}
+        {count > 0 && (
+          <span
+            className={`absolute -bottom-1.5 -right-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full tabular-nums shadow-xs transition-colors ring-2 ${
+              isSelected
+                ? "bg-emerald-600 text-white ring-white"
+                : "bg-slate-700 text-white ring-white group-hover:bg-slate-800"
+            }`}
+          >
+            {count}
+          </span>
+        )}
+      </div>
+
+      {/* Subcategory Label Centered Below Image */}
+      <div className="mt-2 w-full px-0.5">
+        <span className={`text-[11.5px] leading-snug line-clamp-2 block text-center transition-colors ${
+          isSelected ? "font-extrabold text-emerald-950" : "font-semibold text-slate-700 group-hover:text-slate-900"
+        }`}>
+          {name}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// Instamart-Style Visual Category Sidebar Tile Component (Stacked Vertical Layout)
+function CategorySidebarTile({
+  cat,
+  isSelected,
+  selectedSlug,
+  onSelect,
+  isExpanded = false,
+  toggleExpand,
+  isAll = false,
+  totalCount = 0
+}) {
+  const [imgError, setImgError] = useState(false)
+  const imageUrl = isAll ? null : (cat?.image_url || cat?.image || null)
+  const iconKey = isAll ? "grid" : (cat?.icon_key || cat?.icon || cat?.slug || "")
+  const name = isAll ? "All Products" : (cat?.name || "")
+  const count = isAll ? totalCount : (cat?.total_product_count !== undefined ? cat.total_product_count : (cat?.product_count || 0))
+  const hasChildren = !isAll && Array.isArray(cat?.children) && cat.children.length > 0
+
+  const IconComponent = useMemo(() => {
+    if (isAll) return Grid
+    return getCategoryIconComponent(iconKey, name)
+  }, [isAll, iconKey, name])
+
+  const showImage = Boolean(imageUrl && !imgError)
+
+  const handleTileClick = () => {
+    onSelect(isAll ? null : cat)
+    if (hasChildren && !isExpanded && toggleExpand) {
+      toggleExpand(cat.id || cat.slug)
+    }
+  }
 
   return (
     <div className="select-none">
       <div
-        className={`group flex items-center justify-between gap-1.5 px-3 py-2 rounded-xl text-xs transition-all cursor-pointer ${
-          isSelected
-            ? "bg-emerald-600 text-white shadow-sm font-bold"
-            : "text-slate-700 hover:bg-slate-100 hover:text-slate-900 font-medium"
-        }`}
-        style={{ paddingLeft: `${Math.max(12, level * 14 + 12)}px` }}
-        onClick={() => onSelect(node)}
+        onClick={handleTileClick}
         role="button"
         tabIndex={0}
         aria-current={isSelected ? "page" : undefined}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault()
-            onSelect(node)
+            handleTileClick()
           }
         }}
+        className={`group relative flex flex-col items-center text-center p-2.5 rounded-2xl transition-all duration-200 cursor-pointer border ${
+          isSelected
+            ? "bg-emerald-50/95 border-emerald-500/80 shadow-xs ring-1 ring-emerald-500/30 text-emerald-950 font-bold"
+            : "bg-white border-slate-200/80 hover:bg-slate-50/90 hover:border-slate-300 text-slate-700 hover:text-slate-900"
+        }`}
       >
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          {hasChildren ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                toggleExpand(node.id)
-              }}
-              className={`p-0.5 rounded hover:bg-black/10 transition-colors ${
-                isSelected ? "text-white" : "text-slate-400 group-hover:text-slate-600"
-              }`}
-              aria-label={isExpanded ? `Collapse ${node.name}` : `Expand ${node.name}`}
-            >
-              {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-            </button>
-          ) : level > 0 ? (
-            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isSelected ? "bg-white" : "bg-slate-300"}`} />
-          ) : (
-            <ShoppingBag className={`w-3.5 h-3.5 shrink-0 ${isSelected ? "text-white" : "text-slate-400"}`} />
-          )}
-          <span className="truncate">{node.name}</span>
-        </div>
+        {/* Active Left Indicator Bar */}
+        {isSelected && (
+          <span className="absolute left-0 top-2.5 bottom-2.5 w-1.5 bg-emerald-600 rounded-r-full" />
+        )}
 
-        {productCount > 0 && (
-          <span
-            className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full shrink-0 ${
+        {/* Expand / Collapse Chevron Button for Categories with Children */}
+        {hasChildren && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              toggleExpand?.(cat.id || cat.slug)
+            }}
+            className={`absolute top-1.5 right-1.5 p-1 rounded-lg transition-colors cursor-pointer z-10 ${
               isSelected
-                ? "bg-emerald-700/90 text-white"
-                : "bg-slate-200/80 text-slate-600 group-hover:bg-slate-300"
+                ? "text-emerald-800 hover:bg-emerald-200/70"
+                : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+            }`}
+            aria-label={isExpanded ? `Collapse ${name}` : `Expand ${name}`}
+          >
+            {isExpanded ? (
+              <ChevronDown className="w-3.5 h-3.5 stroke-[2.5]" />
+            ) : (
+              <ChevronRight className="w-3.5 h-3.5 stroke-[2.5]" />
+            )}
+          </button>
+        )}
+
+        {/* Instamart Photo Thumbnail / Icon Box (Fixed Square Container w-16 h-16) */}
+        <div className="relative">
+          <div
+            className={`w-16 h-16 rounded-2xl shrink-0 flex items-center justify-center overflow-hidden transition-transform duration-200 group-hover:scale-[1.03] border ${
+              isSelected
+                ? "bg-white border-emerald-300 shadow-xs text-emerald-700"
+                : "bg-slate-50 border-slate-200/80 text-slate-600 group-hover:bg-white group-hover:border-slate-300"
             }`}
           >
-            {productCount}
+            {showImage ? (
+              <img
+                src={imageUrl}
+                alt={name}
+                className="w-full h-full object-cover object-center"
+                onError={() => setImgError(true)}
+                loading="lazy"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center p-3">
+                <IconComponent className={`w-7 h-7 transition-colors ${isSelected ? "text-emerald-700" : "text-slate-500 group-hover:text-slate-700"}`} />
+              </div>
+            )}
+          </div>
+
+          {/* Product Count Badge on Image Corner */}
+          {count > 0 && (
+            <span
+              className={`absolute -bottom-1.5 -right-1.5 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full tabular-nums shadow-xs transition-colors ring-2 ${
+                isSelected
+                  ? "bg-emerald-600 text-white ring-white"
+                  : "bg-slate-800 text-white ring-white group-hover:bg-slate-900"
+              }`}
+            >
+              {count}
+            </span>
+          )}
+        </div>
+
+        {/* Category Label Below Image */}
+        <div className="mt-2 w-full px-0.5">
+          <span className={`text-xs leading-snug line-clamp-2 block text-center transition-colors ${
+            isSelected ? "font-black text-emerald-950" : "font-semibold text-slate-800 group-hover:text-slate-950"
+          }`}>
+            {name}
           </span>
-        )}
+        </div>
       </div>
 
-      {/* Nested Children Accordion */}
+      {/* Nested Expandable Subcategory List (Indented Single Column) */}
       {hasChildren && isExpanded && (
-        <div className="relative ml-2 pl-1 border-l border-slate-200 space-y-0.5 mt-0.5">
-          {node.children.map((child) => (
-            <CategoryTreeItem
-              key={child.id || child.slug}
-              node={child}
-              selectedSlug={selectedSlug}
-              expandedIds={expandedIds}
-              toggleExpand={toggleExpand}
-              onSelect={onSelect}
-              level={level + 1}
-            />
-          ))}
+        <div className="ml-2 pl-2 border-l-2 border-slate-200/80 space-y-1.5 mt-1.5 pb-1">
+          {cat.children.map((child) => {
+            const isChildSelected = selectedSlug === child.slug || String(selectedSlug) === String(child.id)
+            return (
+              <SubcategorySidebarTile
+                key={child.id || child.slug}
+                child={child}
+                isSelected={isChildSelected}
+                onSelect={onSelect}
+              />
+            )
+          })}
         </div>
       )}
     </div>
@@ -217,6 +461,36 @@ export function MarketplacePage() {
     return getCategoryPathFromTree(categoryTree, currentCategorySlug)
   }, [categoryTree, currentCategorySlug, activeCategoryNode])
 
+  // Deduplicated / aggregated root categories only (no leaf/child categories) for Instamart sidebar & top pill bar
+  const uniqueRootCategories = useMemo(() => {
+    if (!Array.isArray(categoryTree)) return []
+    const seen = new Map()
+    for (const cat of categoryTree) {
+      // Exclude leaf/child categories -- only include root categories (parent_id is null/None)
+      if (cat.parent_id !== null && cat.parent_id !== undefined && cat.parent_id !== "" && cat.parent_id !== "null") {
+        continue
+      }
+      const key = (cat.slug || cat.name || "").toLowerCase().trim()
+      if (!seen.has(key)) {
+        seen.set(key, { ...cat })
+      } else {
+        const existing = seen.get(key)
+        const addCount = cat.total_product_count !== undefined ? cat.total_product_count : (cat.product_count || 0)
+        existing.total_product_count = (existing.total_product_count || existing.product_count || 0) + addCount
+        existing.product_count = existing.total_product_count
+        if (Array.isArray(cat.children) && cat.children.length > 0) {
+          const currentChildren = existing.children || []
+          existing.children = [...currentChildren, ...cat.children]
+        }
+        if (!existing.image_url && cat.image_url) existing.image_url = cat.image_url
+        if (!existing.image && cat.image) existing.image = cat.image
+        if (!existing.icon_key && cat.icon_key) existing.icon_key = cat.icon_key
+        if (!existing.icon && cat.icon) existing.icon = cat.icon
+      }
+    }
+    return Array.from(seen.values())
+  }, [categoryTree])
+
   // Total products in catalog across all categories
   const totalCatalogProductsCount = useMemo(() => {
     if (!Array.isArray(categoryTree)) return 0
@@ -230,17 +504,19 @@ export function MarketplacePage() {
         const next = new Set(prev)
         breadcrumbs.forEach((crumb) => {
           if (crumb.id) next.add(crumb.id)
+          if (crumb.slug) next.add(crumb.slug)
         })
         return next
       })
     }
   }, [breadcrumbs])
 
-  const toggleCategoryExpand = (id) => {
+  const toggleCategoryExpand = (idOrSlug) => {
+    if (!idOrSlug) return
     setExpandedCategoryIds((prev) => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      if (next.has(idOrSlug)) next.delete(idOrSlug)
+      else next.add(idOrSlug)
       return next
     })
   }
@@ -603,7 +879,7 @@ export function MarketplacePage() {
       {/* Main Container */}
       <div>
         {/* Marketplace Header */}
-        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-2xs">
+        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <Link to={routes.landing} className="p-2 hover:bg-slate-100 rounded-xl text-slate-600 transition-colors">
@@ -614,7 +890,7 @@ export function MarketplacePage() {
                   <span className="bg-emerald-100 text-emerald-800 text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md tracking-wider">
                     Seller Hub Marketplace
                   </span>
-                  <span className="text-xs text-slate-400 font-medium">Verified Stores</span>
+                  <span className="text-xs text-slate-400 font-medium hidden sm:inline">Verified Stores</span>
                 </div>
                 <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight flex items-center gap-1.5">
                   Sevo Mart
@@ -631,7 +907,7 @@ export function MarketplacePage() {
                   placeholder="Search groceries, dairy, staples, brands..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-slate-100/80 hover:bg-slate-100 focus:bg-white text-sm rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-hidden transition-all"
+                  className="w-full pl-10 pr-4 py-2 bg-slate-100/80 hover:bg-slate-100 focus:bg-white text-sm rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition-all"
                 />
                 {searchQuery && (
                   <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
@@ -682,19 +958,19 @@ export function MarketplacePage() {
                 placeholder="Search products, brands..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-100 text-sm rounded-xl border border-slate-200 focus:bg-white focus:border-emerald-500 outline-hidden"
+                className="w-full pl-10 pr-4 py-2 bg-slate-100 text-sm rounded-xl border border-slate-200 focus:bg-white focus:border-emerald-500 outline-none"
               />
             </div>
           </div>
 
           {/* Top Categories Pill Bar + Mobile Drawer Trigger */}
-          <div className="border-t border-slate-100 bg-slate-50/80 overflow-x-auto no-scrollbar">
+          <div className="border-t border-slate-100 bg-slate-50/90 overflow-x-auto no-scrollbar">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex items-center gap-2">
               {/* Mobile Category Drawer Button */}
               <button
                 type="button"
                 onClick={() => setCategoryDrawerOpen(true)}
-                className="lg:hidden flex items-center gap-1.5 px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg shrink-0 shadow-xs cursor-pointer hover:bg-emerald-700 transition-colors"
+                className="lg:hidden flex items-center gap-1.5 px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg shrink-0 shadow-sm cursor-pointer hover:bg-emerald-700 transition-colors"
                 aria-label="Open categories menu"
               >
                 <ListFilter className="w-3.5 h-3.5" />
@@ -708,32 +984,32 @@ export function MarketplacePage() {
               {/* All Option */}
               <button
                 onClick={() => handleSelectCategory(null)}
-                className={`px-3.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shadow-sm ${
                   currentCategorySlug === "all"
-                    ? "bg-slate-900 text-white shadow-xs"
-                    : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
+                    ? "bg-slate-900 text-white shadow-md"
+                    : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 hover:border-slate-300"
                 }`}
               >
                 All
               </button>
 
-              {/* Root Categories Horizontal Pills */}
-              {categoryTree.map((cat) => {
+              {/* Unique Root Categories Horizontal Pills */}
+              {uniqueRootCategories.map((cat) => {
                 const isSelected = currentCategorySlug === cat.slug || breadcrumbs.some((b) => b.slug === cat.slug)
                 return (
                   <button
                     key={cat.id || cat.slug}
                     onClick={() => handleSelectCategory(cat)}
-                    className={`px-3.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 shadow-sm ${
                       isSelected
-                        ? "bg-slate-900 text-white shadow-xs"
-                        : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
+                        ? "bg-slate-900 text-white shadow-md"
+                        : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 hover:border-slate-300"
                     }`}
                   >
                     <span>{cat.name}</span>
                     {(cat.total_product_count || cat.product_count) > 0 && (
                       <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
-                        isSelected ? "bg-slate-700 text-white" : "bg-slate-100 text-slate-600"
+                        isSelected ? "bg-slate-700 text-emerald-300" : "bg-slate-100 text-slate-600"
                       }`}>
                         {cat.total_product_count || cat.product_count}
                       </span>
@@ -749,7 +1025,7 @@ export function MarketplacePage() {
                   <select
                     value={selectedSeller}
                     onChange={(e) => setSelectedSeller(e.target.value)}
-                    className="text-xs font-bold bg-white border border-slate-200 rounded-lg px-2 py-1 text-slate-700 outline-hidden"
+                    className="text-xs font-bold bg-white border border-slate-200 rounded-lg px-2 py-1 text-slate-700 outline-none"
                   >
                     <option value="All">All Stores</option>
                     {availableSellers.map((s) => (
@@ -764,119 +1040,8 @@ export function MarketplacePage() {
           </div>
         </header>
 
-        {/* Hero Store Banner */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
-          <div
-            className="rounded-3xl p-6 sm:p-8 text-white relative overflow-hidden shadow-xl"
-            style={{
-              background: "linear-gradient(135deg, #022c22 0%, #064e3b 50%, #022c22 100%)",
-            }}
-          >
-            <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-              {/* Left Column */}
-              <div className="max-w-2xl">
-                <div
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold mb-3"
-                  style={{
-                    backgroundColor: "rgba(16, 185, 129, 0.2)",
-                    border: "1px solid rgba(52, 211, 153, 0.3)",
-                    color: "#34d399",
-                  }}
-                >
-                  <ShieldCheck className="w-3.5 h-3.5" /> 100% Quality &amp; Freshness Guarantee
-                </div>
-
-                <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight leading-tight text-white">
-                  Direct from Certified <span style={{ color: "#34d399" }}>Seller Hub</span> Partners
-                </h2>
-
-                <p className="text-slate-300 text-xs sm:text-sm mt-2 leading-relaxed max-w-xl">
-                  Shop authentic branded groceries, dairy, staples, and packaged goods dispatched directly from verified local suppliers.
-                </p>
-
-                {/* Feature Pills */}
-                <div className="flex flex-wrap items-center gap-2.5 mt-5">
-                  <div
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-emerald-100"
-                    style={{
-                      backgroundColor: "rgba(255, 255, 255, 0.08)",
-                      border: "1px solid rgba(255, 255, 255, 0.12)",
-                    }}
-                  >
-                    <Truck className="w-3.5 h-3.5 text-emerald-400" />
-                    Express Delivery
-                  </div>
-
-                  <div
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-emerald-100"
-                    style={{
-                      backgroundColor: "rgba(255, 255, 255, 0.08)",
-                      border: "1px solid rgba(255, 255, 255, 0.12)",
-                    }}
-                  >
-                    <PackageCheck className="w-3.5 h-3.5 text-emerald-400" />
-                    Sealed &amp; Tamper-Proof
-                  </div>
-
-                  <div
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-emerald-100"
-                    style={{
-                      backgroundColor: "rgba(255, 255, 255, 0.08)",
-                      border: "1px solid rgba(255, 255, 255, 0.12)",
-                    }}
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                    Best Price Assured
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Side Stats Card */}
-              <div
-                className="hidden sm:flex flex-col justify-center rounded-2xl p-4 sm:p-5 w-full md:w-72 shrink-0 backdrop-blur-md"
-                style={{
-                  backgroundColor: "rgba(255, 255, 255, 0.05)",
-                  border: "1px solid rgba(255, 255, 255, 0.1)",
-                }}
-              >
-                <div className="flex items-center justify-between gap-2 mb-3">
-                  <span className="text-xs font-bold text-slate-300">Marketplace Hub</span>
-                  <span
-                    className="text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider"
-                    style={{
-                      backgroundColor: "rgba(16, 185, 129, 0.25)",
-                      color: "#34d399",
-                    }}
-                  >
-                    Live Verified
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-2.5 my-1">
-                  <Store className="w-6 h-6 text-emerald-400" />
-                  <span className="text-lg font-black text-white">
-                    {availableSellers.length > 0 ? `${availableSellers.length} Local Stores` : "9 Local Stores"}
-                  </span>
-                </div>
-
-                <p className="text-[11px] text-slate-300 mt-2 leading-normal">
-                  Dispatched straight from local vendor warehouses for quick delivery and freshness.
-                </p>
-              </div>
-            </div>
-
-            {/* Ambient Background decoration */}
-            <div
-              className="absolute right-0 top-0 bottom-0 w-1/2 pointer-events-none"
-              style={{
-                background: "radial-gradient(ellipse at top right, rgba(16, 185, 129, 0.15), transparent 70%)",
-              }}
-            />
-          </div>
-        </section>
-
         {/* Products Grid Section with Left Category Rail */}
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {/* Category Not Found Banner */}
           {categoryNotFound && (
             <div className="mb-6 bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between gap-4 text-amber-900">
@@ -896,78 +1061,67 @@ export function MarketplacePage() {
             </div>
           )}
 
-          <div className="flex items-start gap-6 lg:gap-8">
-            {/* Desktop Left Category Rail */}
-            <aside className="w-64 lg:w-72 shrink-0 hidden lg:block sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-1 space-y-4">
-              <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-2xs">
-                <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <ListFilter className="w-4 h-4 text-emerald-600" />
-                    <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
+          <div className="flex items-start gap-4 lg:gap-6">
+            {/* Desktop Left Category Rail (Instamart Compact Rail) */}
+            <aside className="w-28 sm:w-32 lg:w-36 shrink-0 hidden lg:block sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-0.5 space-y-2">
+              <div className="bg-white rounded-2xl border border-slate-200/80 p-2 shadow-sm space-y-2">
+                <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+                  <div className="flex items-center gap-1.5">
+                    <ListFilter className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span className="text-[11px] font-black text-slate-900 uppercase tracking-wider truncate">
                       Categories
                     </span>
                   </div>
                   {currentCategorySlug !== "all" && (
                     <button
                       onClick={() => handleSelectCategory(null)}
-                      className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer"
+                      className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer"
                     >
                       Reset
                     </button>
                   )}
                 </div>
 
-                {/* All Products Rail Item */}
-                <div
-                  className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-all cursor-pointer mb-1 ${
-                    currentCategorySlug === "all"
-                      ? "bg-emerald-600 text-white font-bold shadow-sm"
-                      : "text-slate-700 hover:bg-slate-100 font-medium"
-                  }`}
-                  onClick={() => handleSelectCategory(null)}
-                  role="button"
-                  tabIndex={0}
-                  aria-current={currentCategorySlug === "all" ? "page" : undefined}
-                >
-                  <div className="flex items-center gap-2">
-                    <Grid className={`w-3.5 h-3.5 ${currentCategorySlug === "all" ? "text-white" : "text-slate-500"}`} />
-                    <span>All Products</span>
-                  </div>
-                  {totalCatalogProductsCount > 0 && (
-                    <span
-                      className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
-                        currentCategorySlug === "all" ? "bg-emerald-700 text-white" : "bg-slate-100 text-slate-600"
-                      }`}
-                    >
-                      {totalCatalogProductsCount}
-                    </span>
-                  )}
-                </div>
+                {/* All Products Tile */}
+                <CategorySidebarTile
+                  isAll={true}
+                  isSelected={currentCategorySlug === "all"}
+                  onSelect={handleSelectCategory}
+                  totalCount={totalCatalogProductsCount}
+                />
 
-                {/* Category Tree Items */}
+                {/* Category Image Tiles */}
                 {categoriesLoading ? (
-                  <div className="space-y-2 py-2 animate-pulse">
+                  <div className="space-y-2 py-1 animate-pulse">
                     {[...Array(6)].map((_, i) => (
-                      <div key={i} className="h-8 bg-slate-100 rounded-xl" />
+                      <div key={i} className="h-14 bg-slate-100 rounded-2xl" />
                     ))}
                   </div>
                 ) : categoriesUnavailable ? (
-                  <div className="py-4 text-center text-xs text-slate-400">
+                  <div className="py-6 text-center text-xs text-slate-400">
                     <span>Categories temporarily unavailable</span>
                   </div>
                 ) : (
-                  <div className="space-y-1">
-                    {categoryTree.map((cat) => (
-                      <CategoryTreeItem
-                        key={cat.id || cat.slug}
-                        node={cat}
-                        selectedSlug={currentCategorySlug}
-                        expandedIds={expandedCategoryIds}
-                        toggleExpand={toggleCategoryExpand}
-                        onSelect={handleSelectCategory}
-                        level={0}
-                      />
-                    ))}
+                  <div className="space-y-1.5 pt-0.5">
+                    {uniqueRootCategories.map((cat) => {
+                      const catKey = cat.id || cat.slug
+                      const isDirectSelected = currentCategorySlug === cat.slug || String(currentCategorySlug) === String(cat.id)
+                      const isAncestorOfSelected = breadcrumbs.some((b) => b.slug === cat.slug || String(b.id) === String(cat.id))
+                      const isSelected = isDirectSelected || isAncestorOfSelected
+                      const isExpanded = expandedCategoryIds.has(cat.id) || expandedCategoryIds.has(cat.slug)
+
+                      return (
+                        <CategorySidebarTile
+                          key={catKey}
+                          cat={cat}
+                          isSelected={isSelected}
+                          selectedSlug={currentCategorySlug}
+                          isExpanded={isExpanded}
+                          toggleExpand={toggleCategoryExpand}
+                          onSelect={handleSelectCategory}
+                        />
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -976,7 +1130,7 @@ export function MarketplacePage() {
             {/* Right Products Container */}
             <div className="flex-1 min-w-0">
               {/* Breadcrumb Trail */}
-              <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-4 flex-wrap bg-white/70 border border-slate-200/80 px-4 py-2.5 rounded-xl shadow-2xs">
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-4 flex-wrap bg-white/70 border border-slate-200/80 px-4 py-2.5 rounded-xl shadow-sm">
                 <button
                   onClick={() => handleSelectCategory(null)}
                   className={`hover:text-emerald-700 transition-colors cursor-pointer ${
@@ -1074,184 +1228,139 @@ export function MarketplacePage() {
               {/* Product Cards */}
               {!loading && products.length > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-              {products.map((product) => {
-                const cartItem = cart.items?.find((i) => i.seller_product_id === product.id)
-                const inCartQty = cartItem ? cartItem.quantity : 0
-                const price = Number(product.selling_price || 0)
-                const mrp = Number(product.mrp || 0)
-                const hasDiscount = mrp > price
-                const discountPct = hasDiscount ? Math.round(((mrp - price) / mrp) * 100) : 0
+                  {products.map((product) => {
+                    const cartItem = cart.items?.find((i) => i.seller_product_id === product.id)
+                    const inCartQty = cartItem ? cartItem.quantity : 0
+                    const price = Number(product.selling_price || 0)
+                    const mrp = Number(product.mrp || 0)
+                    const hasDiscount = mrp > price
+                    const discountPct = hasDiscount ? Math.round(((mrp - price) / mrp) * 100) : 0
 
-                return (
-                  <motion.div
-                    key={product.id}
-                    layout
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="bg-white rounded-2xl border border-slate-200/80 hover:border-slate-300 hover:shadow-xl transition-all duration-300 flex flex-col justify-between overflow-hidden group"
-                  >
-                    {/* Top Image & Badge */}
-                    <div
-                      className="relative p-4 bg-slate-50/50 cursor-pointer overflow-hidden flex items-center justify-center min-h-[160px]"
-                      onClick={() => handleOpenDetail(product)}
-                    >
-                      {hasDiscount && (
-                        <span className="absolute top-2.5 left-2.5 z-10 bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-xs">
-                          {discountPct}% OFF
-                        </span>
-                      )}
-
-                      <img
-                        src={product.primary_image || "/mockups/vegetables_realistic.png"}
-                        alt={product.title}
-                        className="w-full h-32 object-contain group-hover:scale-105 transition-transform duration-300"
-                        onError={(e) => {
-                          e.target.src = "/mockups/vegetables_realistic.png"
-                        }}
-                      />
-
-                      {!product.in_stock && (
-                        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center">
-                          <span className="bg-rose-600 text-white text-xs font-black px-3 py-1 rounded-lg">
-                            Out of Stock
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Product Meta */}
-                    <div className="p-4 flex-1 flex flex-col justify-between">
-                      <div>
-                        {product.brand && (
-                          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                            {product.brand}
-                          </div>
-                        )}
-                        <h4
+                    return (
+                      <motion.div
+                        key={product.id}
+                        layout
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="bg-white rounded-2xl border border-slate-200/80 hover:border-slate-300 hover:shadow-xl transition-all duration-300 flex flex-col justify-between overflow-hidden group hover:-translate-y-0.5"
+                      >
+                        {/* Top Image & Badge */}
+                        <div
+                          className="relative p-4 bg-slate-50/50 cursor-pointer overflow-hidden flex items-center justify-center min-h-[160px]"
                           onClick={() => handleOpenDetail(product)}
-                          className="text-sm font-extrabold text-slate-900 line-clamp-2 hover:text-emerald-700 cursor-pointer mt-0.5 leading-snug"
                         >
-                          {product.title}
-                        </h4>
-                        <div className="text-xs text-slate-500 mt-1 font-medium">
-                          {product.pack_size || product.unit || "1 unit"}
-                        </div>
-                      </div>
-
-                      {/* Store Tag */}
-                      <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1 text-[11px] text-slate-400 font-semibold truncate">
-                        <Store className="w-3 h-3 text-slate-400 shrink-0" />
-                        <span className="truncate">{product.seller_name || "Seller Store"}</span>
-                      </div>
-
-                      {/* Price & Add To Cart */}
-                      <div className="mt-3 flex items-center justify-between gap-2">
-                        <div>
-                          <div className="text-base font-black text-slate-900">
-                            ₹{price}
-                          </div>
                           {hasDiscount && (
-                            <div className="text-xs text-slate-400 line-through">
-                              ₹{mrp}
+                            <span className="absolute top-2.5 left-2.5 z-10 bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-sm">
+                              {discountPct}% OFF
+                            </span>
+                          )}
+
+                          <img
+                            src={product.primary_image || "/mockups/vegetables_realistic.png"}
+                            alt={product.title}
+                            className="w-full h-32 object-contain group-hover:scale-105 transition-transform duration-300"
+                            onError={(e) => {
+                              e.target.src = "/mockups/vegetables_realistic.png"
+                            }}
+                          />
+
+                          {!product.in_stock && (
+                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center">
+                              <span className="bg-rose-600 text-white text-xs font-black px-3 py-1 rounded-lg shadow-sm">
+                                Out of Stock
+                              </span>
                             </div>
                           )}
                         </div>
 
-                        {/* Add / Stepper CTA */}
-                        {product.in_stock ? (
-                          inCartQty === 0 ? (
-                            <button
-                              type="button"
-                              onClick={() => handleAddToCart(product, 1)}
-                              className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-600 hover:text-white text-emerald-700 border border-emerald-200 hover:border-emerald-600 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs active:scale-95"
+                        {/* Product Meta */}
+                        <div className="p-4 flex-1 flex flex-col justify-between">
+                          <div>
+                            {product.brand && (
+                              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                                {product.brand}
+                              </div>
+                            )}
+                            <h4
+                              onClick={() => handleOpenDetail(product)}
+                              className="text-sm font-extrabold text-slate-900 line-clamp-2 hover:text-emerald-700 cursor-pointer mt-0.5 leading-snug"
                             >
-                              ADD
-                            </button>
-                          ) : (
-                            <div className="flex items-center bg-emerald-600 text-white rounded-xl shadow-xs overflow-hidden">
-                              <button
-                                type="button"
-                                onClick={() => handleAddToCart(product, -1)}
-                                className="px-2 py-1.5 hover:bg-emerald-700 transition-colors"
-                              >
-                                <Minus className="w-3 h-3" />
-                              </button>
-                              <span className="px-2 text-xs font-black">{inCartQty}</span>
-                              <button
-                                type="button"
-                                onClick={() => handleAddToCart(product, 1)}
-                                className="px-2 py-1.5 hover:bg-emerald-700 transition-colors"
-                              >
-                                <Plus className="w-3 h-3" />
-                              </button>
+                              {product.title}
+                            </h4>
+                            <div className="text-xs text-slate-500 mt-1 font-medium">
+                              {product.pack_size || product.unit || "1 unit"}
                             </div>
-                          )
-                        ) : (
-                          <span className="text-[11px] font-bold text-slate-400 uppercase">
-                            Unavailable
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </motion.div>
-                )
-              })}
-            </div>
-          )}
+                          </div>
+
+                          {/* Store Tag */}
+                          <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1 text-[11px] text-slate-400 font-semibold truncate">
+                            <Store className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span className="truncate">{product.seller_name || "Seller Store"}</span>
+                          </div>
+
+                          {/* Price & Add To Cart */}
+                          <div className="mt-3 flex items-center justify-between gap-2">
+                            <div>
+                              <div className="text-base font-black text-slate-900">
+                                ₹{price}
+                              </div>
+                              {hasDiscount && (
+                                <div className="text-xs text-slate-400 line-through">
+                                  ₹{mrp}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Add / Stepper CTA */}
+                            {product.in_stock ? (
+                              inCartQty === 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddToCart(product, 1)}
+                                  className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-600 hover:text-white text-emerald-700 border border-emerald-200 hover:border-emerald-600 rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm active:scale-95"
+                                >
+                                  ADD
+                                </button>
+                              ) : (
+                                <div className="flex items-center bg-emerald-600 text-white rounded-xl shadow-sm overflow-hidden">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddToCart(product, -1)}
+                                    className="px-2 py-1.5 hover:bg-emerald-700 transition-colors"
+                                  >
+                                    <Minus className="w-3 h-3" />
+                                  </button>
+                                  <span className="px-2 text-xs font-black">{inCartQty}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddToCart(product, 1)}
+                                    className="px-2 py-1.5 hover:bg-emerald-700 transition-colors"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              )
+                            ) : (
+                              <span className="text-[11px] font-bold text-slate-400 uppercase">
+                                Unavailable
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </main>
       </div>
 
-      {/* ── Single-Seller Conflict Modal ── */}
-      <AnimatePresence>
-        {sellerConflict && (
-          <div className="fixed inset-0 z-[10010] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-100 font-sans"
-            >
-              <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mb-4">
-                <AlertCircle className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-black text-slate-900 tracking-tight">
-                Replace items in cart?
-              </h3>
-              <p className="text-sm text-slate-600 mt-2 leading-relaxed">
-                Your cart currently contains items from <strong>"{sellerConflict.current_seller_name}"</strong>.
-                Each order can only be placed with one seller at a time.
-              </p>
-              <p className="text-xs text-slate-500 mt-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                Adding items from <strong>"{sellerConflict.new_seller_name}"</strong> will discard your existing cart items.
-              </p>
-
-              <div className="flex items-center gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setSellerConflict(null)}
-                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-extrabold transition-colors cursor-pointer"
-                >
-                  Keep Current Seller
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmSellerSwitch}
-                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
-                >
-                  Clear & Switch
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
       {/* ── Product Detail Modal ── */}
       <AnimatePresence>
         {detailProduct && (
-          <div className="fixed inset-0 z-[10005] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div className="fixed inset-0 z-[10005] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1264,7 +1373,7 @@ export function MarketplacePage() {
                 </span>
                 <button
                   onClick={() => setDetailProduct(null)}
-                  className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
+                  className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1355,7 +1464,7 @@ export function MarketplacePage() {
       <AnimatePresence>
         {cartDrawerOpen && (
           <div className="fixed inset-0 z-[10000] overflow-hidden" onClick={() => setCartDrawerOpen(false)}>
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-xs transition-opacity" />
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity" />
 
             <motion.div
               initial={{ x: "100%" }}
@@ -1366,7 +1475,7 @@ export function MarketplacePage() {
               className="fixed top-0 right-0 bottom-0 w-full max-w-md bg-[#F8FAFC] h-full flex flex-col shadow-2xl overflow-hidden font-sans z-10"
             >
               {/* Drawer Header */}
-              <div className="px-5 py-4 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 shadow-2xs">
+              <div className="px-5 py-4 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 shadow-sm">
                 <div className="flex items-center gap-2.5">
                   <ShoppingBag className="w-5 h-5 text-emerald-600" />
                   <div>
@@ -1399,62 +1508,156 @@ export function MarketplacePage() {
                   </div>
                 ) : (
                   <>
-                    {cart.items.map((item) => (
-                      <div
-                        key={item.id}
-                        className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-2xs flex items-center gap-3.5"
-                      >
-                        <img
-                          src={item.product_image || "/mockups/vegetables_realistic.png"}
-                          alt={item.product_title}
-                          className="w-14 h-14 object-contain bg-slate-50 rounded-xl p-1 shrink-0"
-                          onError={(e) => { e.target.src = "/mockups/vegetables_realistic.png" }}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-xs font-extrabold text-slate-900 truncate">
-                            {item.product_title}
-                          </h4>
-                          <div className="text-[11px] text-slate-400 font-medium">
-                            {item.pack_size || item.unit} • ₹{item.unit_price_snapshot}
-                          </div>
-                          <div className="text-xs font-black text-slate-900 mt-1">
-                            ₹{item.line_amount}
-                          </div>
-                        </div>
-
-                        {/* Stepper */}
-                        <div className="flex items-center bg-slate-100 rounded-xl overflow-hidden shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (item.quantity === 1) {
-                                removeMarketplaceCartItem(item.id).then(reloadCart)
-                              } else {
-                                updateMarketplaceCartItem(item.id, { quantity: item.quantity - 1 }).then(reloadCart)
-                              }
-                            }}
-                            className="p-1.5 hover:bg-slate-200 text-slate-700 transition-colors"
-                          >
-                            <Minus className="w-3.5 h-3.5" />
-                          </button>
-                          <span className="px-2 text-xs font-black text-slate-900">
-                            {item.quantity}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              updateMarketplaceCartItem(item.id, { quantity: item.quantity + 1 }).then(reloadCart)
-                            }}
-                            className="p-1.5 hover:bg-slate-200 text-slate-700 transition-colors"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                          </button>
+                    {/* Multi-Warehouse Split Warning Notice */}
+                    {cart?.multi_warehouse_notice && (
+                      <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs flex items-start gap-2.5">
+                        <Truck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-bold">Multi-Warehouse Delivery</div>
+                          <div className="text-[11px] text-amber-800 mt-0.5">{cart.multi_warehouse_notice}</div>
                         </div>
                       </div>
-                    ))}
+                    )}
+
+                    {/* Grouped by Warehouse if available */}
+                    {Array.isArray(cart?.warehouse_groups) && cart.warehouse_groups.length > 0 ? (
+                      cart.warehouse_groups.map((group, gIdx) => (
+                        <div key={group.warehouse_id || gIdx} className="space-y-2.5">
+                          <div className="flex items-center justify-between px-1 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+                            <span className="flex items-center gap-1.5">
+                              <Store className="w-3.5 h-3.5 text-emerald-600" />
+                              {group.warehouse_name || "Warehouse"}
+                            </span>
+                            <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md font-bold">
+                              1 Consolidated Delivery
+                            </span>
+                          </div>
+
+                          <div className="space-y-2">
+                            {group.items.map((item) => (
+                              <div
+                                key={item.id}
+                                className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-sm flex items-center gap-3.5"
+                              >
+                                <img
+                                  src={item.product_image || "/mockups/vegetables_realistic.png"}
+                                  alt={item.product_title}
+                                  className="w-14 h-14 object-contain bg-slate-50 rounded-xl p-1 shrink-0"
+                                  onError={(e) => { e.target.src = "/mockups/vegetables_realistic.png" }}
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="text-xs font-extrabold text-slate-900 truncate">
+                                    {item.product_title}
+                                  </h4>
+                                  <div className="text-[11px] text-slate-400 font-medium">
+                                    {item.pack_size || item.unit} • ₹{item.unit_price_snapshot}
+                                  </div>
+                                  {item.seller_name && (
+                                    <div className="text-[10px] text-slate-500 font-bold mt-0.5">
+                                      Seller: <span className="text-slate-700">{item.seller_name}</span>
+                                    </div>
+                                  )}
+                                  <div className="text-xs font-black text-slate-900 mt-1">
+                                    ₹{item.line_amount}
+                                  </div>
+                                </div>
+
+                                {/* Stepper */}
+                                <div className="flex items-center bg-slate-100 rounded-xl overflow-hidden shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (item.quantity === 1) {
+                                        removeMarketplaceCartItem(item.id).then(reloadCart)
+                                      } else {
+                                        updateMarketplaceCartItem(item.id, { quantity: item.quantity - 1 }).then(reloadCart)
+                                      }
+                                    }}
+                                    className="p-1.5 hover:bg-slate-200 text-slate-700 transition-colors"
+                                  >
+                                    <Minus className="w-3.5 h-3.5" />
+                                  </button>
+                                  <span className="px-2 text-xs font-black text-slate-900">
+                                    {item.quantity}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      updateMarketplaceCartItem(item.id, { quantity: item.quantity + 1 }).then(reloadCart)
+                                    }}
+                                    className="p-1.5 hover:bg-slate-200 text-slate-700 transition-colors"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      cart.items.map((item) => (
+                        <div
+                          key={item.id}
+                          className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-sm flex items-center gap-3.5"
+                        >
+                          <img
+                            src={item.product_image || "/mockups/vegetables_realistic.png"}
+                            alt={item.product_title}
+                            className="w-14 h-14 object-contain bg-slate-50 rounded-xl p-1 shrink-0"
+                            onError={(e) => { e.target.src = "/mockups/vegetables_realistic.png" }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-xs font-extrabold text-slate-900 truncate">
+                              {item.product_title}
+                            </h4>
+                            <div className="text-[11px] text-slate-400 font-medium">
+                              {item.pack_size || item.unit} • ₹{item.unit_price_snapshot}
+                            </div>
+                            {item.seller_name && (
+                              <div className="text-[10px] text-slate-500 font-bold mt-0.5">
+                                Seller: <span className="text-slate-700">{item.seller_name}</span>
+                              </div>
+                            )}
+                            <div className="text-xs font-black text-slate-900 mt-1">
+                              ₹{item.line_amount}
+                            </div>
+                          </div>
+
+                          {/* Stepper */}
+                          <div className="flex items-center bg-slate-100 rounded-xl overflow-hidden shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (item.quantity === 1) {
+                                  removeMarketplaceCartItem(item.id).then(reloadCart)
+                                } else {
+                                  updateMarketplaceCartItem(item.id, { quantity: item.quantity - 1 }).then(reloadCart)
+                                }
+                              }}
+                              className="p-1.5 hover:bg-slate-200 text-slate-700 transition-colors"
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+                            <span className="px-2 text-xs font-black text-slate-900">
+                              {item.quantity}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updateMarketplaceCartItem(item.id, { quantity: item.quantity + 1 }).then(reloadCart)
+                              }}
+                              className="p-1.5 hover:bg-slate-200 text-slate-700 transition-colors"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
 
                     {/* Delivery Address Section */}
-                    <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-2">
+                    <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-2">
                       <div className="text-xs font-black text-slate-400 uppercase tracking-wider">
                         Delivery Address
                       </div>
@@ -1464,7 +1667,7 @@ export function MarketplacePage() {
                     </div>
 
                     {/* Bill Summary */}
-                    <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-2.5 text-xs">
+                    <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-2.5 text-xs">
                       <div className="font-black text-slate-900 uppercase tracking-wider text-[11px] mb-2">
                         Bill Summary
                       </div>
@@ -1474,7 +1677,9 @@ export function MarketplacePage() {
                       </div>
                       <div className="flex justify-between text-slate-600 font-medium">
                         <span>Delivery Fee</span>
-                        <span className="font-bold text-emerald-600">FREE</span>
+                        <span className="font-bold text-emerald-600">
+                          {cart?.delivery_count > 1 ? `FREE (${cart.delivery_count} shipments)` : "FREE"}
+                        </span>
                       </div>
                       <div className="pt-2 border-t border-slate-100 flex justify-between text-sm font-black text-slate-900">
                         <span>To Pay</span>
@@ -1526,71 +1731,64 @@ export function MarketplacePage() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setCategoryDrawerOpen(false)}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs"
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
             />
             <motion.div
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 250 }}
-              className="absolute left-0 top-0 bottom-0 w-4/5 max-w-xs bg-white shadow-2xl flex flex-col z-10 font-sans"
+              className="absolute left-0 top-0 bottom-0 w-36 sm:w-44 bg-white shadow-2xl flex flex-col z-10 font-sans"
               role="dialog"
               aria-modal="true"
               aria-label="Categories menu"
             >
-              <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-                <div className="flex items-center gap-2">
-                  <ListFilter className="w-4 h-4 text-emerald-600" />
-                  <h3 className="font-extrabold text-slate-900 text-sm">Browse Categories</h3>
+              <div className="p-3 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <div className="flex items-center gap-1.5">
+                  <ListFilter className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <h3 className="font-extrabold text-slate-900 text-xs">Categories</h3>
                 </div>
                 <button
                   type="button"
                   onClick={() => setCategoryDrawerOpen(false)}
-                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200 transition-colors cursor-pointer"
+                  className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200 transition-colors cursor-pointer"
                   aria-label="Close categories menu"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-3 space-y-1">
-                {/* All Products Item */}
-                <div
-                  className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all cursor-pointer mb-2 ${
-                    currentCategorySlug === "all"
-                      ? "bg-emerald-600 text-white font-bold"
-                      : "text-slate-700 hover:bg-slate-100 font-medium"
-                  }`}
-                  onClick={() => handleSelectCategory(null)}
-                  role="button"
-                  tabIndex={0}
-                  aria-current={currentCategorySlug === "all" ? "page" : undefined}
-                >
-                  <div className="flex items-center gap-2">
-                    <Grid className="w-4 h-4" />
-                    <span>All Products</span>
-                  </div>
-                  {totalCatalogProductsCount > 0 && (
-                    <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
-                      currentCategorySlug === "all" ? "bg-emerald-700 text-white" : "bg-slate-100 text-slate-600"
-                    }`}>
-                      {totalCatalogProductsCount}
-                    </span>
-                  )}
-                </div>
+              <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+                {/* All Products Tile */}
+                <CategorySidebarTile
+                  isAll={true}
+                  isSelected={currentCategorySlug === "all"}
+                  onSelect={handleSelectCategory}
+                  totalCount={totalCatalogProductsCount}
+                />
 
                 {/* Categories */}
-                {categoryTree.map((cat) => (
-                  <CategoryTreeItem
-                    key={cat.id || cat.slug}
-                    node={cat}
-                    selectedSlug={currentCategorySlug}
-                    expandedIds={expandedCategoryIds}
-                    toggleExpand={toggleCategoryExpand}
-                    onSelect={handleSelectCategory}
-                    level={0}
-                  />
-                ))}
+                <div className="space-y-1.5 pt-0.5">
+                  {uniqueRootCategories.map((cat) => {
+                    const catKey = cat.id || cat.slug
+                    const isDirectSelected = currentCategorySlug === cat.slug || String(currentCategorySlug) === String(cat.id)
+                    const isAncestorOfSelected = breadcrumbs.some((b) => b.slug === cat.slug || String(b.id) === String(cat.id))
+                    const isSelected = isDirectSelected || isAncestorOfSelected
+                    const isExpanded = expandedCategoryIds.has(cat.id) || expandedCategoryIds.has(cat.slug)
+
+                    return (
+                      <CategorySidebarTile
+                        key={catKey}
+                        cat={cat}
+                        isSelected={isSelected}
+                        selectedSlug={currentCategorySlug}
+                        isExpanded={isExpanded}
+                        toggleExpand={toggleCategoryExpand}
+                        onSelect={handleSelectCategory}
+                      />
+                    )
+                  })}
+                </div>
               </div>
             </motion.div>
           </div>
@@ -1598,10 +1796,9 @@ export function MarketplacePage() {
       </AnimatePresence>
 
       {/* ── Order Confirmation & Live Tracking Modal ── */}
-      {/* ── Order Confirmation & Live Tracking Modal ── */}
       <AnimatePresence>
         {trackingModalOpen && activeOrder && (
-          <div className="fixed inset-0 z-[10020] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="fixed inset-0 z-[10020] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -1609,7 +1806,7 @@ export function MarketplacePage() {
               className="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 font-sans"
             >
               {/* Tracking Header */}
-              <div className="p-6 bg-gradient-to-b from-emerald-50 to-white border-b border-slate-100 sticky top-0 bg-white/95 backdrop-blur-xs z-10">
+              <div className="p-6 bg-gradient-to-b from-emerald-50 to-white border-b border-slate-100 sticky top-0 bg-white/95 backdrop-blur-sm z-10">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className={`text-xs font-black px-2.5 py-1 rounded-md ${
@@ -1633,7 +1830,7 @@ export function MarketplacePage() {
                   </div>
                   <button
                     onClick={() => setTrackingModalOpen(false)}
-                    className="p-1 text-slate-400 hover:text-slate-700 rounded-full"
+                    className="p-1 text-slate-400 hover:text-slate-700 rounded-full cursor-pointer"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -1645,6 +1842,9 @@ export function MarketplacePage() {
                   </h3>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 mt-0.5">
                     <span>Seller: <strong>{activeOrder.seller_name || "Seller Hub Partner"}</strong></span>
+                    {activeOrder.warehouse_name && (
+                      <span>Warehouse: <strong>{activeOrder.warehouse_name}</strong></span>
+                    )}
                     {activeOrder.delivery_slot && (
                       <span>Slot: <strong>{activeOrder.delivery_slot}</strong></span>
                     )}
@@ -1657,6 +1857,56 @@ export function MarketplacePage() {
 
               {/* Status Timeline */}
               <div className="p-6 space-y-6">
+                {/* Consolidated Delivery Group Info */}
+                {activeOrder.delivery_group && activeOrder.delivery_group.total_orders > 1 && (
+                  <div className="p-4 bg-emerald-50/80 border border-emerald-200/80 rounded-2xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Truck className="w-4 h-4 text-emerald-700 shrink-0" />
+                        <span className="text-xs font-black text-emerald-950">
+                          Consolidated Hub Delivery ({activeOrder.delivery_group.total_orders} Sellers)
+                        </span>
+                      </div>
+                      <span className="text-[10px] bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-full font-extrabold">
+                        {activeOrder.delivery_group.warehouse_name || "Warehouse"}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-emerald-800 leading-snug">
+                      Items from multiple sellers in this warehouse will be picked up together and delivered in one single trip.
+                    </p>
+
+                    {/* Sibling Orders List */}
+                    <div className="space-y-1.5 pt-1">
+                      {activeOrder.delivery_group.orders.map((sib) => (
+                        <div
+                          key={sib.order_number}
+                          className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${
+                            sib.order_number === activeOrder.order_number
+                              ? "bg-white border-emerald-300 shadow-sm font-bold"
+                              : "bg-white/70 border-emerald-100 text-slate-700"
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1 truncate">
+                            <span className="text-slate-900 font-extrabold">{sib.seller_name}</span>
+                            <span className="text-[11px] text-slate-400 font-mono ml-1.5">#{sib.order_number}</span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="font-extrabold text-slate-900">₹{sib.total_amount}</span>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
+                              sib.status === "DELIVERED"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : sib.status === "CANCELLED"
+                                ? "bg-rose-100 text-rose-800"
+                                : "bg-slate-100 text-slate-700"
+                            }`}>
+                              {sib.status_label || sib.status}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {/* Cancellation Pending Banner */}
                 {activeOrder.cancellation_pending && (
                   <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs font-medium flex items-center gap-2">
@@ -1706,7 +1956,7 @@ export function MarketplacePage() {
                         <div key={step.key} className="flex items-start gap-3.5 relative">
                           <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
                             isPassed
-                              ? "bg-emerald-600 text-white shadow-xs"
+                              ? "bg-emerald-600 text-white shadow-sm"
                               : "bg-slate-100 text-slate-400"
                           }`}>
                             {isPassed ? <Check className="w-3.5 h-3.5" /> : idx + 1}
@@ -1782,7 +2032,7 @@ export function MarketplacePage() {
               </div>
 
               {/* Actions */}
-              <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3 sticky bottom-0 bg-slate-50/95 backdrop-blur-xs">
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3 sticky bottom-0 bg-slate-50/95 backdrop-blur-sm">
                 {activeOrder.status !== "CANCELLED" && activeOrder.status !== "DELIVERED" && (
                   <button
                     type="button"
@@ -1869,7 +2119,7 @@ export function MarketplacePage() {
       {/* ── Single-Seller Conflict Resolution Modal ── */}
       <AnimatePresence>
         {sellerConflict && (
-          <div id="seller-conflict-modal-backdrop" className="fixed inset-0 z-[10010] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs font-sans">
+          <div id="seller-conflict-modal-backdrop" className="fixed inset-0 z-[10010] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm font-sans">
             <motion.div
               id="seller-conflict-modal"
               initial={{ scale: 0.95, opacity: 0, y: 10 }}

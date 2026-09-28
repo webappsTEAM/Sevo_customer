@@ -33,11 +33,13 @@ export async function fetchMarketplaceProductDetail(productId) {
 /**
  * Fetch Seller Hub categories.
  */
-export async function fetchMarketplaceCategories({ tree = true, hide_empty = true, parent_id = null } = {}) {
+export async function fetchMarketplaceCategories({ tree = true, hide_empty = true, parent_id = null, top_level = false, level = null } = {}) {
   const params = new URLSearchParams()
   if (tree !== undefined) params.append("tree", tree ? "true" : "false")
   if (hide_empty !== undefined) params.append("hide_empty", hide_empty ? "true" : "false")
   if (parent_id !== null && parent_id !== undefined) params.append("parent_id", parent_id)
+  if (top_level) params.append("top_level", "true")
+  if (level) params.append("level", level)
 
   const queryString = params.toString()
   const url = queryString ? `/marketplace/categories/?${queryString}` : "/marketplace/categories/"
