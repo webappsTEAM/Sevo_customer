@@ -185,6 +185,7 @@ class LogisticsQuoteView(APIView):
         from service_requests.services.logistics_pricing import (
             DISTANCE_PRICED_CATEGORIES, LogisticsCatalogMismatchError,
             assert_catalog_matches_category, quote_logistics_fare,
+            TooManyStopsError,
         )
 
         data = request.data if isinstance(request.data, dict) else {}
@@ -355,14 +356,25 @@ class LogisticsQuoteView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        breakdown = quote_logistics_fare(
-            tier=tier,
-            pickup_lat=pickup_lat, pickup_lng=pickup_lng,
-            drop_lat=drop_lat, drop_lng=drop_lng,
-            stop_count=stop_count,
-            cargo_summary=cargo_summary,
-            waypoints=waypoints,
-        )
+        try:
+            breakdown = quote_logistics_fare(
+                tier=tier,
+                pickup_lat=pickup_lat, pickup_lng=pickup_lng,
+                drop_lat=drop_lat, drop_lng=drop_lng,
+                stop_count=stop_count,
+                cargo_summary=cargo_summary,
+                waypoints=waypoints,
+            )
+        except TooManyStopsError as exc:
+            return Response(
+                {
+                    "success": False,
+                    "error_code": "MAX_STOPS_EXCEEDED",
+                    "message": str(exc),
+                    "max_additional_stops": exc.allowed,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         if breakdown is None:
             if getattr(tier, "per_km_rate", None) is not None:

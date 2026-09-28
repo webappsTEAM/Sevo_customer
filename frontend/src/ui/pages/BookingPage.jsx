@@ -43,6 +43,7 @@ import { SevoLogo, sevoLogo } from "../components/sevoLogo.jsx"
 import CustomerLiveTrackingModal from "../components/CustomerLiveTrackingModal.jsx"
 import { CustomerTrackingMap } from "../customer/tracking/CustomerTrackingMap.jsx"
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
+import { TripRatingCard } from "../components/TripRatingCard.jsx"
 import { EditModeToggleBar, SaveNoticeToast, EditableText, EditableImage } from "../components/SuperAdminEditControls.jsx"
 import { useEditMode } from "../../state/editMode/useEditMode.js"
 import { useMultiServiceCart } from "../../state/multiServiceCart/useMultiServiceCart.js"
@@ -2894,12 +2895,18 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 4, background: "#fef3c7", padding: "4px 10px", borderRadius: 99, border: "1px solid #fde68a" }}>
                 <Star size={14} color="#d97706" fill="#d97706" />
-                <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#92400e" }}>{techRating ? Number(techRating).toFixed(1) : "4.8"}</span>
+                <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#92400e" }}>{techRating ? Number(techRating).toFixed(1) : "New"}</span>
               </div>
             </div>
           )}
 
-          {/* Rating & Feedback Section */}
+          {/* Rating & Feedback Section.
+              Goods & Transport / Packers & Movers trips get a real, persisted rating (TripRatingCard, keyed by
+              the trip's feedback token); the legacy card below only set local state and never saved anything,
+              so it is no longer shown for them. */}
+          {["goods_transport_truck", "goods_transport_two_wheeler", "packers_movers"].includes(String(liveData?.service_category || successData?.service_category || "").toLowerCase())
+            ? <TripRatingCard feedback={liveData?.feedback} />
+            : (
           <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 16, padding: "1.25rem", marginBottom: "1.25rem", textAlign: "center" }}>
             <h4 style={{ margin: "0 0 6px", fontSize: "1rem", fontWeight: 800, color: "#065f46" }}>
               {ratingSubmitted ? "Thank you for your rating! ⭐" : "How was your service experience?"}
@@ -2971,8 +2978,11 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               </div>
             )}
           </div>
+            )}
 
-          {/* 30-Day Doorstep Guarantee Reassurance Card */}
+          {/* 30-Day Doorstep Guarantee Reassurance Card -- a home-services promise (re-inspect and fix the work);
+              it does not apply to a goods delivery or a move, so it is not shown for Goods & Transport / Packers & Movers. */}
+          {!["goods_transport_truck", "goods_transport_two_wheeler", "packers_movers"].includes(String(liveData?.service_category || successData?.service_category || "").toLowerCase()) && (
           <div style={{ background: "linear-gradient(135deg, #064e3b, #065f46)", borderRadius: 16, padding: "1.25rem 1.5rem", color: "white", marginBottom: "1.25rem", boxShadow: "0 4px 14px rgba(6, 78, 59, 0.2)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
               <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -3004,6 +3014,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               </a>
             </div>
           </div>
+          )}
 
           {/* Service & Payment Summary */}
           <div style={{ padding: "1rem 1.25rem", background: "#f8fafc", borderRadius: 16, border: "1px solid #e2e8f0", marginBottom: "1.5rem" }}>

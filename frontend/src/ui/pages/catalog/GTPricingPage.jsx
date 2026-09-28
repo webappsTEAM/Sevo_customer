@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react"
 import {
   AlertTriangle, ArrowRight, History, Info, Lock,
   RefreshCw, Search, ShieldCheck, Truck, Layers, Package, Home, Clock,
-  Navigation, HelpCircle, MapPinned
+  Navigation, HelpCircle, MapPinned, Receipt
 } from "lucide-react"
 import { Button, Input, Modal, Select, formatDateTime } from "../../components/kit.jsx"
 import { ToastBanner, useToast } from "./useToast.jsx"
@@ -16,6 +16,7 @@ import { GTPackersMoversTab } from "./gt/GTPackersMoversTab.jsx"
 import { GTSlotsTab } from "./gt/GTSlotsTab.jsx"
 import { GTLanesTab } from "./gt/GTLanesTab.jsx"
 import { GTFaqsTab } from "./gt/GTFaqsTab.jsx"
+import { GTPoliciesTab } from "./gt/GTPoliciesTab.jsx"
 import { GTCoverageTab } from "./GTCoverageTab.jsx"
 import { GTPackersMoversHelpersPanel } from "./GTPackersMoversHelpersPanel.jsx"
 
@@ -64,6 +65,11 @@ const PRICING_FIELDS = [
     key: "additional_stop_charge", label: "Additional stop", short: "Extra stop", unit: "₹ / stop",
     kind: "money", nullable: false,
     hint: "Charged per stop beyond the standard two (one pickup, one drop).",
+  },
+  {
+    key: "max_additional_stops", label: "Max extra stops", short: "Max stops", unit: "stops",
+    kind: "int", nullable: false,
+    hint: "Most intermediate stops a customer may add on this vehicle (0-10). Enforced on quote and booking.",
   },
   {
     key: "surge_multiplier", label: "Surge multiplier", short: "Surge", unit: "x",
@@ -339,6 +345,19 @@ export function GTPricingPage() {
           <HelpCircle size={15} />
           Platform FAQs
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("policies")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === "policies"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+          }`}
+        >
+          <Receipt size={15} />
+          Fees &amp; Policies
+        </button>
       </div>
 
       {activeTab === "categories" && <GTCategoriesTab showToast={showToast} />}
@@ -353,6 +372,7 @@ export function GTPricingPage() {
       {activeTab === "lanes" && <GTLanesTab showToast={showToast} />}
       {activeTab === "coverage" && <GTCoverageTab showToast={showToast} />}
       {activeTab === "faqs" && <GTFaqsTab showToast={showToast} />}
+      {activeTab === "policies" && <GTPoliciesTab showToast={showToast} />}
 
       {activeTab === "tiers" && (
         <div className="space-y-5">

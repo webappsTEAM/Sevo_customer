@@ -2486,7 +2486,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                 <MultiStopRouteManager
                   stops={intermediateStops}
                   onChangeStops={(newStops) => setIntermediateStops(newStops)}
-                  maxStops={3}
+                  maxStops={Number.isFinite(Number((selectedVehicle || selectedVehicleEffective)?.max_additional_stops)) ? Number((selectedVehicle || selectedVehicleEffective)?.max_additional_stops) : 3}
                   pickupAddress={pickupAddressValue}
                   dropAddress={dropAddressValue}
                   pickupPoint={pickupPoint}

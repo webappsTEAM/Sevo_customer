@@ -106,6 +106,18 @@ class LogisticsCatalogMismatchError(UnresolvedLogisticsFareError):
     pass
 
 
+class TooManyStopsError(UnresolvedLogisticsFareError):
+    """The route has more intermediate stops than the tier allows."""
+
+    def __init__(self, allowed, requested):
+        self.allowed = allowed
+        self.requested = requested
+        super().__init__(
+            f"This vehicle allows up to {allowed} intermediate stop(s); "
+            f"the route has {requested}."
+        )
+
+
 def expected_tier_category(service_category):
     """The catalogue category a booking of `service_category` must use."""
     return SERVICE_CATEGORY_TO_TIER_CATEGORY.get((service_category or "").strip())
@@ -393,6 +405,9 @@ def quote_logistics_fare(
     except (TypeError, ValueError):
         stops = STANDARD_STOP_COUNT
     additional_stops = max(0, stops - STANDARD_STOP_COUNT)
+    max_extra = getattr(tier, "max_additional_stops", None)
+    if max_extra is not None and additional_stops > int(max_extra):
+        raise TooManyStopsError(int(max_extra), additional_stops)
     per_stop = _money(getattr(tier, "additional_stop_charge", 0) or 0)
     stop_charge = _money(per_stop * additional_stops)
 

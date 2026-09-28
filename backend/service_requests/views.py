@@ -1835,7 +1835,7 @@ def _latest_delivery_otp(sr):
     return None
 
 
-def _build_tracking_payload(sr, has_full_access, include_delivery_otp=False):
+def _build_tracking_payload(sr, has_full_access, include_delivery_otp=False, include_feedback=False):
     """
     Constructs the canonical live tracking response payload for a booking.
     Sensitive data (technician phone, Service Start OTP) is strictly omitted
@@ -2237,6 +2237,15 @@ def _build_tracking_payload(sr, has_full_access, include_delivery_otp=False):
     if include_delivery_otp and has_full_access and sr.service_category in LOGISTICS_CATEGORIES and not is_terminal:
         delivery_otp = _latest_delivery_otp(sr)
 
+    # Rating handle for a delivered trip. Same opt-in / full-access rule as the delivery OTP: the
+    # feedback token is a bearer credential for the rating form, so it is only handed to the
+    # customer/token-holder/admin live-location endpoint -- never to the driver-facing builders or
+    # the websocket group broadcast that share this function.
+    trip_feedback = None
+    if include_feedback and has_full_access and sr.service_category in LOGISTICS_CATEGORIES:
+        from .services.trip_feedback import trip_feedback_summary
+        trip_feedback = trip_feedback_summary(sr)
+
     created_at_raw = getattr(sr, 'created_at', None) or getattr(sr, 'submitted_at', None)
     if created_at_raw and hasattr(created_at_raw, 'isoformat'):
         created_at_str = created_at_raw.isoformat()
@@ -2336,6 +2345,7 @@ def _build_tracking_payload(sr, has_full_access, include_delivery_otp=False):
         "start_otp": start_otp,
         "payment_confirmation_otp": payment_confirmation_otp,
         "delivery_otp": delivery_otp,
+        "feedback": trip_feedback,
         "tracking_token": str(sr.tracking_token) if (has_full_access and sr.tracking_token) else None,
         "vehicle_number": tracking.get("vehicle_number") if (tracking and isinstance(tracking, dict)) else "",
         "vehicle_type": tracking.get("vehicle_type") if (tracking and isinstance(tracking, dict)) else "",
@@ -2412,7 +2422,7 @@ class CustomerBookingLiveLocationView(APIView):
         if not (token_matches or is_admin_user or is_owner):
             return _error("Valid tracking token or authentication required.", 401)
 
-        payload = _build_tracking_payload(sr, has_full_access=True, include_delivery_otp=True)
+        payload = _build_tracking_payload(sr, has_full_access=True, include_delivery_otp=True, include_feedback=True)
         return _success(data=payload)
 
 
@@ -2572,6 +2582,8 @@ class FeedbackTokenView(APIView):
         serializer = ServiceFeedbackSubmitSerializer(fb, data=request.data)
         if not serializer.is_valid():
             return Response({"success": False, "errors": serializer.errors}, status=400)
+        if serializer.validated_data.get("rating") is None:
+            return Response({"success": False, "errors": {"rating": ["Rating is required."]}}, status=400)
 
         with atomic_transaction():
             serializer.save(is_submitted=True, submitted_at=timezone.now())
@@ -2580,7 +2592,9 @@ class FeedbackTokenView(APIView):
         try:
             from workforce_integration.services import WorkforceIntegrationService
             sr = fb.service_request
-            tech_id = getattr(sr, "workforce_job_id", "") or str(sr.id)
+            # The technician the rating is about, snapshotted when the job was done. (This used to send
+            # the JOB id in the technician slot, which the vendor resolved as an employee id.)
+            tech_id = fb.technician_id or ""
             WorkforceIntegrationService.send_technician_feedback(
                 service_request=sr,
                 technician_id=tech_id,

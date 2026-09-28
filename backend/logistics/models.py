@@ -155,6 +155,14 @@ class ServiceTier(models.Model):
         validators=[MinValueValidator(Decimal("0.00"))],
         help_text="Charged per stop beyond the standard two (one pickup, one drop).",
     )
+    max_additional_stops = models.PositiveSmallIntegerField(
+        default=3,
+        validators=[MaxValueValidator(10)],
+        help_text=(
+            "Most intermediate stops (beyond one pickup and one drop) a booking "
+            "on this tier may add. Enforced by the server on quote and booking."
+        ),
+    )
     surge_multiplier = models.DecimalField(
         max_digits=4, decimal_places=2, default=1,
         # Bounded on both sides. quote_logistics_fare already treats a

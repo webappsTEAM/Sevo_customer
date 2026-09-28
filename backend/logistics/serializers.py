@@ -105,6 +105,7 @@ class ServiceTierPricingSerializer(serializers.ModelSerializer):
             # pricing
             "starting_price", "base_fare", "per_km_rate", "free_km",
             "minimum_fare", "loading_unloading_charge", "additional_stop_charge",
+            "max_additional_stops",
             "surge_multiplier", "gst_rate",
             "updated_at",
         ]

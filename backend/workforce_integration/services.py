@@ -445,8 +445,11 @@ class WorkforceIntegrationService:
         Dispatches customer verified rating and feedback score to the Workforce employee profile.
         """
         sr = cls._resolve_sr(service_request)
-        if not sr or not technician_id:
+        if not sr:
             return {"success": True, "fallback": True}
+        # The vendor resolves the technician from the job (authoritative); the id in the URL is only a
+        # hint, so a missing snapshot must not swallow the rating.
+        technician_id = technician_id or ""
 
         payload = {
             "booking_id": sr.request_id,
@@ -458,7 +461,7 @@ class WorkforceIntegrationService:
         }
 
         try:
-            url = f"{WORKFORCE_API_BASE_URL}/technicians/{technician_id}/feedback/"
+            url = f"{WORKFORCE_API_BASE_URL}/technicians/{technician_id or 'assigned'}/feedback/"
             response = requests.post(url, json=payload, headers=cls._internal_headers(), timeout=5)
             if response.status_code in [200, 201, 204]:
                 return {"success": True}
