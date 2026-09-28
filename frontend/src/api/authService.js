@@ -217,6 +217,7 @@ export async function apiFetchMe(customSignal = null) {
 
       let res = await fetch(url, {
         credentials: "include",
+        cache: "no-store",
         headers,
         signal: effectiveSignal,
       })
@@ -233,6 +234,7 @@ export async function apiFetchMe(customSignal = null) {
 
           res = await fetch(url, {
             credentials: "include",
+            cache: "no-store",
             headers: retryHeaders,
             signal: effectiveSignal,
           })

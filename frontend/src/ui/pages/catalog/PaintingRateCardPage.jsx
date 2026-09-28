@@ -165,107 +165,84 @@ export function PaintingRateCardPage() {
   }
 
   return (
-    <div style={{ padding: "2rem", background: "#f8fafc", minHeight: "100vh" }}>
+    <div className="p-8 bg-[var(--sevo-bg)] min-h-screen text-[var(--sevo-text-primary)]">
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
+      <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 style={{ fontSize: "1.75rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>Painting & Waterproofing Rate Card</h1>
-          <p style={{ color: "#64748b", margin: "0.25rem 0 0" }}>Manage service pricing packages, capacities, and custom slabs</p>
+          <h1 className="text-2xl font-extrabold text-[var(--sevo-text-primary)] m-0">Painting & Waterproofing Rate Card</h1>
+          <p className="text-[var(--sevo-text-secondary)] mt-1">Manage service pricing packages, capacities, and custom slabs</p>
         </div>
         <button
           onClick={openAddModal}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            background: "linear-gradient(135deg, #4f46e5, #4338ca)",
-            color: "white",
-            padding: "10px 16px",
-            borderRadius: "12px",
-            border: "none",
-            fontWeight: 700,
-            cursor: "pointer",
-            boxShadow: "0 4px 12px rgba(79, 70, 229, 0.25)",
-            transition: "all 0.2s"
-          }}
+          className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white px-4 py-2.5 rounded-xl font-bold cursor-pointer shadow-md shadow-indigo-500/20 transition-all"
         >
           <Plus size={18} /> Add Rate Item
         </button>
       </div>
 
-      {loading && <div style={{ textAlign: "center", color: "#64748b", padding: "3rem" }}>Loading Rate Cards...</div>}
-      {error && <div style={{ color: "#ef4444", padding: "1rem", borderRadius: "12px", background: "#fef2f2", display: "flex", alignItems: "center", gap: "8px", marginBottom: "1.5rem" }}><AlertCircle size={20} /> {error}</div>}
+      {loading && <div className="text-center text-[var(--sevo-text-muted)] py-12">Loading Rate Cards...</div>}
+      {error && <div className="text-red-500 p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center gap-2 mb-6"><AlertCircle size={20} /> {error}</div>}
 
       {!loading && rates.length === 0 && (
-        <div style={{ textAlign: "center", padding: "4rem", background: "white", borderRadius: "16px", border: "1px dashed #e2e8f0" }}>
-          <p style={{ color: "#64748b", fontWeight: 600 }}>No rate card items found. Add your first item above.</p>
+        <div className="text-center p-16 bg-[var(--sevo-surface)] rounded-2xl border border-dashed border-[var(--sevo-border)]">
+          <p className="text-[var(--sevo-text-secondary)] font-semibold">No rate card items found. Add your first item above.</p>
         </div>
       )}
 
       {/* Grid of categories */}
       {!loading && rates.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
+        <div className="flex flex-col gap-8">
           {categories.map(cat => {
             const catRates = rates.filter(r => r.category === cat)
             if (catRates.length === 0) return null
 
             return (
-              <div key={cat} style={{ background: "white", padding: "1.5rem", borderRadius: "20px", boxShadow: "0 4px 20px rgba(0,0,0,0.02)", border: "1px solid #f1f5f9" }}>
-                <h2 style={{ fontSize: "1.2rem", fontWeight: 800, color: "#1e293b", borderBottom: "2px solid #f1f5f9", paddingBottom: "0.75rem", marginBottom: "1rem" }}>{cat}</h2>
+              <div key={cat} className="bg-[var(--sevo-surface)] p-6 rounded-2xl shadow-sm border border-[var(--sevo-border)]">
+                <h2 className="text-lg font-extrabold text-[var(--sevo-text-primary)] border-b border-[var(--sevo-border)] pb-3 mb-4">{cat}</h2>
                 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "1rem" }}>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {catRates.map(item => (
                     <div
                       key={item.id}
-                      style={{
-                        padding: "1.25rem",
-                        borderRadius: "14px",
-                        border: "1px solid #e2e8f0",
-                        background: item.is_active ? "white" : "#f8fafc",
-                        display: "flex",
-                        flexDirection: "column",
-                        justifyContent: "space-between",
-                        opacity: item.is_active ? 1 : 0.7,
-                        transition: "transform 0.2s, box-shadow 0.2s"
-                      }}
+                      className={`p-5 rounded-xl border border-[var(--sevo-border)] flex flex-col justify-between transition-all duration-200 ${item.is_active ? 'bg-[var(--sevo-surface-raised)]' : 'bg-[var(--sevo-surface-raised)]/60 opacity-70'}`}
                     >
                       <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
-                          <h3 style={{ fontSize: "0.95rem", fontWeight: 700, color: "#0f172a", margin: 0 }}>{item.sub_service}</h3>
-                          <span style={{ fontSize: "0.7rem", padding: "2px 6px", borderRadius: "6px", background: item.is_active ? "#ecfdf5" : "#f1f5f9", color: item.is_active ? "#065f46" : "#64748b", fontWeight: 700 }}>
+                        <div className="flex justify-between items-start mb-2">
+                          <h3 className="text-sm font-bold text-[var(--sevo-text-primary)] m-0">{item.sub_service}</h3>
+                          <span className={`text-[11px] px-2 py-0.5 rounded-md font-bold ${item.is_active ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-slate-500/15 text-slate-500'}`}>
                             {item.is_active ? "Active" : "Inactive"}
                           </span>
                         </div>
                         
-                        <p style={{ fontSize: "1.25rem", fontWeight: 900, color: "#4f46e5", margin: "0.25rem 0" }}>
-                          ₹{item.base_rate} <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 500 }}>/ {item.unit}</span>
+                        <p className="text-xl font-black text-indigo-600 dark:text-indigo-400 my-1">
+                          ₹{item.base_rate} <span className="text-xs text-[var(--sevo-text-muted)] font-medium">/ {item.unit}</span>
                         </p>
 
                         {item.min_rate && (
-                          <p style={{ fontSize: "0.75rem", color: "#64748b", margin: "0 0 0.5rem" }}>Min Rate: ₹{item.min_rate}</p>
+                          <p className="text-xs text-[var(--sevo-text-muted)] mb-2">Min Rate: ₹{item.min_rate}</p>
                         )}
 
-                        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", margin: "0.5rem 0" }}>
-                          <span style={{ fontSize: "0.7rem", background: "#f1f5f9", padding: "2px 8px", borderRadius: "6px", color: "#475569", fontWeight: 600 }}>{item.classification.toUpperCase()}</span>
+                        <div className="flex gap-1.5 flex-wrap my-2">
+                          <span className="text-xs bg-[var(--sevo-surface)] border border-[var(--sevo-border)] px-2 py-0.5 rounded-md text-[var(--sevo-text-secondary)] font-semibold">{item.classification.toUpperCase()}</span>
                           {item.warranty && (
-                            <span style={{ fontSize: "0.7rem", background: "#e0f2fe", padding: "2px 8px", borderRadius: "6px", color: "#0369a1", fontWeight: 600 }}>🛡️ {item.warranty}</span>
+                            <span className="text-xs bg-sky-500/15 text-sky-600 dark:text-sky-400 px-2 py-0.5 rounded-md font-semibold">🛡️ {item.warranty}</span>
                           )}
                         </div>
 
                         {/* Inclusions / Exclusions preview */}
                         {item.inclusions && (
-                          <div style={{ fontSize: "0.72rem", color: "#64748b", margin: "4px 0" }}><strong>Inc:</strong> {item.inclusions.slice(0, 80)}...</div>
+                          <div className="text-xs text-[var(--sevo-text-muted)] my-1"><strong>Inc:</strong> {item.inclusions.slice(0, 80)}...</div>
                         )}
 
                         {/* Slabs list */}
                         {item.has_slabs && item.slabs && item.slabs.length > 0 && (
-                          <div style={{ margin: "10px 0 0", paddingTop: "10px", borderTop: "1px dashed #e2e8f0" }}>
-                            <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#475569", marginBottom: "4px" }}>Configured Price Slabs:</div>
-                            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                          <div className="mt-2.5 pt-2.5 border-t border-dashed border-[var(--sevo-border)]">
+                            <div className="text-xs font-bold text-[var(--sevo-text-secondary)] mb-1">Configured Price Slabs:</div>
+                            <div className="flex flex-col gap-1">
                               {item.slabs.map(slab => (
-                                <div key={slab.id} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "#64748b" }}>
+                                <div key={slab.id} className="flex justify-between text-xs text-[var(--sevo-text-secondary)]">
                                   <span>{slab.slab_key}</span>
-                                  <strong style={{ color: "#0f172a" }}>₹{slab.rate} {slab.unit && `/ ${slab.unit}`}</strong>
+                                  <strong className="text-[var(--sevo-text-primary)]">₹{slab.rate} {slab.unit && `/ ${slab.unit}`}</strong>
                                 </div>
                               ))}
                             </div>
@@ -274,16 +251,16 @@ export function PaintingRateCardPage() {
                       </div>
 
                       {/* Actions */}
-                      <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "1rem", borderTop: "1px solid #f1f5f9", paddingTop: "0.75rem" }}>
+                      <div className="flex justify-end gap-2 mt-4 border-t border-[var(--sevo-border)] pt-3">
                         <button
                           onClick={() => openEditModal(item)}
-                          style={{ display: "flex", alignItems: "center", gap: "4px", background: "none", border: "none", color: "#4f46e5", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer" }}
+                          className="flex items-center gap-1 bg-transparent border-0 text-indigo-600 dark:text-indigo-400 text-xs font-bold cursor-pointer hover:underline"
                         >
                           <Edit2 size={12} /> Edit
                         </button>
                         <button
                           onClick={() => handleDeleteItem(item.id)}
-                          style={{ display: "flex", alignItems: "center", gap: "4px", background: "none", border: "none", color: "#ef4444", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer" }}
+                          className="flex items-center gap-1 bg-transparent border-0 text-red-500 text-xs font-bold cursor-pointer hover:underline"
                         >
                           <Trash2 size={12} /> Delete
                         </button>
@@ -299,32 +276,32 @@ export function PaintingRateCardPage() {
 
       {/* Editor Modal Overlay */}
       {isModalOpen && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(15, 23, 42, 0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
-          <div style={{ background: "white", padding: "2rem", borderRadius: "24px", width: "100%", maxWidth: "560px", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 40px rgba(0,0,0,0.1)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
-              <h2 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[1000] p-4">
+          <div className="bg-[var(--sevo-surface)] border border-[var(--sevo-border)] p-8 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-extrabold text-[var(--sevo-text-primary)] m-0">
                 {editingItem ? "Edit Rate Card Item" : "Create Rate Card Item"}
               </h2>
-              <button onClick={() => setIsModalOpen(false)} style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer" }}><X size={20} /></button>
+              <button onClick={() => setIsModalOpen(false)} className="bg-transparent border-0 text-[var(--sevo-text-muted)] hover:text-[var(--sevo-text-primary)] cursor-pointer"><X size={20} /></button>
             </div>
 
-            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569" }}>Category</label>
-                <select value={category} onChange={e => setCategory(e.target.value)} style={{ padding: "10px", borderRadius: "10px", border: "1px solid #cbd5e1" }}>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-[var(--sevo-text-secondary)]">Category</label>
+                <select value={category} onChange={e => setCategory(e.target.value)} className="p-2.5 rounded-xl border border-[var(--sevo-border)] bg-[var(--sevo-surface-raised)] text-[var(--sevo-text-primary)]">
                   {categories.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569" }}>Sub-Service Name</label>
-                <input required type="text" value={subService} onChange={e => setSubService(e.target.value)} placeholder="e.g. Terrace 4-Coat Waterproofing" style={{ padding: "10px", borderRadius: "10px", border: "1px solid #cbd5e1" }} />
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-[var(--sevo-text-secondary)]">Sub-Service Name</label>
+                <input required type="text" value={subService} onChange={e => setSubService(e.target.value)} placeholder="e.g. Terrace 4-Coat Waterproofing" className="p-2.5 rounded-xl border border-[var(--sevo-border)] bg-[var(--sevo-surface-raised)] text-[var(--sevo-text-primary)]" />
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                  <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569" }}>Unit</label>
-                  <select value={unit} onChange={e => setUnit(e.target.value)} style={{ padding: "10px", borderRadius: "10px", border: "1px solid #cbd5e1" }}>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-[var(--sevo-text-secondary)]">Unit</label>
+                  <select value={unit} onChange={e => setUnit(e.target.value)} className="p-2.5 rounded-xl border border-[var(--sevo-border)] bg-[var(--sevo-surface-raised)] text-[var(--sevo-text-primary)]">
                     <option value="sq.ft">sq.ft</option>
                     <option value="litre">litre</option>
                     <option value="job">job</option>
@@ -333,20 +310,20 @@ export function PaintingRateCardPage() {
                     <option value="window">window</option>
                   </select>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                  <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569" }}>Base Rate (₹)</label>
-                  <input required type="number" step="0.01" value={baseRate} onChange={e => setBaseRate(e.target.value)} placeholder="e.g. 50" style={{ padding: "10px", borderRadius: "10px", border: "1px solid #cbd5e1" }} />
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-[var(--sevo-text-secondary)]">Base Rate (₹)</label>
+                  <input required type="number" step="0.01" value={baseRate} onChange={e => setBaseRate(e.target.value)} placeholder="e.g. 50" className="p-2.5 rounded-xl border border-[var(--sevo-border)] bg-[var(--sevo-surface-raised)] text-[var(--sevo-text-primary)]" />
                 </div>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                  <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569" }}>Minimum Rate (₹) (Optional)</label>
-                  <input type="number" step="0.01" value={minRate} onChange={e => setMinRate(e.target.value)} placeholder="e.g. 3500" style={{ padding: "10px", borderRadius: "10px", border: "1px solid #cbd5e1" }} />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-[var(--sevo-text-secondary)]">Minimum Rate (₹) (Optional)</label>
+                  <input type="number" step="0.01" value={minRate} onChange={e => setMinRate(e.target.value)} placeholder="e.g. 3500" className="p-2.5 rounded-xl border border-[var(--sevo-border)] bg-[var(--sevo-surface-raised)] text-[var(--sevo-text-primary)]" />
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                  <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569" }}>Classification</label>
-                  <select value={classification} onChange={e => setClassification(e.target.value)} style={{ padding: "10px", borderRadius: "10px", border: "1px solid #cbd5e1" }}>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-[var(--sevo-text-secondary)]">Classification</label>
+                  <select value={classification} onChange={e => setClassification(e.target.value)} className="p-2.5 rounded-xl border border-[var(--sevo-border)] bg-[var(--sevo-surface-raised)] text-[var(--sevo-text-primary)]">
                     <option value="both">Both Material + Labour</option>
                     <option value="material">Material Only</option>
                     <option value="labour">Labour Only</option>
@@ -354,80 +331,70 @@ export function PaintingRateCardPage() {
                 </div>
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569" }}>Warranty (Optional)</label>
-                <input type="text" value={warranty} onChange={e => setWarranty(e.target.value)} placeholder="e.g. 5 years warranty" style={{ padding: "10px", borderRadius: "10px", border: "1px solid #cbd5e1" }} />
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-[var(--sevo-text-secondary)]">Warranty (Optional)</label>
+                <input type="text" value={warranty} onChange={e => setWarranty(e.target.value)} placeholder="e.g. 5 years warranty" className="p-2.5 rounded-xl border border-[var(--sevo-border)] bg-[var(--sevo-surface-raised)] text-[var(--sevo-text-primary)]" />
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569" }}>Inclusions (Optional)</label>
-                <textarea value={inclusions} onChange={e => setInclusions(e.target.value)} placeholder="Inclusions detailed notes..." rows={2} style={{ padding: "10px", borderRadius: "10px", border: "1px solid #cbd5e1", resize: "none" }} />
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-[var(--sevo-text-secondary)]">Inclusions (Optional)</label>
+                <textarea value={inclusions} onChange={e => setInclusions(e.target.value)} placeholder="Inclusions detailed notes..." rows={2} className="p-2.5 rounded-xl border border-[var(--sevo-border)] bg-[var(--sevo-surface-raised)] text-[var(--sevo-text-primary)] resize-none" />
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569" }}>Exclusions (Optional)</label>
-                <textarea value={exclusions} onChange={e => setExclusions(e.target.value)} placeholder="Exclusions detailed notes..." rows={2} style={{ padding: "10px", borderRadius: "10px", border: "1px solid #cbd5e1", resize: "none" }} />
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-[var(--sevo-text-secondary)]">Exclusions (Optional)</label>
+                <textarea value={exclusions} onChange={e => setExclusions(e.target.value)} placeholder="Exclusions detailed notes..." rows={2} className="p-2.5 rounded-xl border border-[var(--sevo-border)] bg-[var(--sevo-surface-raised)] text-[var(--sevo-text-primary)] resize-none" />
               </div>
 
-              <div style={{ display: "flex", gap: "1.5rem", margin: "6px 0" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.82rem", fontWeight: 600, color: "#475569", cursor: "pointer" }}>
-                  <input type="checkbox" checked={isActive} onChange={e => setIsActive(e.target.checked)} />
+              <div className="flex gap-6 my-1.5">
+                <label className="flex items-center gap-2 text-sm font-semibold text-[var(--sevo-text-secondary)] cursor-pointer">
+                  <input type="checkbox" checked={isActive} onChange={e => setIsActive(e.target.checked)} className="rounded text-indigo-600" />
                   Is Active Item
                 </label>
-                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.82rem", fontWeight: 600, color: "#475569", cursor: "pointer" }}>
-                  <input type="checkbox" checked={hasSlabs} onChange={e => setHasSlabs(e.target.checked)} />
+                <label className="flex items-center gap-2 text-sm font-semibold text-[var(--sevo-text-secondary)] cursor-pointer">
+                  <input type="checkbox" checked={hasSlabs} onChange={e => setHasSlabs(e.target.checked)} className="rounded text-indigo-600" />
                   Configure Price Slabs
                 </label>
               </div>
 
               {/* Slabs Configuration Panel */}
               {hasSlabs && (
-                <div style={{ padding: "1rem", borderRadius: "12px", border: "1px dashed #cbd5e1", background: "#f8fafc" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                    <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "#334155" }}>Slabs Configurations</span>
-                    <button type="button" onClick={handleAddSlab} style={{ background: "none", border: "none", color: "#4f46e5", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer" }}>
+                <div className="p-4 rounded-xl border border-dashed border-[var(--sevo-border)] bg-[var(--sevo-surface-raised)]">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-extrabold text-[var(--sevo-text-primary)]">Slabs Configurations</span>
+                    <button type="button" onClick={handleAddSlab} className="bg-transparent border-0 text-indigo-600 dark:text-indigo-400 text-xs font-bold cursor-pointer hover:underline">
                       + Add Slab
                     </button>
                   </div>
 
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <div className="flex flex-col gap-2">
                     {slabs.map((slab, index) => (
-                      <div key={index} style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                        <input required type="text" value={slab.slab_key} onChange={e => handleSlabChange(index, "slab_key", e.target.value)} placeholder="Key (e.g. 1 mm, Large)" style={{ flex: 1.5, padding: "6px", fontSize: "0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1" }} />
-                        <input required type="number" step="0.01" value={slab.rate} onChange={e => handleSlabChange(index, "rate", e.target.value)} placeholder="Rate (₹)" style={{ flex: 1, padding: "6px", fontSize: "0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1" }} />
-                        <input type="text" value={slab.unit || ""} onChange={e => handleSlabChange(index, "unit", e.target.value)} placeholder="Unit" style={{ flex: 1, padding: "6px", fontSize: "0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1" }} />
-                        <button type="button" onClick={() => handleRemoveSlab(index)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer" }}><X size={16} /></button>
+                      <div key={index} className="flex gap-1.5 items-center">
+                        <input required type="text" value={slab.slab_key} onChange={e => handleSlabChange(index, "slab_key", e.target.value)} placeholder="Key (e.g. 1 mm, Large)" className="flex-[1.5] p-1.5 text-xs rounded-lg border border-[var(--sevo-border)] bg-[var(--sevo-surface)] text-[var(--sevo-text-primary)]" />
+                        <input required type="number" step="0.01" value={slab.rate} onChange={e => handleSlabChange(index, "rate", e.target.value)} placeholder="Rate (₹)" className="flex-1 p-1.5 text-xs rounded-lg border border-[var(--sevo-border)] bg-[var(--sevo-surface)] text-[var(--sevo-text-primary)]" />
+                        <input type="text" value={slab.unit || ""} onChange={e => handleSlabChange(index, "unit", e.target.value)} placeholder="Unit" className="flex-1 p-1.5 text-xs rounded-lg border border-[var(--sevo-border)] bg-[var(--sevo-surface)] text-[var(--sevo-text-primary)]" />
+                        <button type="button" onClick={() => handleRemoveSlab(index)} className="bg-transparent border-0 text-red-500 cursor-pointer p-1"><X size={16} /></button>
                       </div>
                     ))}
                     {slabs.length === 0 && (
-                      <div style={{ fontSize: "0.7rem", color: "#64748b", textAlign: "center", padding: "8px 0" }}>No slabs added. Add slabs for capacity/thickness pricing.</div>
+                      <div className="text-xs text-[var(--sevo-text-muted)] text-center py-2">No slabs added. Add slabs for capacity/thickness pricing.</div>
                     )}
                   </div>
                 </div>
               )}
 
               {/* Actions */}
-              <div style={{ display: "flex", gap: "10px", marginTop: "1rem", borderTop: "1px solid #e2e8f0", paddingTop: "1rem" }}>
+              <div className="flex gap-2.5 mt-4 border-t border-[var(--sevo-border)] pt-4">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  style={{ flex: 1, padding: "10px", borderRadius: "10px", border: "1px solid #cbd5e1", background: "white", color: "#475569", fontWeight: 700, cursor: "pointer" }}
+                  className="flex-1 p-2.5 rounded-xl border border-[var(--sevo-border)] bg-[var(--sevo-surface-raised)] text-[var(--sevo-text-secondary)] font-bold cursor-pointer hover:bg-[var(--sevo-surface)]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  style={{
-                    flex: 1.5,
-                    padding: "10px",
-                    borderRadius: "10px",
-                    border: "none",
-                    background: "linear-gradient(135deg, #4f46e5, #4338ca)",
-                    color: "white",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    boxShadow: "0 4px 12px rgba(79, 70, 229, 0.2)"
-                  }}
+                  className="flex-[1.5] p-2.5 rounded-xl border-0 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-bold cursor-pointer shadow-md shadow-indigo-500/20"
                 >
                   Save Item
                 </button>

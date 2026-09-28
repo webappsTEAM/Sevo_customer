@@ -48,7 +48,17 @@ export function LogisticsBookingPage() {
       <div style={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12, padding: 24, textAlign: "center" }}>
         <h2 style={{ fontSize: 20, fontWeight: 700 }}>Unknown service category</h2>
         <p style={{ color: "#64748b", fontSize: 14 }}>"{category}" isn't a logistics category we recognize.</p>
-        <button onClick={() => navigate("/home")} style={{ padding: "10px 18px", borderRadius: 10, background: "#0f172a", color: "#fff", fontSize: 14, fontWeight: 600 }}>
+        <button
+          onClick={() => {
+            const isPreview = (typeof window !== "undefined" && window.parent !== window) || window.location.search.includes("preview=true")
+            if (window.history.length > 1) {
+              navigate(-1)
+            } else {
+              navigate(isPreview ? "/home?preview=true" : "/home")
+            }
+          }}
+          style={{ padding: "10px 18px", borderRadius: 10, background: "#0f172a", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+        >
           Back to Home
         </button>
       </div>

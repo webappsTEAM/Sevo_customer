@@ -8,9 +8,17 @@ from .views import (
     AdminVegetableReturnListView,
     AdminVegetableReturnDetailView,
     AdminVegetableReturnActionView,
+    CustomerVegetableSlotsView,
+    AdminVegetableSlotConfigView,
+    CustomerVegetablePricingConfigView,
+    AdminVegetablePricingConfigView,
 )
 
 urlpatterns = [
+    path('slots/', CustomerVegetableSlotsView.as_view(), name='vegetable-orders-slots'),
+    path('pricing-config/', CustomerVegetablePricingConfigView.as_view(), name='vegetable-orders-pricing-config'),
+    path('admin/slots/', AdminVegetableSlotConfigView.as_view(), name='vegetable-orders-admin-slots'),
+    path('admin/pricing-config/', AdminVegetablePricingConfigView.as_view(), name='vegetable-orders-admin-pricing-config'),
     path('admin/', AdminVegetableOrderListView.as_view(), name='vegetable-orders-admin-list'),
     path('admin/<int:pk>/', AdminVegetableOrderDetailView.as_view(), name='vegetable-orders-admin-detail'),
     path('admin/<int:pk>/transition/', AdminVegetableOrderTransitionView.as_view(), name='vegetable-orders-admin-transition'),

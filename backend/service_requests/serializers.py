@@ -291,6 +291,22 @@ class PackageSerializer(serializers.ModelSerializer):
             "sort_order": v.sort_order,
         } for v in variants_qs]
 
+    def get_variants(self, obj):
+        variants_qs = obj.variants.filter(is_active=True, status="APPROVED").order_by("sort_order", "pack_value", "id")
+        return [{
+            "id": v.id,
+            "name": v.display_name,
+            "pack_value": str(v.pack_value),
+            "unit": v.unit,
+            "unit_basis": v.unit_basis,
+            "base_price": str(v.base_price),
+            "mrp": str(v.mrp) if v.mrp else None,
+            "sku": v.sku,
+            "is_default": v.is_default,
+            "is_active": v.is_active,
+            "sort_order": v.sort_order,
+        } for v in variants_qs]
+
     def get_vegetable_category(self, obj):
         item = getattr(obj, "stock_item", None)
         if item and item.category:
@@ -2186,7 +2202,11 @@ class EstimationSummarySerializer(serializers.ModelSerializer):
 class ACInspectionConfigurationSerializer(serializers.ModelSerializer):
     class Meta:
         model = ACInspectionConfiguration
-        fields = ("id", "diagnostic_fee", "currency", "is_active", "updated_at")
+        fields = (
+            "id", "diagnostic_fee", "currency", "is_active",
+            "title", "subtitle", "image", "badges", "includes", "ready",
+            "updated_at"
+        )
 
 
 class ACInspectionRateItemSerializer(serializers.ModelSerializer):

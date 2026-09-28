@@ -1547,7 +1547,7 @@ class RescheduleRequest(models.Model):
 
     # Proposed new date & slot
     new_date              = models.DateField()
-    new_time_slot         = models.CharField(max_length=20, choices=TimeSlotChoices.choices, default=TimeSlotChoices.SLOT_09_10)
+    new_time_slot         = models.CharField(max_length=100, blank=True, default="09:00 - 10:00")
 
     reason                = models.CharField(max_length=50, choices=RescheduleReason.choices, default=RescheduleReason.SCHEDULE_CONFLICT)
     additional_notes      = models.TextField(blank=True, default="")
@@ -3455,7 +3455,7 @@ class ACInspectionRateItem(models.Model):
 
 class ACInspectionConfiguration(models.Model):
     """
-    Authoritative configuration for AC Inspection & Diagnostic fees.
+    Authoritative configuration for AC Inspection & Diagnostic fees and service details.
     """
     diagnostic_fee = models.DecimalField(
         max_digits=10,
@@ -3465,6 +3465,38 @@ class ACInspectionConfiguration(models.Model):
     )
     currency = models.CharField(max_length=10, default="INR")
     is_active = models.BooleanField(default=True)
+    title = models.CharField(
+        max_length=255,
+        default="AC Inspection & Diagnostic Visit",
+        blank=True,
+        help_text="Customer-facing service title"
+    )
+    subtitle = models.TextField(
+        default="Not sure about the fault? Certified technician visits with diagnostic instruments, inspects cooling, gas pressure & electricals, and provides an itemized quotation before repair.",
+        blank=True,
+        help_text="Customer-facing description of the diagnostic visit"
+    )
+    image = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        help_text="Storage path or URL to the inspection service image"
+    )
+    badges = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="JSON list of service highlight badges"
+    )
+    includes = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="JSON list of diagnostic inspection check points"
+    )
+    ready = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="JSON list of customer preparation instructions"
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -3473,9 +3505,36 @@ class ACInspectionConfiguration(models.Model):
 
     @classmethod
     def get_solo(cls):
+        default_badges = [
+            "₹199 Diagnostic Fee",
+            "Adjustable Against Repair",
+            "Pay at Doorstep",
+        ]
+        default_includes = [
+            "Comprehensive 21-point system & safety diagnostics",
+            "Cooling delta temp scan & gas pressure test",
+            "Compressor load & capacitor electrical scan",
+            "Itemized quotation before any repair work",
+        ]
+        default_ready = [
+            "Continuous power supply and remote control available for testing",
+            "Clear access to indoor and outdoor AC units",
+            "Area below indoor unit cleared of electronics & valuables",
+            "Outdoor unit safely accessible via balcony, terrace, or window",
+        ]
         obj, _ = cls.objects.get_or_create(
             id=1,
-            defaults={"diagnostic_fee": Decimal("199.00"), "currency": "INR", "is_active": True}
+            defaults={
+                "diagnostic_fee": Decimal("199.00"),
+                "currency": "INR",
+                "is_active": True,
+                "title": "AC Inspection & Diagnostic Visit",
+                "subtitle": "Not sure about the fault? Certified technician visits with diagnostic instruments, inspects cooling, gas pressure & electricals, and provides an itemized quotation before repair.",
+                "image": "",
+                "badges": default_badges,
+                "includes": default_includes,
+                "ready": default_ready,
+            }
         )
         return obj
 

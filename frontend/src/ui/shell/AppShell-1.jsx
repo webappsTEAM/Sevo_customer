@@ -19,6 +19,7 @@ import { fetchTrialStatus, fetchTrialNotifications } from "../../store/trialSlic
 import { TrialBanner } from "../components/TrialBanner.jsx"
 import { TrialExpiredModal } from "../components/TrialExpiredModal.jsx"
 import { isSuperAdmin, hasModule } from "../../auth/authorization.js"
+import { resolveImageUrl } from "../../utils/imageUrl.js"
 
 import {
   Home, Clock, CheckSquare, CalendarDays, Banknote, CalendarRange,
@@ -104,18 +105,6 @@ const ADMIN_NAV_ITEMS = [
     to: routes.homepage_customizer,
     icon: <Globe size={20} />,
     color: "#F59E0B",
-    children: [
-      { label: "Hero Banner", to: `${routes.homepage_customizer}?tab=hero`, icon: <Globe size={16} />, color: "#F59E0B" },
-      { label: "Browse Categories", to: `${routes.homepage_customizer}?tab=categories`, icon: <FolderOpen size={16} />, color: "#3B82F6" },
-      { label: "Vendor Hire Banner", to: `${routes.homepage_customizer}?tab=vendorBanner`, icon: <Users size={16} />, color: "#0D9488" },
-      { label: "Promotional Offers", to: `${routes.homepage_customizer}?tab=offers`, icon: <Gift size={16} />, color: "#EC4899" },
-      { label: "Why Choose Us", to: `${routes.homepage_customizer}?tab=trust`, icon: <ShieldCheck size={16} />, color: "#10B981" },
-      { label: "How It Works", to: `${routes.homepage_customizer}?tab=workflow`, icon: <Repeat2 size={16} />, color: "#8B5CF6" },
-      { label: "Live Stats Bar", to: `${routes.homepage_customizer}?tab=stats`, icon: <BarChart3 size={16} />, color: "#0EA5E9" },
-      { label: "Featured Pros", to: `${routes.homepage_customizer}?tab=experts`, icon: <Users size={16} />, color: "#D946EF" },
-      { label: "Testimonials", to: `${routes.homepage_customizer}?tab=testimonials`, icon: <Award size={16} />, color: "#F59E0B" },
-      { label: "Footer & Contacts", to: `${routes.homepage_customizer}?tab=footer`, icon: <FileText size={16} />, color: "#64748B" },
-    ]
   },
   {
     label: "Warehouse Inventory",
@@ -134,11 +123,6 @@ const ADMIN_NAV_ITEMS = [
     to: "/settings",
     icon: <Settings size={20} />,
     color: "#64748B",
-    children: [
-      { label: "My Profile", to: "/settings?section=profile", icon: <User size={16} />, color: "#3B82F6" },
-      { label: "Security", to: "/settings?section=security", icon: <Shield size={16} />, color: "#10B981" },
-      { label: "Appearance", to: "/settings?section=appearance", icon: <Palette size={16} />, color: "#8B5CF6" },
-    ]
   },
 ]
 
@@ -531,10 +515,10 @@ export function AppShell() {
               type="button"
               onClick={() => setProfileOpen(v => !v)}
             >
-              <div className="relative w-10 h-10 flex items-center justify-center rounded-xl bg-[var(--sevo-primary)] text-white font-bold text-sm shadow-md group-hover:scale-105 transition-transform">
+              <div className="relative w-10 h-10 flex items-center justify-center rounded-xl bg-[var(--sevo-primary)] text-white font-bold text-sm shadow-md group-hover:scale-105 transition-transform overflow-hidden">
                 {user.avatar_url ? (
                   <img
-                    src={user.avatar_url.includes("demo.localhost") ? `${window.location.origin}${user.avatar_url.substring(user.avatar_url.indexOf('/media/'))}` : user.avatar_url}
+                    src={resolveImageUrl(user.avatar_url)}
                     alt="avatar"
                     className="w-full h-full object-cover rounded-xl"
                     onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -579,9 +563,14 @@ export function AppShell() {
                 <div className="absolute top-full right-0 mt-3 w-80 bg-[var(--sevo-surface)] rounded-2xl shadow-2xl border border-[var(--sevo-border)] z-[99999] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
                   <div className="p-6 bg-[var(--sevo-surface-raised)]/80 backdrop-blur-xl border-b border-[var(--sevo-border)]">
                     <div className="flex items-center gap-4">
-                      <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-[var(--sevo-primary)] text-white text-xl font-bold shadow-md">
+                      <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-[var(--sevo-primary)] text-white text-xl font-bold shadow-md overflow-hidden">
                         {user.avatar_url ? (
-                          <img src={user.avatar_url} alt="avatar" className="w-full h-full object-cover rounded-2xl" />
+                          <img
+                            src={resolveImageUrl(user.avatar_url)}
+                            alt="avatar"
+                            className="w-full h-full object-cover rounded-2xl"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          />
                         ) : (
                           initials(user.username)
                         )}

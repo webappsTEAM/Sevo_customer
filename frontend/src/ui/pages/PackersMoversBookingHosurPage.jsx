@@ -3953,7 +3953,12 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
               type="button"
               onClick={() => {
                 setIsSurveySubmittedModalOpen(false)
-                navigate(routes.landing)
+                const isPreview = (typeof window !== "undefined" && window.parent !== window) || window.location.search.includes("preview=true")
+                if (window.history.length > 1) {
+                  navigate(-1)
+                } else {
+                  navigate(isPreview ? "/home?preview=true" : routes.landing)
+                }
               }}
               className="w-full py-3.5 bg-[#0B8860] hover:bg-[#097754] text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
             >
@@ -4028,7 +4033,12 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                 type="button"
                 onClick={() => {
                   setBookingSuccessOpen(false)
-                  navigate(routes.landing)
+                  const isPreview = (typeof window !== "undefined" && window.parent !== window) || window.location.search.includes("preview=true")
+                  if (window.history.length > 1) {
+                    navigate(-1)
+                  } else {
+                    navigate(isPreview ? "/home?preview=true" : routes.landing)
+                  }
                 }}
                 className={`py-3.5 ${lastBookingId ? "flex-1 border border-slate-200 text-slate-700 hover:bg-slate-50" : "w-full bg-emerald-600 text-white"} text-xs font-bold rounded-xl transition-all cursor-pointer`}
               >

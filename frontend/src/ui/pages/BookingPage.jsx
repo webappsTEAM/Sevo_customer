@@ -53,6 +53,7 @@ import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 import { getAddress } from "../../api/geocoding.js";
 import { getVegetableTimingInfo } from "../../utils/vegetableSchedule.js";
+import { QUICK_COMMERCE_PRICING } from "../../utils/quickCommercePricing.js";
 import acServiceImg from "../../assets/ac service.png";
 import imgFoamSplit from "../../assets/Foam & Power Jet AC Service — Split.png";
 import imgFoamWin from "../../assets/Foam & Power Jet AC Service — Window.png";
@@ -1438,21 +1439,78 @@ function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTi
   const platformFee = totalPrice === 0 || isPaintingOrMason || nonConsultCart.length === 0 ? 0 : Math.max(29, ...nonConsultCart.map(c => c.platform_fee !== undefined ? Number(c.platform_fee) : 29))
   const grandTotal = totalPrice + roundedGst + platformFee
 
-  // Urban time slots (30-min intervals): Morning / Afternoon / Evening
+  // Urban time slots (30-min intervals) fallback
   const UC_TIME_SLOTS = [
-    { period: 'Morning', icon: '🌅', slots: ['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30'] },
-    { period: 'Afternoon', icon: '☀️', slots: ['12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30'] },
-    { period: 'Evening', icon: '🌙', slots: ['17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00'] },
+    { period: 'Morning', icon: '', slots: ['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30'] },
+    { period: 'Afternoon', icon: '', slots: ['12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30'] },
+    { period: 'Evening', icon: '', slots: ['17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00'] },
   ]
   const formatSlot = t => {
+    if (!t) return ""
+    if (String(t).toUpperCase().includes("AM") || String(t).toUpperCase().includes("PM")) return t
     const [h, m = 0] = t.split(':').map(Number)
+    if (isNaN(h)) return t
     const ampm = h < 12 ? 'AM' : 'PM'
     const h12 = h % 12 === 0 ? 12 : h % 12
     const minStr = String(m).padStart(2, '0')
     return `${h12}:${minStr} ${ampm}`
   }
 
-  const canContinue = Boolean(selectedDate && selectedTime && !isSlotInPast(selectedDate, selectedTime))
+  // Dynamic server slot state connected to Time Slot Management
+  const [serverSlotData, setServerSlotData] = useState(null)
+  const [loadingSlots, setLoadingSlots] = useState(false)
+
+  useEffect(() => {
+    if (!selectedDate) return
+    let isCancelled = false
+    setLoadingSlots(true)
+
+    const serviceParam = cart?.[0]?.service_id || cart?.[0]?.db_id || category?.id || category?.slug
+    const packageParam = cart?.[0]?.id || cart?.[0]?.package_id
+    const categoryParam = category?.id || category?.slug
+
+    const query = new URLSearchParams()
+    query.set("date", selectedDate)
+    if (serviceParam) query.set("service", serviceParam)
+    if (packageParam) query.set("package", packageParam)
+    if (categoryParam) query.set("category", categoryParam)
+
+    apiRequest(`/services/resolve/time-slots/?${query.toString()}`)
+      .then(res => {
+        if (isCancelled) return
+        if (res?.success && res.data) {
+          setServerSlotData(res.data)
+          if (!res.data.is_open) {
+            onTimeChange("")
+          } else if (selectedTime) {
+            const all = res.data.all_slots || []
+            const valid = all.some(s => s.available && (s.value === selectedTime || s.time === selectedTime || s.start_time === selectedTime))
+            if (!valid) {
+              const firstAvail = all.find(s => s.available)
+              onTimeChange(firstAvail ? (firstAvail.value || firstAvail.start_time) : "")
+            }
+          }
+        }
+      })
+      .catch(err => {
+        console.warn("Could not load dynamic slots, using fallback", err)
+      })
+      .finally(() => {
+        if (!isCancelled) setLoadingSlots(false)
+      })
+
+    return () => { isCancelled = true }
+  }, [selectedDate, category, cart])
+
+  const isDateClosed = serverSlotData && serverSlotData.is_open === false
+  const canContinue = Boolean(
+    selectedDate &&
+    selectedTime &&
+    !isDateClosed &&
+    (serverSlotData
+      ? (serverSlotData.all_slots || []).some(s => s.available && (s.value === selectedTime || s.time === selectedTime || s.start_time === selectedTime))
+      : !isSlotInPast(selectedDate, selectedTime))
+  )
 
   return (
     <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', maxWidth: 960, margin: '0 auto', padding: '0 0 80px' }}>
@@ -1511,43 +1569,111 @@ function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTi
 
         {/* Time Section */}
         <div>
-          <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#374151', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Clock size={15} color="#7C3AED" /> Select Time Slot
+          <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#374151', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Clock size={15} color="#7C3AED" /> Select Time Slot
+            </div>
+            {loadingSlots && (
+              <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 600 }}>Checking live capacity...</span>
+            )}
           </div>
-          {UC_TIME_SLOTS.map(group => (
-            <div key={group.period} style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                {group.icon} {group.period}
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {group.slots.map(t => {
-                  const isPast = isSlotInPast(selectedDate, t)
-                  const isSel = selectedTime === t
-                  return (
-                    <button
-                      key={`${group.period}-${t}`}
-                      disabled={isPast}
-                      onClick={() => {
-                        if (isPast) return
-                        onTimeChange(t)
-                      }}
-                      style={{
-                        padding: '8px 18px', borderRadius: 99,
-                        border: `2px solid ${isPast ? '#e2e8f0' : isSel ? '#7C3AED' : '#e2e8f0'}`,
-                        background: isPast ? '#f1f5f9' : isSel ? '#7C3AED' : 'white',
-                        color: isPast ? '#94a3b8' : isSel ? 'white' : '#374151',
-                        fontWeight: 700, fontSize: '0.8rem', cursor: isPast ? 'not-allowed' : 'pointer', transition: 'all 0.18s',
-                        opacity: isPast ? 0.6 : 1,
-                        userSelect: 'none'
-                      }}
-                    >
-                      {formatSlot(t)}
-                    </button>
-                  )
-                })}
+
+          {isDateClosed ? (
+            <div style={{ padding: '16px', borderRadius: 14, background: '#fffbeb', border: '1.5px solid #fde68a', color: '#92400e', marginBottom: 20 }}>
+              <div style={{ fontWeight: 800, fontSize: '0.85rem', marginBottom: 4 }}>Service Closed on This Date</div>
+              <div style={{ fontSize: '0.75rem', lineHeight: 1.5 }}>
+                {serverSlotData?.reason || "This service is not operating on the selected date. Please pick another date above."}
               </div>
             </div>
-          ))}
+          ) : serverSlotData && serverSlotData.groups ? (
+            // Dynamic Server Slot Groups from Time Slot Management
+            [
+              { key: 'morning', label: 'Morning', icon: '🌅' },
+              { key: 'afternoon', label: 'Afternoon', icon: '☀️' },
+              { key: 'evening', label: 'Evening', icon: '🌙' },
+            ].map(group => {
+              const groupSlots = serverSlotData.groups[group.key] || []
+              if (groupSlots.length === 0) return null
+              return (
+                <div key={group.key} style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {group.icon} {group.label}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {groupSlots.map(s => {
+                      const slotVal = s.value || s.start_time
+                      const isAvail = s.available
+                      const isSel = selectedTime === slotVal || selectedTime === s.time
+                      return (
+                        <button
+                          key={slotVal}
+                          type="button"
+                          disabled={!isAvail}
+                          onClick={() => onTimeChange(slotVal)}
+                          title={!isAvail ? (s.reason || "Unavailable") : `${s.time} (${s.booked_count || 0}/${s.capacity || 1} booked)`}
+                          style={{
+                            padding: '8px 18px', borderRadius: 99,
+                            border: `2px solid ${!isAvail ? '#e2e8f0' : isSel ? '#7C3AED' : '#e2e8f0'}`,
+                            background: !isAvail ? '#f1f5f9' : isSel ? '#7C3AED' : 'white',
+                            color: !isAvail ? '#94a3b8' : isSel ? 'white' : '#374151',
+                            fontWeight: 700, fontSize: '0.8rem',
+                            cursor: !isAvail ? 'not-allowed' : 'pointer',
+                            transition: 'all 0.18s',
+                            opacity: !isAvail ? 0.5 : 1,
+                            userSelect: 'none',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6
+                          }}
+                        >
+                          <span>{s.time}</span>
+                          {!isAvail && s.reason === "Slot full" && (
+                            <span style={{ fontSize: '0.62rem', background: '#fee2e2', color: '#dc2626', padding: '1px 5px', borderRadius: 99, fontWeight: 800 }}>Full</span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })
+          ) : (
+            // Standard fallback if server slot data not yet loaded or offline
+            UC_TIME_SLOTS.map(group => (
+              <div key={group.period} style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {group.icon} {group.period}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {group.slots.map(t => {
+                    const isPast = isSlotInPast(selectedDate, t)
+                    const isSel = selectedTime === t
+                    return (
+                      <button
+                        key={`${group.period}-${t}`}
+                        disabled={isPast}
+                        onClick={() => {
+                          if (isPast) return
+                          onTimeChange(t)
+                        }}
+                        style={{
+                          padding: '8px 18px', borderRadius: 99,
+                          border: `2px solid ${isPast ? '#e2e8f0' : isSel ? '#7C3AED' : '#e2e8f0'}`,
+                          background: isPast ? '#f1f5f9' : isSel ? '#7C3AED' : 'white',
+                          color: isPast ? '#94a3b8' : isSel ? 'white' : '#374151',
+                          fontWeight: 700, fontSize: '0.8rem', cursor: isPast ? 'not-allowed' : 'pointer', transition: 'all 0.18s',
+                          opacity: isPast ? 0.6 : 1,
+                          userSelect: 'none'
+                        }}
+                      >
+                        {formatSlot(t)}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))
+          )}
         </div>
 
         {/* CTA */}
@@ -3102,7 +3228,12 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                 onClick={() => {
                   sessionStorage.removeItem("calservice_active_tracking_id")
                   sessionStorage.removeItem("calservice_last_booking")
-                  window.location.href = "/"
+                  const isPreview = (typeof window !== "undefined" && window.parent !== window) || window.location.search.includes("preview=true")
+                  if (isPreview) {
+                    window.location.href = "/home?preview=true"
+                  } else {
+                    window.location.href = "/"
+                  }
                 }}
                 style={{
                   padding: "0.85rem 1rem",
@@ -9746,30 +9877,6 @@ export function PeopleAlsoTake({ category, cart, setCart }) {
    ───────────────────────────────────────────────────────────── */
 
 // ── Quick Commerce Pricing Configuration (Blinkit-style affordable tiers) ──
-const QUICK_COMMERCE_PRICING = {
-  FREE_DELIVERY_THRESHOLD: 200,
-  HANDLING_FEE: 2,
-  SMALL_CART_FEE: 5,
-  SMALL_CART_THRESHOLD: 100,
-  SURGE_ACTIVE: false, // Default inactive; true only during active rain/high-demand conditions
-  SURGE_FEE: 0,        // Configurable ₹5–₹10 when SURGE_ACTIVE is true
-  getDeliveryFee: (subtotal) => {
-    if (subtotal <= 0 || subtotal >= 200) return 0
-    if (subtotal >= 100) return 10
-    return 15
-  },
-  getSmallCartFee: (subtotal) => {
-    if (subtotal > 0 && subtotal < 100) return 5
-    return 0
-  },
-  getHandlingFee: (subtotal) => {
-    return subtotal > 0 ? 2 : 0
-  },
-  getSurgeFee: (subtotal, isSurgeActive = false, surgeAmount = 10) => {
-    return isSurgeActive && subtotal > 0 ? surgeAmount : 0
-  }
-}
-
 function QuickCommerceCartCheckout({
   cart,
   setCart,
@@ -9816,9 +9923,6 @@ function QuickCommerceCartCheckout({
   })
   const [selectedAddressId, setSelectedAddressId] = useState(() => savedAddresses[0]?.id || "addr_home")
   const [isDonationChecked, setIsDonationChecked] = useState(false)
-  const [selectedTip, setSelectedTip] = useState(null)
-  const [customTip, setCustomTip] = useState("")
-  const [isCustomTipOpen, setIsCustomTipOpen] = useState(false)
   const [showAddAddressModal, setShowAddAddressModal] = useState(false)
   const [newAddressText, setNewAddressText] = useState("")
   const [newAddressType, setNewAddressType] = useState("Home")
@@ -9826,21 +9930,60 @@ function QuickCommerceCartCheckout({
   const [orderConfirmedData, setOrderConfirmedData] = useState(null)
   const [errorMsg, setErrorMsg] = useState("")
 
+  // Delivery schedule, slot state & dynamic pricing config
+  const [deliverySchedule, setDeliverySchedule] = useState([])
+  const [selectedDateStr, setSelectedDateStr] = useState("")
+  const [selectedSlot, setSelectedSlot] = useState(null)
+  const [isLoadingSlots, setIsLoadingSlots] = useState(true)
+  const [pricingConfig, setPricingConfig] = useState(() => QUICK_COMMERCE_PRICING.getConfig())
+
+  useEffect(() => {
+    let isMounted = true
+    async function fetchSlots() {
+      try {
+        setIsLoadingSlots(true)
+        const res = await apiRequest("/vegetable-orders/slots/")
+        if (res && res.success && isMounted) {
+          if (res.pricing_config) {
+            QUICK_COMMERCE_PRICING.updateConfig(res.pricing_config)
+            setPricingConfig(res.pricing_config)
+          }
+          if (Array.isArray(res.dates)) {
+            setDeliverySchedule(res.dates)
+            const today = res.dates[0]
+            const todayHasAvailable = today?.slots?.some(s => s.available)
+            const chosenDate = todayHasAvailable ? today : (res.dates.find(d => d.slots?.some(s => s.available)) || today)
+            if (chosenDate) {
+              setSelectedDateStr(chosenDate.date)
+              const firstAvailable = chosenDate.slots?.find(s => s.available) || chosenDate.slots?.[0]
+              setSelectedSlot(firstAvailable)
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load delivery slots:", err)
+      } finally {
+        if (isMounted) setIsLoadingSlots(false)
+      }
+    }
+    fetchSlots()
+    return () => { isMounted = false }
+  }, [])
+
   const activeAddressObj = savedAddresses.find(a => a.id === selectedAddressId) || savedAddresses[0]
+  const activeDateObj = deliverySchedule.find(d => d.date === selectedDateStr) || deliverySchedule[0]
 
   const itemsTotal = cart.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 1), 0)
   const itemsOriginalTotal = cart.reduce((sum, item) => sum + (item.mrp || Math.round((item.price || 0) * 1.2)) * (item.quantity || 1), 0)
   const savings = Math.max(0, itemsOriginalTotal - itemsTotal)
 
-  // Dynamic Blinkit-style pricing calculations
-  const deliveryCharge = QUICK_COMMERCE_PRICING.getDeliveryFee(itemsTotal)
-  const handlingCharge = QUICK_COMMERCE_PRICING.getHandlingFee(itemsTotal)
-  const smallCartFee = QUICK_COMMERCE_PRICING.getSmallCartFee(itemsTotal)
-  const isSurgeActive = QUICK_COMMERCE_PRICING.SURGE_ACTIVE
-  const surgeCharge = QUICK_COMMERCE_PRICING.getSurgeFee(itemsTotal, isSurgeActive, QUICK_COMMERCE_PRICING.SURGE_FEE)
-  const donationAmount = 0
-  const tipAmount = selectedTip === "custom" ? Math.max(0, parseInt(customTip, 10) || 0) : Math.max(0, selectedTip || 0)
-  const grandTotal = Math.max(0, itemsTotal + deliveryCharge + handlingCharge + smallCartFee + surgeCharge + donationAmount + tipAmount)
+  const tipAmount = 0
+  const pricing = QUICK_COMMERCE_PRICING.calculateTotals(itemsTotal, { selectedTip: 0 })
+  const deliveryCharge = pricing.deliveryCharge
+  const handlingCharge = pricing.handlingCharge
+  const smallCartFee = pricing.smallCartFee
+  const surgeCharge = pricing.surgeCharge
+  const grandTotal = pricing.grandTotal
 
   const handleUpdateQty = (id, delta) => {
     setCart(prev => {
@@ -9913,13 +10056,6 @@ function QuickCommerceCartCheckout({
       onRequireAuth && onRequireAuth()
       return
     }
-    // Bug found: this used to fall back to a hardcoded "9876543210" and
-    // submit it as the real ServiceRequest.phone whenever a logged-in user
-    // had no phone on file (e.g. email/Google-only signup) -- a fake,
-    // non-functional number would be persisted as the delivery contact, so
-    // whoever fulfills the order would be calling a number that isn't the
-    // customer's. Require a real phone before checkout instead of
-    // fabricating one.
     if (!user?.phone) {
       setErrorMsg("Please add a phone number to your profile before placing this order, so we can reach you for delivery.")
       return
@@ -9934,19 +10070,13 @@ function QuickCommerceCartCheckout({
         return
       }
 
-      // Real grocery checkout (DAILY_ESSENTIALS_IMPLEMENTATION_PLAN.md Phase
-      // 3 / frontend plan Phase 2) -- GroceryCheckoutView reads the
-      // customer's ACTIVE daily_essentials Cart from the backend and
-      // reserves stock atomically, hard-blocking on InsufficientStockError.
-      // No cart_data payload here: unlike the old /booking/ endpoint, this
-      // one is not told what's in the cart, it reads the real Cart rows
-      // that dailyEssentialsCartSync.js has been keeping in sync (Phase 1).
-      // No silent fallback on failure -- a real error (insufficient stock,
-      // network failure, anything) must surface as an error, never a
-      // fabricated success screen.
       const res = await apiRequest("/orders/grocery/checkout/", {
         method: "POST",
-        json: { delivery_address: deliveryAddress },
+        json: {
+          delivery_address: deliveryAddress,
+          delivery_date: selectedDateStr || undefined,
+          delivery_slot: selectedSlot?.full_label || selectedSlot?.slot_label || undefined,
+        },
       })
 
       if (!res || res.success === false) {
@@ -9963,19 +10093,14 @@ function QuickCommerceCartCheckout({
         address: deliveryAddress,
         total: order.total_amount ?? grandTotal,
         itemsCount: cart.reduce((a, b) => a + (b.quantity || 1), 0),
-        deliveryDayText: vegTiming.deliveryDay,
-        deliverySlot: vegTiming.deliverySlot,
+        deliveryDayText: activeDateObj?.display_label || vegTiming.deliveryDay,
+        deliverySlot: selectedSlot?.slot_label || order.delivery_slot || vegTiming.deliverySlot,
         paymentStatus: "Paid",
-        deliveryNotice: vegTiming.afterTwelveNotice
-          ? "Booking was placed after 12:00 PM. Your fresh vegetables will be harvested and delivered tomorrow between 6:00 PM and 8:00 PM."
-          : "Your fresh vegetables will be packed and delivered directly to your doorstep today between 6:00 PM and 8:00 PM."
+        deliveryNotice: activeDateObj?.is_today && !selectedSlot?.available
+          ? "Same-day booking cutoff passed. Your order is scheduled for the earliest delivery window."
+          : `Your fresh vegetables will be packed and delivered on ${activeDateObj?.formatted || "scheduled date"} during ${selectedSlot?.slot_label || "6:00 PM – 8:00 PM"}.`
       })
     } catch (err) {
-      // GroceryCheckoutView's insufficient-stock response puts the
-      // human-readable text in `message` (and the machine-readable item
-      // detail in `errors`) -- extractApiErrorMessage() prefers `errors`
-      // first for other endpoints' sake, so check `message` here explicitly
-      // before falling back to it.
       setErrorMsg(err?.body?.message || extractApiErrorMessage(err, "Failed to place order. Please try again."))
     } finally {
       setIsSubmitting(false)
@@ -10006,7 +10131,7 @@ function QuickCommerceCartCheckout({
           <div className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200 text-left space-y-2">
             <div className="flex items-center gap-2 text-xs font-black text-emerald-900">
               <Clock className="w-4 h-4 text-emerald-700" />
-              <span>Delivery Time: 6:00 PM – 8:00 PM ({orderConfirmedData.deliveryDayText})</span>
+              <span>Delivery Time: {orderConfirmedData.deliverySlot} ({orderConfirmedData.deliveryDayText})</span>
             </div>
             <p className="text-[11px] text-emerald-800 font-semibold leading-relaxed">
               {orderConfirmedData.deliveryNotice}
@@ -10077,71 +10202,153 @@ function QuickCommerceCartCheckout({
           </div>
 
           <div className="p-5 sm:p-6 space-y-4 bg-slate-50/30">
-            {/* Delivery Time Banner */}
-            {vegTiming.afterTwelveNotice ? (
-              <div className="bg-amber-50 rounded-2xl p-4 border border-amber-200 flex items-start gap-3.5 shadow-3xs border-l-4 border-l-amber-500">
-                <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 shadow-3xs mt-0.5">
-                  <Clock className="w-5 h-5 stroke-[2.5]" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-amber-950 flex items-center gap-1.5">
-                    Next-Day Delivery: Tomorrow (6:00 PM – 8:00 PM)
-                    <span className="text-[9px] font-black bg-amber-500 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">After 12 PM Notice</span>
-                  </h3>
-                  <p className="text-xs text-amber-900 font-semibold mt-1 leading-relaxed">
-                    Same-day booking is open 6:00 AM – 12:00 PM. Booking is not available for same-day delivery right now — <strong>even if booked now, it will be delivered tomorrow between 6:00 PM and 8:00 PM</strong>.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-gradient-to-r from-emerald-50/60 to-emerald-50/20 rounded-2xl p-4 border border-emerald-100 flex items-center gap-4 shadow-3xs border-l-4 border-l-emerald-600">
-                <div className="w-10 h-10 rounded-xl bg-emerald-100/80 text-emerald-800 flex items-center justify-center shrink-0 shadow-3xs">
-                  <Clock className="w-5 h-5 stroke-[2.5]" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-955 flex items-center gap-1.5">
-                    Evening Delivery Today (6:00 PM – 8:00 PM)
-                    <span className="text-[9px] font-black bg-emerald-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">Active</span>
-                  </h3>
-                  <p className="text-xs text-slate-600 font-medium mt-0.5">
-                    Morning order window: 6:00 AM – 12:00 PM • Evening delivery: 6:00 PM – 8:00 PM
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Free Delivery Incentive Card */}
-            {itemsTotal > 0 && (
-              <div className="bg-white rounded-2xl p-3.5 border border-slate-100 shadow-3xs flex flex-col gap-2">
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span className="font-bold text-slate-800">
-                      {itemsTotal >= QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD ? (
-                        <span className="text-emerald-700 font-extrabold">🎉 You unlocked FREE delivery!</span>
-                      ) : (
-                        <span>
-                          Add <span className="font-extrabold text-emerald-700">₹{QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD - itemsTotal}</span> more to get <span className="font-extrabold text-emerald-700">FREE delivery</span>
-                        </span>
-                      )}
-                    </span>
+            {/* Delivery Date & Time Slot Selection (Inline Two-Level Selector) */}
+            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-100 shadow-3xs space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
+                    <Clock className="w-4 h-4 stroke-[2.2]" />
                   </div>
-                  {itemsTotal < QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD && (
-                    <span className="text-[11px] font-bold text-slate-400 shrink-0">
-                      ₹{itemsTotal}/₹{QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD}
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-black text-slate-900">Choose Delivery Window</h3>
+                    <p className="text-[11px] font-semibold text-slate-400">All 7 days of the week available</p>
+                  </div>
+                </div>
+                {selectedSlot && (
+                  <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                    {activeDateObj?.display_label || "Scheduled"}
+                  </span>
+                )}
+              </div>
+
+              {/* Level 1: Horizontal Scrollable Day Tabs (Sunday through Saturday) */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">1. Select Day</span>
+                  {activeDateObj && (
+                    <span className="text-[11px] font-bold text-slate-600">
+                      {activeDateObj.display_label} • {activeDateObj.date_display || activeDateObj.formatted}
                     </span>
                   )}
                 </div>
-                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                  <div
-                    className="bg-emerald-600 h-full rounded-full transition-all duration-300"
-                    style={{
-                      width: `${Math.min(100, Math.round((itemsTotal / QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD) * 100))}%`
-                    }}
-                  />
-                </div>
+
+                {deliverySchedule.length > 0 ? (
+                  <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
+                    {deliverySchedule.map((dateObj) => {
+                      const isSelected = selectedDateStr === dateObj.date
+                      const isClosed = dateObj.is_closed || (dateObj.slots && dateObj.slots.length > 0 && dateObj.slots.every(s => !s.available))
+                      return (
+                        <button
+                          key={dateObj.date}
+                          type="button"
+                          onClick={() => {
+                            setSelectedDateStr(dateObj.date)
+                            const currentStillAvailable = dateObj.slots?.find(s => s.name === selectedSlot?.name && s.available)
+                            const firstAvailable = dateObj.slots?.find(s => s.available)
+                            setSelectedSlot(currentStillAvailable || firstAvailable || dateObj.slots?.[0] || null)
+                          }}
+                          className={`px-3.5 py-2.5 rounded-2xl text-left border transition-all shrink-0 cursor-pointer min-w-[88px] text-center ${
+                            isSelected
+                              ? "bg-slate-900 text-white border-slate-900 shadow-md ring-2 ring-slate-900/20 font-black"
+                              : "bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100 font-bold"
+                          }`}
+                        >
+                          <p className="text-xs leading-tight font-extrabold">{dateObj.display_label}</p>
+                          <p className={`text-[10px] mt-0.5 ${isSelected ? "text-slate-300" : "text-slate-400"} font-medium`}>
+                            {dateObj.date_display || dateObj.formatted}
+                          </p>
+                          {isClosed && (
+                            <span className="inline-block mt-1 text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300">
+                              {dateObj.reason ? (dateObj.is_today ? "Cutoff" : "Closed") : "Closed"}
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 py-2">
+                    <Clock className="w-4 h-4 text-emerald-600 animate-spin" />
+                    <span>Loading delivery schedule...</span>
+                  </div>
+                )}
               </div>
-            )}
+
+              {/* Level 2: Time Slot Chips for Chosen Day */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    2. Select Time Window
+                  </span>
+                </div>
+
+                {activeDateObj?.is_closed || !activeDateObj?.slots || activeDateObj.slots.length === 0 ? (
+                  <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/60 text-center space-y-1.5">
+                    <AlertCircle className="w-6 h-6 text-amber-600 mx-auto" />
+                    <h4 className="text-xs font-bold text-amber-900">
+                      No Delivery Slots Available on {activeDateObj?.display_label || "this day"}
+                    </h4>
+                    <p className="text-[11px] text-amber-700 font-medium">
+                      {activeDateObj?.reason || "Deliveries are closed on this day. Please select another day from the list above."}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {activeDateObj.slots.map((slot) => {
+                      const isSlotSelected = selectedSlot?.name === slot.name && selectedSlot?.slot_label === slot.slot_label
+                      const isAvailable = slot.available !== false
+                      return (
+                        <button
+                          key={slot.full_label || `${slot.name}-${slot.slot_label}`}
+                          type="button"
+                          disabled={!isAvailable}
+                          onClick={() => {
+                            if (isAvailable) {
+                              setSelectedSlot(slot)
+                            }
+                          }}
+                          className={`p-3.5 rounded-2xl border text-left transition-all flex items-center justify-between gap-2.5 ${
+                            !isAvailable
+                              ? "bg-slate-50/80 border-slate-200/60 text-slate-400 cursor-not-allowed opacity-60"
+                              : isSlotSelected
+                              ? "bg-emerald-600 text-white border-emerald-600 shadow-md ring-2 ring-emerald-600/30 font-black cursor-pointer"
+                              : "bg-white border-slate-200/90 hover:border-emerald-500 hover:bg-emerald-50/20 text-slate-800 cursor-pointer shadow-3xs"
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs font-black">{slot.name}</p>
+                              {isSlotSelected && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
+                            </div>
+                            <p className={`text-[11px] font-semibold mt-0.5 ${isSlotSelected ? "text-emerald-100" : "text-slate-500"}`}>
+                              {slot.slot_label}
+                            </p>
+                            {slot.reason && !isAvailable && (
+                              <p className="text-[10px] text-amber-700 font-medium mt-1">{slot.reason}</p>
+                            )}
+                          </div>
+                          <div className="shrink-0">
+                            {isSlotSelected ? (
+                              <span className="w-6 h-6 rounded-full bg-white text-emerald-700 flex items-center justify-center shadow-xs">
+                                <Check className="w-3.5 h-3.5 stroke-[3]" />
+                              </span>
+                            ) : isAvailable ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                                Select
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                                Closed
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
 
             {/* Cart Items List */}
             <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-3xs divide-y divide-slate-100 space-y-4">
@@ -10280,61 +10487,6 @@ function QuickCommerceCartCheckout({
               </div>
             </div>
 
-            {/* (Donation box removed) */}
-
-            {/* Tip Your Delivery Partner Card */}
-            <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-3xs space-y-3">
-              <h3 className="text-xs sm:text-sm font-bold text-slate-900">Support your delivery partner</h3>
-              <p className="text-[11px] sm:text-xs text-slate-400 font-medium leading-relaxed">
-                Add a tip to show appreciation. 100% of the tip goes directly to your rider.
-              </p>
-              <div className="grid grid-cols-4 gap-2 pt-1">
-                {[
-                  { label: "₹20", val: 20, desc: "Say Thanks" },
-                  { label: "₹30", val: 30, desc: "Buy a Chai" },
-                  { label: "₹50", val: 50, desc: "Show Love" },
-                  { label: "Custom", val: "custom", desc: "Other" },
-                ].map((t) => {
-                  const isSelected = selectedTip === t.val
-                  return (
-                    <button
-                      key={t.label}
-                      type="button"
-                      onClick={() => {
-                        if (selectedTip === t.val) {
-                          setSelectedTip(null)
-                          setIsCustomTipOpen(false)
-                        } else {
-                          setSelectedTip(t.val)
-                          setIsCustomTipOpen(t.val === "custom")
-                        }
-                      }}
-                      className={`py-3 px-2 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 active:scale-95 ${isSelected
-                        ? "bg-slate-900 border-slate-900 text-white shadow-2xs"
-                        : "bg-slate-50 hover:bg-white border-slate-200 text-slate-700 hover:border-slate-350"
-                        }`}
-                    >
-                      <span className="text-sm font-bold">{t.label}</span>
-                      <span className="text-[9px] font-semibold text-slate-405">{t.desc}</span>
-                    </button>
-                  )
-                })}
-              </div>
-              {isCustomTipOpen && (
-                <div className="pt-2">
-                  <input
-                    type="number"
-                    min="0"
-                    value={customTip}
-                    onKeyDown={e => { if (['-', '+', 'e', 'E'].includes(e.key)) e.preventDefault() }}
-                    onChange={(e) => setCustomTip(e.target.value.replace(/[^0-9]/g, ''))}
-                    placeholder="Enter custom tip amount (₹)"
-                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400"
-                  />
-                </div>
-              )}
-            </div>
-
             {/* Cancellation Policy Card */}
             <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4.5 space-y-1.5 shadow-3xs">
               <h3 className="text-xs font-bold text-slate-800">Cancellation Policy</h3>
@@ -10387,12 +10539,14 @@ function QuickCommerceCartCheckout({
               <span className="text-[9px] font-black text-emerald-100 uppercase tracking-widest mt-1">TOTAL AMOUNT</span>
             </div>
             <div className="flex items-center gap-1.5 font-bold text-white transition-colors">
-              <span>{isSubmitting ? "Placing Order..." : `Proceed to Pay • ${vegTiming.deliveryDay} (6-8 PM)`}</span>
+              <span>{isSubmitting ? "Placing Order..." : `Proceed to Pay • ${activeDateObj?.display_label || "Scheduled"}`}</span>
               <ChevronRight className="w-5 h-5 text-white" />
             </div>
           </button>
         </div>
       </div>
+
+
 
       {/* Standard Swiggy-Style Select Service Address Drawer */}
       {isAddressScreenOpen && (
@@ -19257,6 +19411,7 @@ export function CustomCleaningPackageModal({
 
   const [showAcInspectionModal, setShowAcInspectionModal] = useState(false);
   const [activeAcInspectionItem, setActiveAcInspectionItem] = useState(null);
+  const [dynamicAcInspectionConfig, setDynamicAcInspectionConfig] = useState(null);
   const [dynamicAcInspectionFee, setDynamicAcInspectionFee] = useState(() => {
     try {
       const c = localStorage.getItem("calservices_ac_inspection_fee");
@@ -19271,12 +19426,15 @@ export function CustomCleaningPackageModal({
     async function loadDynamicFee() {
       try {
         const res = await fetch("/api/service-requests/ac-inspection/rate-card/").then((r) => r.json());
-        if (isMounted && res?.data?.diagnostic_fee != null) {
-          const fee = Number(res.data.diagnostic_fee);
-          setDynamicAcInspectionFee(fee);
-          try {
-            localStorage.setItem("calservices_ac_inspection_fee", String(fee));
-          } catch (_) {}
+        if (isMounted && res?.data) {
+          setDynamicAcInspectionConfig(res.data);
+          if (res.data.diagnostic_fee != null) {
+            const fee = Number(res.data.diagnostic_fee);
+            setDynamicAcInspectionFee(fee);
+            try {
+              localStorage.setItem("calservices_ac_inspection_fee", String(fee));
+            } catch (_) {}
+          }
         }
       } catch (e) {
         console.warn("[BookingPage] Failed to fetch dynamic AC inspection fee:", e);
@@ -19300,7 +19458,8 @@ export function CustomCleaningPackageModal({
 
     const inspectionCartItem = {
       id: inspectionCartId,
-      name: "AC Inspection",
+      name: dynamicAcInspectionConfig?.title || "AC Inspection & Diagnostic",
+      image: dynamicAcInspectionConfig?.image || "media/catalog/packages/appliance_cleaning_thumb.webp",
       price: unitPrice,
       quantity: qty,
       duration: "45 mins",
@@ -19384,17 +19543,36 @@ export function CustomCleaningPackageModal({
     badge: "₹199 Inspection",
     price: 199,
   };
-  const [acInspectionTile, setAcInspectionTile] = useState(AC_INSPECTION_TILE_DEFAULTS);
+  const [acInspectionTile, setAcInspectionTile] = useState(() => {
+    try {
+      const cached = localStorage.getItem("calservices_ac_inspection_config");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.is_active === false) {
+          return { ...AC_INSPECTION_TILE_DEFAULTS, visible: false };
+        }
+      }
+    } catch (_) {}
+    return AC_INSPECTION_TILE_DEFAULTS;
+  });
 
   useEffect(() => {
     apiRequest("/settings/homepage/")
       .then((res) => {
         const saved = res?.config?.ac_inspection_tile;
         if (saved && typeof saved === "object") {
-          setAcInspectionTile({ ...AC_INSPECTION_TILE_DEFAULTS, ...saved });
+          setAcInspectionTile((prev) => ({ ...AC_INSPECTION_TILE_DEFAULTS, ...saved, visible: prev.visible === false ? false : saved.visible !== false }));
         }
       })
       .catch((err) => console.warn("AC inspection tile config unavailable, using default tile config:", err?.message || err));
+
+    apiRequest("/settings/ac-inspection/config/")
+      .then((res) => {
+        if (res?.data && res.data.is_active === false) {
+          setAcInspectionTile((prev) => ({ ...prev, visible: false }));
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const handleSaveAcInspectionTile = async (field, value) => {

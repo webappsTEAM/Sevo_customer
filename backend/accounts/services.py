@@ -416,6 +416,9 @@ def complete_customer_profile(customer_id: int, full_name: str, email: Optional[
 
     update_fields = ['first_name', 'last_name', 'profile_complete']
 
+    if not (customer.phone or customer.mobile_number) and not phone:
+        raise ValidationError({"detail": "Mobile number is required to complete customer profile."})
+
     if email:
         try:
             clean_email = _normalize_email(email)

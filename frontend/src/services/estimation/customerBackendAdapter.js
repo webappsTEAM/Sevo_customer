@@ -63,24 +63,42 @@ export const customerBackendAdapter = {
    */
   async fetchEstimationService() {
     let fee = getDynamicEstimationFee();
+    let title = ESTIMATION_TITLE;
+    let subtitle = ESTIMATION_SUBTITLE;
+    let image = "";
+    let is_active = true;
+    let includes = INSPECTION_CARD_INCLUDES;
+    let ready = [];
+
     try {
       const res = await apiRequest("/service-requests/ac-inspection/rate-card/");
-      if (res?.data?.diagnostic_fee != null) {
-        fee = setDynamicEstimationFee(res.data.diagnostic_fee);
+      if (res?.data) {
+        if (res.data.diagnostic_fee != null) {
+          fee = setDynamicEstimationFee(res.data.diagnostic_fee);
+        }
+        if (res.data.title) title = res.data.title;
+        if (res.data.subtitle) subtitle = res.data.subtitle;
+        if (res.data.image) image = res.data.image;
+        if (res.data.is_active !== undefined) is_active = res.data.is_active;
+        if (Array.isArray(res.data.includes) && res.data.includes.length > 0) includes = res.data.includes;
+        if (Array.isArray(res.data.ready) && res.data.ready.length > 0) ready = res.data.ready;
       }
     } catch (_) {}
 
     return {
       id: "ac-inspection",
-      name: ESTIMATION_TITLE,
-      subtitle: ESTIMATION_SUBTITLE,
+      name: title,
+      subtitle: subtitle,
       price: fee,
       duration: ESTIMATION_DURATION,
+      image,
+      is_active,
       badge: "Diagnosis & Inspection",
       badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-200",
-      description: ESTIMATION_DESCRIPTION,
-      includes: INSPECTION_CARD_INCLUDES,
-      whatsIncluded: WHAT_IS_INCLUDED,
+      description: subtitle || ESTIMATION_DESCRIPTION,
+      includes: includes,
+      whatsIncluded: includes,
+      readyInstructions: ready,
       whatTechnicianChecks: WHAT_TECHNICIAN_CHECKS,
       howEstimationWorks: HOW_ESTIMATION_WORKS_STEPS,
       whatIsNotIncluded: WHAT_IS_NOT_INCLUDED,
