@@ -460,7 +460,7 @@ def compute_packers_movers_quote(
     """
     from .routing import get_route_eta
     try:
-        stops_n = max(0, int(extra_stops or 0))
+        stops_n = max(0, extra_stops or 0)
     except (TypeError, ValueError):
         stops_n = 0
     stop_rate = Decimal("0.00")
