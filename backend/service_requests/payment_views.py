@@ -90,6 +90,11 @@ def _verify_booking_ownership(request, sr):
     return token_matches or phone_matches
 
 
+def _wallet_part_payment_enabled():
+    from .services.gt_operations import ops
+    return bool(ops("allow_wallet_part_payment"))
+
+
 _LOGISTICS_CATEGORIES = ("goods_transport_truck", "goods_transport_two_wheeler", "packers_movers")
 
 
@@ -527,6 +532,7 @@ class PaymentConfigView(APIView):
             "online_available": gateway or bool(getattr(settings, "PAYMENT_SANDBOX_MODE", False)),
             "sandbox": (not gateway) and bool(getattr(settings, "PAYMENT_SANDBOX_MODE", False)),
             "key_id": settings.RAZORPAY_KEY_ID if gateway else "",
+            "wallet_part_payment": _wallet_part_payment_enabled(),
         })
 
 
@@ -571,6 +577,12 @@ class PaymentWalletPayView(APIView):
 
                 wallet = CustomerWallet.objects.filter(user=request.user).first()
                 balance = wallet.balance if wallet else Decimal("0")
+                part_ok = False
+                if balance < amount_due and balance > 0:
+                    from .services.gt_operations import ops
+                    part_ok = bool(ops("allow_wallet_part_payment")) and str(request.data.get("allow_partial")).lower() in ("1", "true", "yes")
+                if part_ok:
+                    return self._part_pay(request, sr, balance, amount_due)
                 if balance < amount_due:
                     return Response({
                         "success": False,
@@ -595,6 +607,132 @@ class PaymentWalletPayView(APIView):
             return _error("Booking not found.", 404)
         except ValidationError as e:
             return _error(str(getattr(e, "detail", e)))
+
+
+    def _part_pay(self, request, sr, balance, amount_due):
+        """Wallet + online split: spend the whole wallet now; the remainder is an ordinary online
+        order (PaymentInitiateView._amount_due already subtracts recorded payments). The booking
+        is only confirmed and dispatched when the remainder lands."""
+        from .services import debit_wallet
+        from .models import WalletTransaction
+        ref = f"wallet_{uuid.uuid4().hex[:16]}"
+        tx = debit_wallet(
+            request.user, balance, WalletTransaction.Reason.BOOKING_DEBIT,
+            note=f"Part payment for booking {sr.request_id}", actor=request.user,
+            reference_type="booking", reference_id=sr.request_id,
+        )
+        Payment.objects.create(
+            customer=sr.customer, service_request=sr, razorpay_order_id=ref,
+            razorpay_payment_id=f"WALLET_{tx.id}", amount=balance, currency="INR",
+            status=ServiceRequest.PaymentStatus.PAID, gateway="wallet",
+        )
+        remaining = (amount_due - balance).quantize(Decimal("0.01"))
+        return _success(
+            data={"partial": True, "wallet_paid": float(balance), "remaining_due": float(remaining),
+                  "request_id": sr.request_id, "booking_status": sr.status},
+            message=f"Rs. {balance} paid from your wallet. Pay the remaining Rs. {remaining} online to confirm the booking.",
+        )
+
+
+def _topup_limits():
+    from .services.gt_operations import ops
+    return bool(ops("wallet_topup_enabled")), ops("wallet_max_topup"), ops("wallet_max_balance")
+
+
+class WalletTopUpInitiateView(APIView):
+    """POST /api/wallet/topup/  {"amount": "500"} -> a gateway order for a wallet recharge.
+
+    Off until Admin enables it. The per-recharge limit and the wallet-balance cap are Admin values;
+    both are checked here (and again at verification) so the client can never decide them."""
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "payment"
+
+    def post(self, request):
+        from .models import WalletTopUp
+        from .services import get_or_create_wallet
+        enabled, max_topup, max_balance = _topup_limits()
+        if not enabled:
+            return _error("Adding money to the wallet is not available right now.", 403)
+        try:
+            amount = Decimal(str(request.data.get("amount"))).quantize(Decimal("0.01"))
+        except Exception:
+            return _error("Enter a valid amount.")
+        if amount <= 0:
+            return _error("Enter an amount greater than zero.")
+        if max_topup is not None and amount > Decimal(str(max_topup)):
+            return _error(f"You can add at most Rs. {max_topup} at a time.")
+        balance = get_or_create_wallet(request.user).balance
+        if max_balance is not None and balance + amount > Decimal(str(max_balance)):
+            room = max(Decimal("0"), Decimal(str(max_balance)) - balance)
+            return _error(f"Your wallet can hold at most Rs. {max_balance}. You can add up to Rs. {room}.")
+
+        gateway = bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
+        if gateway:
+            try:
+                import razorpay
+                client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+                order_id = client.order.create({"amount": int(amount * 100), "currency": "INR",
+                                                "receipt": f"wallet-{request.user.id}-{uuid.uuid4().hex[:8]}"})["id"]
+            except Exception:
+                logger.exception("Razorpay wallet top-up order failed for user %s", request.user.id)
+                return _error("Could not start payment. Please try again.", 502)
+        elif getattr(settings, "PAYMENT_SANDBOX_MODE", False):
+            order_id = f"order_sandbox_{uuid.uuid4().hex[:16]}"
+        else:
+            return _error("Online payment is not available right now.", 503)
+        WalletTopUp.objects.create(customer=request.user, order_id=order_id, amount=amount,
+                                   gateway="razorpay" if gateway else "sandbox")
+        return _success(data={"order_id": order_id, "amount": float(amount), "currency": "INR",
+                              "key_id": settings.RAZORPAY_KEY_ID if gateway else "", "sandbox": not gateway},
+                        message="Top-up order created.")
+
+
+class WalletTopUpVerifyView(APIView):
+    """POST /api/wallet/topup/verify/ {"order_id","payment_id","signature"} -> credits the wallet once."""
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "payment"
+
+    def post(self, request):
+        from .models import CustomerWallet, WalletTopUp, WalletTransaction
+        from .services import credit_wallet
+        order_id = request.data.get("order_id")
+        payment_id = request.data.get("payment_id")
+        signature = request.data.get("signature") or request.data.get("razorpay_signature")
+        if not order_id:
+            return _error("order_id is required.")
+        with transaction.atomic():
+            top = WalletTopUp.objects.select_for_update().filter(order_id=order_id, customer=request.user).first()
+            if not top:
+                return _error("Unknown top-up order.", 404)
+            if top.status == WalletTopUp.Status.PAID:
+                return _success(data={"status": "PAID", "amount": float(top.amount)}, message="Top-up already credited.")
+            gateway = bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
+            if gateway:
+                if not (payment_id and signature):
+                    return _error("payment_id and signature are required.")
+                expected = hmac.new(settings.RAZORPAY_KEY_SECRET.encode(), f"{order_id}|{payment_id}".encode(), hashlib.sha256).hexdigest()
+                if not hmac.compare_digest(expected.encode(), str(signature).encode()):
+                    top.status = WalletTopUp.Status.FAILED
+                    top.save(update_fields=["status", "updated_at"])
+                    return _error("Payment verification failed.", 400)
+            elif not getattr(settings, "PAYMENT_SANDBOX_MODE", False):
+                return _error("Online payment is not available right now.", 503)
+            # The cap is enforced again: two orders opened back to back must not both fit.
+            _, _, max_balance = _topup_limits()
+            wallet = CustomerWallet.objects.filter(user=request.user).first()
+            balance = wallet.balance if wallet else Decimal("0")
+            if max_balance is not None and balance + top.amount > Decimal(str(max_balance)):
+                top.status = WalletTopUp.Status.FAILED
+                top.save(update_fields=["status", "updated_at"])
+                return _error("This top-up would take your wallet above its limit. It was not credited; contact support for a refund.", 409)
+            credit_wallet(request.user, top.amount, WalletTransaction.Reason.TOPUP,
+                          note="Wallet recharge", reference_type="wallet_topup", reference_id=top.order_id)
+            top.status = WalletTopUp.Status.PAID
+            top.payment_id = payment_id or f"SANDBOX_{uuid.uuid4().hex[:12].upper()}"
+            top.save(update_fields=["status", "payment_id", "updated_at"])
+        return _success(data={"status": "PAID", "amount": float(top.amount)}, message="Money added to your wallet.")
 
 
 # ─── Admin Payment Management ─────────────────────────────────────────────────
@@ -904,6 +1042,11 @@ class InvoiceDownloadView(APIView):
              if isinstance(i, dict) and isinstance(i.get("logistics_snapshot"), dict)),
             None,
         )
+        # A PTL quote can be revised before dispatch; the booking's fare_breakdown is the
+        # current one, so it wins over the snapshot copied into cart_data at booking time.
+        _fb = getattr(sr, "fare_breakdown", None)
+        if isinstance(_fb, dict) and _fb.get("pricing_basis") == "ptl_per_kg":
+            gt_snapshot = _fb
         if gt_snapshot:
             # Goods transport: itemise the locked quote instead of one opaque
             # "Service" line. Rows come only from the stored snapshot, so the
@@ -940,16 +1083,44 @@ class InvoiceDownloadView(APIView):
                 other = pm_subtotal - sum((a for _, a in rows), _D("0"))
                 if abs(other) >= _D("0.01"):
                     rows.append(("Other charges", other))
-                gst_row = (f"GST ({pm.get('gst_rate') or ''}):", _p("gst_amount"), pm_subtotal)
+                # Porter-parity P&M add-ons (rope pulling, appliance install/uninstall,
+                # electrician, carpenter, labour-only) -- server-priced, one line per add-on,
+                # added after GST since the add-on total is charged on top of the GST-inclusive
+                # quote (see _apply_pm_addons in logistics_pricing.py), not taxed itself.
+                addon_total = _D("0")
+                for addon in (pm.get("pm_addons") or []):
+                    if not isinstance(addon, dict):
+                        continue
+                    try:
+                        amt = _D(str(addon.get("amount") or "0"))
+                    except Exception:
+                        amt = _D("0")
+                    if amt <= 0:
+                        continue
+                    qty = addon.get("quantity") or 1
+                    label = f"{addon.get('name') or addon.get('code')}" + (f" x{qty}" if qty and int(qty) > 1 else "")
+                    rows.append((label, amt))
+                    addon_total += amt
+                gst_row = (f"GST ({pm.get('gst_rate') or ''}):", _p("gst_amount"), pm_subtotal + addon_total)
             else:
                 km = gt_snapshot.get("chargeable_km") or gt_snapshot.get("distance_km") or "0"
-                rows = [
+                if gt_snapshot.get("pricing_basis") == "ptl_per_kg":
+                    # Light PTL: per-kg freight (rate x chargeable weight), optional Load Assist.
+                    _cw = gt_snapshot.get("chargeable_weight_kg") or gt_snapshot.get("declared_weight_kg") or "0"
+                    _dw = gt_snapshot.get("declared_weight_kg") or _cw
+                    _min_note = f", min {_cw}" if str(_cw) != str(_dw) else ""
+                    rows = [
+                        (f"Part-load freight - {_dw} kg{_min_note} x Rs.{gt_snapshot.get('rate_per_kg') or 0}/kg", _amt("freight_charge")),
+                        ("Load Assist", _amt("load_assist_fee")),
+                    ]
+                else:
+                    rows = [
                     (f"Base fare - {gt_snapshot.get('tier_name') or 'Vehicle'}", _amt("base_fare")),
                     (f"Distance charge ({km} km)", _amt("distance_charge")),
                     (f"Additional stops ({gt_snapshot.get('additional_stops') or 0})", _amt("additional_stop_charge")),
                     ("Loading / unloading", _amt("loading_unloading")),
                     ("Special handling", _amt("special_handling_charge")),
-                ]
+                    ]
                 rows = [(n, a) for n, a in rows if a > 0]
                 # A coupon and transit-insurance premium are part of what was charged; show them as
                 # their own lines instead of letting them masquerade as a fare adjustment.

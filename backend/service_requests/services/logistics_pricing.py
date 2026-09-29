@@ -448,7 +448,9 @@ def quote_logistics_fare(
 
     now = timezone.now()
     created_at = now.isoformat()
-    expires_at = (now + timedelta(minutes=15)).isoformat()
+    from .gt_operations import ops
+    _validity = int(ops("gt_quote_validity_minutes"))
+    expires_at = (now + timedelta(minutes=_validity)).isoformat()
     quote_id = f"gtq_{uuid.uuid4().hex[:16]}"
 
     # Canonicalize waypoints for cryptographic quote binding
@@ -554,7 +556,7 @@ def quote_logistics_fare(
     )
     cached_data["breakdown"] = dict(breakdown)
     try:
-        cache.set(f"gt_quote_{quote_id}", cached_data, timeout=900)
+        cache.set(f"gt_quote_{quote_id}", cached_data, timeout=max(_validity * 60, 60))
     except Exception as cache_err:
         logger.warning("Could not cache logistics quote %s: %s", quote_id, cache_err)
 
@@ -712,6 +714,28 @@ def classification_only_snapshot(*, service_category, tier, total, source):
     )
 
 
+def _apply_pm_addons(base_total, breakdown, cart_data, city):
+    """Adds Porter-parity P&M add-ons (rope pulling, appliance install/uninstall, electrician,
+    carpenter, labour-only) on top of a verified P&M quote/fare. Server-priced only -- the
+    client's cart_data carries only codes and quantities, never a price."""
+    from .pm_addons import price_pm_addons
+    total_cft = 0
+    if isinstance(breakdown, dict):
+        total_cft = (breakdown.get("inventory_summary") or {}).get("effective_cft") or (breakdown.get("inventory_summary") or {}).get("total_cft") or 0
+    addon_total, addon_items, addon_error = price_pm_addons(cart_data, city, total_cft)
+    if addon_error:
+        raise UnresolvedLogisticsFareError(addon_error)
+    if addon_items and isinstance(breakdown, dict):
+        breakdown = dict(breakdown)
+        breakdown["pm_addons"] = addon_items
+        breakdown["pm_addons_total"] = str(addon_total)
+        if isinstance(breakdown.get("pricing"), dict):
+            breakdown["pricing"] = dict(breakdown["pricing"])
+            breakdown["pricing"]["pm_addons"] = addon_items
+            breakdown["pricing"]["pm_addons_total"] = str(addon_total)
+    return _money(base_total + addon_total), breakdown
+
+
 def resolve_logistics_fare_v2(
     *,
     service_category,
@@ -727,9 +751,16 @@ def resolve_logistics_fare_v2(
     waypoints=None,
     move_date=None,
     move_time=None,
+    booking_mode=None,
+    declared_weight_kg=None,
+    load_assist=None,
 ):
     """
     GT-B-01. Returns (fare, breakdown_or_None).
+
+    booking_mode="ptl" routes a goods_transport_truck booking to the Light PTL
+    per-kg pricer (services/ptl_pricing.py), the same way packers_movers has
+    its own branch below. Any other value keeps today's Spot behaviour.
     """
     if service_category not in LOGISTICS_CATEGORIES:
         return submitted_amount, None
@@ -742,6 +773,23 @@ def resolve_logistics_fare_v2(
     # never produces a fare, and before the flat paths too, which is where
     # the lane-only case lives.
     assert_gt_booking_is_classifiable(service_category, logistics_tier)
+
+    if str(booking_mode or "").strip().lower() == "ptl":
+        from .ptl_pricing import resolve_ptl_fare
+        return resolve_ptl_fare(
+            service_category=service_category,
+            logistics_tier=logistics_tier,
+            logistics_lane=logistics_lane,
+            submitted_amount=submitted_amount,
+            pickup_lat=pickup_lat,
+            pickup_lng=pickup_lng,
+            drop_lat=drop_lat,
+            drop_lng=drop_lng,
+            cart_data=cart_data,
+            declared_weight_kg=declared_weight_kg,
+            load_assist=load_assist,
+            waypoints=waypoints,
+        )
 
     if service_category in DISTANCE_PRICED_CATEGORIES:
         submitted_quote_id = None
@@ -1116,9 +1164,12 @@ def resolve_logistics_fare_v2(
 
         if quote_id:
             from .packers_movers_pricing import verify_packers_movers_quote
+            # submitted_total is checked below, AFTER add-ons are priced in -- add-ons are not
+            # part of the signed quote, so comparing the client's total (which includes them)
+            # against the quote-only total here would reject every add-on booking.
             is_valid, cached_quote, err_msg = verify_packers_movers_quote(
                 quote_id,
-                submitted_total=submitted_amount,
+                submitted_total=None,
                 current_request=current_req,
             )
             if not is_valid:
@@ -1128,7 +1179,16 @@ def resolve_logistics_fare_v2(
                     raise UnresolvedLogisticsFareError(
                         f"Quote tier mismatch: quote was generated for tier #{cached_quote.get('tier_id')}, but tier #{tier_id} was requested."
                     )
-                return _money(cached_quote["total"]), cached_quote
+                final_amount, final_breakdown = _apply_pm_addons(_money(cached_quote["total"]), cached_quote, cart_data, city)
+                if submitted_amount is not None:
+                    try:
+                        if _money(submitted_amount) != final_amount:
+                            raise UnresolvedLogisticsFareError(
+                                f"Submitted total \u20b9{_money(submitted_amount)} does not match verified server total \u20b9{final_amount} (quote + add-ons)."
+                            )
+                    except (InvalidOperation, TypeError):
+                        raise UnresolvedLogisticsFareError(f"Invalid total amount format: '{submitted_amount}'.")
+                return final_amount, final_breakdown
 
         # P1-7: If quote_id is absent, we must have a selected ServiceTier to recompute.
         # Silently auto-selecting a different vehicle or proceeding without a tier is prohibited.
@@ -1180,7 +1240,7 @@ def resolve_logistics_fare_v2(
                 )
             if computed_quote.get("total") is None:
                 raise UnresolvedLogisticsFareError("Packers & Movers booking cannot be finalized without an authoritative fare.")
-            return _money(computed_quote["total"]), computed_quote
+            return _apply_pm_addons(_money(computed_quote["total"]), computed_quote, cart_data, city)
 
     # Fall through to the original flat resolver rather than duplicating
     # its lane-beats-tier ordering and its

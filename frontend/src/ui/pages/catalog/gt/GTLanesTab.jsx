@@ -9,7 +9,7 @@ import {
 } from "../../../../api/logisticsAdminService.js"
 
 const EMPTY_LANE_FORM = {
-  category: "goods_transport_truck",
+  category: "truck",
   city: "Hosur",
   destination_label: "",
   destination_latitude: "",
@@ -17,14 +17,15 @@ const EMPTY_LANE_FORM = {
   distance_km: "",
   eta_label: "",
   fare: "",
+  ptl_rate_per_kg: "",
   currency: "INR",
   order: 0,
   is_active: true,
 }
 
 const CATEGORY_OPTIONS = [
-  { value: "goods_transport_truck", label: "Truck / Mini Truck" },
-  { value: "goods_transport_two_wheeler", label: "2-Wheeler Courier" },
+  { value: "truck", label: "Truck / Mini Truck" },
+  { value: "two_wheeler", label: "2-Wheeler Courier" },
   { value: "packers_movers", label: "Packers & Movers" },
 ]
 
@@ -65,7 +66,7 @@ export function GTLanesTab({ showToast }) {
     setEditingLane("new")
     setFormData({
       ...EMPTY_LANE_FORM,
-      category: selectedCat || "goods_transport_truck",
+      category: selectedCat || "truck",
       city: selectedCity || "Hosur",
     })
     setFormError("")
@@ -75,7 +76,7 @@ export function GTLanesTab({ showToast }) {
   const openEditModal = (lane) => {
     setEditingLane(lane)
     setFormData({
-      category: lane.category || "goods_transport_truck",
+      category: lane.category || "truck",
       city: lane.city || "Hosur",
       destination_label: lane.destination_label || "",
       destination_latitude: lane.destination_latitude != null ? String(lane.destination_latitude) : "",
@@ -83,6 +84,7 @@ export function GTLanesTab({ showToast }) {
       distance_km: lane.distance_km != null ? String(lane.distance_km) : "",
       eta_label: lane.eta_label || "",
       fare: lane.fare != null ? String(lane.fare) : "",
+      ptl_rate_per_kg: lane.ptl_rate_per_kg != null ? String(lane.ptl_rate_per_kg) : "",
       currency: lane.currency || "INR",
       order: lane.order ?? 0,
       is_active: lane.is_active !== false,
@@ -114,6 +116,7 @@ export function GTLanesTab({ showToast }) {
       distance_km: formData.distance_km ? Number(formData.distance_km) : null,
       eta_label: formData.eta_label.trim(),
       fare: Number(formData.fare),
+      ptl_rate_per_kg: formData.ptl_rate_per_kg ? Number(formData.ptl_rate_per_kg) : null,
       currency: formData.currency,
       order: Number(formData.order) || 0,
       is_active: formData.is_active,
@@ -258,7 +261,7 @@ export function GTLanesTab({ showToast }) {
                     </td>
                     <td className="py-3 px-4 text-slate-600">
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
-                        {lane.category === "goods_transport_truck" ? "Truck" : lane.category === "goods_transport_two_wheeler" ? "2-Wheeler" : "Packers & Movers"}
+                        {lane.category_display || (lane.category === "truck" ? "Truck" : lane.category === "two_wheeler" ? "2-Wheeler" : "Packers & Movers")}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-slate-600">
@@ -399,6 +402,16 @@ export function GTLanesTab({ showToast }) {
                   value={formData.eta_label}
                   onChange={(e) => setFormData({ ...formData, eta_label: e.target.value })}
                   placeholder="~1.5 hrs"
+                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Part Truck Load rate (₹/kg, blank = platform rate)</label>
+                <input
+                  type="number" min="0" step="any"
+                  value={formData.ptl_rate_per_kg}
+                  onChange={(e) => setFormData({ ...formData, ptl_rate_per_kg: e.target.value })}
+                  placeholder="e.g. 4.50"
                   className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500"
                 />
               </div>

@@ -143,6 +143,109 @@ def _route_coverage_for(request, category, tier, pickup_lat, pickup_lng, drop_la
     )
 
 
+class PTLConfigView(APIView):
+    """
+    GET /api/logistics/ptl/config/?city=hosur
+
+    Light PTL (Part Truck Load) booking page data: whether PTL is offered, the admin rate
+    card, the ptl_eligible (4W+) vehicles and PTL-priced lanes for the city, and the fixed
+    customer-loads rule. Slots come from /api/logistics/slots/?category=ptl&city=...
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from service_requests.models import get_gt_ptl_policy
+        from service_requests.services.ptl_pricing import eligible_tiers
+
+        city = (request.query_params.get("city") or "").strip()
+        policy = get_gt_ptl_policy()
+        enabled = bool(policy and policy.is_enabled and policy.rate_per_kg and policy.rate_per_kg > 0)
+        lanes = Lane.objects.filter(is_active=True, category="truck", ptl_rate_per_kg__isnull=False)
+        if city:
+            lanes = lanes.filter(city__iexact=city)
+        tiers = list(eligible_tiers(city)) if enabled else []
+        return Response({
+            "success": True,
+            "enabled": enabled,
+            "rate_per_kg": str(policy.rate_per_kg) if enabled else None,
+            "minimum_chargeable_weight_kg": str(policy.minimum_chargeable_weight_kg) if enabled else None,
+            "minimum_fare": str(policy.minimum_fare) if enabled and policy.minimum_fare is not None else None,
+            "min_advance_days": policy.min_advance_days if enabled else None,
+            "load_assist_offered": bool(enabled and policy.load_assist_enabled),
+            "load_assist_fee": str(policy.load_assist_fee) if enabled and policy.load_assist_enabled else None,
+            "loading_responsibility": "customer",
+            "loading_notice": (
+                "Part Truck Load is priced per kg. You load the goods at pickup and unload them at drop; "
+                "the driver does not load or unload."
+            ),
+            "tiers": ServiceTierSerializer(tiers, many=True).data,
+            "lanes": [
+                {**LaneSerializer(l).data, "ptl_rate_per_kg": str(l.ptl_rate_per_kg)} for l in (lanes if enabled else [])
+            ],
+        })
+
+
+class PTLQuoteView(APIView):
+    """
+    POST /api/logistics/ptl/quote/
+    Body: tier_id, lane_id?, declared_weight_kg, pickup_latitude/longitude,
+          drop_latitude/longitude, load_assist?
+    Returns the server-authoritative per-kg quote (quote_id, quote_hash, expires_at, total).
+    The booking must echo quote_id/quote_hash/expires_at in cart_data and the same total.
+    """
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "logistics_quote"
+
+    def post(self, request):
+        from service_requests.services.ptl_pricing import PTLError, PTL_SERVICE_CATEGORY, compute_ptl_quote, _truthy
+
+        data = request.data if isinstance(request.data, dict) else {}
+        try:
+            tier = ServiceTier.objects.filter(id=int(data.get("tier_id")), is_active=True).first()
+        except (TypeError, ValueError):
+            tier = None
+        lane = None
+        if data.get("lane_id") not in (None, ""):
+            try:
+                lane = Lane.objects.filter(id=int(data.get("lane_id"))).first()
+            except (TypeError, ValueError):
+                lane = None
+            if lane is None:
+                return Response({"success": False, "error_code": "PTL_LANE_INVALID",
+                                 "message": "The selected route was not found."}, status=status.HTTP_400_BAD_REQUEST)
+
+        def _f(*keys):
+            for k in keys:
+                v = data.get(k)
+                if v not in (None, ""):
+                    try:
+                        return Decimal(str(v))
+                    except (InvalidOperation, ValueError):
+                        return None
+            return None
+
+        p_lat, p_lng = _f("pickup_latitude", "pickup_lat"), _f("pickup_longitude", "pickup_lng")
+        d_lat, d_lng = _f("drop_latitude", "drop_lat"), _f("drop_longitude", "drop_lng")
+        try:
+            if tier is not None and None not in (p_lat, p_lng, d_lat, d_lng):
+                coverage = _route_coverage_for(request, PTL_SERVICE_CATEGORY, tier, p_lat, p_lng, d_lat, d_lng)
+                if not coverage.allowed:
+                    return Response({"success": False, "error_code": coverage.error_code,
+                                     "failed_point": coverage.failed_point, "message": coverage.message},
+                                    status=status.HTTP_400_BAD_REQUEST)
+            quote = compute_ptl_quote(
+                tier=tier, lane=lane, declared_weight_kg=data.get("declared_weight_kg"),
+                pickup_lat=p_lat, pickup_lng=p_lng, drop_lat=d_lat, drop_lng=d_lng,
+                load_assist=_truthy(data.get("load_assist")),
+            )
+        except PTLError as e:
+            return Response({"success": False, "error_code": e.code, "message": str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        from service_requests.views import _jsonable_fare_breakdown
+        return Response({"success": True, "quote": _jsonable_fare_breakdown(quote)})
+
+
 class LogisticsQuoteView(APIView):
     """
     POST /api/logistics/quote/
@@ -404,7 +507,8 @@ class LogisticsQuoteView(APIView):
             now = timezone.now()
             quote_id = f"gtq_{uuid.uuid4().hex[:16]}"
             created_at = now.isoformat()
-            expires_at = (now + timedelta(minutes=15)).isoformat()
+            from service_requests.services.gt_operations import ops
+            expires_at = (now + timedelta(minutes=int(ops("gt_quote_validity_minutes")))).isoformat()
             return success_response(data={
                 "quotable": True,
                 "quote_id": quote_id,
@@ -735,6 +839,31 @@ class PackersMoversQuoteView(APIView):
         })
 
 
+class PackersMoversAddOnsView(APIView):
+    """
+    GET /api/logistics/packers-movers/addons/?city=Hosur
+
+    Server-priced Porter-parity P&M add-on catalogue (rope pulling, appliance
+    install/uninstall, electrician, carpenter, labour-only) for the booking wizard to display
+    and let the customer select; the actual charge is always recomputed server-side at booking
+    time from this same table (see service_requests/services/pm_addons.py).
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from .models import PMAddOnService
+        from django.db.models import Q
+        city = (request.query_params.get("city") or "").strip()
+        qs = PMAddOnService.objects.filter(is_active=True)
+        if city:
+            qs = qs.filter(Q(city="") | Q(city__iexact=city))
+        return success_response(data=[{
+            "code": a.code, "name": a.name, "description": a.description,
+            "pricing_mode": a.pricing_mode, "unit_price": str(a.unit_price),
+            "max_quantity": a.max_quantity, "is_labour_only": a.is_labour_only,
+        } for a in qs])
+
+
 class PackersMoversInventoryView(APIView):
     """
     GET /api/logistics/packers-movers/inventory/
@@ -833,8 +962,22 @@ class LogisticsSlotAvailabilityView(APIView):
             .order_by("order", "start_time")
         )
 
+        is_ptl = category.strip().lower() == "ptl"
+        ptl_date_err = None
+        if is_ptl:
+            # Light PTL runs only on admin-configured slots: no fallback grid, and a blank-city
+            # query sees only all-city slots (same rule as the booking-time check).
+            from service_requests.services.ptl_pricing import PTLError, get_policy, ptl_slots
+            db_slots = list(ptl_slots(city))
+            try:
+                _earliest = now.date() + datetime.timedelta(days=int(get_policy().min_advance_days or 0))
+                if target_date < _earliest:
+                    ptl_date_err = f"Part Truck Load is booked in advance. The earliest pickup date is {_earliest.isoformat()}."
+            except PTLError as _e:
+                ptl_date_err = str(_e)
+
         groups_map = {}
-        if db_slots:
+        if db_slots or is_ptl:
             for s in db_slots:
                 groups_map.setdefault(s.group, []).append({
                     "id": s.id,
@@ -878,14 +1021,23 @@ class LogisticsSlotAvailabilityView(APIView):
                     service_category=category,
                 )
                 
+                if is_ptl and not err:
+                    err = ptl_date_err
                 # Check concurrent capacity
                 cap = item.get("capacity") or 10
                 if not err and cap > 0:
-                    booked_count = ServiceRequest.objects.filter(
+                    if is_ptl:
+                        from service_requests.services.ptl_pricing import PTL_MODE, SLOT_OCCUPYING_STATUSES
+                        booked_count = ServiceRequest.objects.filter(
+                            logistics_booking_mode=PTL_MODE, preferred_date=target_date,
+                            preferred_time__iexact=slot_label, status__in=SLOT_OCCUPYING_STATUSES,
+                        ).count()
+                    else:
+                        booked_count = ServiceRequest.objects.filter(
                         preferred_date=target_date,
                         preferred_time=slot_label,
                         status__in=["new_request", "assigned", "accepted", "in_progress", "scheduled"]
-                    ).count()
+                        ).count()
                     if booked_count >= cap:
                         err = f"Slot is fully booked ({booked_count}/{cap} bookings filled)."
 

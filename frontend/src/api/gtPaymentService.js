@@ -61,8 +61,11 @@ async function verify(bookingId, trackingToken, payload) {
 export async function settleBookingPayment({ bookingId, trackingToken, method, prefill = {} }) {
   try {
     if (method === "wallet") {
-      await apiRequest("/payment/wallet-pay/", { method: "POST", body: { booking_id: bookingId } })
-      return { ok: true }
+      // allow_partial only takes effect when Admin enabled the wallet + online split; otherwise the
+      // server still requires the wallet to cover the whole amount.
+      const w = await apiRequest("/payment/wallet-pay/", { method: "POST", body: { booking_id: bookingId, allow_partial: true } })
+      if (!(w?.data || w)?.partial) return { ok: true }
+      // wallet spent; fall through and pay only the remainder online
     }
 
     const res = await apiRequest("/payment/initiate/", {
@@ -109,5 +112,45 @@ export async function settleBookingPayment({ bookingId, trackingToken, method, p
     })
   } catch (err) {
     return { ok: false, message: extractApiErrorMessage(err, "Payment could not be started. Please try again.") }
+  }
+}
+
+/**
+ * Add money to the SEVO wallet. Amount limits are Admin values checked by the server; the client
+ * only shows them. @returns {Promise<{ok: boolean, message?: string, cancelled?: boolean}>}
+ */
+export async function topUpWallet(amount) {
+  try {
+    const res = await apiRequest("/wallet/topup/", { method: "POST", body: { amount: String(amount) } })
+    const order = res?.data || res
+    const confirm = (extra) => apiRequest("/wallet/topup/verify/", { method: "POST", body: { order_id: order.order_id, ...extra } })
+    if (order.sandbox) {
+      await confirm({})
+      return { ok: true }
+    }
+    await loadCheckoutScript()
+    return await new Promise((resolve) => {
+      const rzp = new window.Razorpay({
+        key: order.key_id,
+        amount: Math.round(Number(order.amount) * 100),
+        currency: order.currency || "INR",
+        order_id: order.order_id,
+        name: "SEVO",
+        description: "Add money to wallet",
+        handler: async (r) => {
+          try {
+            await confirm({ payment_id: r.razorpay_payment_id, signature: r.razorpay_signature })
+            resolve({ ok: true })
+          } catch (err) {
+            resolve({ ok: false, message: extractApiErrorMessage(err, "We could not confirm your payment.") })
+          }
+        },
+        modal: { ondismiss: () => resolve({ ok: false, cancelled: true, message: "Payment was not completed." }) },
+      })
+      rzp.on?.("payment.failed", (r) => resolve({ ok: false, message: r?.error?.description || "Payment failed. Please try again." }))
+      rzp.open()
+    })
+  } catch (err) {
+    return { ok: false, message: extractApiErrorMessage(err, "Could not add money. Please try again.") }
   }
 }

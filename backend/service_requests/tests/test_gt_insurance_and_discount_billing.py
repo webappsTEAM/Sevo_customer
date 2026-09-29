@@ -86,7 +86,7 @@ class InsurancePolicyOverrideTests(TestCase):
         from service_requests.services.insurance import insurance_terms
         with override_settings(INSURANCE_RATE="0.02", INSURANCE_MAX_LIABILITY="500000"):
             self.assertEqual(insurance_terms("10000"), (Decimal("200.00"), Decimal("10000.00")))
-            p = GTInsurancePolicy.objects.create(premium_rate=Decimal("0.0100"), max_liability=Decimal("8000"))
+            p = GTInsurancePolicy.objects.create(premium_percent=Decimal("1"), max_liability=Decimal("8000"))
             self.assertEqual(insurance_terms("10000"), (Decimal("100.00"), Decimal("8000.00")))
             p.is_offered = False; p.save()
             self.assertEqual(insurance_terms("10000"), (None, None))

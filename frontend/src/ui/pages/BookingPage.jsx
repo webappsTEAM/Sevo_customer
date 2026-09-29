@@ -25,6 +25,7 @@ import { setCustomerSelectedAddress, getCustomerSelectedAddress, getCustomerLoca
 import { routes } from "../routes.js"
 import { CATEGORIES } from "./categoriesData.js"
 import { apiRequest, extractApiErrorMessage, API_BASE_URL } from "../../api/client.js"
+import WalletTopUpCard from "../components/WalletTopUpCard.jsx"
 import { resetDailyEssentialsCartCache } from "../../services/dailyEssentialsCartSync.js"
 import { hasPendingDailyEssentialsCart, hasPendingServicesCart } from "../../services/combinedCartCheck.js"
 import { CombinedCheckoutConfirmModal } from "../components/CombinedCheckoutConfirmModal.jsx"
@@ -7782,6 +7783,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                     {BOOKING_CURRENCY_SYMBOL}{Number(walletData?.balance || 0).toFixed(2)}
                   </div>
                 </div>
+                <WalletTopUpCard topup={walletData?.topup} onDone={() => apiRequest("/wallet/", { method: "GET" }).then((res) => res?.data && setWalletData(res.data)).catch(console.error)} />
                 <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', marginBottom: 10 }}>Transaction History</div>
                 {!walletData?.transactions || walletData.transactions.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', background: '#f8fafc', borderRadius: 20, border: '1px solid #e2e8f0' }}>

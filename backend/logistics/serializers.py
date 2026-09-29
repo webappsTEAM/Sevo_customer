@@ -14,7 +14,7 @@ class ServiceTierSerializer(serializers.ModelSerializer):
             "id", "category", "category_display", "vehicle_class", "city", "slug", "name",
             "weight_class", "capacity_label", "dimensions_label", "description",
             "starting_price", "currency", "includes", "icon", "image", "order",
-            "max_weight_kg", "max_cft",
+            "max_weight_kg", "max_cft", "ptl_eligible",
             "duration", "updated_at",
         ]
 
@@ -53,6 +53,7 @@ class LaneSerializer(serializers.ModelSerializer):
             "id", "category", "category_display", "city", "destination_label",
             "destination_latitude", "destination_longitude",
             "distance_km", "eta_label", "fare", "currency", "order",
+            "ptl_rate_per_kg",
         ]
 
 
@@ -102,6 +103,8 @@ class ServiceTierPricingSerializer(serializers.ModelSerializer):
             "includes_configured",
             # capacity
             "max_weight_kg", "max_cft",
+            # Light PTL eligibility (admin opt-in; 2W/3W always refused at booking)
+            "ptl_eligible",
             # pricing
             "starting_price", "base_fare", "per_km_rate", "free_km",
             "minimum_fare", "loading_unloading_charge", "additional_stop_charge",
@@ -290,3 +293,15 @@ class AdminLogisticsSlotSerializer(serializers.ModelSerializer):
 
 
 
+
+
+class PMAddOnServiceSerializer(serializers.ModelSerializer):
+    class Meta:
+        from .models import PMAddOnService
+        model = PMAddOnService
+        fields = [
+            "id", "code", "name", "description", "city", "pricing_mode",
+            "unit_price", "max_quantity", "is_labour_only", "is_active",
+            "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]

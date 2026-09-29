@@ -18,6 +18,8 @@ import { CustomerTrackingHeader } from "./CustomerTrackingHeader.jsx"
 import { CustomerTrackingStatusCard } from "./CustomerTrackingStatusCard.jsx"
 import { settleBookingPayment } from "../../../api/gtPaymentService.js"
 import { getFreshnessBadge } from "./trackingUtils.js"
+import { ChangeDropCard } from "./ChangeDropCard.jsx"
+import { PTLRequoteCard } from "./PTLRequoteCard.jsx"
 import "../../pages/LiveTrackingPage.css"
 
 const STATUS_LABEL_MAP = {
@@ -846,7 +848,7 @@ export function CustomerTrackingPage({
                 {data.extra_charges.map((c) => (
                   <div key={c.charge_id} style={{ fontSize: "0.85rem", color: "#0c4a6e", marginTop: 4 }}>
                     {c.label}: ₹{c.amount}
-                    {/^https?:\/\//.test(c.receipt_photo_url || "") && (
+                    {/^(https?:\/\/|\/)/.test(c.receipt_photo_url || "") && (
                       <> · <a href={c.receipt_photo_url} target="_blank" rel="noopener noreferrer">View receipt</a></>
                     )}
                   </div>
@@ -1039,6 +1041,17 @@ export function CustomerTrackingPage({
                       <div style={{ fontSize: "0.75rem", color: "#475569", marginTop: 3 }}>
                         👤 Receiver: <strong>{data.drop_contact_name || "Recipient"}</strong> {data.drop_contact_phone ? `(${data.drop_contact_phone})` : ""}
                       </div>
+                    )}
+                    {/* GT en-route drop change: single-drop goods transport, live trip, signed-in owner */}
+                    {chatAllowed && !isCompleted && !data?.ptl && !["proof_submitted", "unable_to_complete"].includes(status) &&
+                      /goods_transport_(truck|two_wheeler)/.test((data?.service_category || "").toLowerCase()) &&
+                      intermediateStops(data?.logistics).length === 0 && (
+                      <ChangeDropCard bookingId={data?.booking_id} onChanged={() => { if (typeof refresh === "function") refresh() }} />
+                    )}
+                    {/* Light PTL: pre-dispatch quote revision; eligibility comes from the server (same rule as the API) */}
+                    {data?.ptl?.requote_eligible && (
+                      <PTLRequoteCard bookingId={data?.booking_id} currentWeightKg={data?.ptl?.declared_weight_kg}
+                        onChanged={() => { if (typeof refresh === "function") refresh() }} />
                     )}
                   </div>
                 </div>

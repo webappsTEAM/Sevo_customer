@@ -156,6 +156,18 @@ export async function fetchPackersMoversInventory() {
 }
 
 /**
+ * Porter-parity P&M add-on catalogue (rope pulling, appliance install/uninstall, electrician,
+ * carpenter, labour-only). Prices shown here are informational; the server always reprices
+ * from this same table at booking time (see logistics/views.py PackersMoversAddOnsView and
+ * service_requests/services/pm_addons.py).
+ */
+export async function fetchPackersMoversAddOns(city) {
+  const qs = city ? `?city=${encodeURIComponent(city)}` : ""
+  const res = await apiRequest(`/logistics/packers-movers/addons/${qs}`)
+  return res?.data || res || []
+}
+
+/**
  * Server-authoritative quote for Packers & Movers relocation.
  */
 export async function fetchPackersMoversQuote({

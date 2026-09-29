@@ -2,13 +2,14 @@ import React, { useCallback, useEffect, useMemo, useState } from "react"
 import {
   AlertTriangle, ArrowRight, History, Info, Lock,
   RefreshCw, Search, ShieldCheck, Truck, Layers, Package, Home, Clock,
-  Navigation, HelpCircle, MapPinned, Receipt
+  Navigation, HelpCircle, MapPinned, Receipt, ListChecks
 } from "lucide-react"
 import { Button, Input, Modal, Select, formatDateTime } from "../../components/kit.jsx"
 import { ToastBanner, useToast } from "./useToast.jsx"
 import {
   fetchAdminTierHistory,
   fetchAdminTiers,
+  updateAdminTier,
 } from "../../../api/logisticsAdminService.js"
 import { GTCategoriesTab } from "./gt/GTCategoriesTab.jsx"
 import { GTItemsTab } from "./gt/GTItemsTab.jsx"
@@ -17,6 +18,7 @@ import { GTSlotsTab } from "./gt/GTSlotsTab.jsx"
 import { GTLanesTab } from "./gt/GTLanesTab.jsx"
 import { GTFaqsTab } from "./gt/GTFaqsTab.jsx"
 import { GTPoliciesTab } from "./gt/GTPoliciesTab.jsx"
+import { GTRulesTab } from "./gt/GTRulesTab.jsx"
 import { GTCoverageTab } from "./GTCoverageTab.jsx"
 import { GTPackersMoversHelpersPanel } from "./GTPackersMoversHelpersPanel.jsx"
 
@@ -358,6 +360,19 @@ export function GTPricingPage() {
           <Receipt size={15} />
           Fees &amp; Policies
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("rules")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === "rules"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+          }`}
+        >
+          <ListChecks size={15} />
+          Rules, Add-ons &amp; Cities
+        </button>
       </div>
 
       {activeTab === "categories" && <GTCategoriesTab showToast={showToast} />}
@@ -373,6 +388,7 @@ export function GTPricingPage() {
       {activeTab === "coverage" && <GTCoverageTab showToast={showToast} />}
       {activeTab === "faqs" && <GTFaqsTab showToast={showToast} />}
       {activeTab === "policies" && <GTPoliciesTab showToast={showToast} />}
+      {activeTab === "rules" && <GTRulesTab showToast={showToast} />}
 
       {activeTab === "tiers" && (
         <div className="space-y-5">
@@ -504,6 +520,25 @@ export function GTPricingPage() {
                   </td>
                   <td className="px-4 py-3 align-top">
                     <div className="flex items-center justify-end gap-1.5">
+                      {tier.category === "truck" && !["two_wheeler", "three_wheeler"].includes(tier.vehicle_class) && (
+                        <button
+                          type="button"
+                          title="Part Truck Load: allow this vehicle for per-kg, slot-booked part-load trips"
+                          onClick={async () => {
+                            const res = await updateAdminTier(tier.id, { ptl_eligible: !tier.ptl_eligible }, { reason: "PTL eligibility toggled" })
+                            if (res.ok) { showToast?.(`PTL ${tier.ptl_eligible ? "disabled" : "enabled"} for ${tier.name}.`, "success"); load() }
+                            else showToast?.(res.error?.message || "Could not update PTL eligibility.", "error")
+                          }}
+                          className={[
+                            "inline-flex items-center px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-colors cursor-pointer",
+                            tier.ptl_eligible
+                              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+                              : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800",
+                          ].join(" ")}
+                        >
+                          PTL {tier.ptl_eligible ? "on" : "off"}
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => openHistory(tier)}

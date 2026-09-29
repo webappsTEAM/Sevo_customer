@@ -203,6 +203,9 @@ const MarketplacePage = lazy(() =>
 const MiniTruckBookingHosurPage = lazy(() =>
   import("./pages/MiniTruckBookingHosurPage.jsx").then(m => ({ default: m.MiniTruckBookingHosurPage || m.default }))
 )
+const PTLBookingPage = lazy(() =>
+  import("./pages/PTLBookingPage.jsx").then(m => ({ default: m.PTLBookingPage || m.default }))
+)
 const TwoWheelerBookingHosurPage = lazy(() =>
   import("./pages/TwoWheelerBookingHosurPage.jsx").then(m => ({ default: m.TwoWheelerBookingHosurPage || m.default }))
 )
@@ -444,6 +447,8 @@ export function App() {
           <Route path="/trucks/:city" element={<LogisticsBookingPage />} />
           <Route path="/trucks" element={<MiniTruckBookingHosurPage />} />
           <Route path="/booking/trucks" element={<MiniTruckBookingHosurPage />} />
+          <Route path="/part-truck-load" element={<PTLBookingPage />} />
+          <Route path="/part-truck-load/:city" element={<PTLBookingPage />} />
           <Route path={routes.two_wheeler_booking_hosur} element={<TwoWheelerBookingHosurPage />} />
           <Route path="/two-wheelers/hosur" element={<TwoWheelerBookingHosurPage />} />
           <Route path="/two-wheelers/:city" element={<LogisticsBookingPage />} />
