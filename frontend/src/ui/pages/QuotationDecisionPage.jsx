@@ -219,12 +219,25 @@ export function QuotationDecisionPage() {
             </span>
           </div>
 
-          {quote.valid_until && quote.can_decide && (
-            <p className="text-xs text-slate-500 mt-4 flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5" />
-              Valid until {formatDate(quote.valid_until)}
-            </p>
-          )}
+          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+            {quote.valid_until && quote.can_decide ? (
+              <p className="text-xs text-slate-500 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5" />
+                Valid until {formatDate(quote.valid_until)}
+              </p>
+            ) : <div />}
+
+            <a
+              href={`/api/booking/quote/${encodeURIComponent(token || quote.quote_number || quote.id)}/pdf/?download=1`}
+              target="_blank"
+              rel="noopener noreferrer"
+              download={`Quotation_${quote.quote_number || 'Official'}.pdf`}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Download Official PDF
+            </a>
+          </div>
         </div>
 
         {outcome && (

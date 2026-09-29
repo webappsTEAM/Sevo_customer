@@ -833,6 +833,64 @@ class WorkforceWebhookView(APIView):
 
                     transaction.on_commit(lambda: self._broadcast_quote_event(sr, payload))
 
+                # ── 16. CASH PAYMENT COLLECTED / OTP BROADCAST ───────────────────────
+                elif event_type in ["payment_cash_collected", "payment.cash_collected", "cash_collected", "cash_payment_reported"]:
+                    payment_otp = payload.get("payment_otp") or payload.get("otp") or payload.get("confirmation_otp")
+                    milestone = payload.get("milestone_type") or payload.get("milestone") or "ADVANCE"
+                    amount_received = payload.get("amount_received") or payload.get("amount") or 0.0
+
+                    if payment_otp:
+                        try:
+                            from django.db import connection
+                            with connection.cursor() as cursor:
+                                cursor.execute(
+                                    "INSERT INTO workforce_notification (related_object_id, notification_type, message, created_at) "
+                                    "VALUES (%s, 'PAYMENT_CONFIRMATION_OTP', %s, NOW());",
+                                    [str(sr.id), f"Cash Payment OTP {payment_otp} for amount ₹{amount_received}"]
+                                )
+                        except Exception as notif_err:
+                            logger.warning("Could not insert workforce_notification for cash OTP: %s", notif_err)
+
+                    sr.payment_status = ServiceRequest.PaymentStatus.PENDING
+                    sr.save(update_fields=["payment_status", "updated_at"])
+
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "payment_cash_collected", {
+                        "payment_otp": payment_otp,
+                        "milestone_type": milestone,
+                        "amount_received": amount_received,
+                        "expires_at": payload.get("otp_expires_at") or payload.get("expires_at"),
+                    }))
+
+                # ── 17. JOB HOLD / RESUME (Weather Delay / Site Emergency) ───────────
+                elif event_type in ["job.hold", "job_on_hold", "job.paused"]:
+                    hold_reason = payload.get("reason") or payload.get("reason_note") or "Service temporarily paused due to weather / site condition"
+                    safe_apply_transition(sr, "on_hold")
+                    sr.cancellation_note = hold_reason
+                    sr.save(update_fields=["status", "cancellation_note", "updated_at"])
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "job_hold_status_changed", {
+                        "is_on_hold": True,
+                        "hold_reason": hold_reason,
+                    }))
+
+                elif event_type in ["job.resume", "job_resumed"]:
+                    safe_apply_transition(sr, "in_progress")
+                    sr.cancellation_note = ""
+                    sr.save(update_fields=["status", "cancellation_note", "updated_at"])
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "job_hold_status_changed", {
+                        "is_on_hold": False,
+                        "hold_reason": "",
+                    }))
+
+                # ── 18. SCOPE REDUCTION / REVISED QUOTATION APPROVED ─────────────────
+                elif event_type in ["job.scope_reduction_approved", "quote.scope_reduced", "scope_reduction_approved"]:
+                    try:
+                        from django.core.cache import cache
+                        cache.delete(f"wf_quote_{sr.request_id}")
+                        cache.delete(f"wf_quote_{sr.id}")
+                    except Exception:
+                        pass
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "quote_scope_reduced", payload))
+
                 webhook_event.processing_status = WorkforceWebhookEvent.ProcessingStatus.PROCESSED
                 webhook_event.processed_at = timezone.now()
                 webhook_event.save()
