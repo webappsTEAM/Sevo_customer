@@ -24,6 +24,12 @@ from .admin_policy_views import (
     AdminGTPolicyListView,
     AdminGTPolicyOverviewView,
 )
+from .public_policy_views import PublicGTPolicyView, InsuranceTermsView
+from .admin_policy_views import (
+    AdminGTPolicyDetailView,
+    AdminGTPolicyListView,
+    AdminGTPolicyOverviewView,
+)
 from .views import (
     CargoFitmentEvaluationView,
     GoodsCategoryListView,

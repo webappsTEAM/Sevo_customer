@@ -9,7 +9,6 @@ import { ToastBanner, useToast } from "./useToast.jsx"
 import {
   fetchAdminTierHistory,
   fetchAdminTiers,
-  updateAdminTier,
 } from "../../../api/logisticsAdminService.js"
 import { GTCategoriesTab } from "./gt/GTCategoriesTab.jsx"
 import { GTItemsTab } from "./gt/GTItemsTab.jsx"
@@ -360,7 +359,6 @@ export function GTPricingPage() {
           <Receipt size={15} />
           Fees &amp; Policies
         </button>
-
         <button
           type="button"
           onClick={() => setActiveTab("rules")}

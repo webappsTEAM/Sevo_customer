@@ -274,7 +274,12 @@ def resolve_service(service_param=None, package_param=None, category_param=None)
         raw_cat = str(category_param).strip()
         cat = _find_category(raw_cat)
         if cat:
-            svc = _pick_primary_service_for_category(cat, hint_text=raw_cat)
+            cat_services = Service.objects.filter(category=cat, is_active=True)
+            if not cat_services.exists():
+                cat_services = Service.objects.filter(category=cat)
+            if cat_services.count() > 1:
+                return None, f"Category '{cat.name}' contains multiple services. Please specify a service or package."
+            svc = cat_services.first()
             if svc:
                 return svc, None
             return None, f"No services found in category '{cat.name}'."

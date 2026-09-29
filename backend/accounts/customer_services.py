@@ -283,6 +283,43 @@ def create_saved_address(user, validated_data):
         except Exception:
             pass
 
+    # Ensure formatted_address is never left as raw coordinates
+    fmt = str(validated_data.get("formatted_address") or "").strip()
+    import re
+    is_coords = bool(re.match(r"^(\s*GPS Location\s*\()?[-+]?\d+(\.\d+)?,\s*[-+]?\d+(\.\d+)?\)?$", fmt, re.I))
+    if not fmt or is_coords:
+        parts = [
+            validated_data.get("flat_house_no"),
+            validated_data.get("address_line1"),
+            validated_data.get("landmark"),
+            validated_data.get("locality"),
+            validated_data.get("city"),
+            validated_data.get("state"),
+            validated_data.get("pincode"),
+        ]
+        clean_parts = [str(p).strip() for p in parts if p and str(p).strip()]
+        dedup = []
+        for cp in clean_parts:
+            if not dedup or cp.lower() != dedup[-1].lower():
+                dedup.append(cp)
+        if dedup and len(dedup) >= 2:
+            validated_data["formatted_address"] = ", ".join(dedup)
+        elif lat is not None and lng is not None:
+            try:
+                geo = detect_customer_location(lat, lng)
+                if geo and geo.get("formatted_address"):
+                    validated_data["formatted_address"] = geo["formatted_address"]
+                    if not validated_data.get("locality") and geo.get("area"):
+                        validated_data["locality"] = geo["area"]
+                    if not validated_data.get("city") and geo.get("city"):
+                        validated_data["city"] = geo["city"]
+                    if not validated_data.get("state") and geo.get("state"):
+                        validated_data["state"] = geo["state"]
+                    if not validated_data.get("pincode") and geo.get("pincode"):
+                        validated_data["pincode"] = geo["pincode"]
+            except Exception:
+                pass
+
     is_default = validated_data.get("is_default", False)
 
     with transaction.atomic():

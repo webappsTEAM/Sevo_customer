@@ -112,7 +112,7 @@ class GetProductDetailsTool(BaseTool):
     }
 
     def execute(self, context: Dict[str, Any], product_id: str, **kwargs) -> Dict[str, Any]:
-        p_str = str(product_id).strip()
+        p_str = product_id.strip()
         try:
             if p_str.isdigit():
                 pkg = Package.objects.select_related("service", "service__category").get(pk=int(p_str))
@@ -170,7 +170,7 @@ class GetProductReviewsTool(BaseTool):
 
         # 1. If product_id given, check Package.reviews JSON field
         if product_id:
-            p_str = str(product_id).strip()
+            p_str = product_id.strip()
             try:
                 if p_str.isdigit():
                     pkg = Package.objects.get(pk=int(p_str))

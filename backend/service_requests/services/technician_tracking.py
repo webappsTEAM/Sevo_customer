@@ -34,6 +34,7 @@ cannot silently inherit a threshold tuned for a different transport.
 import logging
 from decimal import Decimal
 
+from django.db import transaction
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
@@ -106,14 +107,8 @@ def record_technician_fix(
         return _INVALID, None
 
     captured = captured_at or timezone.now()
-    previous = latest_fix(sr)
-    previous_at = effective_time(previous)
-    if previous_at is not None and captured < previous_at:
-        logger.info(
-            "[TRACKING] Dropping stale fix for %s: captured %s is older than stored %s",
-            getattr(sr, "request_id", sr.pk), captured.isoformat(), previous_at.isoformat(),
-        )
-        return _STALE, previous
+    if timezone.is_naive(captured):
+        captured = timezone.make_aware(captured, timezone.get_current_timezone())
 
     try:
         acc = float(accuracy) if accuracy is not None else None
@@ -128,28 +123,50 @@ def record_technician_fix(
     except (TypeError, ValueError):
         spd = 0.0
 
-    fix = TechnicianLocation.objects.create(
-        booking=sr,
-        technician=technician,
-        latitude=Decimal(str(round(lat, 6))),
-        longitude=Decimal(str(round(lng, 6))),
-        accuracy=acc,
-        heading=hdg,
-        speed=spd,
-        captured_at=captured,
-    )
+    # A stale-check followed by an insert must be one database operation. Two
+    # concurrent webhook deliveries can otherwise both read the same previous
+    # fix and let the older one overwrite the customer's live-map snapshot.
+    # Locking only this booking keeps independent technicians/jobs concurrent.
+    with transaction.atomic():
+        locked_sr = ServiceRequest.objects.select_for_update().get(pk=sr.pk)
+        previous = latest_fix(locked_sr)
+        previous_at = effective_time(previous)
+        if previous_at is not None and captured < previous_at:
+            logger.info(
+                "[TRACKING] Dropping stale fix for %s: captured %s is older than stored %s",
+                getattr(locked_sr, "request_id", locked_sr.pk), captured.isoformat(), previous_at.isoformat(),
+            )
+            return _STALE, previous
 
-    sr.technician_latitude = fix.latitude
-    sr.technician_longitude = fix.longitude
-    update_fields = ["technician_latitude", "technician_longitude", "updated_at"]
+        fix = TechnicianLocation.objects.create(
+            booking=locked_sr,
+            technician=technician,
+            latitude=Decimal(str(round(lat, 6))),
+            longitude=Decimal(str(round(lng, 6))),
+            accuracy=acc,
+            heading=hdg,
+            speed=spd,
+            captured_at=captured,
+        )
 
-    if location_name:
-        sr.technician_location_name = location_name
-        update_fields.append("technician_location_name")
+        locked_sr.technician_latitude = fix.latitude
+        locked_sr.technician_longitude = fix.longitude
+        update_fields = ["technician_latitude", "technician_longitude", "updated_at"]
 
-    if transition_accepted_to_on_the_way and sr.status == ServiceRequest.Status.ACCEPTED:
-        sr.status = ServiceRequest.Status.ON_THE_WAY
-        update_fields.append("status")
+        if location_name:
+            locked_sr.technician_location_name = location_name
+            update_fields.append("technician_location_name")
 
-    sr.save(update_fields=update_fields)
+        if transition_accepted_to_on_the_way and locked_sr.status == ServiceRequest.Status.ACCEPTED:
+            locked_sr.status = ServiceRequest.Status.ON_THE_WAY
+            update_fields.append("status")
+
+        locked_sr.save(update_fields=update_fields)
+
+    # Callers often build a WebSocket payload from the instance they passed in.
+    # Keep that in-memory object consistent with the row committed above.
+    sr.technician_latitude = locked_sr.technician_latitude
+    sr.technician_longitude = locked_sr.technician_longitude
+    sr.technician_location_name = locked_sr.technician_location_name
+    sr.status = locked_sr.status
     return _APPLIED, fix

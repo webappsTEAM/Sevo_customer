@@ -8,6 +8,7 @@ views" rule. Every view is IsAdminRole-gated (internal Ops tooling, not the
 public catalog read API in service_requests/views.py).
 """
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.models import Prefetch
 from service_requests.services.catalog import LogisticsPricingPermissionError
 from django.shortcuts import get_object_or_404
 from rest_framework.permissions import AllowAny
@@ -20,7 +21,7 @@ from django.utils import timezone
 from service_requests.models import (
     CatalogCategory, Service, Package, AddOn, CatalogChangeLog,
     VegetableRecipe, RecipeIngredient, VegetableRecommendation, PackageStatus,
-    VendorCapabilityRequest, VendorCapabilityRequestStatus,
+    VendorCapabilityRequest, VendorCapabilityRequestStatus, PackageVariant,
 )
 from service_requests.serializers import (
     CatalogCategorySerializer, ServiceSerializer, PackageSerializer,
@@ -113,7 +114,28 @@ class PublicPackageListView(APIView):
     authentication_classes = []  # bypass auth middleware entirely for speed
 
     def get(self, request):
-        qs = Package.objects.select_related("service", "service__category").prefetch_related("addons").exclude(status__in=[PackageStatus.INACTIVE, PackageStatus.ARCHIVED])
+        # The public homepage loads this endpoint on every cold visit.  The
+        # serializer needs the package's service/category, add-ons, variants
+        # and optional inventory item; loading variants package-by-package
+        # previously turned a 240-row response into 289 database queries.
+        # Keep the public response unchanged while loading those relationships
+        # in a bounded number of queries.
+        qs = (
+            Package.objects
+            .select_related("service", "service__category", "stock_item", "stock_item__category")
+            .prefetch_related(
+                "addons",
+                Prefetch(
+                    "variants",
+                    queryset=PackageVariant.objects.filter(
+                        is_active=True,
+                        status="APPROVED",
+                    ).order_by("sort_order", "pack_value", "id"),
+                    to_attr="public_variants",
+                ),
+            )
+            .exclude(status__in=[PackageStatus.INACTIVE, PackageStatus.ARCHIVED])
+        )
         service_slug = request.GET.get("service_slug")
         if service_slug:
             qs = qs.filter(service__slug=service_slug)

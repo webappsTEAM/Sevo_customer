@@ -18,6 +18,9 @@ import {
   Plus,
   Clock,
   Trash2,
+  Headphones,
+  UploadCloud,
+  AlertCircle,
 } from "lucide-react"
 import { apiRequest } from "../../../api/client.js"
 import { useAuth } from "../../../state/auth/useAuth.js"
@@ -177,6 +180,10 @@ export function AIChatWidget() {
           return parsed.map((m) => ({
             ...m,
             created_at: m.created_at || m.timestamp || new Date().toISOString(),
+            expects: m.expects || "text",
+            options: m.options || [],
+            handed_off: Boolean(m.handed_off),
+            previewUrl: m.previewUrl || null,
           }))
         }
       }
@@ -189,6 +196,15 @@ export function AIChatWidget() {
   const [messages, setMessages] = useState(
     () => readStoredMessages(currentOwnerId) ?? [DEFAULT_WELCOME_MESSAGE]
   )
+
+  const [selectedImageFile, setSelectedImageFile] = useState(null)
+  const [imagePreviewUrl, setImagePreviewUrl] = useState(null)
+  const [imageError, setImageError] = useState(null)
+  const fileInputRef = useRef(null)
+
+  const isHandedOff = Boolean(messages.some((m) => m.handed_off))
+  const latestAssistantMsg = [...messages].reverse().find((m) => m.sender === "assistant")
+  const currentExpects = isHandedOff ? "text" : (latestAssistantMsg?.expects || "text")
 
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
@@ -238,11 +254,15 @@ export function AIChatWidget() {
       const res = await apiRequest(`/ai/conversations/${convId}/`)
       if (res?.success && res?.data?.messages && Array.isArray(res.data.messages)) {
         if (res.data.messages.length > 0) {
-          const formatted = res.data.messages.map((m) => ({
+          const isConvHandedOff = Boolean(res.data.handed_off)
+          const formatted = res.data.messages.map((m, idx, arr) => ({
             id: m.id || `msg_${Date.now()}_${Math.random()}`,
             sender: m.sender,
             content: m.content,
             sources: m.sources || [],
+            expects: m.expects || "text",
+            options: m.options || [],
+            handed_off: Boolean(m.handed_off || (isConvHandedOff && idx === arr.length - 1 && m.sender === "assistant")),
             created_at: m.created_at || new Date().toISOString(),
           }))
           setMessages(formatted)
@@ -257,6 +277,17 @@ export function AIChatWidget() {
       console.warn("Could not sync conversation details from server:", err)
     }
   }
+
+  // Live polling for human agent replies when chat is handed off to care desk
+  useEffect(() => {
+    if (!isOpen || !isHandedOff || !conversationId) return
+
+    const interval = setInterval(() => {
+      loadConversationDetails(conversationId)
+    }, 3500)
+
+    return () => clearInterval(interval)
+  }, [isOpen, isHandedOff, conversationId])
 
   // ── Privacy guard: wipe chat state whenever the signed-in identity changes.
   //    This covers same-device / same-tab account switches so User B
@@ -344,6 +375,7 @@ export function AIChatWidget() {
   }
 
   const handleSelectConversation = (conv) => {
+    handleClearSelectedImage()
     loadConversationDetails(conv.id)
     setShowHistoryView(false)
   }
@@ -370,6 +402,115 @@ export function AIChatWidget() {
     window.addEventListener("open-ai-mitra", handleOpenAiMitra)
     return () => window.removeEventListener("open-ai-mitra", handleOpenAiMitra)
   }, [conversationId, loading])
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith("image/")) {
+      setImageError("Please select a valid image file (PNG, JPG, WebP).")
+      return
+    }
+
+    const maxBytes = 5 * 1024 * 1024 // 5MB
+    if (file.size > maxBytes) {
+      setImageError("Image size must be less than 5MB.")
+      return
+    }
+
+    setImageError(null)
+    setSelectedImageFile(file)
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      setImagePreviewUrl(event.target.result)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleClearSelectedImage = () => {
+    setSelectedImageFile(null)
+    setImagePreviewUrl(null)
+    setImageError(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+  }
+
+  const handleSubmitImage = async () => {
+    if (!selectedImageFile || loading) return
+    const fileToUpload = selectedImageFile
+    const previewToKeep = imagePreviewUrl
+    handleClearSelectedImage()
+
+    const userMsgId = `user_${Date.now()}`
+    const userCreatedAt = new Date().toISOString()
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: userMsgId,
+        sender: "user",
+        content: `📷 [Uploaded Photo: ${fileToUpload.name}]`,
+        previewUrl: previewToKeep,
+        created_at: userCreatedAt,
+      },
+    ])
+    setLoading(true)
+
+    try {
+      const formData = new FormData()
+      formData.append("image", fileToUpload)
+      if (conversationId) {
+        formData.append("conversation_id", conversationId)
+      }
+
+      const res = await apiRequest("/ai/chat/", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (res?.success && res?.data) {
+        if (res.data.conversation_id && res.data.conversation_id !== conversationId) {
+          setConversationId(res.data.conversation_id)
+        }
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `asst_${Date.now()}`,
+            sender: "assistant",
+            content: res.data.message || "",
+            sources: res.data.sources || [],
+            expects: res.data.expects || "text",
+            options: res.data.options || [],
+            handed_off: Boolean(res.data.handed_off),
+            created_at: res.data.created_at || new Date().toISOString(),
+          },
+        ])
+      } else {
+        const errorMsg = res?.message || res?.detail || "Photo upload failed. Please try again."
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `err_${Date.now()}`,
+            sender: "assistant",
+            content: errorMsg,
+            created_at: new Date().toISOString(),
+          },
+        ])
+      }
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `err_${Date.now()}`,
+          sender: "assistant",
+          content: "Unable to upload image. Please verify your connection or try again.",
+          created_at: new Date().toISOString(),
+        },
+      ])
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleSendMessage = async (textToSend) => {
     const query = (textToSend || input || "").trim()
@@ -400,17 +541,22 @@ export function AIChatWidget() {
           setConversationId(res.data.conversation_id)
         }
 
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `asst_${Date.now()}`,
-            sender: "assistant",
-            content: res.data.message || "I couldn't process this query.",
-            sources: res.data.sources || [],
-            blocked: Boolean(res.data.blocked_by_guardrail),
-            created_at: res.data.created_at || new Date().toISOString(),
-          },
-        ])
+        if (res.data.message) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `asst_${Date.now()}`,
+              sender: "assistant",
+              content: res.data.message,
+              sources: res.data.sources || [],
+              blocked: Boolean(res.data.blocked_by_guardrail),
+              expects: res.data.expects || "text",
+              options: res.data.options || [],
+              handed_off: Boolean(res.data.handed_off),
+              created_at: res.data.created_at || new Date().toISOString(),
+            },
+          ])
+        }
       } else {
         const errorMsg = res?.message || res?.detail || "Sorry, I encountered a connection issue. Please try again."
         setMessages((prev) => [
@@ -439,6 +585,7 @@ export function AIChatWidget() {
   }
 
   const handleNewChat = () => {
+    handleClearSelectedImage()
     setConversationId(null)
     clearAIChatStorage()
     setMessages([
@@ -454,6 +601,7 @@ export function AIChatWidget() {
   }
 
   const handleDeleteCurrentChat = async () => {
+    handleClearSelectedImage()
     if (conversationId) {
       try {
         await apiRequest(`/ai/conversations/${conversationId}/`, { method: "DELETE" })
@@ -696,6 +844,21 @@ export function AIChatWidget() {
             <span>Read-only assistant · Real-time verified policies & catalog data</span>
           </div>
 
+          {/* Connected to Support Banner */}
+          {isHandedOff && (
+            <div className="caltrack-ai-support-banner">
+              <div className="caltrack-ai-support-banner-icon">
+                <Headphones size={15} />
+              </div>
+              <div className="caltrack-ai-support-banner-body">
+                <div className="caltrack-ai-support-banner-title">Connected to Human Support</div>
+                <div className="caltrack-ai-support-banner-sub">
+                  A care agent has received your details and will continue this chat with you shortly.
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Conditional View: History Browser or Live Chat Stream */}
           {showHistoryView ? (
             <div className="caltrack-ai-history-panel">
@@ -829,9 +992,31 @@ export function AIChatWidget() {
                       )}
                       <div className={`caltrack-ai-msg-row ${m.sender}`}>
                         <div className="caltrack-ai-msg-bubble">
+                          {m.previewUrl && (
+                            <div className="caltrack-ai-uploaded-preview">
+                              <img src={m.previewUrl} alt="Uploaded attachment" />
+                            </div>
+                          )}
                           <div className="caltrack-ai-msg-text">
                             {renderFormattedText(m.content)}
                           </div>
+
+                          {/* Choice options if provided by backend */}
+                          {m.options && m.options.length > 0 && !isHandedOff && (
+                            <div className="caltrack-ai-options-group">
+                              {m.options.map((opt, optIdx) => (
+                                <button
+                                  key={optIdx}
+                                  type="button"
+                                  className="caltrack-ai-option-chip"
+                                  onClick={() => handleSendMessage(opt.value)}
+                                  disabled={loading}
+                                >
+                                  {opt.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
 
                           {timeFormatted && (
                             <div className="caltrack-ai-msg-time">
@@ -885,6 +1070,85 @@ export function AIChatWidget() {
                   </div>
                 )}
 
+                {/* Image Picker for UPLOAD_IMAGE step */}
+                {currentExpects === "image" && !isHandedOff && (
+                  <div className="caltrack-ai-image-upload-card">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      style={{ display: "none" }}
+                    />
+                    {!selectedImageFile ? (
+                      <div className="caltrack-ai-image-prompt">
+                        <div className="caltrack-ai-image-prompt-header">
+                          <UploadCloud size={18} className="caltrack-ai-image-icon" />
+                          <span>Attach Photo Proof</span>
+                        </div>
+                        <p className="caltrack-ai-image-hint">
+                          Please provide a clear photo of the item (JPG, PNG, WebP under 5MB).
+                        </p>
+                        {imageError && (
+                          <div className="caltrack-ai-image-error">
+                            <AlertCircle size={14} />
+                            <span>{imageError}</span>
+                          </div>
+                        )}
+                        <div className="caltrack-ai-image-btn-row">
+                          <button
+                            type="button"
+                            className="caltrack-ai-select-file-btn"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={loading}
+                          >
+                            <UploadCloud size={14} /> Select Photo
+                          </button>
+                          <button
+                            type="button"
+                            className="caltrack-ai-skip-file-btn"
+                            onClick={() => handleSendMessage("SKIP")}
+                            disabled={loading}
+                          >
+                            Skip Photo
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="caltrack-ai-image-selected-view">
+                        <div className="caltrack-ai-image-thumb-wrap">
+                          <img src={imagePreviewUrl} alt="Upload preview" className="caltrack-ai-preview-img" />
+                        </div>
+                        <div className="caltrack-ai-image-details">
+                          <div className="caltrack-ai-image-filename">{selectedImageFile.name}</div>
+                          <div className="caltrack-ai-image-filesize">
+                            {(selectedImageFile.size / (1024 * 1024)).toFixed(2)} MB
+                          </div>
+                        </div>
+                        <div className="caltrack-ai-image-actions">
+                          <button
+                            type="button"
+                            className="caltrack-ai-submit-photo-btn"
+                            onClick={handleSubmitImage}
+                            disabled={loading}
+                          >
+                            Send Photo
+                          </button>
+                          <button
+                            type="button"
+                            className="caltrack-ai-cancel-photo-btn"
+                            onClick={handleClearSelectedImage}
+                            disabled={loading}
+                            title="Remove"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Typing Animation */}
                 {loading && (
                   <div className="caltrack-ai-msg-row assistant">
@@ -911,16 +1175,22 @@ export function AIChatWidget() {
                   ref={inputRef}
                   type="text"
                   className="caltrack-ai-input"
-                  placeholder="Ask AI Mitra about bookings, AC repair, cleaning..."
+                  placeholder={
+                    isHandedOff
+                      ? "Type a message to support..."
+                      : currentExpects === "image"
+                      ? "Please select or skip the photo upload above"
+                      : "Ask AI Mitra about bookings, AC repair, cleaning..."
+                  }
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  disabled={loading}
+                  disabled={loading || currentExpects === "image"}
                 />
                 <button
                   type="submit"
                   className="caltrack-ai-send-btn"
-                  disabled={loading || !input.trim()}
-                  title="Send message"
+                  disabled={loading || currentExpects === "image" || !input.trim()}
+                  title={isHandedOff ? "Send message to support" : "Send message"}
                 >
                   <Send size={16} />
                 </button>

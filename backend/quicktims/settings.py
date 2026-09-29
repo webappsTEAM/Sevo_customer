@@ -21,6 +21,7 @@ SECRET_KEY = _SECRET_KEY
 
 # DEBUG is OFF by default. Must be explicitly set to "1" or "True" in the environment.
 DEBUG = os.getenv("DJANGO_DEBUG", "0").strip().lower() in ("1", "true", "yes")
+IS_TESTING = "test" in sys.argv or os.getenv("DJANGO_TEST_SQLITE") == "1"
 
 # Fixed: this used to hardcode ALLOWED_HOSTS = ["*"] unconditionally,
 # ignoring the DJANGO_ALLOWED_HOSTS env var that's already set correctly in
@@ -30,12 +31,14 @@ DEBUG = os.getenv("DJANGO_DEBUG", "0").strip().lower() in ("1", "true", "yes")
 _allowed_hosts_env = os.getenv("DJANGO_ALLOWED_HOSTS")
 if _allowed_hosts_env:
     ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts_env.split(",") if h.strip()]
+elif DEBUG:
+    ALLOWED_HOSTS = ["*"]
 else:
-    ALLOWED_HOSTS = ["*"] if DEBUG else ["localhost", "127.0.0.1", "sevo.co.in", "www.sevo.co.in", "vendor.sevo.co.in"]
-for _prod_host in ("sevo.co.in", "www.sevo.co.in", "vendor.sevo.co.in"):
-    if _prod_host not in ALLOWED_HOSTS and "*" not in ALLOWED_HOSTS:
-        ALLOWED_HOSTS.append(_prod_host)
-if "testserver" not in ALLOWED_HOSTS and "*" not in ALLOWED_HOSTS:
+    # Production fallback without localhost or 127.0.0.1
+    ALLOWED_HOSTS = ["sevo.co.in", "www.sevo.co.in", "vendor.sevo.co.in"]
+# ``testserver`` is Django's test client host.  It must never broaden the
+# accepted Host header set of a deployed process.
+if IS_TESTING and "testserver" not in ALLOWED_HOSTS and "*" not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append("testserver")
 
 # ── Subpath / Reverse-proxy settings ─────────────────────────────────────────
@@ -102,8 +105,6 @@ SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
 # ---------------------------------------------------------------------------
 
 USE_POSTGRES = os.getenv("DB_NAME") or os.getenv("DB_HOST")
-IS_TESTING = "test" in sys.argv or os.getenv("DJANGO_TEST_SQLITE") == "1"
-
 if IS_TESTING:
     DATABASES = {
         "default": {
@@ -318,7 +319,7 @@ SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 # "Lax" is required for cross-origin dev (frontend:5173 → backend:8000).
 # In production with same domain, change back to "Strict" via env var.
-AUTH_COOKIE_SAMESITE = os.getenv("AUTH_COOKIE_SAMESITE", "Lax" if DEBUG else "Strict")
+AUTH_COOKIE_SAMESITE = os.getenv("AUTH_COOKIE_SAMESITE", "Lax")
 AUTH_COOKIE_DOMAIN = os.getenv("AUTH_COOKIE_DOMAIN", None)
 
 # ── CORS — must name origins explicitly when credentials=True ────────────────
@@ -348,17 +349,32 @@ _default_cors_origins = [
 _env_cors = os.getenv("CORS_ALLOWED_ORIGINS")
 if _env_cors:
     _parsed_cors = [o.strip() for o in _env_cors.split(",") if o.strip()]
-    CORS_ALLOWED_ORIGINS = list(dict.fromkeys(_parsed_cors + _default_cors_origins))
-else:
+    if DEBUG:
+        CORS_ALLOWED_ORIGINS = list(dict.fromkeys(_parsed_cors + _default_cors_origins))
+    else:
+        # In production, use only explicitly configured production origins
+        CORS_ALLOWED_ORIGINS = _parsed_cors
+elif DEBUG:
     CORS_ALLOWED_ORIGINS = _default_cors_origins
+else:
+    CORS_ALLOWED_ORIGINS = [
+        "https://sevo.co.in",
+        "https://www.sevo.co.in",
+        "https://vendor.sevo.co.in",
+    ]
 
-CORS_ALLOWED_ORIGIN_REGEXES = [
-    r"^http://.*\.localhost:517[0-9]$",
-    r"^http://.*\.127\.0\.0\.1:517[0-9]$",
-    r"^http://localhost:517[0-9]$",
-    r"^http://127\.0\.0\.1:517[0-9]$",
-    r"^https://.*\.sevo\.co\.in$",
-]
+if DEBUG:
+    CORS_ALLOWED_ORIGIN_REGEXES = [
+        r"^http://.*\.localhost:517[0-9]$",
+        r"^http://.*\.127\.0\.0\.1:517[0-9]$",
+        r"^http://localhost:517[0-9]$",
+        r"^http://127\.0\.0\.1:517[0-9]$",
+    ]
+else:
+    # Credentialed CORS must be an explicit, audited origin allow-list.  A
+    # wildcard subdomain pattern would allow an unrelated or compromised
+    # subdomain to make authenticated browser requests.
+    CORS_ALLOWED_ORIGIN_REGEXES = []
 CORS_ALLOW_CREDENTIALS = True
 
 _default_csrf_origins = [
@@ -391,9 +407,33 @@ _default_csrf_origins = [
 _env_csrf = os.getenv("CSRF_TRUSTED_ORIGINS")
 if _env_csrf:
     _parsed_csrf = [o.strip() for o in _env_csrf.split(",") if o.strip()]
-    CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(_parsed_csrf + CORS_ALLOWED_ORIGINS + _default_csrf_origins))
-else:
+    if DEBUG:
+        CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(_parsed_csrf + CORS_ALLOWED_ORIGINS + _default_csrf_origins))
+    else:
+        # In production, use only explicitly configured origins without dev defaults
+        CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(_parsed_csrf + CORS_ALLOWED_ORIGINS))
+elif DEBUG:
     CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(CORS_ALLOWED_ORIGINS + _default_csrf_origins))
+else:
+    CSRF_TRUSTED_ORIGINS = list(dict.fromkeys([
+        "https://sevo.co.in",
+        "https://www.sevo.co.in",
+        "https://vendor.sevo.co.in",
+    ] + CORS_ALLOWED_ORIGINS))
+
+# ── HTTPS & Security Headers (Active when DEBUG=False) ────────────────────────
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "1") == "1"
+    SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "31536000"))  # 1 year
+    # Enable only after every present and future subdomain is HTTPS-ready.
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv("SECURE_HSTS_INCLUDE_SUBDOMAINS", "0") == "1"
+    SECURE_HSTS_PRELOAD = False  # Enabled only after all present/future subdomains are verified HTTPS-ready
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_BROWSER_XSS_FILTER = True
+    X_FRAME_OPTIONS = "SAMEORIGIN"  # Safe default preserving payment/OAuth popups/frames
 
 
 MEDIA_URL = os.getenv("MEDIA_URL", "/media/")
@@ -462,10 +502,13 @@ GT_ONLINE_PAYMENT_WINDOW_MINUTES = int(os.getenv("GT_ONLINE_PAYMENT_WINDOW_MINUT
 
 # ── Workforce Integration ────────────────────────────────────────────────────
 WORKFORCE_API_BASE_URL = os.getenv("WORKFORCE_API_BASE_URL", "http://localhost:8001/api/workforce" if DEBUG else "https://vendor.sevo.co.in/api/workforce").rstrip("/")
-WORKFORCE_API_KEY = os.getenv("WORKFORCE_API_KEY", "wf_integration_key_default").strip()
+WORKFORCE_API_KEY = os.getenv("WORKFORCE_API_KEY", "").strip()
 WORKFORCE_WEBHOOK_SECRET = os.getenv(
     "WORKFORCE_WEBHOOK_SECRET",
     "dev-insecure-workforce-webhook-secret-local-testing-only" if DEBUG else ""
+).strip()
+SEVO_INTEGRATION_SECRET = (
+    os.getenv("SEVO_INTEGRATION_SECRET") or WORKFORCE_WEBHOOK_SECRET
 ).strip()
 
 # ── Supabase Storage ─────────────────────────────────────────────────────────
@@ -481,7 +524,6 @@ ENABLE_LOCAL_STORAGE_FALLBACK = os.getenv(
 GOOGLE_CLIENT_ID = (os.getenv("GOOGLE_CLIENT_ID") or os.getenv("Client_ID") or "").strip()
 GOOGLE_CLIENT_SECRET = (os.getenv("GOOGLE_CLIENT_SECRET") or os.getenv("Client_secret") or "").strip()
 
-# — Google Maps (X-10: server-side routing/ETA & geocoding) ────────────────────
 # Backend-only key -- never send this to the frontend. The Vite
 # VITE_GOOGLE_MAPS_KEY/VITE_GOOGLE_MAPS_API_KEY vars are a separate,
 # browser-restricted key for the Maps JS SDK; this one is used server-side
@@ -516,6 +558,12 @@ CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 # Inline (eager) execution only by default for local dev and tests; production runs the
 # sevo-celery worker, so tasks must be queued. Set CELERY_TASK_ALWAYS_EAGER explicitly to override.
 CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "True" if (DEBUG or IS_TESTING) else "False").strip().lower() in ("true", "1", "yes")
+CELERY_BEAT_SCHEDULE = {
+    "process-pending-workforce-dispatches": {
+        "task": "service_requests.process_pending_workforce_dispatches",
+        "schedule": 60.0,
+    },
+}
 # Fail fast when the broker / result store is unreachable. Without these, task.delay() inside a booking
 # request blocked ~19 s (kombu publish retries + result-backend reconnects) before the caller's
 # direct-dispatch fallback could run -- a Redis outage turned every booking POST into a 20 s hang.
@@ -576,20 +624,6 @@ if IS_TESTING:
         k: "10000/minute" for k in REST_FRAMEWORK.get("DEFAULT_THROTTLE_RATES", {})
     }
 
-# ── Workforce & Marketplace Integration Settings ──────────────────────────────
-WORKFORCE_API_BASE_URL = (os.getenv("WORKFORCE_API_BASE_URL") or "http://127.0.0.1:8001/api/workforce").replace("localhost", "127.0.0.1").rstrip("/")
-# The cross-app webhook secret authenticates vendor -> customer events (including
-# payment.collected). A literal default committed to the repo is a skeleton key, so it
-# is only used for local DEBUG/test runs; in production it must come from the environment
-# (workforce_integration/services.py refuses to start without it).
-_DEV_WEBHOOK_SECRET = "caldim_secure_webhook_token_2026"
-_PLACEHOLDER_SECRETS = {_DEV_WEBHOOK_SECRET, "dev-insecure-workforce-webhook-secret-local-testing-only", "wf_webhook_secret_default"}
-_webhook_secret_env = (os.getenv("WORKFORCE_WEBHOOK_SECRET") or "").strip()
-_integration_secret_env = (os.getenv("SEVO_INTEGRATION_SECRET") or "").strip()
-if DEBUG or IS_TESTING:
-    WORKFORCE_WEBHOOK_SECRET = _webhook_secret_env or _DEV_WEBHOOK_SECRET
-    SEVO_INTEGRATION_SECRET = _integration_secret_env or _webhook_secret_env or _DEV_WEBHOOK_SECRET
-else:
-    WORKFORCE_WEBHOOK_SECRET = "" if _webhook_secret_env in _PLACEHOLDER_SECRETS else _webhook_secret_env
-    SEVO_INTEGRATION_SECRET = "" if (_integration_secret_env or _webhook_secret_env) in _PLACEHOLDER_SECRETS else (_integration_secret_env or _webhook_secret_env)
+# Workforce integration settings are defined above.  Do not overwrite them
+# here with a development URL or a source-controlled secret.
 

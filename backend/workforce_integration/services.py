@@ -26,7 +26,7 @@ if _raw_webhook_secret and str(_raw_webhook_secret).strip() in (
     "caldim_secure_webhook_token_2026",
     "dev-insecure-workforce-webhook-secret-local-testing-only",
     "wf_webhook_secret_default",
-) and not (settings.DEBUG or "test" in __import__("sys").argv or getattr(settings, "TESTING", False)):
+) and not (settings.DEBUG or "test" in sys.argv or getattr(settings, "TESTING", False)):
     _raw_webhook_secret = None
 
 if not _raw_base_url or not _raw_webhook_secret:
@@ -99,6 +99,18 @@ class WorkforceIntegrationService:
         if not sr:
             return {"success": False, "error": "Booking not found"}
 
+        # Vendor and Customer operate on the same ServiceRequest row. Once a
+        # Workforce job reference is recorded, a later Celery retry must not
+        # create another allocation request merely because an earlier response
+        # was delivered twice.
+        wf_job_id = getattr(sr, "workforce_job_id", None)
+        if wf_job_id and not hasattr(wf_job_id, "_mock_name") and str(wf_job_id).strip():
+            return {
+                "success": True,
+                "workforce_job_id": str(wf_job_id),
+                "already_dispatched": True,
+            }
+
         # Extract logistics vehicle / fitment requirements if present
         logistics_info = None
         tier = getattr(sr, "logistics_tier", None)
@@ -145,6 +157,14 @@ class WorkforceIntegrationService:
                 "payment_status": sr.payment_status,
             },
             "cart_data": sr.cart_data,
+            # Canonical service/package snapshots are immutable booking facts,
+            # not UI labels. The Vendor also reads the shared row, but sending
+            # them across the boundary keeps the contract explicit and makes a
+            # future separated deployment safe.
+            "catalog_service_id": getattr(sr, "catalog_service_id", "") or "",
+            "package_id": getattr(sr, "package_id", "") or "",
+            "package_version": getattr(sr, "package_version", "") or "",
+            "package_display": getattr(sr, "package_display", {}) or {},
             "start_otp": sr.start_otp,
             "tracking_token": str(sr.tracking_token) if sr.tracking_token else None,
             "logistics": logistics_info,
@@ -179,7 +199,13 @@ class WorkforceIntegrationService:
         try:
 
             url = f"{WORKFORCE_API_BASE_URL}/jobs/dispatch/"
-            response = requests.post(url, json=payload, headers=cls._internal_headers(), timeout=10)
+            headers = cls._internal_headers()
+            # request_id is generated once for the shared booking and is the
+            # cross-service idempotency key. Do not use a random key here: a
+            # retry must identify the same business operation.
+            headers["Idempotency-Key"] = str(sr.request_id)
+            payload["idempotency_key"] = str(sr.request_id)
+            response = requests.post(url, json=payload, headers=headers, timeout=10)
             if response.status_code in [200, 201]:
                 data = response.json()
                 workforce_job_id = data.get("workforce_job_id") or data.get("job_id")
@@ -621,9 +647,10 @@ class WorkforceIntegrationService:
             with connection.cursor() as cursor:
                 cursor.execute("""
                     SELECT id FROM workforce_quote 
-                    WHERE job_id IN (%s, %s)
+                    WHERE (job_id IN (%s, %s)
                        OR quote_number = %s
-                       OR quote_number LIKE %s
+                       OR quote_number LIKE %s)
+                      AND status IN ('SENT_TO_CUSTOMER', 'CUSTOMER_ACCEPTED', 'APPROVED', 'CONVERTED', 'CHANGES_REQUESTED', 'CHANGE_REQUESTED', 'DECLINED', 'CUSTOMER_DECLINED')
                     ORDER BY id ASC
                 """, [sr_id, wf_id, req_id, f"{req_id}%"])
                 rows = cursor.fetchall()
@@ -651,17 +678,17 @@ class WorkforceIntegrationService:
             with connection.cursor() as cursor:
                 cursor.execute("""
                     SELECT id FROM workforce_quote 
-                    WHERE decision_token = %s 
+                    WHERE (decision_token = %s 
                        OR quote_number = %s 
-                       OR quote_number LIKE %s
+                       OR quote_number LIKE %s)
+                      AND status IN ('SENT_TO_CUSTOMER', 'CUSTOMER_ACCEPTED', 'APPROVED', 'CONVERTED', 'CHANGES_REQUESTED', 'CHANGE_REQUESTED', 'DECLINED', 'CUSTOMER_DECLINED')
                     ORDER BY 
                       CASE 
                         WHEN status = 'SENT_TO_CUSTOMER' THEN 1
                         WHEN status IN ('CUSTOMER_ACCEPTED', 'APPROVED', 'CONVERTED') THEN 2
                         WHEN status IN ('CHANGES_REQUESTED', 'CHANGE_REQUESTED') THEN 3
                         WHEN status IN ('DECLINED', 'CUSTOMER_DECLINED') THEN 4
-                        WHEN status = 'DRAFT' THEN 5
-                        ELSE 6
+                        ELSE 5
                       END ASC,
                       updated_at DESC, id DESC LIMIT 1
                 """, [str(token), str(token), f"{str(token).split('-V')[0]}%"])
@@ -740,17 +767,17 @@ class WorkforceIntegrationService:
                 with connection.cursor() as cursor:
                     cursor.execute("""
                         SELECT id FROM workforce_quote 
-                        WHERE job_id IN (%s, %s)
+                        WHERE (job_id IN (%s, %s)
                            OR quote_number = %s
-                           OR quote_number LIKE %s
+                           OR quote_number LIKE %s)
+                          AND status IN ('SENT_TO_CUSTOMER', 'CUSTOMER_ACCEPTED', 'APPROVED', 'CONVERTED', 'CHANGES_REQUESTED', 'CHANGE_REQUESTED', 'DECLINED', 'CUSTOMER_DECLINED')
                         ORDER BY 
                           CASE 
                             WHEN status = 'SENT_TO_CUSTOMER' THEN 1
                             WHEN status IN ('CUSTOMER_ACCEPTED', 'APPROVED', 'CONVERTED') THEN 2
                             WHEN status IN ('CHANGES_REQUESTED', 'CHANGE_REQUESTED') THEN 3
                             WHEN status IN ('DECLINED', 'CUSTOMER_DECLINED') THEN 4
-                            WHEN status = 'DRAFT' THEN 5
-                            ELSE 6
+                            ELSE 5
                           END ASC,
                           updated_at DESC,
                           id DESC
