@@ -276,7 +276,16 @@ class PackageSerializer(serializers.ModelSerializer):
         return self.get_stock_status(obj).get("max_quantity", 99)
 
     def get_variants(self, obj):
-        variants_qs = obj.variants.filter(is_active=True, status="APPROVED").order_by("sort_order", "pack_value", "id")
+        # PublicPackageListView supplies this filtered relation as
+        # ``public_variants``.  Preserve the fallback for every other
+        # PackageSerializer caller while avoiding one variants query per
+        # package on the customer homepage.
+        variants_qs = getattr(obj, "public_variants", None)
+        if variants_qs is None:
+            variants_qs = obj.variants.filter(
+                is_active=True,
+                status="APPROVED",
+            ).order_by("sort_order", "pack_value", "id")
         return [{
             "id": v.id,
             "name": v.display_name,

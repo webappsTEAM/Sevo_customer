@@ -2485,6 +2485,8 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [copiedOtp, setCopiedOtp] = useState(false)
   const [showDeclineReasonModal, setShowDeclineReasonModal] = useState(false)
+  const [showRequestChangesModal, setShowRequestChangesModal] = useState(false)
+  const [changeNotes, setChangeNotes] = useState("")
   const [declineReasonCode, setDeclineReasonCode] = useState("")
   const [declineReasonNotes, setDeclineReasonNotes] = useState("")
   const [quoteExpanded, setQuoteExpanded] = useState(true)
@@ -4078,7 +4080,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               </button>
               <button
                 onClick={() => {
-                  handleQuoteDecision("CHANGE_REQUESTED");
+                  setShowRequestChangesModal(true);
                 }}
                 style={{
                   flex: 1,
@@ -13183,6 +13185,21 @@ export function BookingPage() {
       is_consultation: Boolean(category?.is_consultation || category?.id === "painting" || category?.id === "mason")
     }];
 
+    // Keep the submission contract aligned with the inspection UI.  This
+    // value must be defined inside the submit path because it controls the
+    // extra AC-estimation fields added to the request below.
+    const isEstimation = Boolean(
+      category?.slug === "ac-inspection" ||
+      category?.id === "ac-inspection" ||
+      effectiveCart.some(item =>
+        item?.jobType === "ESTIMATION" ||
+        item?.id === "serv-hvac-ac-inspection" ||
+        item?.id === "ac-inspection" ||
+        item?.id === "hvac-ac-inspection" ||
+        (item?.ac_brand && item?.ac_type)
+      )
+    );
+
     const customerName = (formData.customer_name || user?.name || (user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : '') || user?.username || "Customer").trim();
     const customerPhone = (formData.phone || user?.phone || user?.mobile_number || "").trim();
     const customerEmail = (formData.email || user?.email || "").trim();
@@ -13494,8 +13511,12 @@ export function BookingPage() {
           window.history.replaceState({}, "", newUrl.pathname + newUrl.search)
         } catch (e) { }
         setCart([])
+        setLoading(false)
         setShowPostFlow(true)  // Show animated post-booking flow
-      } else setError(res?.message || "Something went wrong. Please try again.")
+      } else {
+        setError(res?.message || "Something went wrong. Please try again.")
+        setLoading(false)
+      }
     } catch (err) {
       if (err?.body?.errors) {
         const msgs = Object.entries(err.body.errors).map(([f, m]) => `${f}: ${Array.isArray(m) ? m.join(", ") : m}`).join(" · ")

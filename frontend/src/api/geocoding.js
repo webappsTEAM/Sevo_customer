@@ -194,11 +194,30 @@ async function getAddressFromNominatim(lat, lon) {
  *   e.g. "Golden Fairmart, SIPCOT Phase 2, Hosur, Tamil Nadu - 635109"
  */
 export async function getAddress(lat, lon) {
+  // 1. Authoritative Backend Reverse-Geocode Proxy (uses server-side Google Maps key)
+  try {
+    const res = await fetch("/api/customer/addresses/reverse-geocode/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ latitude: lat, longitude: lon })
+    })
+    if (res.ok) {
+      const data = await res.json()
+      const d = data?.data || data
+      if (d?.formatted_address && !/^[-+]?\d+(\.\d+)?,\s*[-+]?\d+(\.\d+)?$/.test(d.formatted_address.trim())) {
+        return d.formatted_address
+      }
+    }
+  } catch (_) {}
+
+  // 2. Client-side Google Maps API
   if (GOOGLE_API_KEY) {
     const result = await getAddressFromGoogle(lat, lon)
     if (result) return result
     console.debug("[Geocoding] Google Maps unavailable, using Nominatim fallback.")
   }
+
+  // 3. Direct Nominatim Fallback
   return getAddressFromNominatim(lat, lon)
 }
 

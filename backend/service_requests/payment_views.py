@@ -446,26 +446,11 @@ class PaymentVerifyView(APIView):
                 message="Payment confirmed. Your booking status is being updated — please contact support if it does not update within a few minutes.",
             )
 
-        # Payment verified; booking is now CONFIRMED. Dispatch to Workforce.
-        def _dispatch_after_payment():
-            if sr.status in [ServiceRequest.Status.ESTIMATION_CLOSED, ServiceRequest.Status.CLOSED, ServiceRequest.Status.CUSTOMER_REJECTED]:
-                logger.info(f"Skipping workforce dispatch for closed/rejected estimation {sr.id}")
-                return
-            try:
-                from service_requests.tasks import async_dispatch_service_request
-                async_dispatch_service_request.delay(sr.id)
-            except Exception as dispatch_err:
-                logger.warning(
-                    f"Could not queue workforce dispatch after payment for booking {sr.id}: {dispatch_err}"
-                )
-                try:
-                    from service_requests.tasks import async_dispatch_service_request
-                    async_dispatch_service_request(sr.id)
-                except Exception as direct_err:
-                    logger.error(
-                        f"Direct dispatch also failed after payment for booking {sr.id}: {direct_err}"
-                    )
-        transaction.on_commit(_dispatch_after_payment)
+        # Payment verified; write a durable Workforce delivery intent before
+        # the surrounding transaction commits.
+        if sr.status not in [ServiceRequest.Status.ESTIMATION_CLOSED, ServiceRequest.Status.CLOSED, ServiceRequest.Status.CUSTOMER_REJECTED]:
+            from service_requests.services.workforce_dispatch_outbox import queue_workforce_dispatch
+            queue_workforce_dispatch(sr)
 
         return _success(
             data={

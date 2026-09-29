@@ -31,7 +31,7 @@ from workforce_integration.services import WorkforceIntegrationService
 
 from . import services as sr_services
 from .models import (
-    Complaint, ServiceFeedback, ServiceRequest, Service,
+    Complaint, ServiceFeedback, ServiceRequest, Service, Package,
     WorkExtension, WorkExtensionItem, JobReschedule, SupplementalInvoice,
     RescheduleRequest, RescheduleAttachment, RescheduleStatus, RescheduleReason, TimeSlotChoices,
     RefundRequest, RefundStatus, RefundType, RefundReason, RefundEvidence,
@@ -92,6 +92,87 @@ def _error(message, status_code=400, extra=None, errors=None, **kwargs):
     if kwargs:
         body.update(kwargs)
     return Response(body, status=status_code)
+
+
+def _apply_verified_catalog_snapshot(cart_data, explicit_package_id=None):
+    """Attach database-verified catalog IDs to a booking cart.
+
+    ``ServiceRequest`` is the shared Customer/Workforce contract.  Checkout
+    originally retained a selected package only inside ``cart_data``; the
+    Workforce eligibility engine deliberately ignores client labels and needs
+    canonical service/package IDs.  Resolve every supplied package ID against
+    the active Customer catalog before saving so the snapshot cannot be forged
+    by the browser or drift with a later catalog edit.
+
+    A booking can contain add-ons or multiple package lines.  The first
+    selected package is retained in the legacy top-level fields for backwards
+    compatibility, while every package cart line gets its own canonical
+    ``catalog_service_id``.  Workforce can therefore enforce every selected
+    service rather than trusting a display name.
+    """
+    if not isinstance(cart_data, list):
+        return {}
+
+    raw_ids = []
+    if explicit_package_id not in (None, "", "undefined", "null"):
+        raw_ids.append(str(explicit_package_id).strip())
+    for item in cart_data:
+        if not isinstance(item, dict):
+            continue
+        package_id = item.get("package_id")
+        if package_id not in (None, "", "undefined", "null"):
+            raw_ids.append(str(package_id).strip())
+
+    # Cart entries without a catalog package (for example a free-text
+    # consultation or a quotation adjustment) remain intentionally unmapped.
+    unique_ids = list(dict.fromkeys(package_id for package_id in raw_ids if package_id))
+    if not unique_ids:
+        return {}
+
+    if any(not package_id.isdigit() for package_id in unique_ids):
+        raise ValidationError({"cart_data": "Selected package IDs must be canonical numeric catalog IDs."})
+
+    packages = {
+        str(package.id): package
+        for package in Package.objects.select_related("service", "service__category").filter(
+            id__in=[int(package_id) for package_id in unique_ids],
+            status="ACTIVE",
+            service__is_active=True,
+        )
+    }
+    missing_ids = [package_id for package_id in unique_ids if package_id not in packages]
+    if missing_ids:
+        raise ValidationError({"cart_data": f"Selected package is unavailable: {', '.join(missing_ids)}."})
+
+    for item in cart_data:
+        if not isinstance(item, dict):
+            continue
+        package_id = str(item.get("package_id") or "").strip()
+        package = packages.get(package_id)
+        if not package:
+            continue
+        # These values are server-derived.  Never preserve a browser-supplied
+        # service ID/version alongside a verified package ID.
+        item["catalog_service_id"] = str(package.service_id)
+        item["package_id"] = str(package.id)
+        item["package_version"] = str(package.version)
+
+    primary_id = str(explicit_package_id).strip() if explicit_package_id not in (None, "", "undefined", "null") else unique_ids[0]
+    primary_package = packages[primary_id]
+    return {
+        "catalog_service_id": str(primary_package.service_id),
+        "package_id": str(primary_package.id),
+        "package_version": str(primary_package.version),
+        "package_display": {
+            "id": str(primary_package.id),
+            "slug": primary_package.slug,
+            "name": primary_package.name,
+            "service_id": str(primary_package.service_id),
+            "service_slug": primary_package.service.slug,
+            "category_slug": primary_package.service.category.slug,
+        },
+        "catalog_mapping_status": "MAPPED",
+    }
 
 # Fixes EC-08: tracking_token never expired -- a link handed to a customer
 # (or forwarded, screenshotted, left in an old SMS/email) stayed a valid
@@ -775,6 +856,22 @@ class BookingCreateView(APIView):
                         item["price"] = p_val
             serializer.validated_data["cart_data"] = clean_cart
 
+        # Promote the selected catalog package(s) from cart_data into the
+        # shared ServiceRequest contract.  The checkout frontend sends the
+        # package ID inside each cart line; do not trust that raw value until
+        # it has been resolved against the active database catalog.
+        try:
+            catalog_snapshot = _apply_verified_catalog_snapshot(
+                clean_cart,
+                explicit_package_id=request.data.get("package_id"),
+            )
+        except ValidationError as exc:
+            if idem_cache_key:
+                from django.core.cache import cache
+                cache.delete(idem_cache_key)
+            messages = getattr(exc, "message_dict", None) or getattr(exc, "messages", None) or str(exc)
+            return _error("Selected service package is invalid.", 400, errors=messages)
+
         save_kwargs = {
             "company": company,
             "customer": customer_user,
@@ -799,10 +896,25 @@ class BookingCreateView(APIView):
             validate_slot_availability_for_booking,
         )
         resolved_svc, _ = resolve_service(
-            service_param=request.data.get("service_id") or serializer.validated_data.get("catalog_service_id") or serializer.validated_data.get("service_category"),
-            package_param=request.data.get("package_id"),
+            service_param=(
+                request.data.get("service_id")
+                or catalog_snapshot.get("catalog_service_id")
+                or serializer.validated_data.get("catalog_service_id")
+                or serializer.validated_data.get("service_category")
+            ),
+            package_param=catalog_snapshot.get("package_id") or request.data.get("package_id"),
             category_param=serializer.validated_data.get("service_category"),
         )
+
+        # A booking that resolves directly to a Service (without a package,
+        # such as a consultation) still records the database service ID.  A
+        # supplied label/slug is never stored as the canonical identifier.
+        if not catalog_snapshot and resolved_svc:
+            catalog_snapshot = {
+                "catalog_service_id": str(resolved_svc.id),
+                "catalog_mapping_status": "MAPPED",
+            }
+        save_kwargs.update(catalog_snapshot)
 
         try:
             with atomic_transaction():
@@ -1031,22 +1143,11 @@ class BookingCreateView(APIView):
         #   (a) No payment-status gate — WAITING_FOR_PAYMENT bookings were dispatched
         #       immediately, reaching the Workforce system before the customer paid.
         #   (b) Raw threads bypass the Celery task's idempotency guard and retry logic.
-        # Now uses async_dispatch_service_request.delay() which is idempotent (skips
-        # if already DISPATCHED), retries with exponential backoff, and tracks
-        # dispatch_status on the booking for observability.
+        # Record the dispatch intent in the booking transaction.  Background
+        # delivery is at-least-once; Vendor deduplicates by request_id.
         if sr.status == ServiceRequest.Status.CONFIRMED:
-            def _dispatch_cod_booking():
-                try:
-                    from service_requests.tasks import async_dispatch_service_request
-                    async_dispatch_service_request.delay(sr.id)
-                except Exception as dispatch_err:
-                    logger.warning(f"Could not queue workforce dispatch for booking {sr.id}: {dispatch_err}")
-                    try:
-                        from service_requests.tasks import async_dispatch_service_request
-                        async_dispatch_service_request(sr.id)
-                    except Exception as direct_err:
-                        logger.error(f"Direct dispatch also failed for booking {sr.id}: {direct_err}")
-            transaction.on_commit(_dispatch_cod_booking)
+            from service_requests.services.workforce_dispatch_outbox import queue_workforce_dispatch
+            queue_workforce_dispatch(sr)
 
         # Fixes HS-A-02 (partial): tell the customer an account was
         # created for them by this booking, since User.objects.create()
@@ -2087,19 +2188,26 @@ def _build_tracking_payload(sr, has_full_access):
         try:
             import re
             from django.db import connection
+            # SAVEPOINT guards against missing table (e.g. test env) without
+            # aborting the outer PostgreSQL transaction.
             with connection.cursor() as cursor:
-                cursor.execute(
-                    "SELECT message FROM workforce_notification "
-                    "WHERE related_object_id IN (%s, %s) "
-                    "AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
-                    "ORDER BY created_at DESC LIMIT 1;",
-                    [str(sr.id), str(sr.request_id or "")],
-                )
-                row = cursor.fetchone()
-                if row and row[0]:
-                    m = re.search(r'OTP\s+([0-9]{6})', row[0])
-                    if m:
-                        payment_confirmation_otp = m.group(1)
+                cursor.execute("SAVEPOINT _otp_lookup_1")
+                try:
+                    cursor.execute(
+                        "SELECT message FROM workforce_notification "
+                        "WHERE related_object_id IN (%s, %s) "
+                        "AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
+                        "ORDER BY created_at DESC LIMIT 1;",
+                        [str(sr.id), str(sr.request_id or "")],
+                    )
+                    row = cursor.fetchone()
+                    if row and row[0]:
+                        m = re.search(r'OTP\s+([0-9]{6})', row[0])
+                        if m:
+                            payment_confirmation_otp = m.group(1)
+                    cursor.execute("RELEASE SAVEPOINT _otp_lookup_1")
+                except Exception:
+                    cursor.execute("ROLLBACK TO SAVEPOINT _otp_lookup_1")
         except Exception:
             pass
 
@@ -2108,19 +2216,27 @@ def _build_tracking_payload(sr, has_full_access):
         try:
             import re
             from django.db import connection
+            # Use a SAVEPOINT so that a DB error (e.g. missing table in test
+            # environments) does not abort the outer PostgreSQL transaction and
+            # poison every subsequent query in this request.
             with connection.cursor() as cursor:
-                cursor.execute(
-                    "SELECT message FROM workforce_notification "
-                    "WHERE related_object_id = %s "
-                    "AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
-                    "ORDER BY created_at DESC LIMIT 1;",
-                    [str(sr.id)],
-                )
-                row = cursor.fetchone()
-                if row and row[0]:
-                    m = re.search(r'OTP\s+([0-9]{6})', row[0])
-                    if m:
-                        payment_confirmation_otp = m.group(1)
+                cursor.execute("SAVEPOINT _otp_lookup")
+                try:
+                    cursor.execute(
+                        "SELECT message FROM workforce_notification "
+                        "WHERE related_object_id = %s "
+                        "AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
+                        "ORDER BY created_at DESC LIMIT 1;",
+                        [str(sr.id)],
+                    )
+                    row = cursor.fetchone()
+                    if row and row[0]:
+                        m = re.search(r'OTP\s+([0-9]{6})', row[0])
+                        if m:
+                            payment_confirmation_otp = m.group(1)
+                    cursor.execute("RELEASE SAVEPOINT _otp_lookup")
+                except Exception:
+                    cursor.execute("ROLLBACK TO SAVEPOINT _otp_lookup")
         except Exception:
             pass
 
@@ -2670,18 +2786,10 @@ class AdminSRAssignView(APIView):
 
             sr.save()
 
-            def _do_dispatch():
-                try:
-                    from service_requests.tasks import async_dispatch_service_request
-                    async_dispatch_service_request.delay(sr.id)
-                except Exception:
-                    try:
-                        from service_requests.tasks import async_dispatch_service_request
-                        async_dispatch_service_request(sr.id)
-                    except Exception as err:
-                        logger.error(f"Manual admin dispatch failed for booking {sr.id}: {err}")
-
-            transaction.on_commit(_do_dispatch)
+            # Customer-side manual assignment is not a dispatch mechanism:
+            # Workforce owns eligibility, offers, and technician assignment.
+            # Leave this request for the Workforce state machine rather than
+            # overwriting assignment data from Marketplace.
 
         # Broadcast live tracking update to customer
         try:
@@ -3728,7 +3836,9 @@ class CustomerReverseGeocodeView(APIView):
             return _standard_response(success=False, error={"code": "INVALID_COORDS", "message": "latitude and longitude must be numeric."}, status_code=400)
 
         result = AddressService.reverse_geocode(lat, lng)
-        return _standard_response(success=True, data=result or {"formatted_address": f"{lat:.4f}, {lng:.4f}"})
+        if result:
+            return _standard_response(success=True, data=result)
+        return _standard_response(success=False, error={"code": "GEOCODE_FAILED", "message": "Unable to reverse geocode coordinates."}, status_code=200)
 
 
 # ─── 8. MARKETING COUPONS VIEWS ───────────────────────────────────────────────
@@ -4760,28 +4870,8 @@ class CustomerQuoteDecideView(APIView):
                             timezone.now().isoformat(), order_err,
                         )
 
-                    # Dispatch job to workforce management system asynchronously.
-                    # Previously synchronous — a slow Workforce API response would block
-                    # the customer's HTTP request that approved the quote. Now uses the
-                    # Celery task which is idempotent and retries on transient failures.
-                    def _dispatch_quoted_booking():
-                        try:
-                            from service_requests.tasks import async_dispatch_service_request
-                            async_dispatch_service_request.delay(new_sr.id)
-                        except Exception as _dispatch_err:
-                            logger.warning(
-                                "Could not queue workforce dispatch for quoted booking %s: %s",
-                                new_sr.id, _dispatch_err,
-                            )
-                            try:
-                                from service_requests.tasks import async_dispatch_service_request
-                                async_dispatch_service_request(new_sr.id)
-                            except Exception as _direct_err:
-                                logger.error(
-                                    "Direct dispatch also failed for quoted booking %s: %s",
-                                    new_sr.id, _direct_err,
-                                )
-                    transaction.on_commit(_dispatch_quoted_booking)
+                    from service_requests.services.workforce_dispatch_outbox import queue_workforce_dispatch
+                    queue_workforce_dispatch(new_sr)
 
                     # Log analytics event
                     from customer_analytics.models import BookingStatusEvent

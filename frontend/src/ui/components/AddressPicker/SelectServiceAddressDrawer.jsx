@@ -34,8 +34,12 @@ export function formatCanonicalAddress(addr) {
   const pincode = addr.pincode || addr.postcode || "635109"
 
   let formatted = addr.formatted_address || ""
-  if (!formatted) {
-    formatted = [flat, line1, landmark, locality, city, state, pincode].filter(Boolean).join(", ")
+  const isCoords = /^(\s*GPS Location\s*\()?[-+]?([0-9]*[.])?[0-9]+,\s*[-+]?([0-9]*[.])?[0-9]+\)?\s*$/i.test(formatted)
+  if (!formatted || isCoords) {
+    const constructed = [flat, line1, landmark, locality, city, state, pincode].filter(Boolean).join(", ")
+    if (constructed) {
+      formatted = constructed
+    }
   }
 
   return {
