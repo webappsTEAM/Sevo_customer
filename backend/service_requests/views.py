@@ -2203,32 +2203,45 @@ def _build_tracking_payload(sr, has_full_access):
     except Exception:
         pass
 
-    q_total = Decimal(str(quote_obj.get("net_payable") or quote_obj.get("grand_total") or quote_obj.get("total_amount") or total_amt)) if quote_obj else Decimal(str(total_amt))
-    q_advance = Decimal(str(quote_obj.get("advance_amount") or (q_total * Decimal("0.50")))) if quote_obj else Decimal("0.00")
-    q_balance = max(Decimal("0.00"), q_total - total_paid) if total_paid > 0 else (Decimal(str(quote_obj.get("balance_amount") or (q_total - q_advance))) if quote_obj else Decimal("0.00"))
+    quote_status = (str(quote_obj.get("status") or "")).upper() if quote_obj else ""
+    is_quote_declined = quote_status in ["REJECTED", "DECLINED", "CUSTOMER_DECLINED"]
 
-    is_milestone_booking = bool(quote_obj and float(q_advance) > 0 and float(q_balance) > 0)
-
-    if is_milestone_booking:
-        # If 2 or more payment notifications exist, the 1st was for Advance and the current is for Balance:
-        if len(all_payment_notifs) >= 2:
-            is_advance_paid = True
-            active_milestone = "BALANCE"
-        elif target_sr.payment_status in ["advance_paid", "paid"] and target_sr.payment_status != "cash_pending":
-            is_advance_paid = True
-            active_milestone = "BALANCE"
-        elif total_paid >= q_advance and q_advance > 0:
-            is_advance_paid = True
-            active_milestone = "BALANCE"
-        else:
-            # Advance is not verified yet (either pending initial collection or cash OTP pending verification)
-            is_advance_paid = False
-            active_milestone = "ADVANCE"
+    if is_quote_declined:
+        # Quote was declined by customer - execution service was not performed!
+        total_amt = float(target_sr.total_amount if target_sr.total_amount is not None else (sr.total_amount or 0.0))
+        q_total = Decimal(str(total_amt))
+        q_advance = Decimal("0.00")
+        q_balance = Decimal("0.00")
+        is_advance_paid = False
+        is_fully_paid = True if total_amt == 0.0 else (total_paid >= q_total)
+        active_milestone = "DECLINED"
     else:
-        is_advance_paid = (total_paid >= q_advance and q_advance > 0) or (target_sr.payment_status in ["paid", "advance_paid", "collected"])
-        active_milestone = "FULL"
+        q_total = Decimal(str(quote_obj.get("net_payable") or quote_obj.get("grand_total") or quote_obj.get("total_amount") or total_amt)) if quote_obj else Decimal(str(total_amt))
+        q_advance = Decimal(str(quote_obj.get("advance_amount") or (q_total * Decimal("0.50")))) if quote_obj else Decimal("0.00")
+        q_balance = max(Decimal("0.00"), q_total - total_paid) if total_paid > 0 else (Decimal(str(quote_obj.get("balance_amount") or (q_total - q_advance))) if quote_obj else Decimal("0.00"))
 
-    is_fully_paid = (total_paid >= q_total and q_total > 0) or (target_sr.payment_status in ["paid", "collected"] and target_sr.status in ["completed", "closed"])
+        is_milestone_booking = bool(quote_obj and float(q_advance) > 0 and float(q_balance) > 0)
+
+        if is_milestone_booking:
+            # If 2 or more payment notifications exist, the 1st was for Advance and the current is for Balance:
+            if len(all_payment_notifs) >= 2:
+                is_advance_paid = True
+                active_milestone = "BALANCE"
+            elif target_sr.payment_status in ["advance_paid", "paid"] and target_sr.payment_status != "cash_pending":
+                is_advance_paid = True
+                active_milestone = "BALANCE"
+            elif total_paid >= q_advance and q_advance > 0:
+                is_advance_paid = True
+                active_milestone = "BALANCE"
+            else:
+                # Advance is not verified yet (either pending initial collection or cash OTP pending verification)
+                is_advance_paid = False
+                active_milestone = "ADVANCE"
+        else:
+            is_advance_paid = (total_paid >= q_advance and q_advance > 0) or (target_sr.payment_status in ["paid", "advance_paid", "collected"])
+            active_milestone = "FULL"
+
+        is_fully_paid = (total_paid >= q_total and q_total > 0) or (target_sr.payment_status in ["paid", "collected"] and target_sr.status in ["completed", "closed"])
 
     duration_days = int(quote_obj.get("estimated_duration_days") or quote_obj.get("duration_days") or 1) if quote_obj else 1
     current_day = 1

@@ -5,11 +5,12 @@
 
 import React, { useState, useEffect, useRef } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import {
   Phone, MessageSquare, CheckCircle2, Clock, MapPin,
   Star, RefreshCw, KeyRound, Bike, Copy, Check,
-  Wrench, WifiOff, Shield, Home, Send, Truck, Share2, Ban
+  Wrench, WifiOff, Shield, Home, Send, Truck, Share2, Ban,
+  X, XCircle, AlertTriangle, Info
 } from "lucide-react"
 import { apiRequest } from "../../../api/client.js"
 import { useCustomerTracking } from "./useCustomerTracking.js"
@@ -136,10 +137,47 @@ export function CustomerTrackingPage({
   const [quoteExpanded, setQuoteExpanded] = useState(true)
   const [expandedPrevQuotes, setExpandedPrevQuotes] = useState({})
 
+  // ── Sleek In-Screen Feedback & Confirmation Modal ──────────────────────────────
+  const [feedbackModal, setFeedbackModal] = useState({
+    isOpen: false,
+    type: "success", // "success" | "error" | "info" | "warning"
+    title: "",
+    message: "",
+    onConfirm: null,
+    confirmText: "Got it",
+  })
+
+  const showFeedback = ({ type = "success", title, message, onConfirm = null, confirmText = "Got it" }) => {
+    setFeedbackModal({
+      isOpen: true,
+      type,
+      title: title || (type === "success" ? "Success" : type === "error" ? "Action Failed" : "Notice"),
+      message,
+      onConfirm,
+      confirmText,
+    })
+  }
+
+  const closeFeedback = () => {
+    const callback = feedbackModal.onConfirm
+    setFeedbackModal(prev => ({ ...prev, isOpen: false }))
+    if (typeof callback === "function") {
+      callback()
+    }
+  }
+
   const handleQuoteDecision = async (decision, reasonCode = "", reasonNotes = "") => {
     try {
       const quoteToken = data?.quote?.decision_token || data?.quote?.customer_decision_token || data?.quote?.quote_number
-      if (!quoteToken) return
+      if (!quoteToken) {
+        showFeedback({
+          type: "warning",
+          title: "Session Expired",
+          message: "Quotation decision token is missing. Please refresh the page.",
+          onConfirm: () => window.location.reload(),
+        })
+        return
+      }
 
       const response = await fetch(`/api/booking/quote/${quoteToken}/decide/`, {
         method: "POST",
@@ -159,16 +197,45 @@ export function CustomerTrackingPage({
       })
       const result = await response.json().catch(() => ({}))
       if (response.ok || result.success) {
-        const actionText = decision === "CUSTOMER_ACCEPTED" ? "accepted" : decision === "CHANGE_REQUESTED" ? "re-quotation requested" : "declined"
-        alert(`Quotation ${actionText} successfully!`)
-        if (typeof refresh === "function") refresh()
-        else window.location.reload()
+        if (decision === "CUSTOMER_ACCEPTED") {
+          showFeedback({
+            type: "success",
+            title: "Quotation Accepted! 🎉",
+            message: "You have approved the quotation. The service professional has been notified to proceed with execution.",
+            confirmText: "View Live Tracking",
+            onConfirm: () => (typeof refresh === "function" ? refresh() : window.location.reload()),
+          })
+        } else if (decision === "DECLINE" || decision === "CUSTOMER_DECLINED") {
+          showFeedback({
+            type: "info",
+            title: "Quotation Declined",
+            message: "You have successfully declined this quotation. Our service team has recorded your feedback.",
+            confirmText: "Done",
+            onConfirm: () => (typeof refresh === "function" ? refresh() : window.location.reload()),
+          })
+        } else {
+          showFeedback({
+            type: "info",
+            title: "Revision Requested",
+            message: "Your revision notes have been submitted to the technician for review.",
+            confirmText: "Got it",
+            onConfirm: () => (typeof refresh === "function" ? refresh() : window.location.reload()),
+          })
+        }
       } else {
-        alert("Error saving quote decision: " + (result.message || result.error || "Unknown error"))
+        showFeedback({
+          type: "error",
+          title: "Unable to Process Request",
+          message: result.message || result.error || "An error occurred while saving your decision. Please try again.",
+        })
       }
     } catch (err) {
       console.error("Quote decision failed:", err)
-      alert("Connection to server failed. Please try again.")
+      showFeedback({
+        type: "error",
+        title: "Connection Failed",
+        message: "Unable to connect to the server. Please check your network and try again.",
+      })
     }
   }
 
@@ -1109,7 +1176,11 @@ export function CustomerTrackingPage({
                     <button
                       onClick={() => {
                         if (!changeNotes.trim()) {
-                          alert("Please enter what changes you would like to request.")
+                          showFeedback({
+                            type: "warning",
+                            title: "Notes Required",
+                            message: "Please enter what specific changes or updates you would like to request.",
+                          })
                           return
                         }
                         handleQuoteDecision("CHANGE_REQUESTED", "", changeNotes)
@@ -1235,7 +1306,11 @@ export function CustomerTrackingPage({
                     <button
                       onClick={() => {
                         if (!declineReasonCode) {
-                          alert("Please select a reason for declining.")
+                          showFeedback({
+                            type: "warning",
+                            title: "Reason Required",
+                            message: "Please select a reason before confirming your decline decision.",
+                          })
                           return
                         }
                         handleQuoteDecision("DECLINE", declineReasonCode, declineReasonNotes)
@@ -1259,6 +1334,161 @@ export function CustomerTrackingPage({
                 </motion.div>
               </div>
             )}
+
+            {/* ── Dynamic In-Screen Feedback Modal Overlay ── */}
+            <AnimatePresence>
+              {feedbackModal.isOpen && (
+                <div
+                  style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(15, 23, 42, 0.7)',
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 99999,
+                    padding: '1.25rem',
+                  }}
+                  onClick={closeFeedback}
+                >
+                  <motion.div
+                    initial={{ scale: 0.88, opacity: 0, y: 15 }}
+                    animate={{ scale: 1, opacity: 1, y: 0 }}
+                    exit={{ scale: 0.88, opacity: 0, y: 15 }}
+                    transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      background: 'white',
+                      borderRadius: 24,
+                      padding: '2rem 1.75rem',
+                      maxWidth: 420,
+                      width: '100%',
+                      boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(226, 232, 240, 0.8)',
+                      textAlign: 'center',
+                      position: 'relative',
+                    }}
+                  >
+                    <button
+                      onClick={closeFeedback}
+                      style={{
+                        position: 'absolute',
+                        top: 14,
+                        right: 14,
+                        background: '#f1f5f9',
+                        border: 'none',
+                        borderRadius: '50%',
+                        width: 32,
+                        height: 32,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        color: '#64748b',
+                        transition: 'all 0.2s ease',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = '#e2e8f0')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = '#f1f5f9')}
+                    >
+                      <X size={16} />
+                    </button>
+
+                    <div
+                      style={{
+                        width: 64,
+                        height: 64,
+                        borderRadius: 20,
+                        margin: '0 auto 1.25rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background:
+                          feedbackModal.type === 'success'
+                            ? 'linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%)'
+                            : feedbackModal.type === 'error'
+                            ? 'linear-gradient(135deg, #ffe4e6 0%, #fecdd3 100%)'
+                            : feedbackModal.type === 'warning'
+                            ? 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)'
+                            : 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)',
+                        boxShadow:
+                          feedbackModal.type === 'success'
+                            ? '0 10px 25px -5px rgba(16, 185, 129, 0.3)'
+                            : feedbackModal.type === 'error'
+                            ? '0 10px 25px -5px rgba(244, 63, 94, 0.3)'
+                            : feedbackModal.type === 'warning'
+                            ? '0 10px 25px -5px rgba(245, 158, 11, 0.3)'
+                            : '0 10px 25px -5px rgba(99, 102, 241, 0.3)',
+                      }}
+                    >
+                      {feedbackModal.type === 'success' && <CheckCircle2 size={34} color="#059669" />}
+                      {feedbackModal.type === 'error' && <XCircle size={34} color="#e11d48" />}
+                      {feedbackModal.type === 'warning' && <AlertTriangle size={34} color="#d97706" />}
+                      {feedbackModal.type === 'info' && <Info size={34} color="#4f46e5" />}
+                    </div>
+
+                    <h3
+                      style={{
+                        margin: '0 0 8px',
+                        fontSize: '1.25rem',
+                        fontWeight: 900,
+                        color: '#0f172a',
+                        letterSpacing: '-0.02em',
+                      }}
+                    >
+                      {feedbackModal.title}
+                    </h3>
+
+                    <p
+                      style={{
+                        margin: '0 0 1.5rem',
+                        fontSize: '0.88rem',
+                        color: '#64748b',
+                        lineHeight: 1.55,
+                      }}
+                    >
+                      {feedbackModal.message}
+                    </p>
+
+                    <button
+                      onClick={closeFeedback}
+                      style={{
+                        width: '100%',
+                        padding: '12px 20px',
+                        borderRadius: 14,
+                        border: 'none',
+                        fontWeight: 800,
+                        fontSize: '0.92rem',
+                        cursor: 'pointer',
+                        color: 'white',
+                        background:
+                          feedbackModal.type === 'success'
+                            ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                            : feedbackModal.type === 'error'
+                            ? 'linear-gradient(135deg, #f43f5e 0%, #e11d48 100%)'
+                            : feedbackModal.type === 'warning'
+                            ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+                            : 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                        boxShadow:
+                          feedbackModal.type === 'success'
+                            ? '0 4px 14px rgba(16, 185, 129, 0.35)'
+                            : feedbackModal.type === 'error'
+                            ? '0 4px 14px rgba(244, 63, 94, 0.35)'
+                            : '0 4px 14px rgba(99, 102, 241, 0.35)',
+                        transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+                      }}
+                      onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.98)')}
+                      onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                    >
+                      {feedbackModal.confirmText || 'Got it'}
+                    </button>
+                  </motion.div>
+                </div>
+              )}
+            </AnimatePresence>
           </aside>
         </main>
       </div>

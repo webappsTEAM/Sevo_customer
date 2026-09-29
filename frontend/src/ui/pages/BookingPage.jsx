@@ -2545,10 +2545,47 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const [paymentTargetBookingId, setPaymentTargetBookingId] = useState(null)
   const [paymentTargetAmount, setPaymentTargetAmount] = useState(0)
 
+  // ── Sleek In-Screen Feedback & Confirmation Modal ──────────────────────────────
+  const [feedbackModal, setFeedbackModal] = useState({
+    isOpen: false,
+    type: "success", // "success" | "error" | "info" | "warning"
+    title: "",
+    message: "",
+    onConfirm: null,
+    confirmText: "Got it",
+  })
+
+  const showFeedback = ({ type = "success", title, message, onConfirm = null, confirmText = "Got it" }) => {
+    setFeedbackModal({
+      isOpen: true,
+      type,
+      title: title || (type === "success" ? "Success" : type === "error" ? "Action Failed" : "Notice"),
+      message,
+      onConfirm,
+      confirmText,
+    })
+  }
+
+  const closeFeedback = () => {
+    const callback = feedbackModal.onConfirm
+    setFeedbackModal(prev => ({ ...prev, isOpen: false }))
+    if (typeof callback === "function") {
+      callback()
+    }
+  }
+
   const handleQuoteDecision = async (decision, reasonCode = "", reasonNotes = "") => {
     try {
       const quoteToken = liveData?.quote?.decision_token || liveData?.quote?.customer_decision_token
-      if (!quoteToken) return
+      if (!quoteToken) {
+        showFeedback({
+          type: "warning",
+          title: "Session Expired",
+          message: "Quotation decision token is missing. Please refresh the page.",
+          onConfirm: () => window.location.reload(),
+        })
+        return
+      }
 
       const response = await fetch(`/api/booking/quote/${quoteToken}/decide/`, {
         method: "POST",
@@ -2561,16 +2598,47 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           reason_notes: reasonNotes
         })
       })
-      const result = await response.json()
-      if (result.success) {
-        alert(`Quote successfully ${decision === "CUSTOMER_ACCEPTED" ? "accepted" : "declined"}!`)
-        window.location.reload()
+      const result = await response.json().catch(() => ({}))
+      if (response.ok || result.success) {
+        if (decision === "CUSTOMER_ACCEPTED") {
+          showFeedback({
+            type: "success",
+            title: "Quotation Accepted! 🎉",
+            message: "You have approved the quotation. The service professional has been notified to proceed with execution.",
+            confirmText: "View Live Tracking",
+            onConfirm: () => window.location.reload(),
+          })
+        } else if (decision === "CUSTOMER_DECLINED") {
+          showFeedback({
+            type: "info",
+            title: "Quotation Declined",
+            message: "You have successfully declined this quotation. Our service team has recorded your feedback.",
+            confirmText: "Done",
+            onConfirm: () => window.location.reload(),
+          })
+        } else {
+          showFeedback({
+            type: "info",
+            title: "Revision Requested",
+            message: "Your revision notes have been submitted to the technician for review.",
+            confirmText: "Got it",
+            onConfirm: () => window.location.reload(),
+          })
+        }
       } else {
-        alert("Error saving quote decision: " + (result.message || "Unknown error"))
+        showFeedback({
+          type: "error",
+          title: "Unable to Process Request",
+          message: result.message || result.error || "An error occurred while saving your decision. Please try again.",
+        })
       }
     } catch (err) {
       console.error("Quote decision failed:", err)
-      alert("Connection to server failed. Please try again.")
+      showFeedback({
+        type: "error",
+        title: "Connection Failed",
+        message: "Unable to connect to the server. Please check your network and try again.",
+      })
     }
   }
 
@@ -2934,132 +3002,159 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           )}
 
           {/* Rating & Feedback Section */}
-          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 16, padding: "1.25rem", marginBottom: "1.25rem", textAlign: "center" }}>
-            <h4 style={{ margin: "0 0 6px", fontSize: "1rem", fontWeight: 800, color: "#065f46" }}>
-              {ratingSubmitted ? "Thank you for your rating! ⭐" : "How was your service experience?"}
-            </h4>
-            <p style={{ margin: "0 0 12px", fontSize: "0.82rem", color: "#047857" }}>
-              {ratingSubmitted ? "Your feedback helps us recognize top professionals and maintain quality." : "Tap a star to rate your technician and service quality"}
-            </p>
+          {(() => {
+            const quoteStatusUpper = (liveData?.quote?.status || "").toUpperCase()
+            const isQuoteDeclined = quoteStatusUpper === "REJECTED" || quoteStatusUpper === "DECLINED" || quoteStatusUpper === "CUSTOMER_DECLINED" || liveData?.milestones?.active_milestone === "DECLINED"
 
-            {/* Stars */}
-            <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 12 }}>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <button
-                  key={star}
-                  type="button"
-                  onClick={() => {
-                    setRatingScore(star)
-                    setRatingSubmitted(true)
-                  }}
-                  onMouseEnter={() => setRatingHover(star)}
-                  onMouseLeave={() => setRatingHover(0)}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: 4,
-                    transform: (ratingHover >= star || ratingScore >= star) ? "scale(1.2)" : "scale(1)",
-                    transition: "transform 0.15s ease"
-                  }}
-                >
-                  <Star
-                    size={32}
-                    color={(ratingHover || ratingScore) >= star ? "#f59e0b" : "#cbd5e1"}
-                    fill={(ratingHover || ratingScore) >= star ? "#f59e0b" : "transparent"}
-                  />
-                </button>
-              ))}
-            </div>
+            return (
+              <>
+                <div style={{ background: isQuoteDeclined ? "#f8fafc" : "#f0fdf4", border: isQuoteDeclined ? "1px solid #e2e8f0" : "1px solid #bbf7d0", borderRadius: 16, padding: "1.25rem", marginBottom: "1.25rem", textAlign: "center" }}>
+                  <h4 style={{ margin: "0 0 6px", fontSize: "1rem", fontWeight: 800, color: isQuoteDeclined ? "#0f172a" : "#065f46" }}>
+                    {ratingSubmitted
+                      ? "Thank you for your rating! ⭐"
+                      : isQuoteDeclined
+                      ? "How was your site consultation experience?"
+                      : "How was your service experience?"}
+                  </h4>
+                  <p style={{ margin: "0 0 12px", fontSize: "0.82rem", color: isQuoteDeclined ? "#64748b" : "#047857" }}>
+                    {ratingSubmitted
+                      ? "Your feedback helps us recognize top professionals and maintain quality."
+                      : isQuoteDeclined
+                      ? "Tap a star to rate your technician and consultation process"
+                      : "Tap a star to rate your technician and service quality"}
+                  </p>
 
-            {/* Quick Feedback Tags */}
-            {ratingScore > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6, marginTop: 10 }}>
-                {["Punctual", "Clean Work", "Polite & Professional", "Clear Communication", "Expert Diagnosis", "Great Value"].map((tag) => {
-                  const isSelected = selectedFeedbackTags.includes(tag)
-                  return (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => {
-                        setSelectedFeedbackTags(prev =>
-                          prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+                  {/* Stars */}
+                  <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 12 }}>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => {
+                          setRatingScore(star)
+                          setRatingSubmitted(true)
+                        }}
+                        onMouseEnter={() => setRatingHover(star)}
+                        onMouseLeave={() => setRatingHover(0)}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          cursor: "pointer",
+                          padding: 4,
+                          transform: (ratingHover >= star || ratingScore >= star) ? "scale(1.2)" : "scale(1)",
+                          transition: "transform 0.15s ease"
+                        }}
+                      >
+                        <Star
+                          size={32}
+                          color={(ratingHover || ratingScore) >= star ? "#f59e0b" : "#cbd5e1"}
+                          fill={(ratingHover || ratingScore) >= star ? "#f59e0b" : "transparent"}
+                        />
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Quick Feedback Tags */}
+                  {ratingScore > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6, marginTop: 10 }}>
+                      {["Punctual", "Clear Explanation", "Polite & Professional", "Clear Communication", "Expert Diagnosis", "Helpful Advice"].map((tag) => {
+                        const isSelected = selectedFeedbackTags.includes(tag)
+                        return (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => {
+                              setSelectedFeedbackTags(prev =>
+                                prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+                              )
+                            }}
+                            style={{
+                              padding: "5px 12px",
+                              borderRadius: 99,
+                              fontSize: "0.75rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              border: isSelected ? "1px solid #059669" : "1px solid #cbd5e1",
+                              background: isSelected ? "#059669" : "white",
+                              color: isSelected ? "white" : "#334155",
+                              transition: "all 0.15s ease"
+                            }}
+                          >
+                            {isSelected ? "✓ " : ""}{tag}
+                          </button>
                         )
-                      }}
-                      style={{
-                        padding: "5px 12px",
-                        borderRadius: 99,
-                        fontSize: "0.75rem",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        border: isSelected ? "1px solid #059669" : "1px solid #cbd5e1",
-                        background: isSelected ? "#059669" : "white",
-                        color: isSelected ? "white" : "#334155",
-                        transition: "all 0.15s ease"
-                      }}
-                    >
-                      {isSelected ? "✓ " : ""}{tag}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* 30-Day Doorstep Guarantee Reassurance Card */}
-          <div style={{ background: "linear-gradient(135deg, #064e3b, #065f46)", borderRadius: 16, padding: "1.25rem 1.5rem", color: "white", marginBottom: "1.25rem", boxShadow: "0 4px 14px rgba(6, 78, 59, 0.2)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-              <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <ShieldCheck size={20} color="#34d399" />
-              </div>
-              <div>
-                <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#a7f3d0", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  SEVO Protection Program
+                      })}
+                    </div>
+                  )}
                 </div>
-                <div style={{ fontSize: "1rem", fontWeight: 900, color: "white" }}>
-                  30-Day Doorstep Revisit Guarantee Active
-                </div>
-              </div>
-            </div>
-            <p style={{ margin: "0 0 10px", fontSize: "0.82rem", color: "#d1fae5", lineHeight: 1.5 }}>
-              If any problem resurfaces with this service, we will send an expert technician to re-inspect and fix it with zero service fee.
-            </p>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid rgba(255,255,255,0.15)", paddingTop: 10 }}>
-              <span style={{ fontSize: "0.76rem", color: "#a7f3d0", fontWeight: 700 }}>
-                🛡️ Covered until {new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-              </span>
-              <a
-                href={`https://wa.me/919944686884?text=${encodeURIComponent(`Hi SEVO Team, I need warranty support for completed booking #${rid}`)}`}
-                target="_blank"
-                rel="noreferrer"
-                style={{ fontSize: "0.76rem", fontWeight: 800, color: "#ffffff", background: "rgba(255,255,255,0.2)", padding: "4px 10px", borderRadius: 8, textDecoration: "none" }}
-              >
-                Claim Revisit →
-              </a>
-            </div>
-          </div>
 
-          {/* Service & Payment Summary */}
-          <div style={{ padding: "1rem 1.25rem", background: "#f8fafc", borderRadius: 16, border: "1px solid #e2e8f0", marginBottom: "1.5rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontSize: "0.85rem", fontWeight: 800, color: "#0f172a" }}>
-                {displayCart[0]?.name || displayCart[0]?.title || category?.name || liveData?.service_name || "SEVO Home Service"}
-              </span>
-              <span style={{ fontSize: "1.05rem", fontWeight: 900, color: "#059669" }}>₹{Number(displayTotal).toLocaleString("en-IN")}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.78rem", color: "#64748b" }}>
-              <span>Payment Mode: {paymentMethod} ({paymentStatusText})</span>
-              {liveData?.id && (
-                <button
-                  type="button"
-                  onClick={() => window.open(`${API_BASE_URL}/booking/${liveData.id}/invoice/`, '_blank')}
-                  style={{ background: "transparent", border: "none", color: "#0284c7", fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
-                >
-                  <FileText size={12} /> View Invoice
-                </button>
-              )}
-            </div>
-          </div>
+                {/* 30-Day Doorstep Guarantee Reassurance Card (Only for Executed Services with Approved Quotes) */}
+                {!isQuoteDeclined && (
+                  <div style={{ background: "linear-gradient(135deg, #064e3b, #065f46)", borderRadius: 16, padding: "1.25rem 1.5rem", color: "white", marginBottom: "1.25rem", boxShadow: "0 4px 14px rgba(6, 78, 59, 0.2)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                      <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <ShieldCheck size={20} color="#34d399" />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#a7f3d0", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                          SEVO Protection Program
+                        </div>
+                        <div style={{ fontSize: "1rem", fontWeight: 900, color: "white" }}>
+                          30-Day Doorstep Revisit Guarantee Active
+                        </div>
+                      </div>
+                    </div>
+                    <p style={{ margin: "0 0 10px", fontSize: "0.82rem", color: "#d1fae5", lineHeight: 1.5 }}>
+                      If any problem resurfaces with this service, we will send an expert technician to re-inspect and fix it with zero service fee.
+                    </p>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid rgba(255,255,255,0.15)", paddingTop: 10 }}>
+                      <span style={{ fontSize: "0.76rem", color: "#a7f3d0", fontWeight: 700 }}>
+                        🛡️ Covered until {new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                      </span>
+                      <a
+                        href={`https://wa.me/919944686884?text=${encodeURIComponent(`Hi SEVO Team, I need warranty support for completed booking #${rid}`)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ fontSize: "0.76rem", fontWeight: 800, color: "#ffffff", background: "rgba(255,255,255,0.2)", padding: "4px 10px", borderRadius: 8, textDecoration: "none" }}
+                      >
+                        Claim Revisit →
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                {/* Service & Payment Summary */}
+                <div style={{ padding: "1rem 1.25rem", background: isQuoteDeclined ? "#fff1f2" : "#f8fafc", borderRadius: 16, border: isQuoteDeclined ? "1px solid #fecdd3" : "1px solid #e2e8f0", marginBottom: "1.5rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <span style={{ fontSize: "0.85rem", fontWeight: 800, color: isQuoteDeclined ? "#9f1239" : "#0f172a" }}>
+                      {isQuoteDeclined
+                        ? `${displayCart[0]?.name || displayCart[0]?.title || category?.name || "Site Consultation"} (Quotation Declined)`
+                        : (displayCart[0]?.name || displayCart[0]?.title || category?.name || liveData?.service_name || "SEVO Home Service")}
+                    </span>
+                    <span style={{ fontSize: "1.05rem", fontWeight: 900, color: isQuoteDeclined ? "#9f1239" : "#059669" }}>
+                      ₹{Number(displayTotal).toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.78rem", color: isQuoteDeclined ? "#be123c" : "#64748b" }}>
+                    <span>
+                      {isQuoteDeclined
+                        ? "Quotation Declined by Customer · No Service Execution Fee"
+                        : `Payment Mode: ${paymentMethod} (${paymentStatusText})`}
+                    </span>
+                    {liveData?.id && !isQuoteDeclined && (
+                      <button
+                        type="button"
+                        onClick={() => window.open(`${API_BASE_URL}/booking/${liveData.id}/invoice/`, '_blank')}
+                        style={{ background: "transparent", border: "none", color: "#0284c7", fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
+                      >
+                        <FileText size={12} /> View Invoice
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </>
+            );
+          })()}
 
           {/* Action CTAs: Book Again, Problem, Back to Home */}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -4473,7 +4568,11 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               <button
                 onClick={() => {
                   if (!changeNotes.trim()) {
-                    alert("Please enter what changes you would like to request.")
+                    showFeedback({
+                      type: "warning",
+                      title: "Notes Required",
+                      message: "Please enter what specific changes or updates you would like to request.",
+                    })
                     return
                   }
                   handleQuoteDecision("CHANGE_REQUESTED", "", changeNotes)
@@ -4594,7 +4693,11 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               <button
                 onClick={() => {
                   if (!declineReasonCode) {
-                    alert("Please select a reason code first.")
+                    showFeedback({
+                      type: "warning",
+                      title: "Reason Required",
+                      message: "Please select a reason code before confirming your decision.",
+                    })
                     return
                   }
                   handleQuoteDecision("CUSTOMER_DECLINED", declineReasonCode, declineReasonNotes)
@@ -4617,6 +4720,161 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           </motion.div>
         </div>
       )}
+
+      {/* ─────────────────── ELEGANT IN-SCREEN FEEDBACK & NOTIFICATION MODAL ─────────────────── */}
+      <AnimatePresence>
+        {feedbackModal.isOpen && (
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(15, 23, 42, 0.7)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 99999,
+              padding: '1.25rem',
+            }}
+            onClick={closeFeedback}
+          >
+            <motion.div
+              initial={{ scale: 0.88, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.88, opacity: 0, y: 15 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: 'white',
+                borderRadius: 24,
+                padding: '2rem 1.75rem',
+                maxWidth: 420,
+                width: '100%',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(226, 232, 240, 0.8)',
+                textAlign: 'center',
+                position: 'relative',
+              }}
+            >
+              <button
+                onClick={closeFeedback}
+                style={{
+                  position: 'absolute',
+                  top: 14,
+                  right: 14,
+                  background: '#f1f5f9',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: 32,
+                  height: 32,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: '#64748b',
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = '#e2e8f0')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = '#f1f5f9')}
+              >
+                <X size={16} />
+              </button>
+
+              <div
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 20,
+                  margin: '0 auto 1.25rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background:
+                    feedbackModal.type === 'success'
+                      ? 'linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%)'
+                      : feedbackModal.type === 'error'
+                      ? 'linear-gradient(135deg, #ffe4e6 0%, #fecdd3 100%)'
+                      : feedbackModal.type === 'warning'
+                      ? 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)'
+                      : 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)',
+                  boxShadow:
+                    feedbackModal.type === 'success'
+                      ? '0 10px 25px -5px rgba(16, 185, 129, 0.3)'
+                      : feedbackModal.type === 'error'
+                      ? '0 10px 25px -5px rgba(244, 63, 94, 0.3)'
+                      : feedbackModal.type === 'warning'
+                      ? '0 10px 25px -5px rgba(245, 158, 11, 0.3)'
+                      : '0 10px 25px -5px rgba(99, 102, 241, 0.3)',
+                }}
+              >
+                {feedbackModal.type === 'success' && <CheckCircle2 size={34} color="#059669" />}
+                {feedbackModal.type === 'error' && <XCircle size={34} color="#e11d48" />}
+                {feedbackModal.type === 'warning' && <AlertTriangle size={34} color="#d97706" />}
+                {feedbackModal.type === 'info' && <Info size={34} color="#4f46e5" />}
+              </div>
+
+              <h3
+                style={{
+                  margin: '0 0 8px',
+                  fontSize: '1.25rem',
+                  fontWeight: 900,
+                  color: '#0f172a',
+                  letterSpacing: '-0.02em',
+                }}
+              >
+                {feedbackModal.title}
+              </h3>
+
+              <p
+                style={{
+                  margin: '0 0 1.5rem',
+                  fontSize: '0.88rem',
+                  color: '#64748b',
+                  lineHeight: 1.55,
+                }}
+              >
+                {feedbackModal.message}
+              </p>
+
+              <button
+                onClick={closeFeedback}
+                style={{
+                  width: '100%',
+                  padding: '12px 20px',
+                  borderRadius: 14,
+                  border: 'none',
+                  fontWeight: 800,
+                  fontSize: '0.92rem',
+                  cursor: 'pointer',
+                  color: 'white',
+                  background:
+                    feedbackModal.type === 'success'
+                      ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                      : feedbackModal.type === 'error'
+                      ? 'linear-gradient(135deg, #f43f5e 0%, #e11d48 100%)'
+                      : feedbackModal.type === 'warning'
+                      ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+                      : 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                  boxShadow:
+                    feedbackModal.type === 'success'
+                      ? '0 4px 14px rgba(16, 185, 129, 0.35)'
+                      : feedbackModal.type === 'error'
+                      ? '0 4px 14px rgba(244, 63, 94, 0.35)'
+                      : '0 4px 14px rgba(99, 102, 241, 0.35)',
+                  transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+                }}
+                onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.98)')}
+                onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+              >
+                {feedbackModal.confirmText || 'Got it'}
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* ─────────────────── REAL BOOKING & SERVICE DETAILS (100% ACCURATE IN ₹) ─────────────────── */}
       <motion.div
@@ -5762,8 +6020,17 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
     }
   }
 
+  const isBookingViewTab = [
+    "My Bookings",
+    "Upcoming & Active",
+    "Past Services",
+    "Book Again",
+    "30-Day Warranties",
+    "My Invoices"
+  ].includes(activeTab);
+
   useEffect(() => {
-    if (activeTab === "My Bookings" && user) {
+    if (isBookingViewTab && user) {
       const fetchBookings = (showLoading = false) => {
         if (showLoading && (!realBookings || realBookings.length === 0)) {
           setBookingsLoading(true)
@@ -5788,10 +6055,10 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         window.removeEventListener("focus", onFocus)
       }
     }
-  }, [activeTab, user])
+  }, [activeTab, user, isBookingViewTab])
 
   useEffect(() => {
-    if (activeTab === "My Bookings" && user) {
+    if (isBookingViewTab && user) {
       const fetchGroceryOrders = (showLoading = false) => {
         if (showLoading && (!groceryOrders || groceryOrders.length === 0)) {
           setGroceryOrdersLoading(true)
@@ -5817,7 +6084,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         window.removeEventListener("focus", onFocus)
       }
     }
-  }, [activeTab, user])
+  }, [activeTab, user, isBookingViewTab])
 
   useEffect(() => {
     if (activeTab === "Wallet" && user) {
@@ -6831,14 +7098,16 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
                 <div>
                   <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>
-                    {isUpcomingTab ? 'Upcoming & Active Services' : isPastTab ? 'Past Completed Services' : 'My Bookings'}
+                    {isUpcomingTab ? 'Upcoming & Active Services' : isPastTab ? 'Past Completed Services' : activeTab === 'My Invoices' ? 'My Invoices & Receipts' : 'My Bookings'}
                   </h3>
                   <p style={{ margin: '3px 0 0', fontSize: '0.82rem', color: '#64748b' }}>
                     {isUpcomingTab
                       ? 'Live tracking, technician assignment, and arrival OTPs for ongoing Hosur services'
                       : isPastTab
                         ? 'Service history, 30-day revisit guarantees, and 1-click rebooking'
-                        : 'Manage all your SEVO service requests, schedules, and warranties in one place'}
+                        : activeTab === 'My Invoices'
+                          ? 'View and download official GST tax invoices, job sheets, and payment receipts'
+                          : 'Manage all your SEVO service requests, schedules, and warranties in one place'}
                   </p>
                 </div>
 
@@ -8649,7 +8918,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
             a: "Once approved by our support team, refunds are initiated immediately to your original payment method (UPI / Cards / Net Banking). Funds typically reflect in your account within 2 to 4 business days depending on your bank."
           },
           {
-            q: "Are CalServices technicians verified and trained?",
+            q: "Are SEVO technicians verified and trained?",
             a: "Yes! 100% of our technicians undergo rigorous background verification, police verification, skill assessment, and standard operating training before being assigned to customer jobs."
           }
         ]
@@ -8778,7 +9047,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           }}>
                             {/* Persona & Username badge */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase', color: '#94a3b8', marginBottom: 4, padding: '0 4px' }}>
-                              <span>{msg.sender_username || (isCust ? (user?.username || 'CUSTOMER') : 'CALSERVICES AGENT')}</span>
+                              <span>{msg.sender_username || (isCust ? (user?.username || 'CUSTOMER') : 'SEVO AGENT')}</span>
                               <span>•</span>
                               <span>{isCust ? 'CUSTOMER' : (msg.sender_persona === 'employee' ? 'SUPPORT AGENT' : 'CARE AGENT')}</span>
                             </div>
@@ -12872,21 +13141,45 @@ export function BookingPage() {
   const incomingCategory = routerLocation.state?.category
   const hasIncomingOrder = Boolean((incomingCart && incomingCart.length > 0) || incomingCategory)
 
-  // Retrieve stored active booking from session
+  // Retrieve stored active booking from session, strictly enforcing user ownership
   const storedBookingData = useMemo(() => {
     if (hasIncomingOrder) return null
     try {
       const saved = sessionStorage.getItem("calservice_last_booking")
       if (saved) {
         const parsed = JSON.parse(saved)
-        if (parsed && parsed.status !== "cancelled") return parsed
+        if (parsed) {
+          // If a customer is logged in, verify the stored booking belongs to them:
+          if (user) {
+            const bCustId = parsed.customer_id || parsed.user_id || parsed.customer?.id
+            const bPhone = parsed.phone || parsed.customer_phone || parsed.customer?.phone
+            const isUserMatch = (bCustId && user.id && String(bCustId) === String(user.id)) ||
+                                (bPhone && user.phone && String(bPhone).replace(/\D/g, "") === String(user.phone).replace(/\D/g, "")) ||
+                                (!bCustId && !bPhone)
+            if (!isUserMatch) {
+              // Stored booking belongs to a different customer! Clean up.
+              sessionStorage.removeItem("calservice_last_booking")
+              sessionStorage.removeItem("calservice_active_tracking_id")
+              sessionStorage.removeItem("active_tracking_token")
+              return null
+            }
+          }
+
+          // Don't auto-lock step=0 for already finished/declined bookings unless explicit ?track query exists
+          const st = String(parsed.status || "").toLowerCase()
+          if (["cancelled", "completed", "closed", "declined", "rejected"].includes(st) && !searchParams.get("track") && !searchParams.get("booking_id")) {
+            return null
+          }
+
+          return parsed
+        }
       }
     } catch (e) { }
     return null
-  }, [hasIncomingOrder])
+  }, [hasIncomingOrder, user, searchParams])
 
   const storedTrackingId = useMemo(() => {
-    if (hasIncomingOrder) return null
+    if (hasIncomingOrder || !storedBookingData) return null
     try {
       return sessionStorage.getItem("calservice_active_tracking_id") || storedBookingData?.request_id || (storedBookingData?.id ? `SR-${storedBookingData.id}` : null)
     } catch (e) {
@@ -12968,10 +13261,29 @@ export function BookingPage() {
     window.scrollTo(0, 0);
   }, [step]);
 
-  // When customer removes all items, stay on the page and show empty state (no redirect)
+  // Handle user account changes / logout events to prevent cross-account booking leakage
   useEffect(() => {
-    // Left empty intentionally to disable redirect
-  }, [cart, step, trackParam, incomingCategory, navigate]);
+    const handleBookingCleared = () => {
+      setSuccessData(null);
+      setStep(3);
+    };
+    window.addEventListener("calservice_booking_cleared", handleBookingCleared);
+    return () => window.removeEventListener("calservice_booking_cleared", handleBookingCleared);
+  }, []);
+
+  useEffect(() => {
+    if (successData && user) {
+      const bCustId = successData.customer_id || successData.user_id || successData.customer?.id;
+      const bPhone = successData.phone || successData.customer_phone || successData.customer?.phone;
+      if (bCustId && user.id && String(bCustId) !== String(user.id)) {
+        setSuccessData(null);
+        setStep(3);
+      } else if (bPhone && user.phone && String(bPhone).replace(/\D/g, "") !== String(user.phone).replace(/\D/g, "")) {
+        setSuccessData(null);
+        setStep(3);
+      }
+    }
+  }, [user?.id, user?.phone]);
 
   // Synchronize step and successData when active tracking ID changes or on page refresh
   useEffect(() => {
@@ -12990,9 +13302,20 @@ export function BookingPage() {
         const storedToken = storedBookingData?.tracking_token || sessionStorage.getItem("active_tracking_token") || sessionStorage.getItem("caltrack_tracking_token") || "";
         const tokenQuery = storedToken ? `?token=${encodeURIComponent(storedToken)}` : "";
         apiRequest(`/booking/${encodeURIComponent(trackParam)}/live-location/${tokenQuery}`)
-        apiRequest(`/booking/${encodeURIComponent(trackParam)}/live-location/`)
           .then(res => {
             if (res?.data) {
+              // If user is logged in, ensure this booking belongs to them or token was provided
+              if (user) {
+                const bCustId = res.data.customer_id || res.data.user_id || res.data.customer?.id;
+                const bPhone = res.data.phone || res.data.customer_phone || res.data.customer?.phone;
+                const isMatch = (bCustId && user.id && String(bCustId) === String(user.id)) ||
+                                (bPhone && user.phone && String(bPhone).replace(/\D/g, "") === String(user.phone).replace(/\D/g, "")) ||
+                                (!bCustId && !bPhone) ||
+                                Boolean(storedToken);
+                if (!isMatch) {
+                  return;
+                }
+              }
               setSuccessData(res.data);
               setStep(0);
             }
@@ -13000,7 +13323,7 @@ export function BookingPage() {
           .catch(() => { });
       }
     }
-  }, [isTrackingActive, trackParam, storedBookingData, routerLocation.state, hasIncomingOrder]);
+  }, [isTrackingActive, trackParam, storedBookingData, routerLocation.state, hasIncomingOrder, user]);
   const [selDate, setSelDate] = useState("")
   const [selTime, setSelTime] = useState("")
   const [urgency, setUrgency] = useState("Standard")
