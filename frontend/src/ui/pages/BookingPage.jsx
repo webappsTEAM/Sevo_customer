@@ -43,6 +43,7 @@ import { SevoLogo, sevoLogo } from "../components/sevoLogo.jsx"
 import CustomerLiveTrackingModal from "../components/CustomerLiveTrackingModal.jsx"
 import { CustomerTrackingMap } from "../customer/tracking/CustomerTrackingMap.jsx"
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
+import { TripRatingCard } from "../components/TripRatingCard.jsx"
 import { EditModeToggleBar, SaveNoticeToast, EditableText, EditableImage } from "../components/SuperAdminEditControls.jsx"
 import { useEditMode } from "../../state/editMode/useEditMode.js"
 import { useMultiServiceCart } from "../../state/multiServiceCart/useMultiServiceCart.js"
@@ -1445,14 +1446,71 @@ function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTi
     { period: 'Evening', icon: '🌙', slots: ['17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00'] },
   ]
   const formatSlot = t => {
+    if (!t) return ""
+    if (String(t).toUpperCase().includes("AM") || String(t).toUpperCase().includes("PM")) return t
     const [h, m = 0] = t.split(':').map(Number)
+    if (isNaN(h)) return t
     const ampm = h < 12 ? 'AM' : 'PM'
     const h12 = h % 12 === 0 ? 12 : h % 12
     const minStr = String(m).padStart(2, '0')
     return `${h12}:${minStr} ${ampm}`
   }
 
-  const canContinue = Boolean(selectedDate && selectedTime && !isSlotInPast(selectedDate, selectedTime))
+  // Dynamic server slot state connected to Time Slot Management
+  const [serverSlotData, setServerSlotData] = useState(null)
+  const [loadingSlots, setLoadingSlots] = useState(false)
+
+  useEffect(() => {
+    if (!selectedDate) return
+    let isCancelled = false
+    setLoadingSlots(true)
+
+    const serviceParam = cart?.[0]?.service_id || cart?.[0]?.db_id || category?.id || category?.slug
+    const packageParam = cart?.[0]?.id || cart?.[0]?.package_id
+    const categoryParam = category?.id || category?.slug
+
+    const query = new URLSearchParams()
+    query.set("date", selectedDate)
+    if (serviceParam) query.set("service", serviceParam)
+    if (packageParam) query.set("package", packageParam)
+    if (categoryParam) query.set("category", categoryParam)
+
+    apiRequest(`/services/resolve/time-slots/?${query.toString()}`)
+      .then(res => {
+        if (isCancelled) return
+        if (res?.success && res.data) {
+          setServerSlotData(res.data)
+          if (!res.data.is_open) {
+            onTimeChange("")
+          } else if (selectedTime) {
+            const all = res.data.all_slots || []
+            const valid = all.some(s => s.available && (s.value === selectedTime || s.time === selectedTime || s.start_time === selectedTime))
+            if (!valid) {
+              const firstAvail = all.find(s => s.available)
+              onTimeChange(firstAvail ? (firstAvail.value || firstAvail.start_time) : "")
+            }
+          }
+        }
+      })
+      .catch(err => {
+        console.warn("Could not load dynamic slots, using fallback", err)
+      })
+      .finally(() => {
+        if (!isCancelled) setLoadingSlots(false)
+      })
+
+    return () => { isCancelled = true }
+  }, [selectedDate, category, cart])
+
+  const isDateClosed = serverSlotData && serverSlotData.is_open === false
+  const canContinue = Boolean(
+    selectedDate &&
+    selectedTime &&
+    !isDateClosed &&
+    (serverSlotData
+      ? (serverSlotData.all_slots || []).some(s => s.available && (s.value === selectedTime || s.time === selectedTime || s.start_time === selectedTime))
+      : !isSlotInPast(selectedDate, selectedTime))
+  )
 
   return (
     <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', maxWidth: 960, margin: '0 auto', padding: '0 0 80px' }}>
@@ -1511,43 +1569,111 @@ function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTi
 
         {/* Time Section */}
         <div>
-          <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#374151', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Clock size={15} color="#7C3AED" /> Select Time Slot
+          <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#374151', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Clock size={15} color="#7C3AED" /> Select Time Slot
+            </div>
+            {loadingSlots && (
+              <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 600 }}>Checking live capacity...</span>
+            )}
           </div>
-          {UC_TIME_SLOTS.map(group => (
-            <div key={group.period} style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                {group.icon} {group.period}
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {group.slots.map(t => {
-                  const isPast = isSlotInPast(selectedDate, t)
-                  const isSel = selectedTime === t
-                  return (
-                    <button
-                      key={`${group.period}-${t}`}
-                      disabled={isPast}
-                      onClick={() => {
-                        if (isPast) return
-                        onTimeChange(t)
-                      }}
-                      style={{
-                        padding: '8px 18px', borderRadius: 99,
-                        border: `2px solid ${isPast ? '#e2e8f0' : isSel ? '#7C3AED' : '#e2e8f0'}`,
-                        background: isPast ? '#f1f5f9' : isSel ? '#7C3AED' : 'white',
-                        color: isPast ? '#94a3b8' : isSel ? 'white' : '#374151',
-                        fontWeight: 700, fontSize: '0.8rem', cursor: isPast ? 'not-allowed' : 'pointer', transition: 'all 0.18s',
-                        opacity: isPast ? 0.6 : 1,
-                        userSelect: 'none'
-                      }}
-                    >
-                      {formatSlot(t)}
-                    </button>
-                  )
-                })}
+
+          {isDateClosed ? (
+            <div style={{ padding: '16px', borderRadius: 14, background: '#fffbeb', border: '1.5px solid #fde68a', color: '#92400e', marginBottom: 20 }}>
+              <div style={{ fontWeight: 800, fontSize: '0.85rem', marginBottom: 4 }}>Service Closed on This Date</div>
+              <div style={{ fontSize: '0.75rem', lineHeight: 1.5 }}>
+                {serverSlotData?.reason || "This service is not operating on the selected date. Please pick another date above."}
               </div>
             </div>
-          ))}
+          ) : serverSlotData && serverSlotData.groups ? (
+            // Dynamic Server Slot Groups from Time Slot Management
+            [
+              { key: 'morning', label: 'Morning', icon: '🌅' },
+              { key: 'afternoon', label: 'Afternoon', icon: '☀️' },
+              { key: 'evening', label: 'Evening', icon: '🌙' },
+            ].map(group => {
+              const groupSlots = serverSlotData.groups[group.key] || []
+              if (groupSlots.length === 0) return null
+              return (
+                <div key={group.key} style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {group.icon} {group.label}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {groupSlots.map(s => {
+                      const slotVal = s.value || s.start_time
+                      const isAvail = s.available
+                      const isSel = selectedTime === slotVal || selectedTime === s.time
+                      return (
+                        <button
+                          key={slotVal}
+                          type="button"
+                          disabled={!isAvail}
+                          onClick={() => onTimeChange(slotVal)}
+                          title={!isAvail ? (s.reason || "Unavailable") : `${s.time} (${s.booked_count || 0}/${s.capacity || 1} booked)`}
+                          style={{
+                            padding: '8px 18px', borderRadius: 99,
+                            border: `2px solid ${!isAvail ? '#e2e8f0' : isSel ? '#7C3AED' : '#e2e8f0'}`,
+                            background: !isAvail ? '#f1f5f9' : isSel ? '#7C3AED' : 'white',
+                            color: !isAvail ? '#94a3b8' : isSel ? 'white' : '#374151',
+                            fontWeight: 700, fontSize: '0.8rem',
+                            cursor: !isAvail ? 'not-allowed' : 'pointer',
+                            transition: 'all 0.18s',
+                            opacity: !isAvail ? 0.5 : 1,
+                            userSelect: 'none',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6
+                          }}
+                        >
+                          <span>{s.time}</span>
+                          {!isAvail && s.reason === "Slot full" && (
+                            <span style={{ fontSize: '0.62rem', background: '#fee2e2', color: '#dc2626', padding: '1px 5px', borderRadius: 99, fontWeight: 800 }}>Full</span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })
+          ) : (
+            // Standard fallback if server slot data not yet loaded or offline
+            UC_TIME_SLOTS.map(group => (
+              <div key={group.period} style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {group.icon} {group.period}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {group.slots.map(t => {
+                    const isPast = isSlotInPast(selectedDate, t)
+                    const isSel = selectedTime === t
+                    return (
+                      <button
+                        key={`${group.period}-${t}`}
+                        disabled={isPast}
+                        onClick={() => {
+                          if (isPast) return
+                          onTimeChange(t)
+                        }}
+                        style={{
+                          padding: '8px 18px', borderRadius: 99,
+                          border: `2px solid ${isPast ? '#e2e8f0' : isSel ? '#7C3AED' : '#e2e8f0'}`,
+                          background: isPast ? '#f1f5f9' : isSel ? '#7C3AED' : 'white',
+                          color: isPast ? '#94a3b8' : isSel ? 'white' : '#374151',
+                          fontWeight: 700, fontSize: '0.8rem', cursor: isPast ? 'not-allowed' : 'pointer', transition: 'all 0.18s',
+                          opacity: isPast ? 0.6 : 1,
+                          userSelect: 'none'
+                        }}
+                      >
+                        {formatSlot(t)}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))
+          )}
         </div>
 
         {/* CTA */}
@@ -2897,12 +3023,18 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 4, background: "#fef3c7", padding: "4px 10px", borderRadius: 99, border: "1px solid #fde68a" }}>
                 <Star size={14} color="#d97706" fill="#d97706" />
-                <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#92400e" }}>{techRating ? Number(techRating).toFixed(1) : "4.8"}</span>
+                <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#92400e" }}>{techRating ? Number(techRating).toFixed(1) : "New"}</span>
               </div>
             </div>
           )}
 
-          {/* Rating & Feedback Section */}
+          {/* Rating & Feedback Section.
+              Goods & Transport / Packers & Movers trips get a real, persisted rating (TripRatingCard, keyed by
+              the trip's feedback token); the legacy card below only set local state and never saved anything,
+              so it is no longer shown for them. */}
+          {["goods_transport_truck", "goods_transport_two_wheeler", "packers_movers"].includes(String(liveData?.service_category || successData?.service_category || "").toLowerCase())
+            ? <TripRatingCard feedback={liveData?.feedback} />
+            : (
           <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 16, padding: "1.25rem", marginBottom: "1.25rem", textAlign: "center" }}>
             <h4 style={{ margin: "0 0 6px", fontSize: "1rem", fontWeight: 800, color: "#065f46" }}>
               {ratingSubmitted ? "Thank you for your rating! ⭐" : "How was your service experience?"}
@@ -2974,8 +3106,11 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               </div>
             )}
           </div>
+          )}
 
-          {/* 30-Day Doorstep Guarantee Reassurance Card */}
+          {/* 30-Day Doorstep Guarantee Reassurance Card -- a home-services promise (re-inspect and fix the work);
+              it does not apply to a goods delivery or a move, so it is not shown for Goods & Transport / Packers & Movers. */}
+          {!["goods_transport_truck", "goods_transport_two_wheeler", "packers_movers"].includes(String(liveData?.service_category || successData?.service_category || "").toLowerCase()) && (
           <div style={{ background: "linear-gradient(135deg, #064e3b, #065f46)", borderRadius: 16, padding: "1.25rem 1.5rem", color: "white", marginBottom: "1.25rem", boxShadow: "0 4px 14px rgba(6, 78, 59, 0.2)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
               <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -3007,6 +3142,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               </a>
             </div>
           </div>
+          )}
 
           {/* Service & Payment Summary */}
           <div style={{ padding: "1rem 1.25rem", background: "#f8fafc", borderRadius: 16, border: "1px solid #e2e8f0", marginBottom: "1.5rem" }}>
@@ -3094,7 +3230,12 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                 onClick={() => {
                   sessionStorage.removeItem("calservice_active_tracking_id")
                   sessionStorage.removeItem("calservice_last_booking")
-                  window.location.href = "/"
+                  const isPreview = (typeof window !== "undefined" && window.parent !== window) || window.location.search.includes("preview=true")
+                  if (isPreview) {
+                    window.location.href = "/home?preview=true"
+                  } else {
+                    window.location.href = "/"
+                  }
                 }}
                 style={{
                   padding: "0.85rem 1rem",
@@ -3530,7 +3671,11 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             const isLogisticsCat = Boolean(liveData?.logistics?.leg) || ["goods", "truck", "two_wheeler", "packers", "transport"].some(k => cat.includes(k))
             const pickup = liveData?.pickup_location || successData?.pickup_location
             const drop = liveData?.drop_location || successData?.drop_location
-            return isLogisticsCat && (pickup || drop) ? { pickup, drop } : null
+            // Intermediate TripStop waypoints passed through for multi-stop GT routes
+            const stops = (liveData?.logistics?.stops || successData?.logistics?.stops || []).filter(
+              (s) => !["PICKUP", "DROP"].includes(String(s?.stop_type || "").toUpperCase())
+            )
+            return isLogisticsCat && (pickup || drop) ? { pickup, drop, stops } : null
           })()}
         />
       </div>
@@ -19841,6 +19986,7 @@ export function CustomCleaningPackageModal({
 
   const [showAcInspectionModal, setShowAcInspectionModal] = useState(false);
   const [activeAcInspectionItem, setActiveAcInspectionItem] = useState(null);
+  const [dynamicAcInspectionConfig, setDynamicAcInspectionConfig] = useState(null);
   const [dynamicAcInspectionFee, setDynamicAcInspectionFee] = useState(() => {
     try {
       const c = localStorage.getItem("calservices_ac_inspection_fee");
@@ -19855,12 +20001,15 @@ export function CustomCleaningPackageModal({
     async function loadDynamicFee() {
       try {
         const res = await fetch("/api/service-requests/ac-inspection/rate-card/").then((r) => r.json());
-        if (isMounted && res?.data?.diagnostic_fee != null) {
-          const fee = Number(res.data.diagnostic_fee);
-          setDynamicAcInspectionFee(fee);
-          try {
-            localStorage.setItem("calservices_ac_inspection_fee", String(fee));
-          } catch (_) {}
+        if (isMounted && res?.data) {
+          setDynamicAcInspectionConfig(res.data);
+          if (res.data.diagnostic_fee != null) {
+            const fee = Number(res.data.diagnostic_fee);
+            setDynamicAcInspectionFee(fee);
+            try {
+              localStorage.setItem("calservices_ac_inspection_fee", String(fee));
+            } catch (_) {}
+          }
         }
       } catch (e) {
         console.warn("[BookingPage] Failed to fetch dynamic AC inspection fee:", e);
@@ -19884,7 +20033,8 @@ export function CustomCleaningPackageModal({
 
     const inspectionCartItem = {
       id: inspectionCartId,
-      name: "AC Inspection",
+      name: dynamicAcInspectionConfig?.title || "AC Inspection & Diagnostic",
+      image: dynamicAcInspectionConfig?.image || "media/catalog/packages/appliance_cleaning_thumb.webp",
       price: unitPrice,
       quantity: qty,
       duration: "45 mins",
@@ -19968,17 +20118,36 @@ export function CustomCleaningPackageModal({
     badge: "₹199 Inspection",
     price: 199,
   };
-  const [acInspectionTile, setAcInspectionTile] = useState(AC_INSPECTION_TILE_DEFAULTS);
+  const [acInspectionTile, setAcInspectionTile] = useState(() => {
+    try {
+      const cached = localStorage.getItem("calservices_ac_inspection_config");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.is_active === false) {
+          return { ...AC_INSPECTION_TILE_DEFAULTS, visible: false };
+        }
+      }
+    } catch (_) {}
+    return AC_INSPECTION_TILE_DEFAULTS;
+  });
 
   useEffect(() => {
     apiRequest("/settings/homepage/")
       .then((res) => {
         const saved = res?.config?.ac_inspection_tile;
         if (saved && typeof saved === "object") {
-          setAcInspectionTile({ ...AC_INSPECTION_TILE_DEFAULTS, ...saved });
+          setAcInspectionTile((prev) => ({ ...AC_INSPECTION_TILE_DEFAULTS, ...saved, visible: prev.visible === false ? false : saved.visible !== false }));
         }
       })
       .catch((err) => console.warn("AC inspection tile config unavailable, using default tile config:", err?.message || err));
+
+    apiRequest("/settings/ac-inspection/config/")
+      .then((res) => {
+        if (res?.data && res.data.is_active === false) {
+          setAcInspectionTile((prev) => ({ ...prev, visible: false }));
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const handleSaveAcInspectionTile = async (field, value) => {

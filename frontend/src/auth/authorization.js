@@ -10,7 +10,7 @@
 export function isSuperAdmin(user) {
   if (!user) return false
   const role = String(user.role || "").toLowerCase()
-  if (role === "super_admin" || role === "superadmin") {
+  if (role === "super_admin" || role === "superadmin" || role === "platform_admin") {
     return true
   }
   if (user.is_super_admin === true || user.isSuperAdmin === true) {

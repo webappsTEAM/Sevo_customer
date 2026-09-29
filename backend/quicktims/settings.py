@@ -520,13 +520,27 @@ GOOGLE_CLIENT_ID = (os.getenv("GOOGLE_CLIENT_ID") or os.getenv("Client_ID") or "
 GOOGLE_CLIENT_SECRET = (os.getenv("GOOGLE_CLIENT_SECRET") or os.getenv("Client_secret") or "").strip()
 
 # Backend-only key -- never send this to the frontend. The Vite
-# VITE_GOOGLE_MAPS_KEY var is a separate, browser-restricted key for the Maps JS SDK.
-# This server key is strictly for server-side routing, ETA & geocoding (Distance Matrix / Directions).
-GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
+# VITE_GOOGLE_MAPS_KEY/VITE_GOOGLE_MAPS_API_KEY vars are a separate,
+# browser-restricted key for the Maps JS SDK; this one is used server-side
+# by service_requests/services/routing.py for the Distance Matrix API, so
+# distance/ETA are computed server-side rather than trusting the client.
+GOOGLE_MAPS_API_KEY = (
+    os.getenv("GOOGLE_MAPS_API_KEY")
+    or os.getenv("VITE_GOOGLE_MAPS_KEY")
+    or os.getenv("VITE_GOOGLE_MAPS_API_KEY")
+    or ""
+).strip()
 
 # S-06: Road curvature factor for straight-line routing fallback.
 LOGISTICS_ROAD_CURVATURE_FACTOR = float(os.getenv("LOGISTICS_ROAD_CURVATURE_FACTOR", "1.00"))
 
+
+# Behind a reverse proxy every client shares the proxy's IP unless DRF is told how many
+# proxies to trust, so anon throttling (and per-IP scopes) would pool all visitors into one
+# bucket. Opt-in: set THROTTLE_NUM_PROXIES to the number of trusted proxies in front of Django.
+_throttle_num_proxies = os.getenv("THROTTLE_NUM_PROXIES", "").strip()
+if _throttle_num_proxies.isdigit():
+    REST_FRAMEWORK["NUM_PROXIES"] = int(_throttle_num_proxies)
 
 # ── Celery ────────────────────────────────────────────────────────────────────
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
@@ -543,6 +557,11 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 60.0,
     },
 }
+# Fail fast when the broker / result store is unreachable.
+CELERY_TASK_PUBLISH_RETRY_POLICY = {"max_retries": 1, "interval_start": 0, "interval_step": 0.2, "interval_max": 0.5}
+CELERY_BROKER_TRANSPORT_OPTIONS = {"socket_connect_timeout": 2, "socket_timeout": 5, "retry_on_timeout": False}
+CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {"retry_policy": {"max_retries": 1, "interval_start": 0, "interval_step": 0.2, "interval_max": 0.5}, "socket_connect_timeout": 2}
+CELERY_BROKER_CONNECTION_TIMEOUT = 2
 
 # ── Performance & Application Logging Configuration ──────────────────────────
 LOGGING = {

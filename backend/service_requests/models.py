@@ -76,7 +76,7 @@ def is_mason_category(value) -> bool:
     return str(value).strip().lower() in MASON_CATEGORY_ALIASES
 
 
-def _generate_request_id(category_or_slug=None):
+def _generate_request_id(category_or_slug=None, skip=0):
     """
     Generate category-prefixed unique ID (e.g. HM0001, AC0001, PL0001, EL0001).
     Guarantees global uniqueness across all ServiceRequests.
@@ -97,6 +97,9 @@ def _generate_request_id(category_or_slug=None):
 
     last = ServiceRequest.objects.filter(request_id__startswith=prefix).order_by("-id").first()
     num = (last.id + 1) if last and last.id else (ServiceRequest.objects.count() + 1)
+    # `skip` > 0 only on a retry after a unique-id collision with a concurrent booking: every racing
+    # request would otherwise recompute the very same next number and keep colliding.
+    num += max(0, int(skip))
     req_id = f"{prefix}{str(num).zfill(4)}"
     while ServiceRequest.objects.filter(request_id=req_id).exists():
         num += 1
@@ -711,7 +714,7 @@ class ServiceRequest(models.Model):
         # under concurrent load). Retry with a freshly generated id a bounded
         # number of times inside a savepoint, so one collision doesn't also
         # abort whatever outer transaction the caller may be in.
-        _max_attempts = 5
+        _max_attempts = 8
         for _attempt in range(1, _max_attempts + 1):
             try:
                 with transaction.atomic():  # type: ignore[attr-defined]
@@ -720,7 +723,9 @@ class ServiceRequest(models.Model):
             except IntegrityError:
                 if not _request_id_was_generated or _attempt == _max_attempts:
                     raise
-                self.request_id = _generate_request_id(self.service_category)
+                import random
+                self.request_id = _generate_request_id(
+                    self.service_category, skip=random.randint(1, 5 * _attempt * _attempt))
 
         if is_new or old_status != self.status:
             from service_requests.state_machine import record_transition
@@ -1208,6 +1213,15 @@ class Package(models.Model):
         max_digits=10, decimal_places=2, null=True, blank=True,
         help_text="Goods & Transport only: floor applied after everything else. Mirrors ServiceTier.minimum_fare.",
     )
+    gt_gst_rate = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0.00")), MaxValueValidator(Decimal("100.00"))],
+        help_text=(
+            "Goods & Transport only: GST percentage already INCLUDED in the fare (18.00 = 18%). The fare does not "
+            "change; invoices show the GST component. Enter 0 to remove GST; blank leaves the tier unchanged. "
+            "Mirrors ServiceTier.gst_rate."
+        ),
+    )
 
     created_at     = models.DateTimeField(auto_now_add=True)
     updated_at     = models.DateTimeField(auto_now=True)
@@ -1525,7 +1539,7 @@ class RescheduleRequest(models.Model):
 
     # Proposed new date & slot
     new_date              = models.DateField()
-    new_time_slot         = models.CharField(max_length=20, choices=TimeSlotChoices.choices, default=TimeSlotChoices.SLOT_09_10)
+    new_time_slot         = models.CharField(max_length=100, blank=True, default="09:00 - 10:00")
 
     reason                = models.CharField(max_length=50, choices=RescheduleReason.choices, default=RescheduleReason.SCHEDULE_CONFLICT)
     additional_notes      = models.TextField(blank=True, default="")
@@ -1830,6 +1844,15 @@ class GTCancellationPolicy(models.Model):
             return Decimal("0")
         if self.applies_only_after_assignment:
             assigned_at = getattr(service_request, "accepted_at", None) or getattr(service_request, "assigned_at", None)
+            if not assigned_at:
+                try:
+                    latest = (
+                        service_request.assignments.filter(accepted_at__isnull=False)
+                        .order_by("-accepted_at").first()
+                    )
+                    assigned_at = latest.accepted_at if latest else None
+                except Exception:
+                    assigned_at = None
             if not assigned_at:
                 return Decimal("0")
             if self.grace_period_seconds:
@@ -3431,6 +3454,38 @@ class ACInspectionConfiguration(models.Model):
     )
     currency = models.CharField(max_length=10, default="INR")
     is_active = models.BooleanField(default=True)
+    title = models.CharField(
+        max_length=255,
+        default="AC Inspection & Diagnostic Visit",
+        blank=True,
+        help_text="Customer-facing service title"
+    )
+    subtitle = models.TextField(
+        default="Not sure about the fault? Certified technician visits with diagnostic instruments, inspects cooling, gas pressure & electricals, and provides an itemized quotation before repair.",
+        blank=True,
+        help_text="Customer-facing description of the diagnostic visit"
+    )
+    image = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        help_text="Storage path or URL to the inspection service image"
+    )
+    badges = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="JSON list of service highlight badges"
+    )
+    includes = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="JSON list of diagnostic inspection check points"
+    )
+    ready = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="JSON list of customer preparation instructions"
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -3439,9 +3494,36 @@ class ACInspectionConfiguration(models.Model):
 
     @classmethod
     def get_solo(cls):
+        default_badges = [
+            "₹199 Diagnostic Fee",
+            "Adjustable Against Repair",
+            "Pay at Doorstep",
+        ]
+        default_includes = [
+            "Comprehensive 21-point system & safety diagnostics",
+            "Cooling delta temp scan & gas pressure test",
+            "Compressor load & capacitor electrical scan",
+            "Itemized quotation before any repair work",
+        ]
+        default_ready = [
+            "Continuous power supply and remote control available for testing",
+            "Clear access to indoor and outdoor AC units",
+            "Area below indoor unit cleared of electronics & valuables",
+            "Outdoor unit safely accessible via balcony, terrace, or window",
+        ]
         obj, _ = cls.objects.get_or_create(
             id=1,
-            defaults={"diagnostic_fee": Decimal("199.00"), "currency": "INR", "is_active": True}
+            defaults={
+                "diagnostic_fee": Decimal("199.00"),
+                "currency": "INR",
+                "is_active": True,
+                "title": "AC Inspection & Diagnostic Visit",
+                "subtitle": "Not sure about the fault? Certified technician visits with diagnostic instruments, inspects cooling, gas pressure & electricals, and provides an itemized quotation before repair.",
+                "image": "",
+                "badges": default_badges,
+                "includes": default_includes,
+                "ready": default_ready,
+            }
         )
         return obj
 

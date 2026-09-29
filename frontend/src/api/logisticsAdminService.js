@@ -476,3 +476,48 @@ export async function deleteCoverageZone(id) {
     return { ok: false, error: asError(err) }
   }
 }
+
+/* =========================================================================
+ * 9. GT MONEY POLICIES (cancellation fee, waiting charge, advance payment)
+ *
+ * Backed by /api/logistics/admin/policies/. Every policy defaults to "no effect";
+ * a category row overrides the blank/platform-wide row for that category only.
+ * ========================================================================= */
+
+const POLICY_BASE = "/logistics/admin/policies/"
+
+export async function fetchAdminPolicies() {
+  try {
+    const res = await apiRequest(POLICY_BASE)
+    return { ok: true, policies: res?.data || {} }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function createAdminPolicy(kind, payload) {
+  try {
+    const res = await apiRequest(`${POLICY_BASE}${kind}/`, { method: "POST", json: payload })
+    return { ok: true, policy: res?.data }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function updateAdminPolicy(kind, id, changes, reason = "") {
+  try {
+    const res = await apiRequest(`${POLICY_BASE}${kind}/${id}/`, { method: "PATCH", json: { ...changes, reason } })
+    return { ok: true, policy: res?.data }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function deactivateAdminPolicy(kind, id) {
+  try {
+    const res = await apiRequest(`${POLICY_BASE}${kind}/${id}/`, { method: "DELETE" })
+    return { ok: true, policy: res?.data }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}

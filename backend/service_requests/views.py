@@ -1857,7 +1857,47 @@ def _haversine_meters(lat1, lon1, lat2, lon2):
         return None
 
 
-def _build_tracking_payload(sr, has_full_access):
+_DELIVERY_OTP_VISIBLE_LEGS = {
+    "EN_ROUTE_DROP", "UNLOADING",            # Goods & Transport
+    "IN_TRANSIT", "ARRIVED_DROP", "REASSEMBLY", "UNPACKING",  # Packers & Movers
+}
+
+
+def _latest_delivery_otp(sr):
+    """
+    The delivery OTP the vendor app issued for this booking, or None.
+
+    Read-only lookup of the DELIVERY_OTP notification the vendor writes for the
+    customer (see WorkforceJobLogisticsCheckpointView / issue_delivery_otp).
+    Only while the trip is at the drop end (a code from an earlier attempt is
+    never shown once the trip is delivered, and never before the driver has
+    reached the drop).
+    """
+    leg = (getattr(sr, "logistics_leg", "") or "").strip().upper()
+    if leg not in _DELIVERY_OTP_VISIBLE_LEGS:
+        return None
+    try:
+        import re
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT message FROM workforce_notification "
+                "WHERE related_object_id IN (%s, %s) "
+                "AND notification_type = 'DELIVERY_OTP' "
+                "ORDER BY created_at DESC LIMIT 1;",
+                [str(sr.id), str(sr.request_id or "")],
+            )
+            row = cursor.fetchone()
+            if row and row[0]:
+                m = re.search(r'OTP\s+([0-9]{6})', row[0])
+                if m:
+                    return m.group(1)
+    except Exception:
+        pass
+    return None
+
+
+def _build_tracking_payload(sr, has_full_access, include_delivery_otp=False, include_feedback=False):
     """
     Constructs the canonical live tracking response payload for a booking.
     Sensitive data (technician phone, Service Start OTP) is strictly omitted
@@ -1866,6 +1906,8 @@ def _build_tracking_payload(sr, has_full_access):
     dest_lat = float(sr.latitude) if sr.latitude is not None else None
     dest_lng = float(sr.longitude) if sr.longitude is not None else None
     dest_address = sr.address or ""
+    dest_stop_seq = None
+    dest_stop_type = ""
 
     # GT-D-02: sr.latitude/sr.longitude are the PICKUP point (see the
     # field comment above sr.address). Bookings that used TripStop
@@ -1896,8 +1938,15 @@ def _build_tracking_payload(sr, has_full_access):
         if stops:
             target_stop = None
             if sr.logistics_leg in post_pickup_legs:
-                drop_stops = [s for s in stops if s.stop_type == TripStop.StopType.DROP]
-                target_stop = drop_stops[-1] if drop_stops else stops[-1]
+                if len(stops) > 2:
+                    pending = [
+                        s for s in stops
+                        if s.stop_type != TripStop.StopType.PICKUP and s.completed_at is None
+                    ]
+                    target_stop = pending[0] if pending else None
+                if target_stop is None:
+                    drop_stops = [s for s in stops if s.stop_type == TripStop.StopType.DROP]
+                    target_stop = drop_stops[-1] if drop_stops else stops[-1]
             else:
                 pickup_stops = [s for s in stops if s.stop_type == TripStop.StopType.PICKUP]
                 target_stop = pickup_stops[0] if pickup_stops else stops[0]
@@ -1905,6 +1954,8 @@ def _build_tracking_payload(sr, has_full_access):
                 dest_lat = float(target_stop.latitude)
                 dest_lng = float(target_stop.longitude)
                 dest_address = target_stop.address or dest_address
+                dest_stop_seq = target_stop.sequence
+                dest_stop_type = target_stop.stop_type
         elif (
             sr.logistics_leg in post_pickup_legs
             and sr.drop_latitude is not None
@@ -2240,6 +2291,32 @@ def _build_tracking_payload(sr, has_full_access):
         except Exception:
             pass
 
+    # Goods & Transport / Packers & Movers delivery OTP. The vendor app
+    # issues it when the driver's GPS is verified at the drop and records it as
+    # a DELIVERY_OTP notification addressed to the customer (the same table the
+    # payment-confirmation OTP above is read from) -- but nothing in this app
+    # ever surfaced it, so the customer had no way to obtain the code the driver
+    # must enter to complete the delivery. Same guard rails as the other OTPs:
+    # full-access viewers only, hidden once the booking is terminal, and only
+    # shown while the trip is at the drop end and not yet delivered.
+    #
+    # Deliberately opt-in (include_delivery_otp): this builder also feeds the
+    # technician-facing endpoints and the websocket group broadcast, and the
+    # driver must never be able to read the code the customer is meant to give
+    # them. Only the customer/token/admin live-location endpoint asks for it.
+    delivery_otp = None
+    if include_delivery_otp and has_full_access and sr.service_category in LOGISTICS_CATEGORIES and not is_terminal:
+        delivery_otp = _latest_delivery_otp(sr)
+
+    # Rating handle for a delivered trip. Same opt-in / full-access rule as the delivery OTP: the
+    # feedback token is a bearer credential for the rating form, so it is only handed to the
+    # customer/token-holder/admin live-location endpoint -- never to the driver-facing builders or
+    # the websocket group broadcast that share this function.
+    trip_feedback = None
+    if include_feedback and has_full_access and sr.service_category in LOGISTICS_CATEGORIES:
+        from .services.trip_feedback import trip_feedback_summary
+        trip_feedback = trip_feedback_summary(sr)
+
     created_at_raw = getattr(sr, 'created_at', None) or getattr(sr, 'submitted_at', None)
     if created_at_raw and hasattr(created_at_raw, 'isoformat'):
         created_at_str = created_at_raw.isoformat()
@@ -2321,6 +2398,9 @@ def _build_tracking_payload(sr, has_full_access):
             "address": dest_address,
             "latitude": dest_lat,
             "longitude": dest_lng,
+            # Which stop of a multi-stop trip this is (None for single pickup/drop bookings).
+            "stop_sequence": dest_stop_seq,
+            "stop_type": dest_stop_type,
         },
         "technician": technician_data,
         "technician_name": tech_name if is_accepted else "",
@@ -2335,6 +2415,8 @@ def _build_tracking_payload(sr, has_full_access):
         "eta_minutes": eta_minutes,
         "start_otp": start_otp,
         "payment_confirmation_otp": payment_confirmation_otp,
+        "delivery_otp": delivery_otp,
+        "feedback": trip_feedback,
         "tracking_token": str(sr.tracking_token) if (has_full_access and sr.tracking_token) else None,
         "vehicle_number": tracking.get("vehicle_number") if (tracking and isinstance(tracking, dict)) else "",
         "vehicle_type": tracking.get("vehicle_type") if (tracking and isinstance(tracking, dict)) else "",
@@ -2411,7 +2493,7 @@ class CustomerBookingLiveLocationView(APIView):
         if not (token_matches or is_admin_user or is_owner):
             return _error("Valid tracking token or authentication required.", 401)
 
-        payload = _build_tracking_payload(sr, has_full_access=True)
+        payload = _build_tracking_payload(sr, has_full_access=True, include_delivery_otp=True, include_feedback=True)
         return _success(data=payload)
 
 
@@ -2439,7 +2521,7 @@ class CustomerPublicTrackingView(APIView):
         if _tracking_token_is_expired(sr):  # Fixes EC-08
             return _error("Tracking link not found or expired.", 404)
 
-        payload = _build_tracking_payload(sr, has_full_access=True)
+        payload = _build_tracking_payload(sr, has_full_access=True, include_delivery_otp=True, include_feedback=True)
         return _success(data=payload)
 
 
@@ -2571,6 +2653,8 @@ class FeedbackTokenView(APIView):
         serializer = ServiceFeedbackSubmitSerializer(fb, data=request.data)
         if not serializer.is_valid():
             return Response({"success": False, "errors": serializer.errors}, status=400)
+        if serializer.validated_data.get("rating") is None:
+            return Response({"success": False, "errors": {"rating": ["Rating is required."]}}, status=400)
 
         with atomic_transaction():
             serializer.save(is_submitted=True, submitted_at=timezone.now())
@@ -2579,7 +2663,9 @@ class FeedbackTokenView(APIView):
         try:
             from workforce_integration.services import WorkforceIntegrationService
             sr = fb.service_request
-            tech_id = getattr(sr, "workforce_job_id", "") or str(sr.id)
+            # The technician the rating is about, snapshotted when the job was done. (This used to send
+            # the JOB id in the technician slot, which the vendor resolved as an employee id.)
+            tech_id = fb.technician_id or ""
             WorkforceIntegrationService.send_technician_feedback(
                 service_request=sr,
                 technician_id=tech_id,
@@ -3836,9 +3922,7 @@ class CustomerReverseGeocodeView(APIView):
             return _standard_response(success=False, error={"code": "INVALID_COORDS", "message": "latitude and longitude must be numeric."}, status_code=400)
 
         result = AddressService.reverse_geocode(lat, lng)
-        if result:
-            return _standard_response(success=True, data=result)
-        return _standard_response(success=False, error={"code": "GEOCODE_FAILED", "message": "Unable to reverse geocode coordinates."}, status_code=200)
+        return _standard_response(success=True, data=result or {"formatted_address": f"{lat:.4f}, {lng:.4f}"})
 
 
 # ─── 8. MARKETING COUPONS VIEWS ───────────────────────────────────────────────
@@ -5213,7 +5297,15 @@ class ACRateCardPublicView(APIView):
         cat_serializer = ACRateCardPublicCategorySerializer(categories, many=True)
         return _success(data={
             "diagnostic_fee": float(config.diagnostic_fee),
+            "fee": int(config.diagnostic_fee) if config.diagnostic_fee == int(config.diagnostic_fee) else float(config.diagnostic_fee),
             "currency": config.currency,
+            "title": config.title or "AC Inspection & Diagnostic Visit",
+            "subtitle": config.subtitle or "",
+            "image": config.image or "",
+            "badges": config.badges or [],
+            "includes": config.includes or [],
+            "ready": config.ready or [],
+            "is_active": bool(config.is_active),
             "categories": cat_serializer.data,
             "total_items": ACInspectionRateItem.objects.filter(is_active=True).count(),
         })
