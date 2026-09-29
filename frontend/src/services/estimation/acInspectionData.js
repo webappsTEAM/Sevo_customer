@@ -3,8 +3,10 @@ import { apiRequest } from "../../api/client.js"
 // Non-rate-card default layout metadata (Note: categories and spare items are strictly database-driven)
 export const DEFAULT_AC_INSPECTION_CONFIG = {
   fee: 199,
+  is_active: true,
   title: "AC Inspection & Diagnostic Visit",
   subtitle: "Not sure about the fault? Certified technician visits with diagnostic instruments, inspects cooling, gas pressure & electricals, and provides an itemized quotation before repair.",
+  image: "",
   badges: [
     "₹199 Diagnostic Fee",
     "Adjustable Against Repair",
@@ -166,10 +168,24 @@ export async function fetchACConfigDB() {
 
 /** Update AC Inspection configuration in database */
 export async function updateACConfigDB(data) {
-  return await apiRequest("/service-requests/admin/ac-inspection/config/", {
+  const res = await apiRequest("/service-requests/admin/ac-inspection/config/", {
     method: "PATCH",
     body: JSON.stringify(data),
   })
+  if (res?.success && res.data) {
+    try {
+      const cached = localStorage.getItem(STORAGE_KEY)
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        const updated = { ...parsed, ...res.data }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+      }
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("ac_inspection_config_updated", { detail: res.data }))
+      }
+    } catch (e) {}
+  }
+  return res
 }
 
 /** Safely reset AC Inspection default catalog in PostgreSQL database */

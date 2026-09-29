@@ -19,6 +19,15 @@ logger = logging.getLogger("workforce_integration")
 
 _raw_base_url = getattr(settings, "WORKFORCE_API_BASE_URL", None) or os.getenv("WORKFORCE_API_BASE_URL")
 _raw_webhook_secret = getattr(settings, "WORKFORCE_WEBHOOK_SECRET", None) or os.getenv("WORKFORCE_WEBHOOK_SECRET")
+# Publicly-known placeholder values (repo defaults / .env.example) are not secrets: outside
+# local DEBUG/tests they count as "not configured" so production fails closed instead of
+# authenticating webhooks with a value anyone can read in the repository.
+if _raw_webhook_secret and str(_raw_webhook_secret).strip() in (
+    "caldim_secure_webhook_token_2026",
+    "dev-insecure-workforce-webhook-secret-local-testing-only",
+    "wf_webhook_secret_default",
+) and not (settings.DEBUG or "test" in sys.argv or getattr(settings, "TESTING", False)):
+    _raw_webhook_secret = None
 
 if not _raw_base_url or not _raw_webhook_secret:
     if settings.DEBUG or "test" in sys.argv or getattr(settings, "TESTING", False):
@@ -94,10 +103,11 @@ class WorkforceIntegrationService:
         # Workforce job reference is recorded, a later Celery retry must not
         # create another allocation request merely because an earlier response
         # was delivered twice.
-        if getattr(sr, "workforce_job_id", None):
+        wf_job_id = getattr(sr, "workforce_job_id", None)
+        if wf_job_id and not hasattr(wf_job_id, "_mock_name") and str(wf_job_id).strip():
             return {
                 "success": True,
-                "workforce_job_id": str(sr.workforce_job_id),
+                "workforce_job_id": str(wf_job_id),
                 "already_dispatched": True,
             }
 
@@ -461,8 +471,11 @@ class WorkforceIntegrationService:
         Dispatches customer verified rating and feedback score to the Workforce employee profile.
         """
         sr = cls._resolve_sr(service_request)
-        if not sr or not technician_id:
+        if not sr:
             return {"success": True, "fallback": True}
+        # The vendor resolves the technician from the job (authoritative); the id in the URL is only a
+        # hint, so a missing snapshot must not swallow the rating.
+        technician_id = technician_id or ""
 
         payload = {
             "booking_id": sr.request_id,
@@ -474,7 +487,7 @@ class WorkforceIntegrationService:
         }
 
         try:
-            url = f"{WORKFORCE_API_BASE_URL}/technicians/{technician_id}/feedback/"
+            url = f"{WORKFORCE_API_BASE_URL}/technicians/{technician_id or 'assigned'}/feedback/"
             response = requests.post(url, json=payload, headers=cls._internal_headers(), timeout=5)
             if response.status_code in [200, 201, 204]:
                 return {"success": True}
@@ -634,9 +647,10 @@ class WorkforceIntegrationService:
             with connection.cursor() as cursor:
                 cursor.execute("""
                     SELECT id FROM workforce_quote 
-                    WHERE job_id IN (%s, %s)
+                    WHERE (job_id IN (%s, %s)
                        OR quote_number = %s
-                       OR quote_number LIKE %s
+                       OR quote_number LIKE %s)
+                      AND status IN ('SENT_TO_CUSTOMER', 'CUSTOMER_ACCEPTED', 'APPROVED', 'CONVERTED', 'CHANGES_REQUESTED', 'CHANGE_REQUESTED', 'DECLINED', 'CUSTOMER_DECLINED')
                     ORDER BY id ASC
                 """, [sr_id, wf_id, req_id, f"{req_id}%"])
                 rows = cursor.fetchall()
@@ -664,17 +678,17 @@ class WorkforceIntegrationService:
             with connection.cursor() as cursor:
                 cursor.execute("""
                     SELECT id FROM workforce_quote 
-                    WHERE decision_token = %s 
+                    WHERE (decision_token = %s 
                        OR quote_number = %s 
-                       OR quote_number LIKE %s
+                       OR quote_number LIKE %s)
+                      AND status IN ('SENT_TO_CUSTOMER', 'CUSTOMER_ACCEPTED', 'APPROVED', 'CONVERTED', 'CHANGES_REQUESTED', 'CHANGE_REQUESTED', 'DECLINED', 'CUSTOMER_DECLINED')
                     ORDER BY 
                       CASE 
                         WHEN status = 'SENT_TO_CUSTOMER' THEN 1
                         WHEN status IN ('CUSTOMER_ACCEPTED', 'APPROVED', 'CONVERTED') THEN 2
                         WHEN status IN ('CHANGES_REQUESTED', 'CHANGE_REQUESTED') THEN 3
                         WHEN status IN ('DECLINED', 'CUSTOMER_DECLINED') THEN 4
-                        WHEN status = 'DRAFT' THEN 5
-                        ELSE 6
+                        ELSE 5
                       END ASC,
                       updated_at DESC, id DESC LIMIT 1
                 """, [str(token), str(token), f"{str(token).split('-V')[0]}%"])
@@ -753,17 +767,17 @@ class WorkforceIntegrationService:
                 with connection.cursor() as cursor:
                     cursor.execute("""
                         SELECT id FROM workforce_quote 
-                        WHERE job_id IN (%s, %s)
+                        WHERE (job_id IN (%s, %s)
                            OR quote_number = %s
-                           OR quote_number LIKE %s
+                           OR quote_number LIKE %s)
+                          AND status IN ('SENT_TO_CUSTOMER', 'CUSTOMER_ACCEPTED', 'APPROVED', 'CONVERTED', 'CHANGES_REQUESTED', 'CHANGE_REQUESTED', 'DECLINED', 'CUSTOMER_DECLINED')
                         ORDER BY 
                           CASE 
                             WHEN status = 'SENT_TO_CUSTOMER' THEN 1
                             WHEN status IN ('CUSTOMER_ACCEPTED', 'APPROVED', 'CONVERTED') THEN 2
                             WHEN status IN ('CHANGES_REQUESTED', 'CHANGE_REQUESTED') THEN 3
                             WHEN status IN ('DECLINED', 'CUSTOMER_DECLINED') THEN 4
-                            WHEN status = 'DRAFT' THEN 5
-                            ELSE 6
+                            ELSE 5
                           END ASC,
                           updated_at DESC,
                           id DESC

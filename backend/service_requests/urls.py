@@ -103,7 +103,7 @@ from .views import (
     AdminRefundListView,
     AdminRefundActionView,
     CustomerWalletView, AdminWalletCreditView, TechnicianProfileView, AdminNotificationOutboxView,
-    CustomerInsuranceClaimListCreateView, AdminInsuranceClaimListView, AdminInsuranceClaimResolveView,
+    CustomerInsuranceClaimListCreateView, CustomerClaimableBookingsView, AdminInsuranceClaimListView, AdminInsuranceClaimResolveView,
 
     # Complaints
     CustomerComplaintListView,
@@ -127,6 +127,8 @@ from .views import (
 from .payment_views import (
     PaymentInitiateView,
     PaymentVerifyView,
+    PaymentWalletPayView,
+    PaymentConfigView,
     AdminPaymentUpdateView,
     InvoiceDownloadView,
 )
@@ -239,6 +241,8 @@ urlpatterns = [
     # ── Payment ───────────────────────────────────────────────────────────────
     path("payment/initiate/",                PaymentInitiateView.as_view(),  name="payment-initiate"),
     path("payment/verify/",                  PaymentVerifyView.as_view(),    name="payment-verify"),
+    path("payment/config/",                  PaymentConfigView.as_view(),     name="payment-config"),
+    path("payment/wallet-pay/",              PaymentWalletPayView.as_view(),  name="payment-wallet-pay"),
 
     # ── Admin — Service Requests ──────────────────────────────────────────────
     path("admin/service-requests/",          AdminSRListView.as_view(),      name="sr-admin-list"),
@@ -312,6 +316,7 @@ urlpatterns = [
     path('wallet/',                                        CustomerWalletView.as_view(),                 name='customer-wallet'),
     path('technicians/<str:technician_id>/profile/',       TechnicianProfileView.as_view(),              name='technician-profile'),
     path('admin/notifications/outbox/',                    AdminNotificationOutboxView.as_view(),        name='admin-notification-outbox'),
+    path('insurance-claims/eligible-bookings/',            CustomerClaimableBookingsView.as_view(),       name='insurance-claims-eligible'),
     path('insurance-claims/',                              CustomerInsuranceClaimListCreateView.as_view(), name='insurance-claims'),
     path('admin/insurance-claims/',                         AdminInsuranceClaimListView.as_view(),        name='admin-insurance-claims'),
     path('admin/insurance-claims/<int:pk>/resolve/',        AdminInsuranceClaimResolveView.as_view(),     name='admin-insurance-claim-resolve'),

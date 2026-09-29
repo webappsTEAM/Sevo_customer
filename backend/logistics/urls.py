@@ -16,6 +16,12 @@ from .admin_views import (
     AdminGTFaqListView,
     AdminGTFaqDetailView,
 )
+from .public_policy_views import PublicGTPolicyView, InsuranceTermsView
+from .admin_policy_views import (
+    AdminGTPolicyDetailView,
+    AdminGTPolicyListView,
+    AdminGTPolicyOverviewView,
+)
 from .views import (
     CargoFitmentEvaluationView,
     GoodsCategoryListView,
@@ -56,6 +62,11 @@ urlpatterns = [
     path("admin/slots/<int:pk>/", AdminLogisticsSlotDetailView.as_view(), name="logistics-admin-slot-detail"),
     path("admin/lanes/", AdminLaneListView.as_view(), name="logistics-admin-lanes"),
     path("admin/lanes/<int:pk>/", AdminLaneDetailView.as_view(), name="logistics-admin-lane-detail"),
+    path("policies/", PublicGTPolicyView.as_view(), name="logistics-public-policies"),
+    path("insurance-terms/", InsuranceTermsView.as_view(), name="logistics-insurance-terms"),
+    path("admin/policies/", AdminGTPolicyOverviewView.as_view(), name="logistics-admin-policies"),
+    path("admin/policies/<str:kind>/", AdminGTPolicyListView.as_view(), name="logistics-admin-policy-list"),
+    path("admin/policies/<str:kind>/<int:pk>/", AdminGTPolicyDetailView.as_view(), name="logistics-admin-policy-detail"),
     path("admin/faqs/", AdminGTFaqListView.as_view(), name="logistics-admin-faqs"),
     path("admin/faqs/<int:pk>/", AdminGTFaqDetailView.as_view(), name="logistics-admin-faq-detail"),
 ]

@@ -44,8 +44,10 @@ PRICING_FIELDS = (
     "minimum_fare",
     "loading_unloading_charge",
     "additional_stop_charge",
+    "max_additional_stops",
     "surge_multiplier",
     "starting_price",
+    "gst_rate",
 )
 
 # Vehicle capacity limits for physical fitment and cargo safety
@@ -65,6 +67,8 @@ DESCRIPTIVE_FIELDS = (
     "description",
     "order",
 ) + CAPACITY_FIELDS
+
+INTEGER_FIELDS = ("max_additional_stops",)
 
 EDITABLE_FIELDS = PRICING_FIELDS + DESCRIPTIVE_FIELDS
 
@@ -128,6 +132,15 @@ def changed_fields(tier, data):
                 if field in CAPACITY_FIELDS and new_dec <= Decimal("0"):
                     invalid[field] = ["Capacity value must be greater than zero."]
                     continue
+                if field in INTEGER_FIELDS and (
+                    new_dec != new_dec.to_integral_value()
+                    or not (Decimal("0") <= new_dec <= Decimal("10"))
+                ):
+                    invalid[field] = ["Enter a whole number between 0 and 10."]
+                    continue
+            if field in INTEGER_FIELDS and new_dec is None:
+                invalid[field] = ["This value is required."]
+                continue
             old_dec = None if old is None else _dec(old)
             if new_dec == old_dec:
                 continue
@@ -223,6 +236,8 @@ def update_tier_pricing(tier, data, actor, reason="", expected_updated_at=None):
             "old": getattr(tier, field),
             "new": new_value,
         })
+        if field in INTEGER_FIELDS and new_value is not None:
+            new_value = int(new_value)
         setattr(tier, field, new_value)
 
     # full_clean runs the model validators added for exactly this path --

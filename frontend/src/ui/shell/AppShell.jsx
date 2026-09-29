@@ -19,6 +19,7 @@ import { fetchTrialStatus, fetchTrialNotifications } from "../../store/trialSlic
 import { TrialBanner } from "../components/TrialBanner.jsx"
 import { TrialExpiredModal } from "../components/TrialExpiredModal.jsx"
 import { isSuperAdmin, hasModule } from "../../auth/authorization.js"
+import { resolveImageUrl } from "../../utils/imageUrl.js"
 
 import {
   Home, Clock, CheckSquare, CalendarDays, Banknote, CalendarRange,
@@ -37,7 +38,7 @@ const SUPER_ADMIN_NAV_ITEMS = [
     icon: <ShieldCheck size={20} />,
     color: "#6366F1",
     children: [
-      { label: "Dashboard", to: "/platform/dashboard", icon: <Home size={16} />, color: "#6366F1" },
+      { label: "Command Center", to: "/platform/dashboard", icon: <ShieldCheck size={16} />, color: "#6366F1" },
       { label: "Staff & Access", to: "/platform/users", icon: <Users size={16} />, color: "#4F46E5" },
       { label: "RBAC Matrix", to: "/platform/rbac", icon: <Shield size={16} />, color: "#8B5CF6" },
       { label: "Customer 360", to: "/platform/customers", icon: <UserCheck size={16} />, color: "#0EA5E9" },
@@ -88,7 +89,7 @@ const ADMIN_NAV_ITEMS = [
       { label: "Vendor Approvals", to: routes.catalog_vendor_approvals, icon: <UserCheck size={16} />, color: "#3B82F6" },
       { label: "Painting Rate Card", to: routes.catalog_painting_rates, icon: <Palette size={16} />, color: "#3B82F6" },
       { label: "AC Inspection & Rates", to: routes.catalog_ac_inspection_rates, icon: <Wrench size={16} />, color: "#F59E0B" },
-      { label: "Goods & Transport Rates", to: routes.catalog_gt_pricing, icon: <Truck size={16} />, color: "#3B82F6", module: "pricing" },
+      { label: "Goods & Transport Rate Card (reference)", to: routes.catalog_gt_pricing, icon: <Truck size={16} />, color: "#3B82F6", module: "pricing" },
       { label: "Time Slot Management", to: routes.time_slot_management, icon: <Clock size={16} />, color: "#F59E0B", module: "time_slots" },
     ]
   },
@@ -115,18 +116,6 @@ const ADMIN_NAV_ITEMS = [
     to: routes.homepage_customizer,
     icon: <Globe size={20} />,
     color: "#F59E0B",
-    children: [
-      { label: "Hero Banner", to: `${routes.homepage_customizer}?tab=hero`, icon: <Globe size={16} />, color: "#F59E0B" },
-      { label: "Browse Categories", to: `${routes.homepage_customizer}?tab=categories`, icon: <FolderOpen size={16} />, color: "#3B82F6" },
-      { label: "Vendor Hire Banner", to: `${routes.homepage_customizer}?tab=vendorBanner`, icon: <Users size={16} />, color: "#0D9488" },
-      { label: "Promotional Offers", to: `${routes.homepage_customizer}?tab=offers`, icon: <Gift size={16} />, color: "#EC4899" },
-      { label: "Why Choose Us", to: `${routes.homepage_customizer}?tab=trust`, icon: <ShieldCheck size={16} />, color: "#10B981" },
-      { label: "How It Works", to: `${routes.homepage_customizer}?tab=workflow`, icon: <Repeat2 size={16} />, color: "#8B5CF6" },
-      { label: "Live Stats Bar", to: `${routes.homepage_customizer}?tab=stats`, icon: <BarChart3 size={16} />, color: "#0EA5E9" },
-      { label: "Featured Pros", to: `${routes.homepage_customizer}?tab=experts`, icon: <Users size={16} />, color: "#D946EF" },
-      { label: "Testimonials", to: `${routes.homepage_customizer}?tab=testimonials`, icon: <Award size={16} />, color: "#F59E0B" },
-      { label: "Footer & Contacts", to: `${routes.homepage_customizer}?tab=footer`, icon: <FileText size={16} />, color: "#64748B" },
-    ]
   },
   // Added 2026-09-17 per explicit request ("add a side section 'Mobile'
   // ... give the access to upload the banners, advertisement, top cards
@@ -140,11 +129,6 @@ const ADMIN_NAV_ITEMS = [
     to: `${routes.homepage_customizer}?tab=mobileBanners`,
     icon: <Smartphone size={20} />,
     color: "#0EA5E9",
-    children: [
-      { label: "App Banners", to: `${routes.homepage_customizer}?tab=mobileBanners`, icon: <Globe size={16} />, color: "#0EA5E9" },
-      { label: "Advertisement", to: `${routes.homepage_customizer}?tab=mobileAds`, icon: <Megaphone size={16} />, color: "#F97316" },
-      { label: "Top Cards (Groceries/Services)", to: `${routes.homepage_customizer}?tab=mobileTopCards`, icon: <LayoutGrid size={16} />, color: "#10B981" },
-    ]
   },
   {
     label: "Vegetable Inventory",
@@ -157,6 +141,7 @@ const ADMIN_NAV_ITEMS = [
       { label: "Returns", to: routes.vegetable_admin_returns, icon: <Repeat2 size={16} />, color: "#F59E0B" },
       { label: "Claims", to: routes.vegetable_admin_claims, icon: <ShieldAlert size={16} />, color: "#EF4444" },
       { label: "Inventory", to: routes.inventory_vegetables, icon: <Layers size={16} />, color: "#10B981" },
+      { label: "Stock Catalog", to: routes.inventory, icon: <Package size={16} />, color: "#8B5CF6" },
       { label: "Catalog Uploads", to: routes.vegetable_admin_catalog_uploads, icon: <FolderOpen size={16} />, color: "#8B5CF6" },
       { label: "Categories Approval", to: routes.vegetable_admin_categories_approval, icon: <ShieldCheck size={16} />, color: "#F59E0B" },
       { label: "Categories", to: routes.vegetable_admin_categories, icon: <FolderOpen size={16} />, color: "#06B6D4" },
@@ -170,12 +155,6 @@ const ADMIN_NAV_ITEMS = [
     to: "/settings",
     icon: <Settings size={20} />,
     color: "#64748B",
-    children: [
-      { label: "Stock Catalog", to: routes.inventory, icon: <Package size={16} />, color: "#8B5CF6" },
-      { label: "My Profile", to: "/settings?section=profile", icon: <User size={16} />, color: "#3B82F6" },
-      { label: "Security", to: "/settings?section=security", icon: <Shield size={16} />, color: "#10B981" },
-      { label: "Appearance", to: "/settings?section=appearance", icon: <Palette size={16} />, color: "#8B5CF6" },
-    ]
   },
 ]
 
@@ -262,11 +241,32 @@ function matchesRoute(currentPathname, routeTo) {
   return currentPathname === basePath || currentPathname.startsWith(basePath + "/")
 }
 
-function isItemActive(item, currentPathname) {
+function isItemActive(item, location) {
   if (!item) return false
+  const currentPathname = typeof location === "string" ? location : location?.pathname || ""
+  const currentSearch = typeof location === "object" ? location?.search || "" : ""
+
   if (item.to === "/customers/dashboard" && (currentPathname === "/customers" || currentPathname.startsWith("/customers/"))) {
     return true
   }
+
+  // Handle Mobile App vs Home Page Builder route distinction
+  if (item.label === "Mobile App") {
+    if (matchesRoute(currentPathname, routes.homepage_customizer)) {
+      const tab = new URLSearchParams(currentSearch).get("tab")
+      return ["mobileBanners", "mobileAds", "mobileTopCards"].includes(tab)
+    }
+    return false
+  }
+
+  if (item.label === "Home Page Builder") {
+    if (matchesRoute(currentPathname, routes.homepage_customizer)) {
+      const tab = new URLSearchParams(currentSearch).get("tab")
+      return !["mobileBanners", "mobileAds", "mobileTopCards"].includes(tab)
+    }
+    return false
+  }
+
   if (matchesRoute(currentPathname, item.to)) return true
   if (item.children && Array.isArray(item.children)) {
     return item.children.some(child => matchesRoute(currentPathname, child.to))
@@ -427,21 +427,30 @@ export function AppShell() {
     }
   }, [user, dispatch])
 
+  const closedParentRef = useRef(null)
+
   useEffect(() => {
-    if (drillDownParent && isItemActive(drillDownParent, location.pathname)) {
+    const parent = items.find(item => {
+      if (!item.children) return false
+      return isItemActive(item, location)
+    })
+
+    if (!parent) {
+      setDrillDownParent(null)
+      closedParentRef.current = null
       return
     }
 
-    const parent = items.find(item => {
-      if (!item.children) return false
-      return isItemActive(item, location.pathname)
-    })
-    if (parent) {
-      setDrillDownParent(parent)
-    } else {
-      setDrillDownParent(null)
+    if (closedParentRef.current && closedParentRef.current !== parent.label) {
+      closedParentRef.current = null
     }
-  }, [location.pathname, items, drillDownParent])
+
+    if (closedParentRef.current === parent.label) {
+      return
+    }
+
+    setDrillDownParent(parent)
+  }, [location, items])
 
   const showTooltip = (label, e) => {
     if (!sidebarCollapsed) return
@@ -602,10 +611,10 @@ export function AppShell() {
               type="button"
               onClick={() => setProfileOpen(v => !v)}
             >
-              <div className="relative w-10 h-10 flex items-center justify-center rounded-xl bg-[var(--sevo-primary)] text-white font-bold text-sm shadow-md group-hover:scale-105 transition-transform">
+              <div className="relative w-10 h-10 flex items-center justify-center rounded-xl bg-[var(--sevo-primary)] text-white font-bold text-sm shadow-md group-hover:scale-105 transition-transform overflow-hidden">
                 {user.avatar_url ? (
                   <img
-                    src={user.avatar_url.includes("demo.localhost") ? `${window.location.origin}${user.avatar_url.substring(user.avatar_url.indexOf('/media/'))}` : user.avatar_url}
+                    src={resolveImageUrl(user.avatar_url)}
                     alt="avatar"
                     className="w-full h-full object-cover rounded-xl"
                     onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -650,9 +659,14 @@ export function AppShell() {
                 <div className="absolute top-full right-0 mt-3 w-80 bg-[var(--sevo-surface)] rounded-2xl shadow-2xl border border-[var(--sevo-border)] z-[99999] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
                   <div className="p-6 bg-[var(--sevo-surface-raised)]/80 backdrop-blur-xl border-b border-[var(--sevo-border)]">
                     <div className="flex items-center gap-4">
-                      <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-[var(--sevo-primary)] text-white text-xl font-bold shadow-md">
+                      <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-[var(--sevo-primary)] text-white text-xl font-bold shadow-md overflow-hidden">
                         {user.avatar_url ? (
-                          <img src={user.avatar_url} alt="avatar" className="w-full h-full object-cover rounded-2xl" />
+                          <img
+                            src={resolveImageUrl(user.avatar_url)}
+                            alt="avatar"
+                            className="w-full h-full object-cover rounded-2xl"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          />
                         ) : (
                           initials(user.username)
                         )}
@@ -714,7 +728,7 @@ export function AppShell() {
         >
           <nav className="flex-1 overflow-y-auto py-6 flex flex-col items-center gap-4 scrollbar-hide">
             {items.map((item) => {
-              const active = isItemActive(item, location.pathname) || drillDownParent?.label === item.label;
+              const active = isItemActive(item, location) || drillDownParent?.label === item.label;
               const color = item.color || "#0B8F7A";
               const hasChildren = !!item.children;
 
@@ -722,7 +736,12 @@ export function AppShell() {
                 <div key={item.label} className="relative group">
                   <button
                     onClick={() => {
-                      if (hasChildren) setDrillDownParent(item);
+                      if (hasChildren) {
+                        closedParentRef.current = null;
+                        setDrillDownParent(item);
+                      } else {
+                        setDrillDownParent(null);
+                      }
                       navigate(item.to);
                     }}
                     className={`flex flex-col items-center justify-center w-20 h-20 rounded-2xl transition-all duration-300 relative gap-1.5 cursor-pointer ${active ? 'shadow-xs bg-[var(--sevo-surface-raised)] border border-[var(--sevo-border)]' : 'text-[var(--sevo-text-secondary)] hover:bg-[var(--sevo-surface-raised)]/60'}`}
@@ -806,7 +825,12 @@ export function AppShell() {
                 </div>
 
                 <button
-                  onClick={() => setDrillDownParent(null)}
+                  onClick={() => {
+                    if (drillDownParent) {
+                      closedParentRef.current = drillDownParent.label;
+                    }
+                    setDrillDownParent(null);
+                  }}
                   className="mt-auto w-full py-3 flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest text-[var(--sevo-text-muted)] hover:text-[var(--sevo-text-primary)] transition-colors cursor-pointer"
                 >
                   <ChevronLeft size={14} /> Close

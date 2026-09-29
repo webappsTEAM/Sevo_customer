@@ -5,11 +5,11 @@ import {
   Globe, Layout, Sparkles, ShieldCheck, Clock, Award, Headphones,
   BadgeCheck, Star, HeartPulse, Plus, Trash2, Check, RotateCcw,
   Eye, Save, ArrowUp, ArrowDown, Image as ImageIcon, MessageSquare,
-  Gift, FileText, Phone, Mail, ChevronRight,
+  Gift, FileText, Phone, Mail, ChevronRight, ChevronLeft, ArrowLeft, ArrowRight,
   Layers, CheckCircle, ExternalLink, Sliders, ToggleLeft, ToggleRight,
   ChefHat, Utensils, Monitor, Tablet, Smartphone, Maximize2, RefreshCw,
   IndianRupee, CheckCircle2, ChevronDown, ChevronUp, Pencil, Search, X,
-  Megaphone, LayoutGrid
+  Megaphone, LayoutGrid, Briefcase
 } from "lucide-react"
 import { getHomePageConfig, saveHomePageConfig, resetHomePageConfig, DEFAULT_HOME_PAGE_CONFIG, fetchDirectImageUrl, fetchPublishedHomePageConfig, publishHomePageConfig, resolveDisplayImageUrl } from "../../config/homePageConfig.js"
 import ImageUploadField from "../components/ImageUploadField.jsx"
@@ -79,29 +79,10 @@ function buildPreviewSrc(path, screen, editMode) {
   return `${path}${sep}preview=true${screenExtra}${editMode ? "&edit=true" : ""}`
 }
 
-// Fixed 2026-09-28 per explicit request ("If user uploaded Top card(Quick
-// access) that should be list on the Show ON for setting"): the Banners/
-// Advertisement tabs' "Show On" dropdown used to hardcode the option text
-// "Services only" / "Groceries only" — copy that drifts the moment the
-// admin renames those quick-access cards in the Mobile Top Cards tab (e.g.
-// to "Home Services"), leaving the dropdown showing a label that no longer
-// matches anything in the app. The underlying VALUES ("services" /
-// "groceries" / "both") stay exactly the values the customer app's
-// homepage_repository.dart already parses — only the on-screen text is
-// now sourced from whichever live top card the admin actually labeled as
-// the Services / Groceries quick-access entry, keyword-matched the same
-// way [Category.flowType] classifies categories on the mobile side.
-function flowOptionLabel(topCards, mode, fallback) {
-  const keyword = mode === "groceries" ? "grocer" : "servic"
-  const match = (topCards || []).find(
-    (c) => (c.label || "").toLowerCase().includes(keyword)
-  )
-  return match?.label ? `${match.label} only` : fallback
-}
-
 export default function HomePageCustomizerPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const activeTabParam = searchParams.get("tab") || "hero"
+  const rawTabParam = searchParams.get("tab") || "hero"
+  const activeTabParam = ["vendor", "vendor-hire", "vendorHire", "vendorBanner"].includes(rawTabParam) ? "vendorBanner" : rawTabParam
 
   const [config, setConfig] = useState(getHomePageConfig())
   const [showSavedToast, setShowSavedToast] = useState(false)
@@ -162,6 +143,34 @@ export default function HomePageCustomizerPage() {
     }
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [showPreviewModal])
+
+  // Listen for navigation, route changes and back events from within preview iframe
+  useEffect(() => {
+    const handlePreviewMessage = (e) => {
+      if (!e.data || typeof e.data !== "object") return
+      if (e.data.type === "PREVIEW_ROUTE_CHANGE") {
+        const { pathname, search, screen } = e.data
+        if (pathname) {
+          setPreviewPath(pathname)
+        }
+        if (screen) {
+          setPreviewScreen(screen)
+        } else if (pathname === "/home" && (!search || search === "?preview=true" || search === "?preview=true&edit=true")) {
+          setPreviewScreen("home")
+        }
+        if (search && search.includes("category=")) {
+          const params = new URLSearchParams(search)
+          const cat = params.get("category")
+          if (cat === "home_pest_control") setPreviewScreen("subcategories")
+          else if (cat === "kitchen_cleaning") setPreviewScreen("kitchen")
+        }
+      } else if (e.data.type === "CLOSE_PREVIEW") {
+        setShowPreviewModal(false)
+      }
+    }
+    window.addEventListener("message", handlePreviewMessage)
+    return () => window.removeEventListener("message", handlePreviewMessage)
+  }, [])
 
   // Fetch initial config from PostgreSQL database
   useEffect(() => {
@@ -358,6 +367,21 @@ export default function HomePageCustomizerPage() {
     })
   }
 
+  const updateVendorBanner = (field, value) => {
+    setConfig(prev => {
+      const next = {
+        ...prev,
+        vendorBanner: {
+          ...DEFAULT_HOME_PAGE_CONFIG.vendorBanner,
+          ...prev.vendorBanner,
+          [field]: value
+        }
+      }
+      saveHomePageConfig(next)
+      return next
+    })
+  }
+
   const navWorkflowSteps = [
     { id: "hero", label: "Hero Banner", icon: Globe, color: "text-amber-600 bg-amber-50" },
     { id: "categories", label: "Browse Categories", icon: Layers, color: "text-blue-600 bg-blue-50" },
@@ -386,6 +410,7 @@ export default function HomePageCustomizerPage() {
     { id: "mobileBestsellers", label: "Mobile Bestsellers", icon: Star, color: "text-amber-600 bg-amber-50" },
     { id: "trust", label: "Why Choose Us", icon: ShieldCheck, color: "text-emerald-600 bg-emerald-50" },
     { id: "testimonials", label: "Customer Reviews", icon: Award, color: "text-orange-600 bg-orange-50" },
+    { id: "vendorBanner", label: "Vendor Hire Banner", icon: Briefcase, color: "text-indigo-600 bg-indigo-50" },
     { id: "footer", label: "Footer & Contacts", icon: FileText, color: "text-slate-600 bg-slate-100" },
   ]
 
@@ -1315,8 +1340,8 @@ export default function HomePageCustomizerPage() {
                           className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold bg-white"
                         >
                           <option value="both">Both (Services &amp; Groceries)</option>
-                          <option value="services">{flowOptionLabel(config.mobile?.topCards, "services", "Services only")}</option>
-                          <option value="groceries">{flowOptionLabel(config.mobile?.topCards, "groceries", "Groceries only")}</option>
+                          <option value="services">Services only</option>
+                          <option value="groceries">Groceries only</option>
                         </select>
                       </div>
                     </div>
@@ -1434,8 +1459,8 @@ export default function HomePageCustomizerPage() {
                           className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold bg-white"
                         >
                           <option value="both">Both (Services &amp; Groceries)</option>
-                          <option value="services">{flowOptionLabel(config.mobile?.topCards, "services", "Services only")}</option>
-                          <option value="groceries">{flowOptionLabel(config.mobile?.topCards, "groceries", "Groceries only")}</option>
+                          <option value="services">Services only</option>
+                          <option value="groceries">Groceries only</option>
                         </select>
                       </div>
                     </div>
@@ -1836,6 +1861,363 @@ export default function HomePageCustomizerPage() {
             </div>
           )}
 
+          {/* TAB: VENDOR HIRE BANNER */}
+          {activeTab === "vendorBanner" && (
+            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
+              <div className="border-b border-slate-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <Briefcase className="w-5 h-5 text-indigo-600" />
+                    Vendor & Professional Hire Banner
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Manage the partner recruitment banner, headlines, call-to-action buttons, benefits, and value propositions.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold text-slate-600">
+                    {config.vendorBanner?.enabled !== false ? "Active on Home" : "Hidden"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => updateVendorBanner("enabled", !(config.vendorBanner?.enabled !== false))}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${
+                      config.vendorBanner?.enabled !== false ? "bg-indigo-600" : "bg-slate-300"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        config.vendorBanner?.enabled !== false ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              {/* Headings & Text */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                    Badge Text
+                  </label>
+                  <input
+                    type="text"
+                    value={config.vendorBanner?.badgeText ?? "We're Looking for Professionals"}
+                    onChange={(e) => updateVendorBanner("badgeText", e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                    placeholder="e.g. We're Looking for Professionals"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                    Badge Icon / Emoji
+                  </label>
+                  <input
+                    type="text"
+                    value={config.vendorBanner?.badgeIcon ?? "🤝"}
+                    onChange={(e) => updateVendorBanner("badgeIcon", e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                    placeholder="e.g. 🤝"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                    Heading Prefix
+                  </label>
+                  <input
+                    type="text"
+                    value={config.vendorBanner?.titlePrefix ?? "We Hire"}
+                    onChange={(e) => updateVendorBanner("titlePrefix", e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                    placeholder="e.g. We Hire"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                    Heading Highlight (Accent Text)
+                  </label>
+                  <input
+                    type="text"
+                    value={config.vendorBanner?.titleHighlight ?? "Technicians, Employees"}
+                    onChange={(e) => updateVendorBanner("titleHighlight", e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-sm font-bold text-indigo-600 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    placeholder="e.g. Technicians, Employees"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                    Heading Suffix
+                  </label>
+                  <input
+                    type="text"
+                    value={config.vendorBanner?.titleSuffix ?? "& Vendors"}
+                    onChange={(e) => updateVendorBanner("titleSuffix", e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                    placeholder="e.g. & Vendors"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                    Subtitle Description
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={config.vendorBanner?.subtitle ?? "Join our team of skilled professionals and be part of a growing service community that works with trust and quality."}
+                    onChange={(e) => updateVendorBanner("subtitle", e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                    placeholder="Describe why professionals should join the platform..."
+                  />
+                </div>
+              </div>
+
+              {/* Call to Actions & Links */}
+              <div className="border-t border-slate-100 pt-5 space-y-4">
+                <h3 className="text-sm font-bold text-slate-900">Buttons & Partner Portal Links</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                      Primary CTA Text
+                    </label>
+                    <input
+                      type="text"
+                      value={config.vendorBanner?.ctaText ?? "Join as a Professional"}
+                      onChange={(e) => updateVendorBanner("ctaText", e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                      Primary CTA URL
+                    </label>
+                    <input
+                      type="text"
+                      value={config.vendorBanner?.ctaUrl ?? "https://vendor.sevo.co.in"}
+                      onChange={(e) => updateVendorBanner("ctaUrl", e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-sm font-mono text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                      Secondary Link Text
+                    </label>
+                    <input
+                      type="text"
+                      value={config.vendorBanner?.learnMoreText ?? "Learn more"}
+                      onChange={(e) => updateVendorBanner("learnMoreText", e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                      Secondary Link URL
+                    </label>
+                    <input
+                      type="text"
+                      value={config.vendorBanner?.learnMoreUrl ?? "https://vendor.sevo.co.in"}
+                      onChange={(e) => updateVendorBanner("learnMoreUrl", e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-sm font-mono text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Banner Image / Illustration */}
+              <div className="border-t border-slate-100 pt-5 space-y-4">
+                <h3 className="text-sm font-bold text-slate-900">Banner Illustration Image</h3>
+                <div className="max-w-md">
+                  <ImageUploadField
+                    value={config.vendorBanner?.image ?? ""}
+                    onChange={(newVal) => updateVendorBanner("image", newVal)}
+                    section="general"
+                    label="Vendor Banner Image"
+                    aspectRatio="aspect-[4/3]"
+                  />
+                </div>
+              </div>
+
+              {/* Features List */}
+              <div className="border-t border-slate-100 pt-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">Key Features / Pillars</h3>
+                    <p className="text-xs text-slate-500">Highlights displayed below the main heading.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cur = config.vendorBanner?.features || DEFAULT_HOME_PAGE_CONFIG.vendorBanner.features || []
+                      const next = [...cur, { id: `vf-${Date.now()}`, icon: "⭐", label: "New Perk" }]
+                      updateVendorBanner("features", next)
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Perk
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {(config.vendorBanner?.features || DEFAULT_HOME_PAGE_CONFIG.vendorBanner.features).map((feat, idx) => (
+                    <div key={feat.id || idx} className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Pillar #{idx + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const cur = [...(config.vendorBanner?.features || DEFAULT_HOME_PAGE_CONFIG.vendorBanner.features)]
+                            cur.splice(idx, 1)
+                            updateVendorBanner("features", cur)
+                          }}
+                          className="text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                          title="Remove"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={feat.icon || ""}
+                          onChange={(e) => {
+                            const cur = [...(config.vendorBanner?.features || DEFAULT_HOME_PAGE_CONFIG.vendorBanner.features)]
+                            cur[idx] = { ...cur[idx], icon: e.target.value }
+                            updateVendorBanner("features", cur)
+                          }}
+                          className="w-12 text-center px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-sm outline-none"
+                          placeholder="Icon"
+                        />
+                        <input
+                          type="text"
+                          value={feat.label || ""}
+                          onChange={(e) => {
+                            const cur = [...(config.vendorBanner?.features || DEFAULT_HOME_PAGE_CONFIG.vendorBanner.features)]
+                            cur[idx] = { ...cur[idx], label: e.target.value }
+                            updateVendorBanner("features", cur)
+                          }}
+                          className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold outline-none"
+                          placeholder="Label"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Benefits List */}
+              <div className="border-t border-slate-100 pt-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">Partner Benefits List</h3>
+                    <p className="text-xs text-slate-500">Checklist bullet points visible in the banner.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cur = config.vendorBanner?.benefits || DEFAULT_HOME_PAGE_CONFIG.vendorBanner.benefits || []
+                      const next = [...cur, { id: `vb-${Date.now()}`, icon: "✅", text: "New Partner Benefit" }]
+                      updateVendorBanner("benefits", next)
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Benefit
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {(config.vendorBanner?.benefits || DEFAULT_HOME_PAGE_CONFIG.vendorBanner.benefits).map((ben, idx) => (
+                    <div key={ben.id || idx} className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Benefit #{idx + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const cur = [...(config.vendorBanner?.benefits || DEFAULT_HOME_PAGE_CONFIG.vendorBanner.benefits)]
+                            cur.splice(idx, 1)
+                            updateVendorBanner("benefits", cur)
+                          }}
+                          className="text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                          title="Remove"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={ben.icon || ""}
+                          onChange={(e) => {
+                            const cur = [...(config.vendorBanner?.benefits || DEFAULT_HOME_PAGE_CONFIG.vendorBanner.benefits)]
+                            cur[idx] = { ...cur[idx], icon: e.target.value }
+                            updateVendorBanner("benefits", cur)
+                          }}
+                          className="w-12 text-center px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-sm outline-none"
+                          placeholder="Icon"
+                        />
+                        <input
+                          type="text"
+                          value={ben.text || ""}
+                          onChange={(e) => {
+                            const cur = [...(config.vendorBanner?.benefits || DEFAULT_HOME_PAGE_CONFIG.vendorBanner.benefits)]
+                            cur[idx] = { ...cur[idx], text: e.target.value }
+                            updateVendorBanner("benefits", cur)
+                          }}
+                          className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold outline-none"
+                          placeholder="Benefit description"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Live Preview of Banner */}
+              <div className="border-t border-slate-100 pt-5 space-y-3">
+                <h3 className="text-sm font-bold text-slate-900">Live Preview</h3>
+                <div className="rounded-2xl p-6 bg-gradient-to-r from-slate-900 to-indigo-950 text-white relative overflow-hidden shadow-lg border border-indigo-900/50">
+                  <div className="relative z-10 max-w-xl space-y-4">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-xs font-bold text-indigo-300">
+                      <span>{config.vendorBanner?.badgeIcon || "🤝"}</span>
+                      <span>{config.vendorBanner?.badgeText || "We're Looking for Professionals"}</span>
+                    </div>
+                    <h3 className="text-xl sm:text-2xl font-black tracking-tight leading-snug">
+                      {config.vendorBanner?.titlePrefix || "We Hire"}{" "}
+                      <span className="text-indigo-400">{config.vendorBanner?.titleHighlight || "Technicians, Employees"}</span>{" "}
+                      {config.vendorBanner?.titleSuffix || "& Vendors"}
+                    </h3>
+                    <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                      {config.vendorBanner?.subtitle || "Join our team of skilled professionals and be part of a growing service community that works with trust and quality."}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3 pt-2">
+                      <a
+                        href={config.vendorBanner?.ctaUrl || "#"}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-md transition-colors"
+                      >
+                        {config.vendorBanner?.ctaText || "Join as a Professional"} →
+                      </a>
+                      <a
+                        href={config.vendorBanner?.learnMoreUrl || "#"}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-semibold text-xs rounded-xl transition-colors"
+                      >
+                        {config.vendorBanner?.learnMoreText || "Learn more"}
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* TAB 9: FOOTER & CONTACT */}
           {activeTab === "footer" && (
             <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
@@ -1957,8 +2339,20 @@ export default function HomePageCustomizerPage() {
             className="h-full bg-slate-950/90 backdrop-blur-md pointer-events-auto flex flex-col transition-all duration-300 overflow-hidden shadow-2xl"
           >
             {/* Top Toolbar */}
-            <div className="bg-slate-900 text-white px-4 py-2.5 flex items-center justify-between gap-3 border-b border-slate-800 shrink-0 select-none z-20 flex-wrap">
-              <div className="flex items-center gap-3">
+            <div className="bg-slate-900 text-white px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2.5 border-b border-slate-800 shrink-0 select-none z-20 flex-wrap">
+              <div className="flex items-center gap-2 sm:gap-3">
+                {/* Back to Customizer button */}
+                <button
+                  type="button"
+                  onClick={() => setShowPreviewModal(false)}
+                  className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700/80 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs mr-1"
+                  title="Back to Homepage Customizer (Close Preview)"
+                >
+                  <ChevronLeft className="w-4 h-4 text-teal-400 shrink-0" />
+                  <span className="hidden sm:inline">Back to Customizer</span>
+                  <span className="sm:hidden">Back</span>
+                </button>
+
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
@@ -1974,10 +2368,10 @@ export default function HomePageCustomizerPage() {
                   />
                   <div className="w-3 h-3 rounded-full bg-emerald-500" />
                 </div>
-                <span className="text-xs font-mono text-slate-300 font-semibold hidden sm:inline">
+                <span className="text-xs font-mono text-slate-300 font-semibold hidden md:inline">
                   Live Home Page Preview Frame
                 </span>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-teal-400 font-bold border border-slate-700">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-teal-400 font-bold border border-slate-700 hidden sm:inline">
                   {previewViewport === "full" ? "Proper Fit View" : previewViewport === "desktop" ? "1200px" : previewViewport === "tablet" ? "768px" : "390px"}
                 </span>
               </div>
@@ -2038,6 +2432,43 @@ export default function HomePageCustomizerPage() {
                 </button>
               </div>
 
+              {/* Preview History Navigation (Back / Forward) */}
+              <div className="flex items-center bg-slate-800/90 rounded-lg p-0.5 border border-slate-700/60">
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      if (iframeRef.current?.contentWindow) {
+                        iframeRef.current.contentWindow.history.back()
+                      }
+                    } catch {
+                      setPreviewPath("/home")
+                      setPreviewScreen("home")
+                    }
+                  }}
+                  className="px-2 py-1 text-slate-300 hover:text-white hover:bg-slate-700 rounded text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                  title="Go Back to Previous Page in Preview"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span className="hidden lg:inline">Back</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      if (iframeRef.current?.contentWindow) {
+                        iframeRef.current.contentWindow.history.forward()
+                      }
+                    } catch {}
+                  }}
+                  className="px-2 py-1 text-slate-300 hover:text-white hover:bg-slate-700 rounded text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                  title="Go Forward in Preview"
+                >
+                  <span className="hidden lg:inline">Forward</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
               {/* Page Picker -- points the whole preview iframe at any page of the
                   site, not just the homepage. Dropdown covers confirmed routes;
                   the free-text field next to it accepts anything else (e.g. a
@@ -2092,71 +2523,78 @@ export default function HomePageCustomizerPage() {
                 </form>
               </div>
 
-              {/* Screen Quick Switcher (Home, 5 Pillars, Subcategories, Kitchen Packages) -- only applies while previewing the Home Page itself */}
-              {previewPath === "/home" && (
-                <div className="flex items-center bg-slate-800/90 rounded-lg p-0.5 border border-slate-700/60">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPreviewScreen("home")
-                      if (iframeRef.current?.contentWindow) {
-                        iframeRef.current.contentWindow.postMessage({ type: "NAVIGATE_PREVIEW_SCREEN", screen: "home" }, "*")
-                      }
-                    }}
-                    className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
-                      previewScreen === "home" ? "bg-teal-600 text-white shadow-xs font-bold" : "text-slate-400 hover:text-white"
-                    }`}
-                    title="Preview Live Homepage"
-                  >
-                    <span>🏠 Home</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPreviewScreen("pillars")
-                      if (iframeRef.current?.contentWindow) {
-                        iframeRef.current.contentWindow.postMessage({ type: "NAVIGATE_PREVIEW_SCREEN", screen: "pillars" }, "*")
-                      }
-                    }}
-                    className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
-                      previewScreen === "pillars" ? "bg-teal-600 text-white shadow-xs font-bold" : "text-slate-400 hover:text-white"
-                    }`}
-                    title="Preview & Edit 5 Core Specialized Pillars Modal"
-                  >
-                    <span>⚡ 5 Pillars</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPreviewScreen("subcategories")
-                      if (iframeRef.current?.contentWindow) {
-                        iframeRef.current.contentWindow.postMessage({ type: "NAVIGATE_PREVIEW_SCREEN", screen: "subcategories" }, "*")
-                      }
-                    }}
-                    className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
-                      previewScreen === "subcategories" ? "bg-teal-600 text-white shadow-xs font-bold" : "text-slate-400 hover:text-white"
-                    }`}
-                    title="Preview & Edit Subcategories Modal"
-                  >
-                    <span>🧹 Subcategories</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPreviewScreen("kitchen")
-                      if (iframeRef.current?.contentWindow) {
-                        iframeRef.current.contentWindow.postMessage({ type: "NAVIGATE_PREVIEW_SCREEN", screen: "kitchen" }, "*")
-                      }
-                    }}
-                    className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
-                      previewScreen === "kitchen" ? "bg-teal-600 text-white shadow-xs font-bold" : "text-slate-400 hover:text-white"
-                    }`}
-                    title="Preview & Edit Kitchen Cleaning Packages Details Page"
-                  >
-                    <span>🍽️ Kitchen Packages</span>
-                  </button>
-                </div>
-              )}
+              {/* Screen Quick Switcher (Home, 5 Pillars, Subcategories, Kitchen Packages) */}
+              <div className="flex items-center bg-slate-800/90 rounded-lg p-0.5 border border-slate-700/60">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const wasNotHome = previewPath !== "/home"
+                    setPreviewPath("/home")
+                    setPreviewScreen("home")
+                    setCustomPathInput("")
+                    if (wasNotHome) {
+                      setIframeKey(k => k + 1)
+                    } else if (iframeRef.current?.contentWindow) {
+                      iframeRef.current.contentWindow.postMessage({ type: "NAVIGATE_PREVIEW_SCREEN", screen: "home" }, "*")
+                    }
+                  }}
+                  className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
+                    previewScreen === "home" && previewPath === "/home" ? "bg-teal-600 text-white shadow-xs font-bold" : "text-slate-400 hover:text-white"
+                  }`}
+                  title="Preview Live Homepage (Back to Home)"
+                >
+                  <span>🏠 Home</span>
+                </button>
+                {previewPath === "/home" && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPreviewScreen("pillars")
+                        if (iframeRef.current?.contentWindow) {
+                          iframeRef.current.contentWindow.postMessage({ type: "NAVIGATE_PREVIEW_SCREEN", screen: "pillars" }, "*")
+                        }
+                      }}
+                      className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
+                        previewScreen === "pillars" ? "bg-teal-600 text-white shadow-xs font-bold" : "text-slate-400 hover:text-white"
+                      }`}
+                      title="Preview & Edit 5 Core Specialized Pillars Modal"
+                    >
+                      <span>⚡ 5 Pillars</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPreviewScreen("subcategories")
+                        if (iframeRef.current?.contentWindow) {
+                          iframeRef.current.contentWindow.postMessage({ type: "NAVIGATE_PREVIEW_SCREEN", screen: "subcategories" }, "*")
+                        }
+                      }}
+                      className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
+                        previewScreen === "subcategories" ? "bg-teal-600 text-white shadow-xs font-bold" : "text-slate-400 hover:text-white"
+                      }`}
+                      title="Preview & Edit Subcategories Modal"
+                    >
+                      <span>🧹 Subcategories</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPreviewScreen("kitchen")
+                        if (iframeRef.current?.contentWindow) {
+                          iframeRef.current.contentWindow.postMessage({ type: "NAVIGATE_PREVIEW_SCREEN", screen: "kitchen" }, "*")
+                        }
+                      }}
+                      className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
+                        previewScreen === "kitchen" ? "bg-teal-600 text-white shadow-xs font-bold" : "text-slate-400 hover:text-white"
+                      }`}
+                      title="Preview & Edit Kitchen Cleaning Packages Details Page"
+                    >
+                      <span>🍽️ Kitchen Packages</span>
+                    </button>
+                  </>
+                )}
+              </div>
 
               {/* In-Page Edit Mode Toggle & Quick Edit Panel Buttons */}
               <div className="flex items-center gap-1.5">

@@ -202,7 +202,7 @@ export default function PlatformDashboardPage() {
             View Customer App
           </h3>
           <p className="text-slate-500 text-xs mt-2 leading-relaxed">
-            Open the live customer storefront exactly as customers see it, with an authorized Edit Mode toggle to update product pricing inline.
+            Open the live customer storefront exactly as customers see it, with quick access to all services, bookings, and categories.
           </p>
         </a>
       </div>

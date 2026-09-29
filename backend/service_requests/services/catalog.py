@@ -396,6 +396,7 @@ def _gt_tier_defaults_from_package(package, cat_enum):
         "additional_stop_charge": package.gt_additional_stop_charge if package.gt_additional_stop_charge is not None else 0,
         "surge_multiplier": package.gt_surge_multiplier if package.gt_surge_multiplier is not None else 1,
         "minimum_fare": package.gt_minimum_fare,
+        "gst_rate": package.gt_gst_rate,
     }
 
 
@@ -425,7 +426,36 @@ def _package_for_logistics_tier(tier):
 
 # ── Package ───────────────────────────────────────────────────────────────
 
+_GT_NON_NEGATIVE_FIELDS = (
+    "gt_base_fare", "gt_per_km_rate", "gt_free_km", "gt_loading_unloading_charge",
+    "gt_additional_stop_charge", "gt_minimum_fare",
+)
+
+
+def _assert_gt_money_valid(data):
+    """
+    Goods & Transport rates are mirrored straight onto the live ServiceTier, which the fare engine
+    prices from. A negative (or non-finite) rate would flow there without ever passing the tier's
+    own validators, so refuse it at the admin boundary with a per-field message.
+    """
+    from decimal import Decimal, InvalidOperation
+    errors = {}
+    for field in _GT_NON_NEGATIVE_FIELDS:
+        if field not in data or data[field] in (None, ""):
+            continue
+        try:
+            value = Decimal(str(data[field]))
+        except (InvalidOperation, TypeError, ValueError):
+            errors[field] = ["Enter a valid number."]
+            continue
+        if not value.is_finite() or value < 0:
+            errors[field] = ["Must be a finite, non-negative number."]
+    if errors:
+        raise ValidationError(errors)
+
+
 def create_package(data, actor):
+    _assert_gt_money_valid(data)
     package = _create_or_raise(Package, data, f'package "{data.get("name", "")}"')
     _log(CatalogChangeLog.EntityType.PACKAGE, package.pk, package.name, CatalogChangeLog.Action.CREATE, actor)
     try:
@@ -472,6 +502,14 @@ def create_package(data, actor):
 
 
 def _sync_goods_tables(package):
+    from django.db import transaction
+    # Best-effort legacy-table mirror. On PostgreSQL a failing statement (e.g. a legacy table that
+    # does not exist) aborts the WHOLE surrounding transaction -- every later query then dies with
+    # "current transaction is aborted". A savepoint confines the failure to this mirror.
+    try:
+        _sid = transaction.savepoint()
+    except Exception:
+        _sid = None
     try:
         from django.db import connection
         import json
@@ -590,11 +628,18 @@ def _sync_goods_tables(package):
                 FROM updated_json uj
                 WHERE vg.category_id = uj.cat_id;
             """)
+        if _sid is not None:
+            transaction.savepoint_commit(_sid)
     except Exception:
-        pass
+        if _sid is not None:
+            try:
+                transaction.savepoint_rollback(_sid)
+            except Exception:
+                pass
 
 
 def update_package(package, data, actor, reason=None):
+    _assert_gt_money_valid(data)
     # ── GT pricing permission gate ─────────────────────────────────────────
     # If this package maps to a logistics ServiceTier AND base_price is
     # changing, the caller must hold pricing:modify_price and supply a reason.
@@ -636,7 +681,7 @@ def update_package(package, data, actor, reason=None):
                 "base_price", "offer_price",
                 "gt_base_fare", "gt_per_km_rate", "gt_free_km",
                 "gt_loading_unloading_charge", "gt_additional_stop_charge",
-                "gt_surge_multiplier", "gt_minimum_fare",
+                "gt_surge_multiplier", "gt_minimum_fare", "gt_gst_rate",
             )
             if f in data and data[f] != getattr(package, f)
         }
@@ -713,6 +758,14 @@ def update_package(package, data, actor, reason=None):
             if pkg.tag is not None and tier.icon != (pkg.tag or ""):
                 tier.icon = pkg.tag or ""
                 fields_to_update.append("icon")
+            # Package.tag is the admin's capacity label (see
+            # Package.gt_dimensions_label) and create_package mirrors it into
+            # capacity_label, but this incremental path never did -- so after
+            # any later edit the customer card kept the stale original text.
+            # A blank tag does not overwrite an existing label.
+            if pkg.tag and tier.capacity_label != pkg.tag:
+                tier.capacity_label = pkg.tag
+                fields_to_update.append("capacity_label")
             if pkg.status:
                 tier_is_active = (pkg.status == "ACTIVE")
                 if tier.is_active != tier_is_active:
@@ -746,6 +799,7 @@ def update_package(package, data, actor, reason=None):
                 ("gt_additional_stop_charge", "additional_stop_charge"),
                 ("gt_surge_multiplier", "surge_multiplier"),
                 ("gt_minimum_fare", "minimum_fare"),
+                ("gt_gst_rate", "gst_rate"),
             )
             for pkg_field, tier_field in _gt_field_map:
                 pkg_value = getattr(pkg, pkg_field, None)

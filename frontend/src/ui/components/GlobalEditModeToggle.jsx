@@ -1,18 +1,45 @@
+import { useLocation } from "react-router-dom"
 import { Pencil, ShieldCheck } from "lucide-react"
 
 import { useEditMode } from "../../state/editMode/useEditMode.js"
 import { SaveNoticeToast } from "./SuperAdminEditControls.jsx"
 
+const ADMIN_ROUTE_PREFIXES = [
+  "/dashboard",
+  "/get-started",
+  "/reports",
+  "/platform",
+  "/customers",
+  "/catalog",
+  "/settings",
+  "/admin",
+  "/support",
+  "/marketing",
+  "/inventory",
+  "/vegetables/admin",
+  "/login",
+  "/organization-signup",
+  "/accept-invite",
+  "/reset-password",
+  "/onboarding",
+]
+
 /**
  * Persistent floating "Edit Mode" switch, rendered once (see App.jsx) so it
- * follows a Super Admin across every customer-facing page instead of each
- * page needing its own toggle bar wired in separately. Renders nothing for
- * anyone who isn't a Super Admin.
+ * follows an authorized Super Admin across customer-facing storefront pages
+ * (e.g. /home, /vegetables, /booking, /marketplace) to allow inline content/pricing editing.
+ * Hidden on internal admin management consoles where inline storefront editing does not apply.
  */
 export function GlobalEditModeToggle() {
   const { canEdit, isEditMode, toggleEditMode, notice } = useEditMode()
+  const location = useLocation()
+  const pathname = (location.pathname || "").toLowerCase()
 
-  if (!canEdit) return null
+  const isAdminRoute = ADMIN_ROUTE_PREFIXES.some(prefix =>
+    pathname === prefix || pathname.startsWith(prefix + "/")
+  )
+
+  if (!canEdit || isAdminRoute) return null
 
   return (
     <>

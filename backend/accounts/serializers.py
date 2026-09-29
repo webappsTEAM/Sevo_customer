@@ -226,15 +226,23 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
         return val_clean
 
     def update(self, instance, validated_data):
-        avatar_val = validated_data.pop('avatar', None)
-        if avatar_val:
-            if isinstance(avatar_val, str):
-                if '/media/' in avatar_val:
-                    instance.avatar.name = avatar_val.split('/media/')[-1]
+        if 'avatar' in validated_data:
+            avatar_val = validated_data.pop('avatar')
+            if avatar_val:
+                if isinstance(avatar_val, str):
+                    if '/media/' in avatar_val:
+                        instance.avatar.name = avatar_val.split('/media/')[-1]
+                    else:
+                        instance.avatar.name = avatar_val.lstrip('/')
                 else:
-                    instance.avatar.name = avatar_val
+                    instance.avatar = avatar_val
             else:
-                instance.avatar = avatar_val
+                if instance.avatar:
+                    try:
+                        instance.avatar.delete(save=False)
+                    except Exception:
+                        pass
+                instance.avatar = None
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)

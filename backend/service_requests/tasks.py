@@ -50,3 +50,10 @@ def generate_due_amc_bookings():
     from service_requests.services import generate_due_bookings
     created, failed = generate_due_bookings()
     return f"AMC generation: {len(created)} booking(s) created, {len(failed)} series failed."
+
+
+@shared_task
+def expire_unpaid_online_bookings_task():
+    """Schedule from the admin's periodic tasks (e.g. every 5 minutes)."""
+    from service_requests.services.payment_expiry import expire_unpaid_online_bookings
+    return expire_unpaid_online_bookings()

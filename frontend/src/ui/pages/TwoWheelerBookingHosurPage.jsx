@@ -7,9 +7,17 @@ import {
   User, Mail, MessageSquare, AlertCircle, Bike, Check, Zap, Calendar, Ban, RefreshCw
 } from "lucide-react"
 import { routes } from "../routes.js"
-import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchLogisticsQuote, checkRouteCoverage, fetchGoodsCategories, fetchGoodsItems, fetchLogisticsSlots, evaluateCargoFitment, fetchGTFaqs, fetchLogisticsCities } from "../../api/logisticsService.js"
+import { CouponField } from "../components/CouponField.jsx"
+import { GTPolicyNote } from "../components/GTPolicyNote.jsx"
+import { GTPaymentMethodPicker } from "../components/GTPaymentMethodPicker.jsx"
+import { TransitInsuranceOption } from "../components/TransitInsuranceOption.jsx"
+import { settleBookingPayment } from "../../api/gtPaymentService.js"
+import { GstinField, isValidGstin, LoadingHelpToggle } from "../components/GstinField.jsx"
+import { extractApiErrorMessage } from "../../api/client.js"
+import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchLogisticsQuote, checkRouteCoverage, checkPointCoverage, fetchGoodsCategories, fetchGoodsItems, fetchLogisticsSlots, evaluateCargoFitment, fetchGTFaqs, fetchLogisticsCities } from "../../api/logisticsService.js"
 import { GoodsCargoSelectorModal } from "../../components/logistics/GoodsCargoSelectorModal.jsx"
-import { MultiStopRouteManager } from "../../components/logistics/MultiStopRouteManager.jsx"
+import { MultiStopRouteManager, findUnpinnedStop, locatedStops, coverageIssueForStops } from "../../components/logistics/MultiStopRouteManager.jsx"
+import { parseDimensionLabel, tierCapacityText, tierBadgeText } from "../../components/logistics/tierDisplay.js"
 import { createBooking, cancelBooking, getBookingStatus } from "../../api/bookingService.js"
 import { apiRequestCustomerPhoneOTP, apiVerifyCustomerPhoneOTP } from "../../api/authService.js"
 import { verifyOtpViaWebSocket } from "../../api/websocketService.js"
@@ -47,7 +55,7 @@ function GenericTwoWheelerDiagram({ className = "w-full max-w-[240px] h-[120px]"
 }
 
 /* ── 2 Wheeler Dimension Diagram matching user screenshot (40cm x 40cm box on bike) ── */
-function TwoWheelerDimensionDiagram({ className = "w-full max-w-[240px] h-[120px]" }) {
+function TwoWheelerDimensionDiagram({ className = "w-full max-w-[240px] h-[120px]", dims = null }) {
   return (
     <svg viewBox="0 0 260 130" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
@@ -62,13 +70,13 @@ function TwoWheelerDimensionDiagram({ className = "w-full max-w-[240px] h-[120px
       </defs>
 
       {/* Height Dimension for Box (Left: 40cm) */}
-      <text x="18" y="58" fill="#475569" fontSize="14" fontWeight="700" fontFamily="system-ui, sans-serif" textAnchor="end">40cm</text>
+      {dims?.left && <text x="2" y="58" fill="#475569" fontSize="11" fontWeight="700" fontFamily="system-ui, sans-serif" textAnchor="start">{dims.left}</text>}
       <line x1="28" y1="36" x2="28" y2="76" stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="3 2" />
       <line x1="24" y1="36" x2="32" y2="36" stroke="#64748b" strokeWidth="1.5" />
       <line x1="24" y1="76" x2="32" y2="76" stroke="#64748b" strokeWidth="1.5" />
 
       {/* Width Dimension for Box (Top: 40cm) */}
-      <text x="80" y="24" fill="#475569" fontSize="14" fontWeight="700" fontFamily="system-ui, sans-serif" textAnchor="middle">40cm</text>
+      {dims?.top && <text x="80" y="24" fill="#475569" fontSize="14" fontWeight="700" fontFamily="system-ui, sans-serif" textAnchor="middle">{dims.top}</text>}
       <line x1="58" y1="30" x2="102" y2="30" stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="3 2" />
       <line x1="58" y1="26" x2="58" y2="34" stroke="#64748b" strokeWidth="1.5" />
       <line x1="102" y1="26" x2="102" y2="34" stroke="#64748b" strokeWidth="1.5" />
@@ -201,6 +209,12 @@ function QRCodeGraphic({ className = "w-36 h-36" }) {
       <rect x="48" y="92" width="8" height="12" fill="#0f172a" />
     </svg>
   )
+}
+
+// Attach the tier's admin-configured dimensions to its artwork (numbers are
+// never baked into the drawings).
+function withDims(diagram, dims) {
+  return diagram ? React.cloneElement(diagram, { dims }) : diagram
 }
 
 const TWO_WHEELER_DIAGRAM_BY_SLUG = {
@@ -350,6 +364,8 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
   const [cargoItems, setCargoItems] = useState([])
   const [cargoSelectorOpen, setCargoSelectorOpen] = useState(false)
   const [intermediateStops, setIntermediateStops] = useState([])
+  // Set when a stop is outside service coverage (see the coverage check below).
+  const [stopCoverageIssue, setStopCoverageIssue] = useState(null)
   const [catalogLoading, setCatalogLoading] = useState(true)
   const [catalogError, setCatalogError] = useState("")
   const [goodsTypeModalOpen, setGoodsTypeModalOpen] = useState(false)
@@ -520,15 +536,26 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
   const [pickupError, setPickupError] = useState("")
   const [destinationError, setDestinationError] = useState("")
   const [bookingError, setBookingError] = useState("")
+  const [customerGstin, setCustomerGstin] = useState("")
+  const [coupon, setCoupon] = useState(null)
+  const [payMethod, setPayMethod] = useState("cod")   // "cod" | "online" | "wallet"
+  const [insurance, setInsurance] = useState(null)      // { declaredValue, premium, cap } | null
+  const [loadingHelp, setLoadingHelp] = useState(true)
   const [bookingSubmitting, setBookingSubmitting] = useState(false)
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [serverSlotsAvailability, setServerSlotsAvailability] = useState(null)
   const [serverSlotGroups, setServerSlotGroups] = useState(null)
   const [serverDates, setServerDates] = useState([])
+  const [serverCutoffLabel, setServerCutoffLabel] = useState("")
+  // The server is the source of truth for the same-day cut-off: its upcoming_dates start at the next
+  // bookable date, so a first date that is not "today" means today's window has already closed.
+  const sameDayClosed = serverDates.length > 0 && !serverDates[0].is_today
   const [slotsLoading, setSlotsLoading] = useState(false)
 
   useEffect(() => {
-    const dStr = selectedDate?.fullDate ? selectedDate.fullDate.toISOString().split("T")[0] : ""
+    const dStr = selectedDate?.fullDate
+      ? `${selectedDate.fullDate.getFullYear()}-${String(selectedDate.fullDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.fullDate.getDate()).padStart(2, "0")}`
+      : ""
     setSlotsLoading(true)
     fetchLogisticsSlots({ date: dStr, category: "goods_transport_two_wheeler", city: currentCitySlug })
       .then(res => {
@@ -543,6 +570,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
               is_today: d.is_today,
             }))
             setServerDates(mappedDates)
+            setServerCutoffLabel(res.cutoff_label || "")
             if (!selectedDate) {
               setSelectedDate(mappedDates[0])
             }
@@ -817,7 +845,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
         const [tiers, lanes, areas, categories] = await Promise.all([
           fetchServiceTiers("two_wheeler", currentCitySlug),
           fetchLanes("two_wheeler", currentCitySlug),
-          fetchServiceAreas(currentCitySlug),
+          fetchServiceAreas(currentCitySlug, "two_wheeler"),
           fetchGoodsCategories(),
         ])
         if (cancelled) return
@@ -980,28 +1008,31 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
       : []
     const bestForText = tier.description || ""
     const isBadgeValid = isBadgeActive(tier.duration, tier.updated_at)
-    const badgeText = isBadgeValid ? (tier.icon || "") : ""
+    const capacityText = tierCapacityText(tier)
+    const badgeText = isBadgeValid ? tierBadgeText(tier.icon || "", tier, capacityText) : ""
+    const dims = parseDimensionLabel(tier.dimensions_label)
 
     return {
       id: tier.slug,
       name: tier.name,
-      capacity: tier.capacity_label,
+      capacity: capacityText,
       description: tier.description,
       badge: badgeText,
       suitableFor: suitableList,
       bestFor: bestForText,
       price: `₹${Number(tier.starting_price).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
       diagram: tier.image
-        ? <TierImageFallback src={tier.image} alt={tier.name} fallback={TWO_WHEELER_DIAGRAM_BY_SLUG[tier.slug] || <GenericTwoWheelerDiagram />} />
-        : (TWO_WHEELER_DIAGRAM_BY_SLUG[tier.slug] || <GenericTwoWheelerDiagram />),
+        ? <TierImageFallback src={tier.image} alt={tier.name} fallback={withDims(TWO_WHEELER_DIAGRAM_BY_SLUG[tier.slug], dims) || <GenericTwoWheelerDiagram />} />
+        : (withDims(TWO_WHEELER_DIAGRAM_BY_SLUG[tier.slug], dims) || <GenericTwoWheelerDiagram />),
       details: {
         name: tier.name,
-        capacity: tier.capacity_label ? `${tier.capacity_label} capacity` : "Standard capacity",
+        capacity: capacityText ? `${capacityText} capacity` : "Standard capacity",
         badge: badgeText,
         suitableFor: suitableList,
         bestFor: bestForText,
       },
       _tierId: tier.id,
+      loading_unloading_charge: Number(tier.loading_unloading_charge) || 0,
       vehicle_class: tier.vehicle_class || "",
       max_weight_kg: Number(tier.max_weight_kg) || 0,
       max_cft: Number(tier.max_cft) || 0,
@@ -1060,6 +1091,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
           quantity: i.quantity,
         })),
         goodsCategoryId: selectedGoodsCategoryObj?.id,
+        loadingHelp,
       })
       if (cancelled) return
       setQuoteLoading(false)
@@ -1079,6 +1111,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
     JSON.stringify(cargoItems.map((i) => [i.goods_item_id || i.goods_item, i.quantity])),
     JSON.stringify(intermediateStops.map((s) => [s.address, s.coords?.lat, s.coords?.lng])),
     selectedGoodsCategoryObj?.id,
+    loadingHelp,
   ])
 
 
@@ -1155,30 +1188,56 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
   }))
 
 
+  // Changes whenever a stop is added, removed, reordered or moved.
+  const stopsCoverageKey = locatedStops(intermediateStops).map((l) => `${l.id}:${l.point.lat},${l.point.lng}`).join("|")
+
   // Real-time coverage check as soon as both points are known -- replaces
   // the old hardcoded Hosur address-string match (isHosurRouteServed), so
   // expanding coverage is an admin action, not a code change.
   useEffect(() => {
     if (!pickupPoint || !dropPoint) {
-      setCoverageMessage("")
-      setNoServiceRoute(false)
-      return
+      setStopCoverageIssue(null)
+      const single = pickupPoint ? ["pickup", pickupPoint] : dropPoint ? ["drop", dropPoint] : null
+      if (!single) {
+        setCoverageMessage("")
+        setNoServiceRoute(false)
+        return
+      }
+      // Only one end is chosen so far: still tell the customer right away if it is uncovered.
+      let stale = false
+      const t = setTimeout(async () => {
+        const res = await checkPointCoverage({
+          serviceCategory: "goods_transport_two_wheeler",
+          point: single[0],
+          location: single[1],
+          vehicleClass: (selectedVehicle || selectedVehicleEffective)?.vehicle_class || "",
+        })
+        if (stale) return
+        setCoverageMessage(res.inCoverage ? "" : res.message)
+        setNoServiceRoute(!res.inCoverage)
+      }, 300)
+      return () => { stale = true; clearTimeout(t) }
     }
     let cancelled = false
+    // Stops are part of the trip: each located stop is checked with the ends.
+    const located = locatedStops(intermediateStops)
     const timer = setTimeout(async () => {
       const res = await checkRouteCoverage({
         serviceCategory: "goods_transport_two_wheeler",
         pickup: pickupPoint,
         drop: dropPoint,
+        stops: located.map((l) => l.point),
         vehicleClass: (selectedVehicle || selectedVehicleEffective)?.vehicle_class || "",
       })
       if (cancelled) return
-      setCoverageMessage(res.inCoverage ? "" : res.message)
+      const stopIssue = coverageIssueForStops(res, located)
+      setStopCoverageIssue(stopIssue)
+      setCoverageMessage(res.inCoverage ? "" : (stopIssue ? stopIssue.message : res.message))
       setNoServiceRoute(!res.inCoverage)
     }, 300)
     return () => { cancelled = true; clearTimeout(timer) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pickupPoint?.lat, pickupPoint?.lng, dropPoint?.lat, dropPoint?.lng, (selectedVehicle || selectedVehicleEffective)?.vehicle_class])
+  }, [pickupPoint?.lat, pickupPoint?.lng, dropPoint?.lat, dropPoint?.lng, stopsCoverageKey, (selectedVehicle || selectedVehicleEffective)?.vehicle_class])
 
   const handleGetEstimate = (e) => {
     if (e) e.preventDefault()
@@ -1227,28 +1286,68 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
       const vehicle = selectedVehicle || TWO_WHEELER_VEHICLES[0]
       const currentGoodsType = goodsTypeOverride || selectedGoodsType || "General Goods"
 
-      // GT-B-01: submit the server's own quote when we have one. The
-      // backend re-derives and validates the fare regardless -- a
-      // client-supplied total is never trusted for a logistics booking --
-      // so this is about charging the number the customer was shown.
-      // GT-B-01: the server quote is the ONLY fare authority. vehicle.price
-      // is the selector card's indicative "starting from" label, not a price
-      // for THIS trip; using it as a fallback submitted a number no server
-      // ever produced, which the backend rejected anyway.
-      if (serverQuote?.total == null) {
-        setBookingError(
-          quoteError ||
-          "We couldn't calculate a fare for this trip. Select the pickup and drop points from the suggestions, pick a vehicle, and try again."
-        )
+      const activePickupPoint = pickupPoint || (pickupCoords?.lat != null && pickupCoords?.lng != null ? { lat: Number(pickupCoords.lat), lng: Number(pickupCoords.lng) } : null)
+      const activeDropPoint = dropPoint || (dropCoords?.lat != null && dropCoords?.lng != null ? { lat: Number(dropCoords.lat), lng: Number(dropCoords.lng) } : null)
+
+      if (!activePickupPoint || !activeDropPoint) {
+        setBookingSubmitting(false)
+        setBookingError("Please pick both the pickup and drop locations from the suggestions so we can map the route.")
+        return
+      }
+
+      // Service Coverage (server-configured). The booking endpoint enforces
+      // the same rule; this just avoids a round-trip we know will fail.
+      if (coverageMessage) {
+        setBookingSubmitting(false)
+        setBookingError(coverageMessage)
+        return
+      }
+
+      // Check if current server quote is missing or expired
+      let currentQuote = serverQuote
+      const quoteExpiry = currentQuote?.expiresAt || currentQuote?.expires_at || currentQuote?.breakdown?.expires_at
+      const isQuoteExpired = quoteExpiry && new Date(quoteExpiry).getTime() <= Date.now()
+
+      if (!currentQuote?.total || isQuoteExpired) {
+        setQuoteLoading(true)
+        const validWaypoints = intermediateStops
+          .map((s) => usableCoords(s.coords, s.address))
+          .filter(Boolean)
+        const freshQuote = await fetchLogisticsQuote({
+          serviceCategory: "goods_transport_two_wheeler",
+          tierId: vehicle._tierId,
+          pickup: activePickupPoint,
+          drop: activeDropPoint,
+          waypoints: validWaypoints,
+          stopCount: 2 + validWaypoints.length,
+          cargoItems: cargoItems.map((i) => ({
+            goods_item_id: i.goods_item_id || i.goods_item,
+            quantity: i.quantity,
+          })),
+          goodsCategoryId: selectedGoodsCategoryObj?.id,
+          loadingHelp,
+        })
+        setQuoteLoading(false)
+        if (freshQuote && !freshQuote.error && freshQuote.total != null) {
+          setServerQuote(freshQuote)
+          currentQuote = freshQuote
+        } else {
+          setBookingSubmitting(false)
+          setBookingError(
+            freshQuote?.message ||
+            quoteError ||
+            "We couldn't calculate a fare for this trip. Select the pickup and drop points from the suggestions, pick a vehicle, and try again."
+          )
+          return
+        }
+      }
+
+      if (currentQuote?.breakdown?.is_cargo_fit === false) {
+        setBookingError(currentQuote.breakdown.cargo_fit_reason || "Selected cargo exceeds Two-Wheeler capacity. Please book a Mini Truck instead.")
         setBookingSubmitting(false)
         return
       }
-      if (serverQuote?.breakdown?.is_cargo_fit === false) {
-        setBookingError(serverQuote.breakdown.cargo_fit_reason || "Selected cargo exceeds Two-Wheeler capacity. Please book a Mini Truck instead.")
-        setBookingSubmitting(false)
-        return
-      }
-      const fare = Number(serverQuote.total)
+      const fare = Number(currentQuote.total)
 
       // Check 2-Wheeler capacity & item compatibility
       const totalCargoWeight = cargoItems.reduce((acc, i) => acc + (i.weight_kg || 0) * i.quantity, 0)
@@ -1263,7 +1362,6 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
         setBookingSubmitting(false)
         return
       }
-
 
       let dateString = todayDateString()
       let timeString = "Immediate / Next Available"
@@ -1282,23 +1380,6 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
       }
 
       const customerEmail = user?.email || (typeof window !== "undefined" ? localStorage.getItem("sevo_customer_email") : "") || ""
-
-      const activePickupPoint = pickupPoint || (pickupCoords?.lat != null && pickupCoords?.lng != null ? { lat: Number(pickupCoords.lat), lng: Number(pickupCoords.lng) } : null)
-      const activeDropPoint = dropPoint || (dropCoords?.lat != null && dropCoords?.lng != null ? { lat: Number(dropCoords.lat), lng: Number(dropCoords.lng) } : null)
-
-      if (!activePickupPoint || !activeDropPoint) {
-        setBookingSubmitting(false)
-        setBookingError("Please pick both the pickup and drop locations from the suggestions so we can map the route.")
-        return
-      }
-
-      // Service Coverage (server-configured). The booking endpoint enforces
-      // the same rule; this just avoids a round-trip we know will fail.
-      if (coverageMessage) {
-        setBookingSubmitting(false)
-        setBookingError(coverageMessage)
-        return
-      }
 
       let resolvedName = (nameOverride || name || user?.full_name || user?.fullName || user?.first_name || user?.username || "").trim()
       if (!resolvedName && typeof window !== "undefined") {
@@ -1335,6 +1416,16 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
       }
       setReceiverPhoneError("")
 
+      // A stop with an address but no resolved location would be saved without
+      // coordinates (the driver could not navigate to it) while the quote --
+      // which only prices located stops -- silently ignored it.
+      const unpinnedStop = findUnpinnedStop(intermediateStops)
+      if (unpinnedStop) {
+        setBookingSubmitting(false)
+        setBookingError(`Stop ${unpinnedStop.index + 1}: choose a suggestion or pin it on the map, or remove the stop.`)
+        return
+      }
+
       const validStops = intermediateStops
         .filter((s) => s.address && s.address.trim())
         .map((s, idx) => ({
@@ -1352,6 +1443,8 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
 
       const payload = {
         customer_name: resolvedName,
+        ...(coupon?.code ? { coupon_code: coupon.code } : {}),
+        ...(customerGstin && isValidGstin(customerGstin) ? { customer_gstin: customerGstin } : {}),
         phone: cleanPhone,
         email: customerEmail,
         city: currentCitySlug,
@@ -1369,15 +1462,16 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
         preferred_date: dateString,
         preferred_time: timeString,
         total_amount: fare,
-        payment_method: "COD",
+        payment_method: payMethod === "cod" ? "COD" : "ONLINE",
+        ...(insurance && payMethod !== "cod" ? { insurance_opted_in: true, declared_value: insurance.declaredValue } : {}),
 
         stops: validStops,
         cart_data: [{
           tier: vehicle.name,
           price: fare,
-          quote_id: serverQuote?.quoteId || serverQuote?.quote_id || serverQuote?.breakdown?.quote_id || null,
-          expires_at: serverQuote?.expiresAt || serverQuote?.expires_at || serverQuote?.breakdown?.expires_at || null,
-          quote_hash: serverQuote?.quoteHash || serverQuote?.quote_hash || serverQuote?.breakdown?.quote_hash || null,
+          quote_id: currentQuote?.quoteId || currentQuote?.quote_id || currentQuote?.breakdown?.quote_id || null,
+          expires_at: currentQuote?.expiresAt || currentQuote?.expires_at || currentQuote?.breakdown?.expires_at || null,
+          quote_hash: currentQuote?.quoteHash || currentQuote?.quote_hash || currentQuote?.breakdown?.quote_hash || null,
           goods_type: currentGoodsType,
           cargo_items: cargoItems,
           goods_items: cargoItems,
@@ -1414,6 +1508,18 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
       }
       bookingAttemptKeyRef.current = null
       const token = res?.data?.tracking_token || res?.tracking_token || null
+      // Prepaid booking: take the payment now. The booking exists but is not dispatched until it
+      // clears. On failure the same idempotency key is kept, so pressing Book again re-uses THIS
+      // booking (no duplicate) and retries the payment.
+      if (payMethod !== "cod") {
+        const paid = await settleBookingPayment({
+          bookingId: res?.data?.id || res?.id, trackingToken: token, method: payMethod,
+        })
+        if (!paid.ok) {
+          bookingAttemptKeyRef.current = attemptKey
+          throw { status: 0, body: { message: `${paid.message || "Payment was not completed."} Your booking is saved - tap Book again to retry the payment.` } }
+        }
+      }
       const authoritativeAmount = res?.data?.total_amount != null
         ? Number(res.data.total_amount)
         : (res?.total_amount != null ? Number(res.total_amount) : null)
@@ -1439,24 +1545,44 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
       }
     } catch (err) {
       // A booking exists only if the backend created the ServiceRequest.
-      console.error("Booking creation failed:", err)
-      let detail = err?.body?.detail
-      if (!detail && err?.body?.errors && typeof err.body.errors === "object") {
-        const firstField = Object.keys(err.body.errors)[0]
-        const firstErr = err.body.errors[firstField]
-        detail = Array.isArray(firstErr) ? firstErr[0] : String(firstErr)
+      console.error("Booking creation failed:", err, "Details:", err?.body)
+      const detail = extractApiErrorMessage(err, "We couldn't confirm your booking just now. Nothing has been charged — please try again.")
+
+      // Self-healing: if quote was expired or rejected due to price/staleness, trigger fresh quote fetch
+      const isQuoteIssue =
+        /expired|invalid|recalculate|quote/i.test(detail) ||
+        err?.body?.code === "UNRESOLVED_FARE"
+
+      if (isQuoteIssue) {
+        const vehicle = selectedVehicle || TWO_WHEELER_VEHICLES[0]
+        const activePickupPoint = pickupPoint || (pickupCoords?.lat != null && pickupCoords?.lng != null ? { lat: Number(pickupCoords.lat), lng: Number(pickupCoords.lng) } : null)
+        const activeDropPoint = dropPoint || (dropCoords?.lat != null && dropCoords?.lng != null ? { lat: Number(dropCoords.lat), lng: Number(dropCoords.lng) } : null)
+        if (activePickupPoint && activeDropPoint && vehicle?._tierId) {
+          const validWaypoints = intermediateStops
+            .map((s) => usableCoords(s.coords, s.address))
+            .filter(Boolean)
+          fetchLogisticsQuote({
+            serviceCategory: "goods_transport_two_wheeler",
+            tierId: vehicle._tierId,
+            pickup: activePickupPoint,
+            drop: activeDropPoint,
+            waypoints: validWaypoints,
+            stopCount: 2 + validWaypoints.length,
+            cargoItems: cargoItems.map((i) => ({
+              goods_item_id: i.goods_item_id || i.goods_item,
+              quantity: i.quantity,
+            })),
+            goodsCategoryId: selectedGoodsCategoryObj?.id,
+            loadingHelp,
+          }).then((fresh) => {
+            if (fresh && !fresh.error && fresh.total != null) {
+              setServerQuote(fresh)
+            }
+          }).catch(() => {})
+        }
       }
-      if (!detail) {
-        detail =
-          err?.body?.message ||
-          (err?.status === 401
-            ? "Please sign in again to complete this booking."
-            : "")
-      }
-      setBookingError(
-        detail ||
-        "We couldn't confirm your booking just now. Nothing has been charged — please try again."
-      )
+
+      setBookingError(detail)
       setLookingForPartnerOpen(false)
     } finally {
       setBookingSubmitting(false)
@@ -1490,6 +1616,10 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
   const handleBookNow = () => {
 
     // Instant Booking: sets bookingMode to IMMEDIATE, clears any stale slot/date, moves to Step 4 Summary
+    if (sameDayClosed) {
+      setBookingError(`Same-day booking closed at ${serverCutoffLabel || "the daily cut-off"}. Please schedule your booking for the next available date.`)
+      return
+    }
     if (!pickup || !pickup.trim()) {
       setBookingError("Please enter your pickup location.")
       const pickupEl = document.getElementById("pickup-input") || document.getElementById("estimate-bar")
@@ -2072,9 +2202,15 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
               <MultiStopRouteManager
                 stops={intermediateStops}
                 onChangeStops={(newStops) => setIntermediateStops(newStops)}
-                maxStops={3}
-                pickupAddress={pickup}
-                dropAddress={drop}
+                maxStops={Number.isFinite(Number((selectedVehicle || selectedVehicleEffective)?.max_additional_stops)) ? Number((selectedVehicle || selectedVehicleEffective)?.max_additional_stops) : 3}
+                pickupAddress={pickupAddressValue}
+                dropAddress={dropAddressValue}
+                pickupPoint={pickupPoint}
+                dropPoint={dropPoint}
+                serviceSlug="goods_transport_two_wheeler"
+                vehicleClass={(selectedVehicle || selectedVehicleEffective)?.vehicle_class || ""}
+                coverageIssue={stopCoverageIssue}
+                cityName={currentCityName || "Hosur"}
               />
             </div>
 
@@ -2098,12 +2234,12 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
                   <p className="text-xs font-bold text-slate-800 mt-0.5 truncate">
                     {cargoItems.length > 0
                       ? cargoItems.map((i) => `${i.quantity}x ${i.name}`).join(", ")
-                      : "No specific items declared (Using default category fitment)"}
+                      : "No specific items declared (category rules only, no weight/volume assumed)"}
                   </p>
                   <p className="text-[11px] text-slate-500">
                     {cargoItems.length > 0
                       ? `Weight: ~${cargoItems.reduce((acc, i) => acc + (i.weight_kg || 0) * i.quantity, 0).toFixed(1)} kg • Volume: ~${cargoItems.reduce((acc, i) => acc + (i.cft || 0) * i.quantity, 0).toFixed(1)} CFT`
-                      : "Add items (e.g. Documents, Boxes, Small Goods) to calculate fitment"}
+                      : "Add items (e.g. Documents, Boxes, Small Goods) to calculate weight & volume fitment"}
                   </p>
                 </div>
               </div>
@@ -2120,7 +2256,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
             <div className="flex flex-col text-left">
               <div className="h-5 mb-1.5 flex items-center">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                  Sender Name *
+                  Customer Name
                 </label>
               </div>
               <input
@@ -2653,7 +2789,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
                       <div className="mt-1 w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0" />
                       <div className="min-w-0 flex-1">
                         <p className="text-[11px] font-bold text-blue-900 truncate">
-                          {stop.contact_name ? `${stop.contact_name} • ${stop.contact_phone || ""}` : `Waypoint ${sIdx + 1}`}
+                          {stop.contact_name ? `${stop.contact_name} • ${stop.contact_phone || ""}` : `Stop ${sIdx + 1}`}
                         </p>
                         <p className="text-xs text-slate-500 leading-snug mt-0.5">{stop.address}</p>
                       </div>
@@ -2674,7 +2810,20 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       type="button"
-                      onClick={() => setShowReceiverDetails(!showReceiverDetails)}
+                      onClick={() => {
+                        // Bug found: same as MiniTruckBookingHosurPage's identical
+                        // control -- toggling only hid the fields without clearing
+                        // receiverName/receiverPhone, so the line above kept showing
+                        // "Receiver: ..." after Hide was clicked, and the stale values
+                        // were still submitted as drop_contact_name/drop_contact_phone.
+                        const next = !showReceiverDetails
+                        setShowReceiverDetails(next)
+                        if (!next) {
+                          setReceiverName("")
+                          setReceiverPhone("")
+                          setReceiverPhoneError("")
+                        }
+                      }}
                       className="text-xs font-bold text-blue-700 hover:underline cursor-pointer"
                     >
                       {showReceiverDetails ? "Hide" : "+ Receiver"}
@@ -2877,7 +3026,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
                   type="button"
                   onClick={handleBookNow}
 
-                  disabled={bookingSubmitting || quoteLoading || serverQuote?.total == null || isSelectedVehicleOverCapacity}
+                  disabled={bookingSubmitting || quoteLoading || serverQuote?.total == null || isSelectedVehicleOverCapacity || sameDayClosed}
                   title={
                     isSelectedVehicleOverCapacity
                       ? "Cargo exceeds Two-Wheeler limits. Please book a Mini Truck."
@@ -2898,7 +3047,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
                     <span>Capacity Exceeded — Book Mini Truck</span>
 
                   ) : (
-                    <span>Book Now</span>
+                    <span>{sameDayClosed ? `Same-day closed (${serverCutoffLabel || "cut-off"}) — schedule below` : "Book Now"}</span>
                   )}
                 </button>
 
@@ -3003,7 +3152,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
                   <span className="text-base">💵</span>
                   <div>
                     <p className="text-[10px] text-slate-400 uppercase font-bold">Payment Method</p>
-                    <p className="font-extrabold text-slate-800">Cash / COD</p>
+                    <p className="font-extrabold text-slate-800">{payMethod === "online" ? "Pay online" : payMethod === "wallet" ? "SEVO wallet" : "Cash / COD"}</p>
                   </div>
                 </div>
                 <div className="text-right">
@@ -3614,6 +3763,17 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
                               <p className="text-[14px] text-slate-800 font-medium leading-relaxed">{pickup || `${currentCityName || "Hosur"} Origin`}</p>
                             </div>
                           </div>
+                          {intermediateStops.filter((s) => s.address && s.address.trim()).map((stop, sIdx) => (
+                            <div key={stop.id || sIdx} className="flex items-start gap-4 relative bg-white" data-testid="summary-stop">
+                              <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
+                                <MapPin className="w-3.5 h-3.5 text-blue-500" />
+                              </div>
+                              <div className="pt-0.5">
+                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-700 block">Stop {sIdx + 1}</span>
+                                <p className="text-[14px] text-slate-800 font-medium leading-relaxed">{stop.address}</p>
+                              </div>
+                            </div>
+                          ))}
                           <div className="flex items-start gap-4 relative bg-white">
                             <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
                               <MapPin className="w-3.5 h-3.5 text-rose-500" />
@@ -3698,7 +3858,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
                           </div>
                           <div>
                             <h4 className="font-bold text-slate-900 text-sm">{selectedVehicle?.name || "Two Wheeler"}</h4>
-                            <p className="text-xs text-slate-500 mt-0.5">{selectedVehicle?.capacity || "20 kg capacity"}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{selectedVehicle?.capacity || ""}</p>
                           </div>
                         </div>
                         <button
@@ -3773,7 +3933,20 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
                             </div>
                             <button
                               type="button"
-                              onClick={() => setShowReceiverDetails(!showReceiverDetails)}
+                              onClick={() => {
+                                // Bug found: "Remove" only toggled visibility without
+                                // clearing receiverName/receiverPhone -- see the identical
+                                // fix on this page's other receiver toggle and in
+                                // MiniTruckBookingHosurPage.jsx for the full explanation.
+                                // Clear the values when hiding.
+                                const next = !showReceiverDetails
+                                setShowReceiverDetails(next)
+                                if (!next) {
+                                  setReceiverName("")
+                                  setReceiverPhone("")
+                                  setReceiverPhoneError("")
+                                }
+                              }}
                               className="text-xs font-bold text-[#0B8860] hover:underline cursor-pointer"
                             >
                               {showReceiverDetails ? "Remove" : "+ Add Receiver"}
@@ -3819,6 +3992,13 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
                         </div>
                       </div>
 
+                      <LoadingHelpToggle charge={(selectedVehicle || selectedVehicleEffective)?.loading_unloading_charge} checked={loadingHelp} onChange={setLoadingHelp} />
+                        <GTPolicyNote serviceCategory="goods_transport_two_wheeler" />
+                        <GTPaymentMethodPicker value={payMethod} onChange={setPayMethod} total={serverQuote?.total != null ? Number(serverQuote.total) + Number(insurance?.premium || 0) : null} />
+                        <TransitInsuranceOption value={insurance} onChange={setInsurance} payMethod={payMethod} />
+                      <CouponField serviceCategory="goods_transport_two_wheeler" cartTotal={serverQuote?.total} value={coupon} onChange={setCoupon} />
+                      <GstinField value={customerGstin} onChange={setCustomerGstin} />
+
                       {/* Booking Error Banner */}
                       {bookingError && (
                         <div className="p-3.5 bg-rose-50 border border-rose-300 rounded-xl flex items-start gap-2.5 text-rose-800 text-xs font-semibold">
@@ -3840,6 +4020,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
                                 ? "Fare unavailable"
                                 : "—"}
                         </p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">Toll, parking &amp; approved extras are charged over and above this fare</p>
                       </div>
                       <button
                         type="button"
@@ -3896,6 +4077,17 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
                       </div>
                       <p className="text-[12px] text-slate-700 font-medium leading-relaxed pt-0.5">{pickup || `${currentCityName || "Hosur"} Origin`}</p>
                     </div>
+                    {intermediateStops.filter((s) => s.address && s.address.trim()).map((stop, sIdx) => (
+                      <div key={stop.id || sIdx} className="flex items-start gap-4 relative bg-white" data-testid="summary-stop">
+                        <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
+                          <MapPin className="w-3.5 h-3.5 text-blue-500" />
+                        </div>
+                        <div className="pt-0.5">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-700 block">Stop {sIdx + 1}</span>
+                          <p className="text-[12px] text-slate-700 font-medium leading-relaxed">{stop.address}</p>
+                        </div>
+                      </div>
+                    ))}
                     <div className="flex items-start gap-4 relative bg-white">
                       <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
                         <MapPin className="w-3.5 h-3.5 text-rose-500" />
@@ -3985,7 +4177,12 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
                 type="button"
                 onClick={() => {
                   setBookingSuccessOpen(false)
-                  navigate(routes.landing)
+                  const isPreview = (typeof window !== "undefined" && window.parent !== window) || window.location.search.includes("preview=true")
+                  if (window.history.length > 1) {
+                    navigate(-1)
+                  } else {
+                    navigate(isPreview ? "/home?preview=true" : routes.landing)
+                  }
                 }}
                 className={`py-3.5 ${lastBookingId ? "flex-1 border border-slate-200 text-slate-700 hover:bg-slate-50" : "w-full bg-emerald-600 text-white"} text-xs font-bold rounded-xl transition-all cursor-pointer`}
               >
@@ -4034,6 +4231,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
               : (dropCoords?.lat ? { lat: Number(dropCoords.lat), lng: Number(dropCoords.lng) } : null)
           }
           serviceSlug="goods_transport_two_wheeler"
+          vehicleClass={(selectedVehicle || selectedVehicleEffective)?.vehicle_class || ""}
           onClose={() => setMapPickerTarget(null)}
           onConfirm={(resolvedAddr) => {
             const fullAddr = resolvedAddr?.formatted_address || resolvedAddr?.address || resolvedAddr?.name || "Selected Location"

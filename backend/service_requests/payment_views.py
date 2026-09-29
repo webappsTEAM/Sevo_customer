@@ -12,6 +12,7 @@ import logging
 import uuid
 from decimal import Decimal
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 from django.http import HttpResponse
@@ -89,6 +90,17 @@ def _verify_booking_ownership(request, sr):
     return token_matches or phone_matches
 
 
+_LOGISTICS_CATEGORIES = ("goods_transport_truck", "goods_transport_two_wheeler", "packers_movers")
+
+
+def _has_balance_due(sr):
+    """A prepaid logistics trip whose final fare is now above what was paid."""
+    if (sr.service_category or "").strip().lower() not in _LOGISTICS_CATEGORIES:
+        return False
+    from .services.prepaid_variance import balance_due
+    return balance_due(sr) > 0
+
+
 # ─── Payment Initiation & Verification ────────────────────────────────────────
 
 class PaymentInitiateView(APIView):
@@ -122,7 +134,7 @@ class PaymentInitiateView(APIView):
         if sr.payment_method != ServiceRequest.PaymentMethod.ONLINE:
             return _error("This booking does not require online payment.")
 
-        if sr.payment_status == ServiceRequest.PaymentStatus.PAID:
+        if sr.payment_status == ServiceRequest.PaymentStatus.PAID and not _has_balance_due(sr):
             return _error("This booking is already paid.")
 
         # How much to charge for THIS order.
@@ -354,7 +366,7 @@ class PaymentVerifyView(APIView):
                 f"{order_id}|{payment_id}".encode("utf-8"),
                 hashlib.sha256,
             ).hexdigest()
-            if not hmac.compare_digest(expected_signature, str(signature)):
+            if not hmac.compare_digest(expected_signature.encode("utf-8"), str(signature).encode("utf-8")):
                 payment.status = ServiceRequest.PaymentStatus.FAILED
                 payment.error_code = "signature_mismatch"
                 payment.save(update_fields=["status", "error_code", "updated_at"])
@@ -373,10 +385,31 @@ class PaymentVerifyView(APIView):
         payment.status = ServiceRequest.PaymentStatus.PAID
         payment.save(update_fields=["razorpay_payment_id", "razorpay_signature", "status", "updated_at"])
 
+        return self._finalize(request, sr, payment)
+
+    def _finalize(self, request, sr, payment):
+        """Everything that follows a payment being recorded PAID (shared with wallet payment)."""
         sr.transaction_id = payment.razorpay_payment_id
         sr.payment_gateway = payment.gateway
         if not sr.invoice_id:
             sr.invoice_id = f"INV-{sr.request_id}-{uuid.uuid4().hex[:6].upper()}"
+
+        # A logistics trip that is already past payment (a balance paid after the final fare
+        # rose) only records the money: it must never re-run the booking confirmation/dispatch.
+        if (sr.service_category or "").strip().lower() in _LOGISTICS_CATEGORIES and \
+                sr.status != ServiceRequest.Status.WAITING_FOR_PAYMENT:
+            sr.payment_status = ServiceRequest.PaymentStatus.PAID
+            sr.save(update_fields=["transaction_id", "payment_gateway", "invoice_id", "payment_status", "updated_at"])
+            return _success(
+                data={
+                    "request_id":     sr.request_id,
+                    "booking_status": sr.status,
+                    "payment_status": sr.payment_status,
+                    "transaction_id": sr.transaction_id,
+                    "invoice_id":     sr.invoice_id,
+                },
+                message="Balance payment received. Thank you!",
+            )
 
         # Special handling for AC Estimation bookings
         has_est = hasattr(sr, "estimation") and sr.estimation is not None
@@ -446,11 +479,26 @@ class PaymentVerifyView(APIView):
                 message="Payment confirmed. Your booking status is being updated — please contact support if it does not update within a few minutes.",
             )
 
-        # Payment verified; write a durable Workforce delivery intent before
-        # the surrounding transaction commits.
-        if sr.status not in [ServiceRequest.Status.ESTIMATION_CLOSED, ServiceRequest.Status.CLOSED, ServiceRequest.Status.CUSTOMER_REJECTED]:
-            from service_requests.services.workforce_dispatch_outbox import queue_workforce_dispatch
-            queue_workforce_dispatch(sr)
+        # Payment verified; booking is now CONFIRMED. Dispatch to Workforce.
+        def _dispatch_after_payment():
+            if sr.status in [ServiceRequest.Status.ESTIMATION_CLOSED, ServiceRequest.Status.CLOSED, ServiceRequest.Status.CUSTOMER_REJECTED]:
+                logger.info(f"Skipping workforce dispatch for closed/rejected estimation {sr.id}")
+                return
+            try:
+                from service_requests.tasks import async_dispatch_service_request
+                async_dispatch_service_request.delay(sr.id)
+            except Exception as dispatch_err:
+                logger.warning(
+                    f"Could not queue workforce dispatch after payment for booking {sr.id}: {dispatch_err}"
+                )
+                try:
+                    from service_requests.tasks import async_dispatch_service_request
+                    async_dispatch_service_request(sr.id)
+                except Exception as direct_err:
+                    logger.error(
+                        f"Direct dispatch also failed after payment for booking {sr.id}: {direct_err}"
+                    )
+        transaction.on_commit(_dispatch_after_payment)
 
         return _success(
             data={
@@ -462,6 +510,91 @@ class PaymentVerifyView(APIView):
             },
             message="Payment confirmed! Your booking is active.",
         )
+
+
+class PaymentConfigView(APIView):
+    """
+    GET /api/payment/config/  -- what the booking pages may offer, decided by the server.
+
+    online: a real gateway is configured, or the local sandbox is explicitly enabled. Without
+    this the page would offer "Pay online" on a deployment where verification returns 503.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        gateway = bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
+        return _success(data={
+            "online_available": gateway or bool(getattr(settings, "PAYMENT_SANDBOX_MODE", False)),
+            "sandbox": (not gateway) and bool(getattr(settings, "PAYMENT_SANDBOX_MODE", False)),
+            "key_id": settings.RAZORPAY_KEY_ID if gateway else "",
+        })
+
+
+class PaymentWalletPayView(APIView):
+    """
+    POST /api/payment/wallet-pay/   {"booking_id": 12}
+
+    Pay a goods-transport / packers-and-movers booking from the customer's SEVO wallet.
+
+    Only the logged-in owner may spend their wallet (the guest phone/token rule that lets
+    someone start a card payment is deliberately NOT enough to spend stored credit). The wallet
+    must cover the whole amount due -- there is no part-wallet/part-card split. The debit and
+    the Payment row are written in one transaction, and the amount is decided server-side by
+    the same _amount_due() the gateway path uses, so the two can never disagree.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "payment"
+
+    def post(self, request):
+        from .services import debit_wallet
+        from .models import CustomerWallet, WalletTransaction
+
+        booking_id = request.data.get("booking_id")
+        if not booking_id:
+            return _error("booking_id is required.")
+        try:
+            with transaction.atomic():
+                sr = ServiceRequest.objects.select_for_update().get(pk=booking_id)
+                if sr.customer_id != request.user.id:
+                    return _error("You are not authorized to pay for this booking.", 403)
+                if (sr.service_category or "").strip().lower() not in _LOGISTICS_CATEGORIES:
+                    return _error("Wallet payment is available for goods transport and packers & movers bookings.")
+                if sr.payment_method != ServiceRequest.PaymentMethod.ONLINE:
+                    return _error("This booking does not require online payment.")
+                if sr.status in (ServiceRequest.Status.CANCELLED, ServiceRequest.Status.REJECTED):
+                    return _error("This booking is cancelled.")
+
+                amount_due, due_error = PaymentInitiateView()._amount_due(sr)
+                if due_error:
+                    return _error(due_error)
+
+                wallet = CustomerWallet.objects.filter(user=request.user).first()
+                balance = wallet.balance if wallet else Decimal("0")
+                if balance < amount_due:
+                    return Response({
+                        "success": False,
+                        "message": f"Your wallet balance (Rs. {balance}) does not cover Rs. {amount_due}.",
+                        "wallet_balance": float(balance),
+                        "amount_due": float(amount_due),
+                    }, status=400)
+
+                ref = f"wallet_{uuid.uuid4().hex[:16]}"
+                tx = debit_wallet(
+                    request.user, amount_due, WalletTransaction.Reason.BOOKING_DEBIT,
+                    note=f"Payment for booking {sr.request_id}", actor=request.user,
+                    reference_type="booking", reference_id=sr.request_id,
+                )
+                payment = Payment.objects.create(
+                    customer=sr.customer, service_request=sr, razorpay_order_id=ref,
+                    razorpay_payment_id=f"WALLET_{tx.id}", amount=amount_due, currency="INR",
+                    status=ServiceRequest.PaymentStatus.PAID, gateway="wallet",
+                )
+                return PaymentVerifyView()._finalize(request, sr, payment)
+        except (ServiceRequest.DoesNotExist, ValueError, TypeError):
+            return _error("Booking not found.", 404)
+        except ValidationError as e:
+            return _error(str(getattr(e, "detail", e)))
 
 
 # ─── Admin Payment Management ─────────────────────────────────────────────────
@@ -505,6 +638,123 @@ class AdminPaymentUpdateView(APIView):
 
 
 # ─── Invoice PDF Generation ───────────────────────────────────────────────────
+
+_INVOICE_FONT = {}
+
+
+def _invoice_unicode_font():
+    """
+    A Unicode TrueType font for customer-entered text that the built-in Helvetica cannot draw
+    (Tamil, Hindi, ... names and addresses used to print as black boxes). Configure with the
+    INVOICE_UNICODE_FONT setting/env (path to a .ttf); otherwise common system fonts are tried.
+    Returns the registered font name or None. Note: reportlab draws glyph by glyph, so complex
+    scripts are not shaped -- use a font/pipeline with shaping if exact Indic typography is needed.
+    """
+    if "name" in _INVOICE_FONT:
+        return _INVOICE_FONT["name"]
+    import os
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    candidates = [
+        getattr(settings, "INVOICE_UNICODE_FONT", "") or "",
+        os.getenv("INVOICE_UNICODE_FONT", ""),
+        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "C:\\Windows\\Fonts\\Nirmala.ttf",
+        "C:\\Windows\\Fonts\\arialuni.ttf",
+    ]
+    for path in candidates:
+        if path and os.path.exists(path):
+            try:
+                pdfmetrics.registerFont(TTFont("SevoInvoiceUnicode", path))
+                _INVOICE_FONT["name"] = "SevoInvoiceUnicode"
+                return "SevoInvoiceUnicode"
+            except Exception:
+                continue
+    _INVOICE_FONT["name"] = None
+    return None
+
+
+def _pdf_text(c, text, size, bold=False):
+    """Set the right font on canvas `c` for `text` and return the (sanitised) text to draw."""
+    text = "".join(ch for ch in str(text or "") if ch.isprintable())
+    base = "Helvetica-Bold" if bold else "Helvetica"
+    try:
+        text.encode("cp1252")
+        c.setFont(base, size)
+        return text
+    except UnicodeEncodeError:
+        pass
+    uni = _invoice_unicode_font()
+    if uni:
+        c.setFont(uni, size)
+        return text
+    c.setFont(base, size)
+    return text.encode("cp1252", "replace").decode("cp1252")   # readable "?" instead of black boxes
+
+
+def _shaped_font_paths():
+    import os
+    cfg = [getattr(settings, "INVOICE_UNICODE_FONT", "") or "", os.getenv("INVOICE_UNICODE_FONT", "")]
+    dirs = ["/usr/share/fonts", "/usr/local/share/fonts", "C:\\Windows\\Fonts", os.path.expanduser("~/.fonts")]
+    names = ["Nirmala.ttf", "NotoSansTamil", "NotoSansDevanagari", "NotoSans-Regular", "FreeSans.ttf", "DejaVuSans.ttf"]
+    found = [p for p in cfg if p and os.path.exists(p)]
+    for n in names:
+        for d in dirs:
+            for root, _dirs, files in os.walk(d) if os.path.isdir(d) else []:
+                for f in files:
+                    if f.startswith(n) and f.lower().endswith(".ttf") and "Bold" not in f:
+                        found.append(os.path.join(root, f))
+    return found
+
+
+def _shaped_image(text, size):
+    """Render `text` with a shaping engine (Pillow+raqm) so Indic conjuncts/vowel signs are correct.
+    Returns (PNG bytes, width_pt, height_pt) or None when no shaper/font that covers the text exists."""
+    try:
+        import io
+        from PIL import Image, ImageDraw, ImageFont, features
+        if not features.check("raqm"):
+            return None
+        scale = 4
+        for path in _shaped_font_paths():
+            try:
+                font = ImageFont.truetype(path, int(size * scale), layout_engine=ImageFont.Layout.RAQM)
+                # every character must be covered by this font (no .notdef boxes)
+                notdef = bytes(font.getmask("\U0010FFFF"))
+                if any(ch != " " and bytes(font.getmask(ch)) == notdef for ch in set(text)):
+                    continue
+                l, t, r, b = font.getbbox(text)
+                img = Image.new("RGBA", (max(1, r + 4), max(1, b - min(t, 0) + 4)), (255, 255, 255, 0))
+                ImageDraw.Draw(img).text((0, -min(t, 0)), text, font=font, fill=(0, 0, 0, 255))
+                buf = io.BytesIO()
+                img.save(buf, "PNG")
+                return buf.getvalue(), img.width / scale, img.height / scale
+            except Exception:
+                continue
+    except Exception:
+        return None
+    return None
+
+
+def _draw_text(c, x, y, text, size, bold=False):
+    """drawString that also handles Tamil/Hindi/etc.: shaped image when a shaper is available,
+    else the glyph-by-glyph Unicode font, else '?' (never black boxes)."""
+    clean = "".join(ch for ch in str(text or "") if ch.isprintable())
+    try:
+        clean.encode("cp1252")
+    except UnicodeEncodeError:
+        shaped = _shaped_image(clean, size)
+        if shaped:
+            from reportlab.lib.utils import ImageReader
+            import io
+            png, w, h = shaped
+            c.drawImage(ImageReader(io.BytesIO(png)), x, y - size * 0.25, width=w, height=h, mask="auto")
+            return
+    c.drawString(x, y, _pdf_text(c, clean, size, bold))
+
 
 class InvoiceDownloadView(APIView):
     """
@@ -604,8 +854,9 @@ class InvoiceDownloadView(APIView):
             c.setFont("Helvetica", 10)
             c.drawString(180, y, sr.transaction_id)
 
-        # Billed To
-        y -= 30
+        # Billed To (the panel spans y-10..y+60, so start it clear of the meta lines above
+        # or it paints over Booking Reference / Date / Transaction ID)
+        y -= 90
         c.setFillColor(HexColor("#F8FAFC"))
         c.rect(25, y - 10, W - 50, 70, fill=1, stroke=0)
         c.setFillColor(HexColor("#4F46E5"))
@@ -613,17 +864,20 @@ class InvoiceDownloadView(APIView):
         c.drawString(35, y + 48, "BILLED TO")
         c.setFillColor(black)
         c.setFont("Helvetica-Bold", 11)
-        c.drawString(35, y + 30, sr.customer_name)
+        _draw_text(c, 35, y + 30, sr.customer_name, 11, bold=True)
         c.setFont("Helvetica", 10)
         c.drawString(35, y + 14, sr.phone)
         if sr.email:
-            c.drawString(35, y - 2, sr.email)
+            _draw_text(c, 35, y - 2, sr.email, 10)
         c.setFont("Helvetica", 9)
         addr = sr.address[:80] + "..." if len(sr.address) > 80 else sr.address
-        c.drawString(35, y - 18, addr)
+        _draw_text(c, 35, y - 18, addr, 9)
+        if getattr(sr, "customer_gstin", ""):
+            c.setFont("Helvetica-Bold", 9)
+            c.drawRightString(W - 35, y + 48, f"Customer GSTIN: {sr.customer_gstin}")
 
         # Line items
-        y -= 50
+        y -= 62
         c.setFillColor(HexColor("#4F46E5"))
         c.rect(25, y, W - 50, 24, fill=1, stroke=0)
         c.setFillColor(white)
@@ -644,7 +898,107 @@ class InvoiceDownloadView(APIView):
                 cart = []
 
         base_total = 0.0
-        if cart:
+        gst_row = None
+        gt_snapshot = next(
+            (i.get("logistics_snapshot") for i in cart
+             if isinstance(i, dict) and isinstance(i.get("logistics_snapshot"), dict)),
+            None,
+        )
+        if gt_snapshot:
+            # Goods transport: itemise the locked quote instead of one opaque
+            # "Service" line. Rows come only from the stored snapshot, so the
+            # invoice can never disagree with what the customer was quoted.
+            from decimal import Decimal as _D
+            def _amt(key):
+                try:
+                    return _D(str(gt_snapshot.get(key) or "0"))
+                except Exception:
+                    return _D("0")
+            total_q = _D(str(getattr(sr, "total_amount", 0) or gt_snapshot.get("total") or "0"))
+            pm = gt_snapshot.get("pricing") if isinstance(gt_snapshot.get("pricing"), dict) else None
+            gst_row = None
+            if pm and "gst_amount" in pm:
+                # Packers & Movers: the locked quote already carries its own line items and GST.
+                def _p(key):
+                    try:
+                        return _D(str(pm.get(key) or "0"))
+                    except Exception:
+                        return _D("0")
+                veh = (gt_snapshot.get("vehicle") or {}).get("name") if isinstance(gt_snapshot.get("vehicle"), dict) else ""
+                rows = [
+                    (f"Transport{f' - {veh}' if veh else ''} ({gt_snapshot.get('distance_km') or 0} km)", _p("transport_total")),
+                    (f"Additional stops ({pm.get('additional_stops') or 0})", _p("additional_stops_charge")),
+                    (f"Packing ({pm.get('packing_tier') or 'standard'})", _p("packing_charge")),
+                    ("Loading / unloading labour", _p("base_labor_charge")),
+                    ("Floor / no-lift labour", _p("floor_labor_charge")),
+                    ("Dismantling / reassembly", _p("dismantling_charge")),
+                    ("Unpacking", _p("unpacking_charge")),
+                    (f"Peak-day / off-hours surcharge", _p("date_surcharge")),
+                ]
+                rows = [(n, a) for n, a in rows if a > 0]
+                pm_subtotal = _p("subtotal")
+                other = pm_subtotal - sum((a for _, a in rows), _D("0"))
+                if abs(other) >= _D("0.01"):
+                    rows.append(("Other charges", other))
+                gst_row = (f"GST ({pm.get('gst_rate') or ''}):", _p("gst_amount"), pm_subtotal)
+            else:
+                km = gt_snapshot.get("chargeable_km") or gt_snapshot.get("distance_km") or "0"
+                rows = [
+                    (f"Base fare - {gt_snapshot.get('tier_name') or 'Vehicle'}", _amt("base_fare")),
+                    (f"Distance charge ({km} km)", _amt("distance_charge")),
+                    (f"Additional stops ({gt_snapshot.get('additional_stops') or 0})", _amt("additional_stop_charge")),
+                    ("Loading / unloading", _amt("loading_unloading")),
+                    ("Special handling", _amt("special_handling_charge")),
+                ]
+                rows = [(n, a) for n, a in rows if a > 0]
+                # A coupon and transit-insurance premium are part of what was charged; show them as
+                # their own lines instead of letting them masquerade as a fare adjustment.
+                _prem = _D(str(sr.insurance_premium or 0)) if getattr(sr, "insurance_opted_in", False) else _D("0")
+                _disc = _D(str(sr.discount_amount or 0)) if getattr(sr, "coupon_id", None) else _D("0")
+                from .services.extra_charges import applied_entries
+                _extras = [(f"{e['label']} (receipt)", _D(str(e["amount"]))) for e in applied_entries(sr)]
+                other = total_q - _prem + _disc - sum((a for _, a in _extras), _D("0")) - sum((a for _, a in rows), _D("0"))
+                if abs(other) >= _D("0.01"):
+                    rows.append(("Surge / minimum fare adjustment", other))
+                rows.extend(_extras)
+                if _disc > 0:
+                    rows.append(("Coupon discount", -_disc))
+                if _prem > 0:
+                    rows.append(("Transit insurance", _prem))
+                # GST configured on the tier (admin) is already INCLUDED in the fare; show its
+                # component, from the rate recorded on the quote (never the tier's current value).
+                _gst_rate = _amt("gst_rate")
+                if _gst_rate > 0:
+                    _gst_amt = _amt("gst_included")
+                    _pct = _gst_rate.quantize(_D("0.01")).normalize()
+                    gst_row = (f"Includes GST ({_pct:f}%):", _gst_amt, total_q)
+            for i, (name, amt) in enumerate(rows):
+                y -= 22
+                c.setFillColor(HexColor("#F8FAFC") if i % 2 == 0 else white)
+                c.rect(25, y - 4, W - 50, 22, fill=1, stroke=0)
+                c.setFillColor(black)
+                c.setFont("Helvetica", 10)
+                _draw_text(c, 35, y + 4, name[:48], 10)
+                c.drawString(320, y + 4, "1")
+                c.drawRightString(W - 35, y + 4, f"Rs. {amt:,.2f}")
+            base_total = float(gst_row[2]) if gst_row else float(total_q)
+            try:
+                from .models import TripStop
+                route = [t.address for t in TripStop.objects.filter(booking=sr).order_by("sequence") if t.address]
+            except Exception:
+                route = []
+            if not route and sr.address:
+                route = [sr.address] + ([sr.drop_address] if getattr(sr, "drop_address", "") else [])
+            if route:
+                y -= 22
+                c.setFont("Helvetica-Bold", 9)
+                c.drawString(35, y + 4, "Route:")
+                c.setFont("Helvetica", 9)
+                for n, a in enumerate(route):
+                    y -= 13
+                    label = "Pickup" if n == 0 else ("Drop" if n == len(route) - 1 else f"Stop {n}")
+                    _draw_text(c, 45, y + 4, f"{label}: {a[:90]}", 9)
+        elif cart:
             for i, item in enumerate(cart):
                 y -= 22
                 bg = HexColor("#F8FAFC") if i % 2 == 0 else white
@@ -653,7 +1007,7 @@ class InvoiceDownloadView(APIView):
                 c.setFillColor(black)
                 c.setFont("Helvetica", 10)
                 name = str(item.get("name", "Service"))[:40]
-                c.drawString(35, y + 4, name)
+                _draw_text(c, 35, y + 4, name, 10)
                 qty = item.get("quantity", 1)
                 c.drawString(320, y + 4, str(qty))
                 price = float(item.get("price", 0))
@@ -664,7 +1018,7 @@ class InvoiceDownloadView(APIView):
             base_total = float(getattr(sr, "total_amount", 0) or 599.0)
             y -= 22
             c.setFont("Helvetica", 10)
-            c.drawString(35, y + 4, sr.issue_title or "Standard Service Package")
+            _draw_text(c, 35, y + 4, sr.issue_title or "Standard Service Package", 10)
             c.drawString(320, y + 4, "1")
             c.drawString(370, y + 4, f"Rs. {base_total:,.0f}")
             c.drawRightString(W - 35, y + 4, f"Rs. {base_total:,.0f}")
@@ -691,12 +1045,23 @@ class InvoiceDownloadView(APIView):
             c.setFillColor(HexColor("#B45309"))
             c.setFont("Helvetica-Bold", 9)
             reason_clean = ext_reason[:42] if ext_reason else "Approved Extension"
-            c.drawString(35, y + 4, f"Approved Extension: {reason_clean}")
+            _draw_text(c, 35, y + 4, f"Approved Extension: {reason_clean}", 9, bold=True)
             c.drawString(320, y + 4, "1")
             c.drawString(370, y + 4, f"Rs. {ext_amount:,.0f}")
             c.drawRightString(W - 35, y + 4, f"Rs. {ext_amount:,.0f}")
 
-        final_total = base_total + ext_amount
+        # Bug found (mirrors the identical fix already applied to
+        # ServiceRequestDetailSerializer.get_base_amount): cart_data rows for
+        # GT/Packers & Movers bookings carry quote_id/cargo_items/pickup_floor
+        # etc, not a "price" key, so summing item.get("price", 0) here silently
+        # produced base_total=0 (invoice showing Rs. 0.00) for every such
+        # booking even though sr.total_amount was correctly charged.
+        # total_amount is the authoritative, already GST/fee/discount-inclusive
+        # figure captured at booking creation -- prefer it for the invoice's
+        # printed total, and only fall back to the cart/base_total sum (which
+        # stays as the per-line-item display above) if total_amount is unset.
+        authoritative_total = float(getattr(sr, "total_amount", 0) or 0)
+        final_total = authoritative_total if authoritative_total > 0 else (base_total + ext_amount)
 
         # Totals
         y -= 35
@@ -704,7 +1069,11 @@ class InvoiceDownloadView(APIView):
         c.line(25, y + 20, W - 25, y + 20)
         c.setFont("Helvetica", 10)
         c.drawString(320, y + 4, "Base Subtotal:")
-        c.drawRightString(W - 35, y + 4, f"Rs. {base_total:,.0f}")
+        c.drawRightString(W - 35, y + 4, f"Rs. {base_total:,.2f}" if gt_snapshot else f"Rs. {base_total:,.0f}")
+        if gst_row:
+            y -= 18
+            c.drawString(320, y + 4, gst_row[0])
+            c.drawRightString(W - 35, y + 4, f"Rs. {gst_row[1]:,.2f}")
 
         if ext_amount > 0:
             y -= 18
@@ -727,7 +1096,7 @@ class InvoiceDownloadView(APIView):
         is_paid = sr.payment_status in (ServiceRequest.PaymentStatus.PAID, ServiceRequest.PaymentStatus.COLLECTED)
         total_text = "TOTAL PAID:" if is_paid else "TOTAL DUE:"
         c.drawString(320, y + 6, total_text)
-        c.drawRightString(W - 35, y + 6, f"₹{final_total:,.2f}")
+        c.drawRightString(W - 35, y + 6, f"Rs. {final_total:,.2f}")
 
         # Footer
         c.setFillColor(HexColor("#F1F5F9"))

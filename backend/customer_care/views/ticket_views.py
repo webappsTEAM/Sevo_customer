@@ -106,7 +106,7 @@ class CustomerCareTicketViewSet(StandardResponseMixin, CompanyScopedViewSet):
                | qs.filter(email__icontains=search) \
                | qs.filter(phone__icontains=search) \
                | qs.filter(customer__customer_id__icontains=search) \
-               | qs.filter(service_request__customer__customer_id__icontains=search)
+               | qs.filter(booking__customer__customer_id__icontains=search)
         if sla_breached in ("true", "1", "yes"):
             from django.utils import timezone
             qs = qs.filter(
@@ -117,13 +117,17 @@ class CustomerCareTicketViewSet(StandardResponseMixin, CompanyScopedViewSet):
 
 
     def list(self, request, *args, **kwargs):
-        queryset = self.filter_queryset(self.get_queryset())
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-        serializer = self.get_serializer(queryset, many=True)
-        return self.success_response(serializer.data)
+        try:
+            queryset = self.filter_queryset(self.get_queryset())
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                return self.get_paginated_response(serializer.data)
+            serializer = self.get_serializer(queryset, many=True)
+            return self.success_response(serializer.data)
+        except Exception as e:
+            logger.exception(f"Failed to list customer care tickets: {e}")
+            return self.error_response(f"Unable to load tickets: {str(e)}", status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()

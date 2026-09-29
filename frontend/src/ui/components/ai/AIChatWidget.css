@@ -294,9 +294,28 @@
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   background: #FAF7F0;
   scroll-behavior: smooth;
+}
+
+/* Date Separator Header - Centered date divider */
+.caltrack-ai-date-separator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 10px 0 2px 0;
+  width: 100%;
+}
+
+.caltrack-ai-date-text {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #64748b;
+  letter-spacing: 0.01em;
+  padding: 2px 10px;
+  background: transparent;
+  user-select: none;
 }
 
 /* Message Bubbles */
@@ -315,10 +334,12 @@
 
 .caltrack-ai-msg-bubble {
   max-width: 84%;
-  padding: 12px 16px;
+  padding: 10px 14px 8px 14px;
   font-size: 13.5px;
   line-height: 1.5;
   word-break: break-word;
+  display: flex;
+  flex-direction: column;
 }
 
 .caltrack-ai-msg-row.user .caltrack-ai-msg-bubble {
@@ -334,6 +355,28 @@
   border: 1px solid #E2DDD5;
   border-radius: 18px 18px 18px 4px;
   box-shadow: 0 2px 8px rgba(11, 23, 42, 0.04);
+}
+
+.caltrack-ai-msg-text {
+  width: 100%;
+}
+
+.caltrack-ai-msg-time {
+  align-self: flex-end;
+  font-size: 10.5px;
+  font-weight: 500;
+  margin-top: 4px;
+  line-height: 1;
+  user-select: none;
+  letter-spacing: 0.01em;
+}
+
+.caltrack-ai-msg-row.assistant .caltrack-ai-msg-time {
+  color: #64748b;
+}
+
+.caltrack-ai-msg-row.user .caltrack-ai-msg-time {
+  color: rgba(255, 255, 255, 0.75);
 }
 
 .caltrack-ai-msg-bubble p {
@@ -590,9 +633,11 @@
 /* Typing Indicator Animation */
 .caltrack-ai-typing {
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 4px;
   padding: 10px 14px;
+  width: fit-content;
 }
 
 .caltrack-ai-dot {
@@ -936,4 +981,291 @@
   transform: translateY(-1px);
   box-shadow: 0 5px 14px rgba(11, 143, 122, 0.4);
 }
+
+/* ── Support Intake Flow: Connected to Support Banner ─────────────────── */
+.caltrack-ai-support-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(135deg, #ECFDF5 0%, #F0FDF4 50%, #EFF6FF 100%);
+  border-bottom: 1.5px solid #A7F3D0;
+  padding: 10px 16px;
+  animation: support-banner-slide-in 0.25s ease-out;
+}
+
+@keyframes support-banner-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.caltrack-ai-support-banner-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #059669;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(5, 150, 105, 0.25);
+}
+
+.caltrack-ai-support-banner-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.caltrack-ai-support-banner-title {
+  font-size: 12.5px;
+  font-weight: 750;
+  color: #065F46;
+  line-height: 1.25;
+}
+
+.caltrack-ai-support-banner-sub {
+  font-size: 11px;
+  color: #047857;
+  line-height: 1.35;
+  margin-top: 1px;
+}
+
+/* ── Support Intake Flow: Choice Options & Reason Chips ─────────────── */
+.caltrack-ai-options-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.caltrack-ai-option-chip {
+  background: #ffffff;
+  border: 1px solid #0B8F7A;
+  color: #0B8F7A;
+  font-size: 12px;
+  font-weight: 650;
+  padding: 6px 12px;
+  border-radius: 9999px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(11, 143, 122, 0.08);
+  transition: all 0.18s ease;
+  text-align: left;
+  line-height: 1.25;
+}
+
+.caltrack-ai-option-chip:hover:not(:disabled) {
+  background: #0B8F7A;
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(11, 143, 122, 0.25);
+}
+
+.caltrack-ai-option-chip:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Support Intake Flow: Image Upload Card & Preview ───────────────── */
+.caltrack-ai-image-upload-card {
+  margin: 10px 16px 6px;
+  padding: 12px 14px;
+  background: #F8FAFC;
+  border: 1.5px dashed #CBD5E1;
+  border-radius: 12px;
+  transition: border-color 0.2s ease;
+}
+
+.caltrack-ai-image-upload-card:hover {
+  border-color: #0B8F7A;
+}
+
+.caltrack-ai-image-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.caltrack-ai-image-prompt-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #0F172A;
+}
+
+.caltrack-ai-image-icon {
+  color: #0B8F7A;
+}
+
+.caltrack-ai-image-hint {
+  font-size: 11.5px;
+  color: #64748B;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.caltrack-ai-image-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: #DC2626;
+  background: #FEF2F2;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+.caltrack-ai-image-btn-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.caltrack-ai-select-file-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #0B8F7A;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.caltrack-ai-select-file-btn:hover:not(:disabled) {
+  background: #087060;
+  transform: translateY(-1px);
+}
+
+.caltrack-ai-skip-file-btn {
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
+  color: #64748B;
+  border: 1px solid #CBD5E1;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.caltrack-ai-skip-file-btn:hover:not(:disabled) {
+  color: #0F172A;
+  background: #F1F5F9;
+  border-color: #94A3B8;
+}
+
+.caltrack-ai-image-selected-view {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.caltrack-ai-image-thumb-wrap {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #E2E8F0;
+  flex-shrink: 0;
+  background: #ffffff;
+}
+
+.caltrack-ai-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.caltrack-ai-image-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.caltrack-ai-image-filename {
+  font-size: 12px;
+  font-weight: 650;
+  color: #0F172A;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.caltrack-ai-image-filesize {
+  font-size: 11px;
+  color: #64748B;
+  margin-top: 2px;
+}
+
+.caltrack-ai-image-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.caltrack-ai-submit-photo-btn {
+  background: #0B8F7A;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+
+.caltrack-ai-submit-photo-btn:hover:not(:disabled) {
+  background: #087060;
+}
+
+.caltrack-ai-cancel-photo-btn {
+  background: #F1F5F9;
+  color: #64748B;
+  border: none;
+  border-radius: 8px;
+  padding: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.caltrack-ai-cancel-photo-btn:hover:not(:disabled) {
+  background: #E2E8F0;
+  color: #0F172A;
+}
+
+.caltrack-ai-uploaded-preview {
+  margin-bottom: 8px;
+  border-radius: 8px;
+  overflow: hidden;
+  max-width: 180px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.caltrack-ai-uploaded-preview img {
+  width: 100%;
+  display: block;
+  object-fit: cover;
+}
+
 

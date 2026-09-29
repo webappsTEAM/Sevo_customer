@@ -2,7 +2,7 @@
   "default_start_time": "09:00",
   "default_end_time": "18:00",
   "slot_duration_minutes": 30,
-  "slot_capacity": 2,
+  "slot_capacity": 1,
   "is_active": true,
   "weekly_schedule": [
     {

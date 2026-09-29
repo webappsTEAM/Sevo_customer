@@ -8,6 +8,11 @@ import {
   ClipboardList, Settings, Zap, Wrench, Search, Plus, Calendar, AlertTriangle, Ban
 } from "lucide-react"
 import { routes } from "../routes.js"
+import { CouponField } from "../components/CouponField.jsx"
+import { GTPolicyNote } from "../components/GTPolicyNote.jsx"
+import { GTPaymentMethodPicker } from "../components/GTPaymentMethodPicker.jsx"
+import { settleBookingPayment } from "../../api/gtPaymentService.js"
+import { GstinField, isValidGstin } from "../components/GstinField.jsx"
 import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchPackersMoversQuote, fetchLogisticsSlots, fetchPackersMoversInventory, fetchGTFaqs, fetchLogisticsCities } from "../../api/logisticsService.js"
 import { createBooking, cancelBooking, getBookingStatus } from "../../api/bookingService.js"
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
@@ -18,6 +23,8 @@ import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
 import { BookingRescheduleModal } from "../components/BookingRescheduleModal.jsx"
 import { MapPickerScreen } from "../components/AddressPicker/MapPickerScreen.jsx"
+import { useLegalConfig } from "./legal/legalConfig.js"
+import { MultiStopRouteManager, findUnpinnedStop } from "../../components/logistics/MultiStopRouteManager.jsx"
 import { LogisticsFooter } from "../components/LogisticsFooter.jsx"
 import {
   filterLocationSuggestions as filterHosurLocations,
@@ -653,6 +660,9 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
     } catch (_) { return {} }
   }
   const savedForm = getSavedForm()
+  // Support line comes from the admin-managed legal/contact config (same source as Help & Support).
+  const { config: supportConfig } = useLegalConfig()
+  const supportTel = String(supportConfig?.support_phone || "").replace(/[^\d+]/g, "")
 
   // Form State
   const [pickup, setPickup] = useState(() => savedForm.pickup || "")
@@ -664,9 +674,10 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
   const [dropCoords, setDropCoords] = useState(() => savedForm.dropCoords || null)     // { lat, lng, forAddress }
 
   // Optional intermediate stops between pickup and drop (e.g. a storage unit
-  // drop-off on the way). Purely additive -- empty by default, capped, and
-  // only sent to the backend when at least one stop has an address filled in.
-  const MAX_EXTRA_STOPS = 5
+  // drop-off on the way). Same stop model + map picker as Mini Truck / Two-Wheeler:
+  // { id, address, coords:{lat,lng,forAddress}, contact_name, contact_phone }.
+  // The cap mirrors the server's MAX_INTERMEDIATE_WAYPOINTS.
+  const MAX_EXTRA_STOPS = 3
   const [extraStops, setExtraStops] = useState([])
 
   useEffect(() => {
@@ -749,7 +760,18 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
   const [expandedSlotCategory, setExpandedSlotCategory] = useState("Morning")
 
   useEffect(() => {
-    const dStr = selectedDate?.fullDate ? selectedDate.fullDate.toISOString().split("T")[0] : ""
+    // Bug found: same as the identical fix in MiniTruckBookingHosurPage --
+    // toISOString() converts to UTC before formatting, and for a
+    // selectedDate.fullDate built at local midnight (server dates use
+    // new Date(`${d.date}T00:00:00`)) under IST (UTC+5:30), that always
+    // rolls the date back to the previous calendar day, which the backend's
+    // validate_booking_slot() then correctly rejects as "in the past" --
+    // making every slot for every date show unavailable. Build the date
+    // string from local Y/M/D components instead, matching how the actual
+    // booking submission further below already does it correctly.
+    const dStr = selectedDate?.fullDate
+      ? `${selectedDate.fullDate.getFullYear()}-${String(selectedDate.fullDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.fullDate.getDate()).padStart(2, "0")}`
+      : ""
     const activeCityParam = selectedCity ? selectedCity.toLowerCase() : currentCitySlug
     setSlotsLoading(true)
     fetchLogisticsSlots({ date: dStr, category: "packers_movers", city: activeCityParam })
@@ -928,6 +950,13 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
         relocationType,
         city: (selectedCity ? selectedCity.toLowerCase() : currentCitySlug),
         serviceTierId: selectedPackage?._tierId || selectedPackage?.id || null,
+        // Stops between pickup and drop: priced server-side at the tier's admin-configured charge,
+        // and the booking must carry the same number.
+        extraStops: (extraStops || []).filter((s) => s && String(s.address || "").trim()).length,
+        moveDate: selectedDate?.fullDate
+          ? `${selectedDate.fullDate.getFullYear()}-${String(selectedDate.fullDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.fullDate.getDate()).padStart(2, "0")}`
+          : null,
+        moveTime: selectedSlot || null,
       })
       const quoteData = res?.data || res
       if (quoteData && quoteData.quote_id) {
@@ -958,6 +987,9 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
     pickupHasLift,
     dropFloor,
     dropHasLift,
+    (extraStops || []).filter((s) => s && String(s.address || "").trim()).length,
+    selectedDate,
+    selectedSlot,
   ])
 
 
@@ -973,6 +1005,9 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
   const [cancelledBookingModalOpen, setCancelledBookingModalOpen] = useState(false)
   const [cancelledReasonText, setCancelledReasonText] = useState("")
   const [bookingError, setBookingError] = useState("")
+  const [customerGstin, setCustomerGstin] = useState("")
+  const [coupon, setCoupon] = useState(null)
+  const [payMethod, setPayMethod] = useState("cod")   // "cod" | "online" | "wallet"
   const [bookingSubmitting, setBookingSubmitting] = useState(false)
   const [lastBookingId, setLastBookingId] = useState(null)
   const [lastBookingAmount, setLastBookingAmount] = useState(null)
@@ -1388,12 +1423,12 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
         const [tiers, lanes, areas] = await Promise.all([
           fetchServiceTiers("packers_movers", activeCityParam),
           fetchLanes("packers_movers", activeCityParam),
-          fetchServiceAreas(activeCityParam),
+          fetchServiceAreas(activeCityParam, "packers_movers"),
         ])
         if (cancelled) return
         setFetchedTiers(tiers)
         setFetchedLanes(lanes)
-        setServiceAreas(areas)
+        setServiceAreas(Array.isArray(areas) ? areas : [])
       } catch (err) {
         console.warn("Failed to load logistics catalog:", err)
       }
@@ -1463,9 +1498,15 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
     const list = []
     const originCityName = selectedCity || currentCityName || "Hosur"
     const originKey = originCityName.trim().toLowerCase()
+    // States come from the City records (admin data); never guessed from a name.
+    const stateOfCity = (label) => {
+      const key = String(label || "").trim().toLowerCase()
+      const hit = Array.isArray(availableCities) ? availableCities.find((c) => c?.name && c.name.trim().toLowerCase() === key) : null
+      return hit?.state || ""
+    }
     list.push({
       name: originCityName,
-      state: "Tamil Nadu",
+      state: stateOfCity(originCityName),
       subtitle: `${originCityName} (Origin Hub)`,
     })
     const seen = new Set([originKey])
@@ -1492,7 +1533,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
         seen.add(key)
         list.push({
           name: l.destination_label,
-          state: (l.destination_label.includes("Bengaluru") || l.destination_label.includes("Electronic City") || l.destination_label.includes("Whitefield")) ? "Karnataka" : "Tamil Nadu",
+          state: stateOfCity(l.destination_label),
           subtitle: `${l.distance_km ? `~${Number(l.distance_km)} Kms from ${originCityName}` : ""} ${l.eta_label ? `(${l.eta_label})` : ""}`.trim(),
           distance_km: l.distance_km,
           eta_label: l.eta_label,
@@ -1769,6 +1810,8 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
 
       const payload = {
         customer_name: resolvedName,
+        ...(coupon?.code ? { coupon_code: coupon.code } : {}),
+        ...(customerGstin && isValidGstin(customerGstin) ? { customer_gstin: customerGstin } : {}),
         phone: cleanPhone,
         email: customerEmail,
         service_category: "packers_movers",
@@ -1783,7 +1826,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
         preferred_date: dateString,
         preferred_time: selectedSlot || "Morning",
         total_amount: fare,
-        payment_method: "COD",
+        payment_method: payMethod === "cod" ? "COD" : "ONLINE",
         cart_data: [{
           quote_id: quoteId,
           package: pmServerQuote?.vehicle?.name || pkg.name || "Packers & Movers",
@@ -1831,13 +1874,25 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
       // Optional intermediate stops -- only sent when at least one has an
       // address filled in, so a booking made without touching this UI keeps
       // producing the exact same payload as before (no `stops` key).
+      // A stop with an address but no resolved location cannot be saved with
+      // coordinates (the crew could not navigate to it): refuse it up front.
+      const unpinnedStop = findUnpinnedStop(extraStops)
+      if (unpinnedStop) {
+        setBookingSubmitting(false)
+        setBookingError(`Stop ${unpinnedStop.index + 1}: choose a suggestion or pin it on the map, or remove the stop.`)
+        return
+      }
       const filledStops = (extraStops || [])
         .filter((s) => s && String(s.address || "").trim())
         .map((s) => {
-          const stopPayload = { address: String(s.address).trim(), stop_type: "WAYPOINT" }
+          const stopPayload = {
+            address: String(s.address).trim(),
+            stop_type: "WAYPOINT",
+            latitude: s.coords?.lat != null ? Number(Number(s.coords.lat).toFixed(6)) : null,
+            longitude: s.coords?.lng != null ? Number(Number(s.coords.lng).toFixed(6)) : null,
+          }
           if (s.contact_name && String(s.contact_name).trim()) stopPayload.contact_name = String(s.contact_name).trim()
           if (s.contact_phone && String(s.contact_phone).trim()) stopPayload.contact_phone = String(s.contact_phone).trim()
-          if (s.notes && String(s.notes).trim()) stopPayload.notes = String(s.notes).trim()
           return stopPayload
         })
       if (filledStops.length > 0) {
@@ -1866,6 +1921,18 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
       }
       bookingAttemptKeyRef.current = null
       const token = res?.data?.tracking_token || res?.tracking_token || null
+      // Prepaid booking: take the payment now. The booking exists but is not dispatched until it
+      // clears. On failure the same idempotency key is kept, so pressing Book again re-uses THIS
+      // booking (no duplicate) and retries the payment.
+      if (payMethod !== "cod") {
+        const paid = await settleBookingPayment({
+          bookingId: res?.data?.id || res?.id, trackingToken: token, method: payMethod,
+        })
+        if (!paid.ok) {
+          bookingAttemptKeyRef.current = attemptKey
+          throw { status: 0, body: { message: `${paid.message || "Payment was not completed."} Your booking is saved - tap Book again to retry the payment.` } }
+        }
+      }
       const authoritativeAmount = res?.data?.total_amount != null
         ? res.data.total_amount
         : (res?.total_amount != null ? res.total_amount : null)
@@ -1965,6 +2032,12 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
   }
 
   const totalItemsCount = Object.values(inventoryItems).reduce((sum, val) => sum + (Number(val) || 0), 0)
+
+  // Coordinates are only trusted for the address they were resolved for.
+  const pmUsableCoords = (coords, address) =>
+    coords && coords.forAddress === address && coords.lat != null && coords.lng != null
+      ? { lat: Number(coords.lat), lng: Number(coords.lng) }
+      : null
 
   return (
     <div className="min-h-screen bg-[var(--sevo-bg)] text-[var(--sevo-text-primary)] font-sans antialiased pb-28 lg:pb-0">
@@ -2294,64 +2367,19 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                             )}
                           </div>
 
-                          {/* Optional Additional Stops (e.g. storage unit on the way) */}
+                          {/* Optional additional stops: same map-pinned stop manager as the other GT services */}
                           <div className="pt-1">
-                            {extraStops.map((stop, idx) => (
-                              <div key={idx} className="relative mb-3">
-                                <div className="absolute -left-[30px] top-6 w-2.5 h-2.5 rounded-full border-[2.5px] border-[#999999] bg-white"></div>
-                                <div className="flex items-center justify-between mb-1.5">
-                                  <span className="text-xs font-semibold text-[#484848]">Stop {idx + 1} (optional)</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => setExtraStops((prev) => prev.filter((_, i) => i !== idx))}
-                                    className="text-xs font-semibold text-rose-600 hover:text-rose-700 cursor-pointer"
-                                  >
-                                    Remove
-                                  </button>
-                                </div>
-                                <input
-                                  type="text"
-                                  placeholder="Stop address or landmark..."
-                                  value={stop.address}
-                                  onChange={(e) => {
-                                    const val = e.target.value
-                                    setExtraStops((prev) => prev.map((s, i) => (i === idx ? { ...s, address: val } : s)))
-                                  }}
-                                  className="w-full h-[54px] pl-4 pr-4 rounded-xl border border-[#E0E0E0] bg-white text-[15px] outline-none transition-colors placeholder:text-[#999999] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] mb-2"
-                                />
-                                <div className="grid grid-cols-2 gap-2">
-                                  <input
-                                    type="text"
-                                    placeholder="Contact name (optional)"
-                                    value={stop.contact_name}
-                                    onChange={(e) => {
-                                      const val = e.target.value
-                                      setExtraStops((prev) => prev.map((s, i) => (i === idx ? { ...s, contact_name: val } : s)))
-                                    }}
-                                    className="w-full h-[44px] px-3 rounded-lg border border-[#E0E0E0] bg-white text-[13px] outline-none placeholder:text-[#999999] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860]"
-                                  />
-                                  <input
-                                    type="text"
-                                    placeholder="Contact phone (optional)"
-                                    value={stop.contact_phone}
-                                    onChange={(e) => {
-                                      const val = e.target.value
-                                      setExtraStops((prev) => prev.map((s, i) => (i === idx ? { ...s, contact_phone: val } : s)))
-                                    }}
-                                    className="w-full h-[44px] px-3 rounded-lg border border-[#E0E0E0] bg-white text-[13px] outline-none placeholder:text-[#999999] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860]"
-                                  />
-                                </div>
-                              </div>
-                            ))}
-                            {extraStops.length < MAX_EXTRA_STOPS && (
-                              <button
-                                type="button"
-                                onClick={() => setExtraStops((prev) => [...prev, { address: "", contact_name: "", contact_phone: "", notes: "" }])}
-                                className="text-[13px] font-semibold text-[#0B8860] hover:text-[#096e4d] cursor-pointer flex items-center gap-1"
-                              >
-                                + Add another stop
-                              </button>
-                            )}
+                            <MultiStopRouteManager
+                              stops={extraStops}
+                              onChangeStops={setExtraStops}
+                              maxStops={MAX_EXTRA_STOPS}
+                              pickupAddress={pickup || ""}
+                              dropAddress={drop || (selectedRoute ? selectedRoute.to : "")}
+                              pickupPoint={pmUsableCoords(pickupCoords, pickup || "")}
+                              dropPoint={pmUsableCoords(dropCoords, drop || (selectedRoute ? selectedRoute.to : ""))}
+                              serviceSlug="packers_movers"
+                              cityName={currentCityName || "Hosur"}
+                            />
                           </div>
                         </div>
                       </div>
@@ -3055,6 +3083,13 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
               })}
             </div>
 
+            <div className="mb-4 space-y-3">
+              <GTPolicyNote serviceCategory="packers_movers" />
+              <GTPaymentMethodPicker value={payMethod} onChange={setPayMethod} total={pmServerQuote?.total} />
+              <CouponField serviceCategory="packers_movers" cartTotal={pmServerQuote?.total} value={coupon} onChange={setCoupon} />
+              <GstinField value={customerGstin} onChange={setCustomerGstin} />
+            </div>
+
             <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 flex items-center justify-between mb-4">
               <span className="flex items-center gap-1.5 font-medium">
                 <Clock className="w-3.5 h-3.5 text-emerald-600" />
@@ -3136,9 +3171,11 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                         </button>
                         <h2 className="text-xl font-bold text-slate-800">Add your Inventory</h2>
                       </div>
-                      <button className="text-[11px] font-bold text-[#0B8860] border border-[#0B8860]/30 bg-[#0B8860]/5 px-3 py-1.5 rounded-full flex items-center gap-1.5 hover:bg-[#0B8860]/10 transition-colors cursor-pointer">
-                        <Phone className="w-3.5 h-3.5" /> Get a call
-                      </button>
+                      {supportTel && (
+                        <a href={`tel:${supportTel}`} data-testid="get-a-call" className="text-[11px] font-bold text-[#0B8860] border border-[#0B8860]/30 bg-[#0B8860]/5 px-3 py-1.5 rounded-full flex items-center gap-1.5 hover:bg-[#0B8860]/10 transition-colors cursor-pointer">
+                          <Phone className="w-3.5 h-3.5" /> Get a call
+                        </a>
+                      )}
                     </div>
 
                     {/* Search Bar */}
@@ -3395,21 +3432,21 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
 
                     {/* Step 3 Footer */}
                     <div className="absolute bottom-0 left-0 right-0 bg-white shadow-[0_-8px_20px_rgba(0,0,0,0.04)]">
-                      {/* Carton Recommendation Banner */}
-                      <div className="bg-[#F8F9FA] px-6 py-3 border-t border-slate-100 flex items-start gap-2">
-                        <span className="text-lg leading-none">📦</span>
-                        {(() => {
-                          const cartonCat = pmCategories.find(c => (c.slug && c.slug.includes("carton")) || (c.name && c.name.toLowerCase().includes("carton")))
-                          const cartonItems = cartonCat?.items || []
-                          const addedCartons = cartonItems.reduce((acc, it) => acc + (inventoryItems[it.id] || 0), 0);
-                          return (
+                      {/* Carton pointer: only when the admin has a cartons category; nothing is invented or auto-added */}
+                      {(() => {
+                        const cartonCat = pmCategories.find(c => (c.slug && c.slug.includes("carton")) || (c.name && c.name.toLowerCase().includes("carton")))
+                        if (!cartonCat) return null
+                        const addedCartons = (cartonCat.items || []).reduce((acc, it) => acc + (inventoryItems[it.id] || 0), 0)
+                        return (
+                          <div className="bg-[#F8F9FA] px-6 py-3 border-t border-slate-100 flex items-start gap-2">
+                            <span className="text-lg leading-none">📦</span>
                             <p className="text-[11px] text-slate-600 leading-relaxed pt-0.5">
-                              You've added {addedCartons} carton{addedCartons !== 1 ? 's' : ''}. Based on your inventory, we estimate you'll need 3 for small items like books and clothes.
-                              <span className="text-[#0B8860] font-bold hover:underline cursor-pointer ml-1 inline-block" onClick={() => { setStepperStep(2); setActiveCategory("Cartons") }}>Add 3 Cartons</span>
+                              You've added {addedCartons} carton{addedCartons !== 1 ? 's' : ''}. Small items like books and clothes usually go in cartons.
+                              <span role="button" className="text-[#0B8860] font-bold hover:underline cursor-pointer ml-1 inline-block" onClick={() => { setStepperStep(2); setActiveCategory(cartonCat.name) }}>Browse cartons</span>
                             </p>
-                          );
-                        })()}
-                      </div>
+                          </div>
+                        )
+                      })()}
 
                       <div className="px-6 py-4 border-t border-slate-100">
                         <button
@@ -3433,9 +3470,11 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                         </button>
                         <h2 className="text-xl font-bold text-slate-800">Booking Summary</h2>
                       </div>
-                      <button className="text-[11px] font-bold text-[#0B8860] border border-[#0B8860]/30 bg-[#0B8860]/5 px-3 py-1.5 rounded-full flex items-center gap-1.5 hover:bg-[#0B8860]/10 transition-colors cursor-pointer">
-                        <Phone className="w-3.5 h-3.5" /> Get a call
-                      </button>
+                      {supportTel && (
+                        <a href={`tel:${supportTel}`} data-testid="get-a-call" className="text-[11px] font-bold text-[#0B8860] border border-[#0B8860]/30 bg-[#0B8860]/5 px-3 py-1.5 rounded-full flex items-center gap-1.5 hover:bg-[#0B8860]/10 transition-colors cursor-pointer">
+                          <Phone className="w-3.5 h-3.5" /> Get a call
+                        </a>
+                      )}
                     </div>
 
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6 pb-36">
@@ -3483,6 +3522,16 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                               </div>
                             </div>
                           </div>
+
+                          {/* Stops between pickup and drop */}
+                          {extraStops.filter((s) => s.address && s.address.trim()).map((stop, sIdx) => (
+                            <div key={stop.id || sIdx} className="flex items-start gap-4 relative bg-white" data-testid="movement-stop">
+                              <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
+                                <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center">{sIdx + 1}</span>
+                              </div>
+                              <p className="pt-0.5 flex-1 text-[14px] text-slate-800 font-semibold leading-relaxed">{stop.address}</p>
+                            </div>
+                          ))}
 
                           {/* Drop Floor & Lift */}
                           <div className="flex items-start gap-4 relative bg-white">
@@ -3734,6 +3783,12 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                                 <span className="font-semibold text-slate-800">₹ {pmServerQuote.pricing.unpacking_charge}</span>
                               </div>
                             )}
+                            {Number(pmServerQuote.pricing?.date_surcharge) > 0 && (
+                              <div className="flex justify-between">
+                                <span>{(pmServerQuote.pricing.date_surcharge_lines || []).map((l) => l.name).join(", ") || "Peak-day / off-hours surcharge"}</span>
+                                <span className="font-semibold text-slate-800">₹ {pmServerQuote.pricing.date_surcharge}</span>
+                              </div>
+                            )}
                             {pmServerQuote.pricing?.total ? (
                               <>
                                 <div className="flex justify-between text-slate-500 pt-1 border-t border-slate-200">
@@ -3815,6 +3870,14 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                       </div>
                       <p className="text-[12px] text-slate-700 font-medium leading-relaxed pt-0.5">{pickup || `${currentCityName || "Hosur"} Origin`}</p>
                     </div>
+                    {extraStops.filter((s) => s.address && s.address.trim()).map((stop, sIdx) => (
+                      <div key={stop.id || sIdx} className="flex items-start gap-4 relative bg-white" data-testid="summary-stop">
+                        <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
+                          <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center">{sIdx + 1}</span>
+                        </div>
+                        <p className="text-[12px] text-slate-700 font-medium leading-relaxed pt-0.5">{stop.address}</p>
+                      </div>
+                    ))}
                     <div className="flex items-start gap-4 relative bg-white">
                       <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
                         <MapPin className="w-3.5 h-3.5 text-rose-500" />
@@ -3890,7 +3953,12 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
               type="button"
               onClick={() => {
                 setIsSurveySubmittedModalOpen(false)
-                navigate(routes.landing)
+                const isPreview = (typeof window !== "undefined" && window.parent !== window) || window.location.search.includes("preview=true")
+                if (window.history.length > 1) {
+                  navigate(-1)
+                } else {
+                  navigate(isPreview ? "/home?preview=true" : routes.landing)
+                }
               }}
               className="w-full py-3.5 bg-[#0B8860] hover:bg-[#097754] text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
             >
@@ -3965,7 +4033,12 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                 type="button"
                 onClick={() => {
                   setBookingSuccessOpen(false)
-                  navigate(routes.landing)
+                  const isPreview = (typeof window !== "undefined" && window.parent !== window) || window.location.search.includes("preview=true")
+                  if (window.history.length > 1) {
+                    navigate(-1)
+                  } else {
+                    navigate(isPreview ? "/home?preview=true" : routes.landing)
+                  }
                 }}
                 className={`py-3.5 ${lastBookingId ? "flex-1 border border-slate-200 text-slate-700 hover:bg-slate-50" : "w-full bg-emerald-600 text-white"} text-xs font-bold rounded-xl transition-all cursor-pointer`}
               >

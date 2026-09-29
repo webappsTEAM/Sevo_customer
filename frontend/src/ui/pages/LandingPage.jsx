@@ -4152,9 +4152,6 @@ export function LandingPage() {
                   </span>
                   <ChevronDown className="w-3 h-3 text-slate-400 shrink-0 ml-auto" />
                 </button>
-                <span className="hidden md:inline-flex items-center bg-emerald-50 dark:bg-emerald-950/40 text-[#0B8F7A] dark:text-emerald-400 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-200/80 dark:border-emerald-800 shrink-0">
-                  Auto-detected
-                </span>
               </div>
             </div>
 

@@ -106,6 +106,18 @@ class LogisticsCatalogMismatchError(UnresolvedLogisticsFareError):
     pass
 
 
+class TooManyStopsError(UnresolvedLogisticsFareError):
+    """The route has more intermediate stops than the tier allows."""
+
+    def __init__(self, allowed, requested):
+        self.allowed = allowed
+        self.requested = requested
+        super().__init__(
+            f"This vehicle allows up to {allowed} intermediate stop(s); "
+            f"the route has {requested}."
+        )
+
+
 def expected_tier_category(service_category):
     """The catalogue category a booking of `service_category` must use."""
     return SERVICE_CATEGORY_TO_TIER_CATEGORY.get((service_category or "").strip())
@@ -158,6 +170,30 @@ _PAISE = Decimal("0.01")
 def _money(value):
     """Quantise to 2dp with half-up rounding -- money, never float."""
     return Decimal(value).quantize(_PAISE, rounding=ROUND_HALF_UP)
+
+
+def _gst_rate_str(tier):
+    """The tier's admin-configured GST rate (percent, e.g. 18.00) as a 2dp string, or None when unset/zero."""
+    rate = getattr(tier, "gst_rate", None)
+    try:
+        rate = Decimal(str(rate)) if rate is not None else None
+    except Exception:
+        return None
+    if rate is None or rate <= 0:
+        return None
+    return str(rate.quantize(Decimal("0.01")))
+
+
+def _gst_included(total, tier):
+    """
+    The GST component of a GST-inclusive `total` (total - total / (1 + rate)); 0.00 when the tier
+    has no GST rate. Informational only: it never changes the fare.
+    """
+    rate = _gst_rate_str(tier)
+    if rate is None:
+        return Decimal("0.00")
+    total = Decimal(str(total))
+    return _money(total - total / (Decimal("1") + Decimal(rate) / Decimal("100")))
 
 
 def resolve_logistics_fare(*, service_category, logistics_tier, logistics_lane, submitted_amount):
@@ -246,6 +282,39 @@ class LogisticsFareBreakdown(dict):
     """
 
 
+def tier_display_starting_fare(tier):
+    """
+    The lowest fare a customer can actually be quoted on this tier -- what a
+    "Starting from" card should say.
+
+    A distance-priced tier (per_km_rate set) is quoted by quote_logistics_fare
+    from base_fare (falling back to starting_price), loading/unloading and the
+    surge multiplier, then floored at minimum_fare. starting_price is only a
+    mirror of the Package base price and is NOT what that formula reads once
+    base_fare is set, so showing it can advertise a fare no quote will ever
+    produce. This runs the same steps for a zero-chargeable-km, standard
+    two-stop, no-cargo trip -- the cheapest booking that exists.
+
+    A flat tier (per_km_rate unset) is priced straight off starting_price by
+    resolve_logistics_fare, so that value is already the truth.
+    """
+    if getattr(tier, "per_km_rate", None) is None:
+        return _money(tier.starting_price)
+    base_fare = getattr(tier, "base_fare", None)
+    if base_fare is None:
+        base_fare = tier.starting_price
+    subtotal = _money(base_fare) + _money(getattr(tier, "loading_unloading_charge", 0) or 0)
+    surge = getattr(tier, "surge_multiplier", None)
+    surge = _money(surge) if surge is not None else Decimal("1.00")
+    if surge <= 0:
+        surge = Decimal("1.00")
+    total = _money(subtotal * surge)
+    minimum_fare = getattr(tier, "minimum_fare", None)
+    if minimum_fare is not None and total < _money(minimum_fare):
+        total = _money(minimum_fare)
+    return total
+
+
 def quote_logistics_fare(
     *,
     tier,
@@ -256,6 +325,7 @@ def quote_logistics_fare(
     stop_count=STANDARD_STOP_COUNT,
     cargo_summary=None,
     waypoints=None,
+    loading_help=True,
 ):
     """
     Compute a real, itemised, distance-based fare for one goods-transport
@@ -304,8 +374,14 @@ def quote_logistics_fare(
             "duration_seconds": total_duration,
             "source": overall_source,
         }
-        if stop_count == STANDARD_STOP_COUNT or stop_count < len(points):
-            stop_count = len(points)
+        # Bug found: this only corrected stop_count UP to match the actual
+        # routed waypoints (points, built from the real `waypoints` argument
+        # a few lines above -- the authoritative list once we're in this
+        # multi-stop branch), never down. A caller-supplied stop_count
+        # greater than the real waypoint count stayed inflated, so
+        # additional_stop_charge below could bill for stops that were never
+        # actually routed. points is authoritative here; always sync to it.
+        stop_count = len(points)
     else:
         route = get_route_eta(pickup_lat, pickup_lng, drop_lat, drop_lng)
         if route is None:
@@ -323,13 +399,18 @@ def quote_logistics_fare(
     base_fare = _money(base_fare)
 
     distance_charge = _money(chargeable_km * _money(per_km_rate))
-    loading = _money(getattr(tier, "loading_unloading_charge", 0) or 0)
+    # Loading / unloading help is an optional, separately charged add-on (Porter's
+    # "Load Assist"); the tier's admin-set charge applies only when it is requested.
+    loading = _money(getattr(tier, "loading_unloading_charge", 0) or 0) if loading_help else Decimal("0.00")
 
     try:
         stops = int(stop_count)
     except (TypeError, ValueError):
         stops = STANDARD_STOP_COUNT
     additional_stops = max(0, stops - STANDARD_STOP_COUNT)
+    max_extra = getattr(tier, "max_additional_stops", None)
+    if max_extra is not None and additional_stops > int(max_extra):
+        raise TooManyStopsError(int(max_extra), additional_stops)
     per_stop = _money(getattr(tier, "additional_stop_charge", 0) or 0)
     stop_charge = _money(per_stop * additional_stops)
 
@@ -421,6 +502,7 @@ def quote_logistics_fare(
         "distance_km": str(distance_km),
         "chargeable_km": str(chargeable_km),
         "stops": stops,
+        "loading_help": bool(loading_help),
         "cargo_hash": cargo_hash_str,
     }
 
@@ -444,6 +526,7 @@ def quote_logistics_fare(
         chargeable_km=chargeable_km,
         distance_charge=distance_charge,
         loading_unloading=loading,
+        loading_help=bool(loading_help),
         stops=stops,
         additional_stops=additional_stops,
         additional_stop_charge=stop_charge,
@@ -459,6 +542,10 @@ def quote_logistics_fare(
         rate_additional_stop=per_stop,
         rate_minimum_fare=_money(minimum_fare) if minimum_fare is not None else None,
         free_km=free_km,
+        # GST INCLUDED in `total` (admin-configured per tier, blank/0 = none). Snapshotted like
+        # the other rates so a later admin change never alters an existing booking's invoice.
+        gst_rate=_gst_rate_str(tier),
+        gst_included=_gst_included(total, tier),
         distance_source=source,
         is_authoritative=is_authoritative,
         is_estimate=is_estimate,
@@ -638,6 +725,8 @@ def resolve_logistics_fare_v2(
     stop_count=STANDARD_STOP_COUNT,
     cart_data=None,
     waypoints=None,
+    move_date=None,
+    move_time=None,
 ):
     """
     GT-B-01. Returns (fare, breakdown_or_None).
@@ -706,8 +795,16 @@ def resolve_logistics_fare_v2(
         if submitted_quote_id:
             cached_quote = cache.get(f"gt_quote_{submitted_quote_id}")
             if not cached_quote:
-                raise UnresolvedLogisticsFareError(
-                    f"Logistics quote '{submitted_quote_id}' has expired or is invalid. Please calculate a fresh quote."
+                has_coords = None not in (pickup_lat, pickup_lng, drop_lat, drop_lng)
+                if not (has_coords and logistics_tier is not None):
+                    raise UnresolvedLogisticsFareError(
+                        f"Logistics quote '{submitted_quote_id}' has expired or is invalid. Please calculate a fresh quote."
+                    )
+                logger.info(
+                    "Logistics quote '%s' not found in cache (evicted or server reloaded); "
+                    "re-verifying authoritatively with tier #%s and coordinates.",
+                    submitted_quote_id,
+                    getattr(logistics_tier, "id", None),
                 )
 
             if cached_quote:
@@ -765,9 +862,19 @@ def resolve_logistics_fare_v2(
                     )
 
                 # 4. Stop Count Verification
-                if cached_quote.get("stops") is not None and stop_count != cached_quote.get("stops"):
+                # A quote's `stops` counts the whole route (pickup + every
+                # intermediate stop + drop). The booking request only lists the
+                # intermediate stops, so when it carries any, the count to
+                # compare is derived from them; comparing the caller's default
+                # (2) rejected every legitimate multi-stop booking that carried
+                # its own quote. The waypoint list itself was already verified
+                # against the quote above.
+                request_stops = (
+                    STANDARD_STOP_COUNT + len(curr_canonical_wp) if curr_canonical_wp else stop_count
+                )
+                if cached_quote.get("stops") is not None and request_stops != cached_quote.get("stops"):
                     raise UnresolvedLogisticsFareError(
-                        f"Quote stop count mismatch: quote was generated for {cached_quote.get('stops')} stops, but request has {stop_count}. Please recalculate fare."
+                        f"Quote stop count mismatch: quote was generated for {cached_quote.get('stops')} stops, but request has {request_stops}. Please recalculate fare."
                     )
 
                 # 5. Cargo Identity & Quantities Verification (binding server-authoritative GoodsItem attributes)
@@ -864,6 +971,16 @@ def resolve_logistics_fare_v2(
             if not breakdown.get("is_cargo_fit", True):
                 reason = breakdown.get("cargo_fit_reason") or "Selected vehicle cannot safely carry this cargo."
                 raise UnresolvedLogisticsFareError(f"VEHICLE_CAPACITY_EXCEEDED: {reason}")
+            if submitted_quote_id and submitted_amount is not None:
+                try:
+                    sub_dec = _money(submitted_amount)
+                    calc_dec = _money(breakdown["total"])
+                    if sub_dec != calc_dec:
+                        raise UnresolvedLogisticsFareError(
+                            f"Quote total mismatch: submitted amount ({sub_dec}) does not match authoritative calculated total ({calc_dec}). Please calculate a fresh quote."
+                        )
+                except (InvalidOperation, TypeError):
+                    raise UnresolvedLogisticsFareError(f"Invalid submitted amount format: '{submitted_amount}'.")
             if submitted_quote_id:
                 breakdown["quote_id"] = submitted_quote_id
             if submitted_expires_at:
@@ -967,7 +1084,17 @@ def resolve_logistics_fare_v2(
                         f"Selected tier #{tier_id} belongs to '{tier_obj.city}', but city '{city}' was requested."
                     )
 
+        # Stops between pickup and drop, from the booking's own stop list (PICKUP/DROP rows excluded).
+        pm_extra_stops = 0
+        if isinstance(waypoints, list):
+            pm_extra_stops = sum(
+                1 for w in waypoints
+                if isinstance(w, dict) and str(w.get("stop_type", "WAYPOINT")).upper() not in ("PICKUP", "DROP")
+                and str(w.get("address") or "").strip()
+            )
+
         current_req = {
+            "extra_stops": pm_extra_stops,
             "tier_id": tier_id,
             "city": city,
             "pickup_lat": pickup_lat,
@@ -983,6 +1110,8 @@ def resolve_logistics_fare_v2(
             "drop_floor": drop_floor,
             "drop_has_lift": drop_has_lift,
             "relocation_type": relocation_type,
+            "move_date": move_date,
+            "move_time": move_time,
         }
 
         if quote_id:
@@ -1029,6 +1158,9 @@ def resolve_logistics_fare_v2(
                 relocation_type=relocation_type,
                 city=city,
                 service_tier_id=tier_id,
+                extra_stops=pm_extra_stops,
+                move_date=move_date,
+                move_time=move_time,
             )
             if not computed_quote.get("is_authoritative", False) or computed_quote.get("is_estimate", False):
                 survey_status = computed_quote.get("survey_status") or "SURVEY_REQUIRED"

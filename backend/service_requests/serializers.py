@@ -425,6 +425,8 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             # GT-C-03: opt-in only; premium/liability_cap are never accepted
             # from the client -- see validate() below.
             "insurance_opted_in",
+            # Optional customer GSTIN for the invoice (format-validated below).
+            "customer_gstin",
         )
         extra_kwargs = {
             "issue_title":         {"required": False, "allow_blank": True},
@@ -457,7 +459,12 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             "declared_value":        {"required": False, "allow_null": True},
             "consignee_relationship": {"required": False, "allow_blank": True},
             "insurance_opted_in":    {"required": False},
+            "customer_gstin":        {"required": False, "allow_blank": True},
         }
+
+    def validate_customer_gstin(self, value):
+        from service_requests.gstin import normalize_gstin
+        return normalize_gstin(value)
 
     def validate_latitude(self, value):
         if value is not None and not (-90.0 <= float(value) <= 90.0):
@@ -636,11 +643,12 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     "insurance_opted_in": "declared_value is required to purchase insurance coverage."
                 })
-            from decimal import Decimal
-            rate = Decimal(str(getattr(_dj_settings, "INSURANCE_RATE", "0.02")))
-            max_liability = Decimal(str(getattr(_dj_settings, "INSURANCE_MAX_LIABILITY", "500000")))
-            attrs["insurance_premium"] = (Decimal(str(declared_value)) * rate).quantize(Decimal("0.01"))
-            attrs["insurance_liability_cap"] = min(Decimal(str(declared_value)), max_liability)
+            from .services.insurance import insurance_terms
+            attrs["insurance_premium"], attrs["insurance_liability_cap"] = insurance_terms(declared_value)
+            if attrs["insurance_premium"] is None:
+                raise serializers.ValidationError({
+                    "insurance_opted_in": "Transit insurance is not currently offered."
+                })
 
         # AC Inspection / Estimation validation
         job_type = str(attrs.get("job_type") or "").strip().upper()
@@ -1354,7 +1362,7 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
             # captured and validated at booking time.
             "drop_contact_name", "drop_contact_phone", "drop_contact_email",
             "declared_value", "consignee_relationship",
-            "insurance_opted_in", "insurance_premium", "insurance_liability_cap",
+            "insurance_opted_in", "insurance_premium", "insurance_liability_cap", "customer_gstin",
             "start_otp", "payment_confirmation_otp", "active_extension", "latest_reschedule", "allowed_transitions", "available_actions",
             "has_feedback", "feedback_token", "feedback",
             "job_type", "request_kind", "catalog_service_id", "quote_number", "parent_request", "estimation", "customer_inspection",
@@ -2203,7 +2211,11 @@ class EstimationSummarySerializer(serializers.ModelSerializer):
 class ACInspectionConfigurationSerializer(serializers.ModelSerializer):
     class Meta:
         model = ACInspectionConfiguration
-        fields = ("id", "diagnostic_fee", "currency", "is_active", "updated_at")
+        fields = (
+            "id", "diagnostic_fee", "currency", "is_active",
+            "title", "subtitle", "image", "badges", "includes", "ready",
+            "updated_at"
+        )
 
 
 class ACInspectionRateItemSerializer(serializers.ModelSerializer):

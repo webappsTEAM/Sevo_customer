@@ -1,7 +1,7 @@
 from django.contrib import admin
 from service_requests.models import (
     Service, Package, AddOn, CatalogCategory, ServiceRequest,
-    GTCancellationPolicy, GTWaitingChargePolicy, GTAdvancePaymentPolicy,
+    GTCancellationPolicy, GTWaitingChargePolicy, GTExtraChargePolicy, GTInsurancePolicy, GTClaimPolicy, GTAdvancePaymentPolicy,
 )
 
 
@@ -69,3 +69,21 @@ class GTAdvancePaymentPolicyAdmin(admin.ModelAdmin):
     list_display = ('service_category', 'is_enabled', 'advance_percent', 'is_active', 'updated_at')
     list_filter = ('is_enabled', 'is_active')
     search_fields = ('service_category',)
+
+
+@admin.register(GTExtraChargePolicy)
+class GTExtraChargePolicyAdmin(admin.ModelAdmin):
+    list_display = ('service_category', 'is_enabled', 'allow_toll', 'allow_parking', 'max_amount_per_item', 'max_total_per_booking', 'require_receipt_photo', 'is_active', 'updated_at')
+    list_filter = ('is_enabled', 'is_active')
+    search_fields = ('service_category',)
+
+
+@admin.register(GTInsurancePolicy)
+class GTInsurancePolicyAdmin(admin.ModelAdmin):
+    list_display = ('is_offered', 'premium_rate', 'max_liability', 'is_active', 'updated_at')
+
+
+@admin.register(GTClaimPolicy)
+class GTClaimPolicyAdmin(admin.ModelAdmin):
+    list_display = ('service_category', 'is_enabled', 'included_liability_cap', 'cap_at_fare', 'claim_window_hours', 'require_photo', 'is_active')
+    list_filter = ('is_enabled', 'is_active')

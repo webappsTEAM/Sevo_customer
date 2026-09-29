@@ -162,4 +162,19 @@ def validate_cargo_safety(
                     continue
                 return False, cat_meta["message"], cat_code
 
+    # Admin-managed rules (logistics.ProhibitedGoodsRule): the commercial
+    # prohibited-items list, editable without a deploy.
+    is_pm = category == "packers_movers"
+    for rule in _active_admin_rules():
+        if is_pm and not rule.applies_to_packers_movers:
+            continue
+        for kw in rule.keyword_list():
+            if re.search(r"(?<![a-z0-9])" + re.escape(kw.lower()) + r"(?![a-z0-9])", combined_text):
+                return False, (rule.message or f"{rule.label} cannot be booked."), "ADMIN_RULE"
+
     return True, None, None
+
+
+def _active_admin_rules():
+    from logistics.models import ProhibitedGoodsRule
+    return list(ProhibitedGoodsRule.objects.filter(is_active=True))

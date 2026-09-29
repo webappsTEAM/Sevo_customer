@@ -43,6 +43,7 @@ import { SevoLogo, sevoLogo } from "../components/sevoLogo.jsx"
 import CustomerLiveTrackingModal from "../components/CustomerLiveTrackingModal.jsx"
 import { CustomerTrackingMap } from "../customer/tracking/CustomerTrackingMap.jsx"
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
+import { TripRatingCard } from "../components/TripRatingCard.jsx"
 import { EditModeToggleBar, SaveNoticeToast, EditableText, EditableImage } from "../components/SuperAdminEditControls.jsx"
 import { useEditMode } from "../../state/editMode/useEditMode.js"
 import { useMultiServiceCart } from "../../state/multiServiceCart/useMultiServiceCart.js"
@@ -1445,14 +1446,71 @@ function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTi
     { period: 'Evening', icon: '🌙', slots: ['17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00'] },
   ]
   const formatSlot = t => {
+    if (!t) return ""
+    if (String(t).toUpperCase().includes("AM") || String(t).toUpperCase().includes("PM")) return t
     const [h, m = 0] = t.split(':').map(Number)
+    if (isNaN(h)) return t
     const ampm = h < 12 ? 'AM' : 'PM'
     const h12 = h % 12 === 0 ? 12 : h % 12
     const minStr = String(m).padStart(2, '0')
     return `${h12}:${minStr} ${ampm}`
   }
 
-  const canContinue = Boolean(selectedDate && selectedTime && !isSlotInPast(selectedDate, selectedTime))
+  // Dynamic server slot state connected to Time Slot Management
+  const [serverSlotData, setServerSlotData] = useState(null)
+  const [loadingSlots, setLoadingSlots] = useState(false)
+
+  useEffect(() => {
+    if (!selectedDate) return
+    let isCancelled = false
+    setLoadingSlots(true)
+
+    const serviceParam = cart?.[0]?.service_id || cart?.[0]?.db_id || category?.id || category?.slug
+    const packageParam = cart?.[0]?.id || cart?.[0]?.package_id
+    const categoryParam = category?.id || category?.slug
+
+    const query = new URLSearchParams()
+    query.set("date", selectedDate)
+    if (serviceParam) query.set("service", serviceParam)
+    if (packageParam) query.set("package", packageParam)
+    if (categoryParam) query.set("category", categoryParam)
+
+    apiRequest(`/services/resolve/time-slots/?${query.toString()}`)
+      .then(res => {
+        if (isCancelled) return
+        if (res?.success && res.data) {
+          setServerSlotData(res.data)
+          if (!res.data.is_open) {
+            onTimeChange("")
+          } else if (selectedTime) {
+            const all = res.data.all_slots || []
+            const valid = all.some(s => s.available && (s.value === selectedTime || s.time === selectedTime || s.start_time === selectedTime))
+            if (!valid) {
+              const firstAvail = all.find(s => s.available)
+              onTimeChange(firstAvail ? (firstAvail.value || firstAvail.start_time) : "")
+            }
+          }
+        }
+      })
+      .catch(err => {
+        console.warn("Could not load dynamic slots, using fallback", err)
+      })
+      .finally(() => {
+        if (!isCancelled) setLoadingSlots(false)
+      })
+
+    return () => { isCancelled = true }
+  }, [selectedDate, category, cart])
+
+  const isDateClosed = serverSlotData && serverSlotData.is_open === false
+  const canContinue = Boolean(
+    selectedDate &&
+    selectedTime &&
+    !isDateClosed &&
+    (serverSlotData
+      ? (serverSlotData.all_slots || []).some(s => s.available && (s.value === selectedTime || s.time === selectedTime || s.start_time === selectedTime))
+      : !isSlotInPast(selectedDate, selectedTime))
+  )
 
   return (
     <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', maxWidth: 960, margin: '0 auto', padding: '0 0 80px' }}>
@@ -1511,43 +1569,111 @@ function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTi
 
         {/* Time Section */}
         <div>
-          <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#374151', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Clock size={15} color="#7C3AED" /> Select Time Slot
+          <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#374151', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Clock size={15} color="#7C3AED" /> Select Time Slot
+            </div>
+            {loadingSlots && (
+              <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 600 }}>Checking live capacity...</span>
+            )}
           </div>
-          {UC_TIME_SLOTS.map(group => (
-            <div key={group.period} style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                {group.icon} {group.period}
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {group.slots.map(t => {
-                  const isPast = isSlotInPast(selectedDate, t)
-                  const isSel = selectedTime === t
-                  return (
-                    <button
-                      key={`${group.period}-${t}`}
-                      disabled={isPast}
-                      onClick={() => {
-                        if (isPast) return
-                        onTimeChange(t)
-                      }}
-                      style={{
-                        padding: '8px 18px', borderRadius: 99,
-                        border: `2px solid ${isPast ? '#e2e8f0' : isSel ? '#7C3AED' : '#e2e8f0'}`,
-                        background: isPast ? '#f1f5f9' : isSel ? '#7C3AED' : 'white',
-                        color: isPast ? '#94a3b8' : isSel ? 'white' : '#374151',
-                        fontWeight: 700, fontSize: '0.8rem', cursor: isPast ? 'not-allowed' : 'pointer', transition: 'all 0.18s',
-                        opacity: isPast ? 0.6 : 1,
-                        userSelect: 'none'
-                      }}
-                    >
-                      {formatSlot(t)}
-                    </button>
-                  )
-                })}
+
+          {isDateClosed ? (
+            <div style={{ padding: '16px', borderRadius: 14, background: '#fffbeb', border: '1.5px solid #fde68a', color: '#92400e', marginBottom: 20 }}>
+              <div style={{ fontWeight: 800, fontSize: '0.85rem', marginBottom: 4 }}>Service Closed on This Date</div>
+              <div style={{ fontSize: '0.75rem', lineHeight: 1.5 }}>
+                {serverSlotData?.reason || "This service is not operating on the selected date. Please pick another date above."}
               </div>
             </div>
-          ))}
+          ) : serverSlotData && serverSlotData.groups ? (
+            // Dynamic Server Slot Groups from Time Slot Management
+            [
+              { key: 'morning', label: 'Morning', icon: '🌅' },
+              { key: 'afternoon', label: 'Afternoon', icon: '☀️' },
+              { key: 'evening', label: 'Evening', icon: '🌙' },
+            ].map(group => {
+              const groupSlots = serverSlotData.groups[group.key] || []
+              if (groupSlots.length === 0) return null
+              return (
+                <div key={group.key} style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {group.icon} {group.label}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {groupSlots.map(s => {
+                      const slotVal = s.value || s.start_time
+                      const isAvail = s.available
+                      const isSel = selectedTime === slotVal || selectedTime === s.time
+                      return (
+                        <button
+                          key={slotVal}
+                          type="button"
+                          disabled={!isAvail}
+                          onClick={() => onTimeChange(slotVal)}
+                          title={!isAvail ? (s.reason || "Unavailable") : `${s.time} (${s.booked_count || 0}/${s.capacity || 1} booked)`}
+                          style={{
+                            padding: '8px 18px', borderRadius: 99,
+                            border: `2px solid ${!isAvail ? '#e2e8f0' : isSel ? '#7C3AED' : '#e2e8f0'}`,
+                            background: !isAvail ? '#f1f5f9' : isSel ? '#7C3AED' : 'white',
+                            color: !isAvail ? '#94a3b8' : isSel ? 'white' : '#374151',
+                            fontWeight: 700, fontSize: '0.8rem',
+                            cursor: !isAvail ? 'not-allowed' : 'pointer',
+                            transition: 'all 0.18s',
+                            opacity: !isAvail ? 0.5 : 1,
+                            userSelect: 'none',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6
+                          }}
+                        >
+                          <span>{s.time}</span>
+                          {!isAvail && s.reason === "Slot full" && (
+                            <span style={{ fontSize: '0.62rem', background: '#fee2e2', color: '#dc2626', padding: '1px 5px', borderRadius: 99, fontWeight: 800 }}>Full</span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })
+          ) : (
+            // Standard fallback if server slot data not yet loaded or offline
+            UC_TIME_SLOTS.map(group => (
+              <div key={group.period} style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {group.icon} {group.period}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {group.slots.map(t => {
+                    const isPast = isSlotInPast(selectedDate, t)
+                    const isSel = selectedTime === t
+                    return (
+                      <button
+                        key={`${group.period}-${t}`}
+                        disabled={isPast}
+                        onClick={() => {
+                          if (isPast) return
+                          onTimeChange(t)
+                        }}
+                        style={{
+                          padding: '8px 18px', borderRadius: 99,
+                          border: `2px solid ${isPast ? '#e2e8f0' : isSel ? '#7C3AED' : '#e2e8f0'}`,
+                          background: isPast ? '#f1f5f9' : isSel ? '#7C3AED' : 'white',
+                          color: isPast ? '#94a3b8' : isSel ? 'white' : '#374151',
+                          fontWeight: 700, fontSize: '0.8rem', cursor: isPast ? 'not-allowed' : 'pointer', transition: 'all 0.18s',
+                          opacity: isPast ? 0.6 : 1,
+                          userSelect: 'none'
+                        }}
+                      >
+                        {formatSlot(t)}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))
+          )}
         </div>
 
         {/* CTA */}
@@ -2897,12 +3023,18 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 4, background: "#fef3c7", padding: "4px 10px", borderRadius: 99, border: "1px solid #fde68a" }}>
                 <Star size={14} color="#d97706" fill="#d97706" />
-                <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#92400e" }}>{techRating ? Number(techRating).toFixed(1) : "4.8"}</span>
+                <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#92400e" }}>{techRating ? Number(techRating).toFixed(1) : "New"}</span>
               </div>
             </div>
           )}
 
-          {/* Rating & Feedback Section */}
+          {/* Rating & Feedback Section.
+              Goods & Transport / Packers & Movers trips get a real, persisted rating (TripRatingCard, keyed by
+              the trip's feedback token); the legacy card below only set local state and never saved anything,
+              so it is no longer shown for them. */}
+          {["goods_transport_truck", "goods_transport_two_wheeler", "packers_movers"].includes(String(liveData?.service_category || successData?.service_category || "").toLowerCase())
+            ? <TripRatingCard feedback={liveData?.feedback} />
+            : (
           <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 16, padding: "1.25rem", marginBottom: "1.25rem", textAlign: "center" }}>
             <h4 style={{ margin: "0 0 6px", fontSize: "1rem", fontWeight: 800, color: "#065f46" }}>
               {ratingSubmitted ? "Thank you for your rating! ⭐" : "How was your service experience?"}
@@ -2974,8 +3106,11 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               </div>
             )}
           </div>
+          )}
 
-          {/* 30-Day Doorstep Guarantee Reassurance Card */}
+          {/* 30-Day Doorstep Guarantee Reassurance Card -- a home-services promise (re-inspect and fix the work);
+              it does not apply to a goods delivery or a move, so it is not shown for Goods & Transport / Packers & Movers. */}
+          {!["goods_transport_truck", "goods_transport_two_wheeler", "packers_movers"].includes(String(liveData?.service_category || successData?.service_category || "").toLowerCase()) && (
           <div style={{ background: "linear-gradient(135deg, #064e3b, #065f46)", borderRadius: 16, padding: "1.25rem 1.5rem", color: "white", marginBottom: "1.25rem", boxShadow: "0 4px 14px rgba(6, 78, 59, 0.2)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
               <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -3007,6 +3142,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               </a>
             </div>
           </div>
+          )}
 
           {/* Service & Payment Summary */}
           <div style={{ padding: "1rem 1.25rem", background: "#f8fafc", borderRadius: 16, border: "1px solid #e2e8f0", marginBottom: "1.5rem" }}>
@@ -3094,7 +3230,12 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                 onClick={() => {
                   sessionStorage.removeItem("calservice_active_tracking_id")
                   sessionStorage.removeItem("calservice_last_booking")
-                  window.location.href = "/"
+                  const isPreview = (typeof window !== "undefined" && window.parent !== window) || window.location.search.includes("preview=true")
+                  if (isPreview) {
+                    window.location.href = "/home?preview=true"
+                  } else {
+                    window.location.href = "/"
+                  }
                 }}
                 style={{
                   padding: "0.85rem 1rem",
@@ -3530,7 +3671,11 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             const isLogisticsCat = Boolean(liveData?.logistics?.leg) || ["goods", "truck", "two_wheeler", "packers", "transport"].some(k => cat.includes(k))
             const pickup = liveData?.pickup_location || successData?.pickup_location
             const drop = liveData?.drop_location || successData?.drop_location
-            return isLogisticsCat && (pickup || drop) ? { pickup, drop } : null
+            // Intermediate TripStop waypoints passed through for multi-stop GT routes
+            const stops = (liveData?.logistics?.stops || successData?.logistics?.stops || []).filter(
+              (s) => !["PICKUP", "DROP"].includes(String(s?.stop_type || "").toUpperCase())
+            )
+            return isLogisticsCat && (pickup || drop) ? { pickup, drop, stops } : null
           })()}
         />
       </div>
@@ -5229,6 +5374,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   const [claimAmount, setClaimAmount] = useState("")
   const [claimSubmitting, setClaimSubmitting] = useState(false)
   const [claimError, setClaimError] = useState("")
+  const [claimPhotos, setClaimPhotos] = useState([])
   // GT-D-02: per-booking multi-stop trip editor, inline in the My
   // Bookings card rather than a separate tab -- a stop list only makes
   // sense in the context of one specific booking.
@@ -5551,7 +5697,16 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
     }
   }, [activeTab, user])
 
-  const eligibleInsuranceBookings = (realBookings || []).filter(b => b.insurance_opted_in && b.status === "completed")
+  // The server decides who can claim (insured, or covered by the Admin claim policy, inside the claim window).
+  const [claimableBookings, setClaimableBookings] = useState([])
+  useEffect(() => {
+    if (activeTab === "Insurance Claims" && user) {
+      apiRequest("/insurance-claims/eligible-bookings/", { method: "GET" })
+        .then(res => setClaimableBookings(Array.isArray(res?.data) ? res.data : []))
+        .catch(() => setClaimableBookings([]))
+    }
+  }, [activeTab, user, insuranceClaims])
+  const eligibleInsuranceBookings = claimableBookings
 
   const handleFileInsuranceClaim = async (e) => {
     e.preventDefault()
@@ -5566,12 +5721,13 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
       form.append("booking_id", claimBookingId)
       form.append("description", claimDescription)
       form.append("claimed_amount", claimAmount)
+      claimPhotos.forEach(f => form.append("attachments", f))
       const res = await apiRequest("/insurance-claims/", { method: "POST", body: form })
       if (res?.success === false) {
         setClaimError(res?.error?.message || "Could not file this claim.")
         return
       }
-      setClaimBookingId(""); setClaimDescription(""); setClaimAmount("")
+      setClaimBookingId(""); setClaimDescription(""); setClaimAmount(""); setClaimPhotos([])
       loadInsuranceClaims()
     } catch (err) {
       setClaimError(err?.body?.error?.message || "Could not file this claim.")
@@ -8199,7 +8355,7 @@ case "My Invoices": {
               <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', marginBottom: 12 }}>File a New Claim</div>
               {eligibleInsuranceBookings.length === 0 ? (
                 <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
-                  No completed, insurance-opted-in bookings are eligible for a claim right now.
+                  No completed bookings are eligible for a claim right now.
                 </div>
               ) : (
                 <form onSubmit={handleFileInsuranceClaim}>
@@ -8212,13 +8368,17 @@ case "My Invoices": {
                   <select value={claimBookingId} onChange={e => setClaimBookingId(e.target.value)} style={{ width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: '0.85rem', marginTop: 6, boxSizing: 'border-box' }}>
                     <option value="">Select a booking...</option>
                     {eligibleInsuranceBookings.map(b => (
-                      <option key={b.id} value={b.id}>{b.request_id || b.id} — {b.issue_title}</option>
+                      <option key={b.id} value={b.id}>{b.request_id || b.id} — {b.issue_title}{b.max_payout ? ` (up to ${BOOKING_CURRENCY_SYMBOL}${b.max_payout})` : ""}</option>
                     ))}
                   </select>
                   <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'block', marginTop: 14 }}>What happened?</label>
                   <textarea value={claimDescription} onChange={e => setClaimDescription(e.target.value)} rows={3} style={{ width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: '0.85rem', marginTop: 6, boxSizing: 'border-box' }} placeholder="Describe the damage or loss..." />
                   <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'block', marginTop: 14 }}>Claimed Amount ({BOOKING_CURRENCY_SYMBOL})</label>
                   <input type="number" min="0" step="0.01" value={claimAmount} onChange={e => setClaimAmount(e.target.value)} style={{ width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: '0.85rem', marginTop: 6, boxSizing: 'border-box' }} placeholder="0.00" />
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'block', marginTop: 14 }}>Photos of the damage</label>
+                  <input type="file" accept="image/*" multiple onChange={e => setClaimPhotos(Array.from(e.target.files || []))} style={{ marginTop: 6, fontSize: '0.85rem' }} />
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'block', marginTop: 14 }}>Photos of the damage</label>
+                  <input type="file" accept="image/*" multiple onChange={e => setClaimPhotos(Array.from(e.target.files || []))} style={{ marginTop: 6, fontSize: '0.85rem' }} />
                   <button type="submit" disabled={claimSubmitting} style={{ marginTop: 16, background: '#5d5fef', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontWeight: 700, cursor: claimSubmitting ? 'not-allowed' : 'pointer', opacity: claimSubmitting ? 0.6 : 1 }}>
                     {claimSubmitting ? 'Submitting...' : 'File Claim'}
                   </button>
@@ -10175,7 +10335,6 @@ export function PeopleAlsoTake({ category, cart, setCart }) {
 /* ─────────────────────────────────────────────────────────────
    ───────────────────────────────────────────────────────────── */
 
-// ── Quick Commerce Pricing Configuration (Blinkit-style affordable tiers) ──
 function QuickCommerceCartCheckout({
   cart,
   setCart,
@@ -10222,6 +10381,9 @@ function QuickCommerceCartCheckout({
   })
   const [selectedAddressId, setSelectedAddressId] = useState(() => savedAddresses[0]?.id || "addr_home")
   const [isDonationChecked, setIsDonationChecked] = useState(false)
+  const [selectedTip, setSelectedTip] = useState(null)
+  const [customTip, setCustomTip] = useState("")
+  const [isCustomTipOpen, setIsCustomTipOpen] = useState(false)
   const [showAddAddressModal, setShowAddAddressModal] = useState(false)
   const [newAddressText, setNewAddressText] = useState("")
   const [newAddressType, setNewAddressType] = useState("Home")
@@ -10276,12 +10438,13 @@ function QuickCommerceCartCheckout({
   const itemsOriginalTotal = cart.reduce((sum, item) => sum + (item.mrp || Math.round((item.price || 0) * 1.2)) * (item.quantity || 1), 0)
   const savings = Math.max(0, itemsOriginalTotal - itemsTotal)
 
-  const tipAmount = 0
-  const pricing = QUICK_COMMERCE_PRICING.calculateTotals(itemsTotal, { selectedTip: 0 })
+  const tipAmount = selectedTip === "custom" ? Math.max(0, parseInt(customTip, 10) || 0) : Math.max(0, selectedTip || 0)
+  const pricing = QUICK_COMMERCE_PRICING.calculateTotals(itemsTotal, { selectedTip: tipAmount })
   const deliveryCharge = pricing.deliveryCharge
   const handlingCharge = pricing.handlingCharge
   const smallCartFee = pricing.smallCartFee
   const surgeCharge = pricing.surgeCharge
+  const donationAmount = 0
   const grandTotal = pricing.grandTotal
 
   const handleUpdateQty = (id, delta) => {
@@ -10355,6 +10518,13 @@ function QuickCommerceCartCheckout({
       onRequireAuth && onRequireAuth()
       return
     }
+    // Bug found: this used to fall back to a hardcoded "9876543210" and
+    // submit it as the real ServiceRequest.phone whenever a logged-in user
+    // had no phone on file (e.g. email/Google-only signup) -- a fake,
+    // non-functional number would be persisted as the delivery contact, so
+    // whoever fulfills the order would be calling a number that isn't the
+    // customer's. Require a real phone before checkout instead of
+    // fabricating one.
     if (!user?.phone) {
       setErrorMsg("Please add a phone number to your profile before placing this order, so we can reach you for delivery.")
       return
@@ -10369,12 +10539,23 @@ function QuickCommerceCartCheckout({
         return
       }
 
+      // Real grocery checkout (DAILY_ESSENTIALS_IMPLEMENTATION_PLAN.md Phase
+      // 3 / frontend plan Phase 2) -- GroceryCheckoutView reads the
+      // customer's ACTIVE daily_essentials Cart from the backend and
+      // reserves stock atomically, hard-blocking on InsufficientStockError.
+      // No cart_data payload here: unlike the old /booking/ endpoint, this
+      // one is not told what's in the cart, it reads the real Cart rows
+      // that dailyEssentialsCartSync.js has been keeping in sync (Phase 1).
+      // No silent fallback on failure -- a real error (insufficient stock,
+      // network failure, anything) must surface as an error, never a
+      // fabricated success screen.
       const res = await apiRequest("/orders/grocery/checkout/", {
         method: "POST",
         json: {
           delivery_address: deliveryAddress,
           delivery_date: selectedDateStr || undefined,
           delivery_slot: selectedSlot?.full_label || selectedSlot?.slot_label || undefined,
+          tip_amount: tipAmount || undefined,
         },
       })
 
@@ -10397,9 +10578,14 @@ function QuickCommerceCartCheckout({
         paymentStatus: "Paid",
         deliveryNotice: activeDateObj?.is_today && !selectedSlot?.available
           ? "Same-day booking cutoff passed. Your order is scheduled for the earliest delivery window."
-          : `Your fresh vegetables will be packed and delivered on ${activeDateObj?.formatted || "scheduled date"} during ${selectedSlot?.slot_label || "6:00 PM – 8:00 PM"}.`
+          : `Your fresh vegetables will be packed and delivered on ${activeDateObj?.formatted || "schedule"}.`
       })
     } catch (err) {
+      // GroceryCheckoutView's insufficient-stock response puts the
+      // human-readable text in `message` (and the machine-readable item
+      // detail in `errors`) -- extractApiErrorMessage() prefers `errors`
+      // first for other endpoints' sake, so check `message` here explicitly
+      // before falling back to it.
       setErrorMsg(err?.body?.message || extractApiErrorMessage(err, "Failed to place order. Please try again."))
     } finally {
       setIsSubmitting(false)
@@ -10649,6 +10835,39 @@ function QuickCommerceCartCheckout({
               </div>
             </div>
 
+            {/* Free Delivery Incentive Card */}
+            {itemsTotal > 0 && (
+              <div className="bg-white rounded-2xl p-3.5 border border-slate-100 shadow-3xs flex flex-col gap-2">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span className="font-bold text-slate-800">
+                      {itemsTotal >= QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD ? (
+                        <span className="text-emerald-700 font-extrabold">🎉 You unlocked FREE delivery!</span>
+                      ) : (
+                        <span>
+                          Add <span className="font-extrabold text-emerald-700">₹{QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD - itemsTotal}</span> more to get <span className="font-extrabold text-emerald-700">FREE delivery</span>
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  {itemsTotal < QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD && (
+                    <span className="text-[11px] font-bold text-slate-400 shrink-0">
+                      ₹{itemsTotal}/₹{QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD}
+                    </span>
+                  )}
+                </div>
+                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                  <div
+                    className="bg-emerald-600 h-full rounded-full transition-all duration-300"
+                    style={{
+                      width: `${Math.min(100, Math.round((itemsTotal / QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD) * 100))}%`
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Cart Items List */}
             <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-3xs divide-y divide-slate-100 space-y-4">
               {cart.map((item, idx) => (
@@ -10786,6 +11005,61 @@ function QuickCommerceCartCheckout({
               </div>
             </div>
 
+            {/* (Donation box removed) */}
+
+            {/* Tip Your Delivery Partner Card */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-3xs space-y-3">
+              <h3 className="text-xs sm:text-sm font-bold text-slate-900">Support your delivery partner</h3>
+              <p className="text-[11px] sm:text-xs text-slate-400 font-medium leading-relaxed">
+                Add a tip to show appreciation. 100% of the tip goes directly to your rider.
+              </p>
+              <div className="grid grid-cols-4 gap-2 pt-1">
+                {[
+                  { label: "₹20", val: 20, desc: "Say Thanks" },
+                  { label: "₹30", val: 30, desc: "Buy a Chai" },
+                  { label: "₹50", val: 50, desc: "Show Love" },
+                  { label: "Custom", val: "custom", desc: "Other" },
+                ].map((t) => {
+                  const isSelected = selectedTip === t.val
+                  return (
+                    <button
+                      key={t.label}
+                      type="button"
+                      onClick={() => {
+                        if (selectedTip === t.val) {
+                          setSelectedTip(null)
+                          setIsCustomTipOpen(false)
+                        } else {
+                          setSelectedTip(t.val)
+                          setIsCustomTipOpen(t.val === "custom")
+                        }
+                      }}
+                      className={`py-3 px-2 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 active:scale-95 ${isSelected
+                        ? "bg-slate-900 border-slate-900 text-white shadow-2xs"
+                        : "bg-slate-50 hover:bg-white border-slate-200 text-slate-700 hover:border-slate-350"
+                        }`}
+                    >
+                      <span className="text-sm font-bold">{t.label}</span>
+                      <span className="text-[9px] font-semibold text-slate-405">{t.desc}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              {isCustomTipOpen && (
+                <div className="pt-2">
+                  <input
+                    type="number"
+                    min="0"
+                    value={customTip}
+                    onKeyDown={e => { if (['-', '+', 'e', 'E'].includes(e.key)) e.preventDefault() }}
+                    onChange={(e) => setCustomTip(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="Enter custom tip amount (₹)"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400"
+                  />
+                </div>
+              )}
+            </div>
+
             {/* Cancellation Policy Card */}
             <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4.5 space-y-1.5 shadow-3xs">
               <h3 className="text-xs font-bold text-slate-800">Cancellation Policy</h3>
@@ -10844,8 +11118,6 @@ function QuickCommerceCartCheckout({
           </button>
         </div>
       </div>
-
-
 
       {/* Standard Swiggy-Style Select Service Address Drawer */}
       {isAddressScreenOpen && (
@@ -19729,6 +20001,7 @@ export function CustomCleaningPackageModal({
 
   const [showAcInspectionModal, setShowAcInspectionModal] = useState(false);
   const [activeAcInspectionItem, setActiveAcInspectionItem] = useState(null);
+  const [dynamicAcInspectionConfig, setDynamicAcInspectionConfig] = useState(null);
   const [dynamicAcInspectionFee, setDynamicAcInspectionFee] = useState(() => {
     try {
       const c = localStorage.getItem("calservices_ac_inspection_fee");
@@ -19743,12 +20016,15 @@ export function CustomCleaningPackageModal({
     async function loadDynamicFee() {
       try {
         const res = await fetch("/api/service-requests/ac-inspection/rate-card/").then((r) => r.json());
-        if (isMounted && res?.data?.diagnostic_fee != null) {
-          const fee = Number(res.data.diagnostic_fee);
-          setDynamicAcInspectionFee(fee);
-          try {
-            localStorage.setItem("calservices_ac_inspection_fee", String(fee));
-          } catch (_) {}
+        if (isMounted && res?.data) {
+          setDynamicAcInspectionConfig(res.data);
+          if (res.data.diagnostic_fee != null) {
+            const fee = Number(res.data.diagnostic_fee);
+            setDynamicAcInspectionFee(fee);
+            try {
+              localStorage.setItem("calservices_ac_inspection_fee", String(fee));
+            } catch (_) {}
+          }
         }
       } catch (e) {
         console.warn("[BookingPage] Failed to fetch dynamic AC inspection fee:", e);
@@ -19772,7 +20048,8 @@ export function CustomCleaningPackageModal({
 
     const inspectionCartItem = {
       id: inspectionCartId,
-      name: "AC Inspection",
+      name: dynamicAcInspectionConfig?.title || "AC Inspection & Diagnostic",
+      image: dynamicAcInspectionConfig?.image || "media/catalog/packages/appliance_cleaning_thumb.webp",
       price: unitPrice,
       quantity: qty,
       duration: "45 mins",
@@ -19856,17 +20133,36 @@ export function CustomCleaningPackageModal({
     badge: "₹199 Inspection",
     price: 199,
   };
-  const [acInspectionTile, setAcInspectionTile] = useState(AC_INSPECTION_TILE_DEFAULTS);
+  const [acInspectionTile, setAcInspectionTile] = useState(() => {
+    try {
+      const cached = localStorage.getItem("calservices_ac_inspection_config");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.is_active === false) {
+          return { ...AC_INSPECTION_TILE_DEFAULTS, visible: false };
+        }
+      }
+    } catch (_) {}
+    return AC_INSPECTION_TILE_DEFAULTS;
+  });
 
   useEffect(() => {
     apiRequest("/settings/homepage/")
       .then((res) => {
         const saved = res?.config?.ac_inspection_tile;
         if (saved && typeof saved === "object") {
-          setAcInspectionTile({ ...AC_INSPECTION_TILE_DEFAULTS, ...saved });
+          setAcInspectionTile((prev) => ({ ...AC_INSPECTION_TILE_DEFAULTS, ...saved, visible: prev.visible === false ? false : saved.visible !== false }));
         }
       })
       .catch((err) => console.warn("AC inspection tile config unavailable, using default tile config:", err?.message || err));
+
+    apiRequest("/settings/ac-inspection/config/")
+      .then((res) => {
+        if (res?.data && res.data.is_active === false) {
+          setAcInspectionTile((prev) => ({ ...prev, visible: false }));
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const handleSaveAcInspectionTile = async (field, value) => {

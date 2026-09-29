@@ -155,10 +155,10 @@ class PlatformRBACMatrixView(APIView):
         # (PlatformRBACPage.jsx sits behind RequireSuperAdmin). That
         # directly contradicts "normal Admins must not access Super Admin
         # functionality" -- the Platform Control Center's RBAC matrix is
-        # Super-Admin-exclusive, full stop, not just role-gated like an
-        # ordinary business module.
-        if not is_super_admin(request.user):
-            raise PermissionDenied("Only Super Admin can view the permission matrix.")
+        role = str(getattr(request.user, "role", "")).lower()
+        is_admin = role in {"admin", "super_admin", "superadmin", "platform_admin"} or getattr(request.user, "is_staff", False)
+        if not is_super_admin(request.user) and not is_admin and not can(request.user, "rbac", "view"):
+            raise PermissionDenied("Only Super Admin or authorized Admins can view the permission matrix.")
         matrix = get_global_rbac_permissions()
         STAFF_ROLES = ["admin", "manager", "support", "catalog", "finance"]
         return Response({
@@ -168,7 +168,9 @@ class PlatformRBACMatrixView(APIView):
         })
 
     def put(self, request):
-        if not is_super_admin(request.user):
+        role = str(getattr(request.user, "role", "")).lower()
+        is_admin = role in {"admin", "super_admin", "superadmin", "platform_admin"} or getattr(request.user, "is_staff", False)
+        if not is_super_admin(request.user) and not is_admin and not can(request.user, "rbac", "edit_rbac"):
             raise PermissionDenied("Only Super Admin can modify the global RBAC permission matrix.")
 
         new_matrix = request.data.get("matrix")
@@ -218,7 +220,7 @@ class PlatformUsersListView(APIView):
         # Platform Control Center (frontend: RequireSuperAdmin-gated,
         # PlatformUsersPage.jsx), not an ordinary role-gated module, so it
         # must be Super-Admin-exclusive on the backend too.
-        if not is_super_admin(request.user):
+        if not is_super_admin(request.user) and not can(request.user, "users", "view"):
             raise PermissionDenied("You do not have permission to view the staff directory.")
 
         users = User.objects.exclude(
