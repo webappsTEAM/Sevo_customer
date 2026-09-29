@@ -4,11 +4,12 @@ import { motion, AnimatePresence } from "framer-motion"
 import {
   Headset, RefreshCw, Search, Filter, Plus, X, Lock, Send, IndianRupee,
   PhoneCall, FileText, Activity, Check, Clock, User, Calendar, AlertCircle,
-  CornerDownRight, Paperclip, ChevronRight, AlertTriangle, CheckCircle2,
-  Users, BarChart3, HelpCircle, Shield, ArrowUpRight
+  CornerDownRight, Paperclip, ChevronRight, AlertTriangle, CheckCircle, CheckCircle2,
+  Users, BarChart3, HelpCircle, Shield, ArrowUpRight,
+  Bot, MessageSquare, Image as ImageIcon, ExternalLink, UserCheck, MessageCircle
 } from "lucide-react"
 
-import { apiRequest } from "../../api/client.js"
+import { apiRequest, unwrapResults } from "../../api/client.js"
 import {
   fetchTickets, fetchTicketDetail, createTicket, assignTicket,
   changeTicketStatus, escalateTicket, addTicketMessage, uploadTicketAttachment,
@@ -128,8 +129,21 @@ export default function CustomerCarePage() {
   const [error, setError] = useState(null)
   const [toast, setToast] = useState(null)
 
-  // Navigation tabs: tickets | refund_approvals | analytics
+  // Navigation tabs: tickets | refund_approvals | analytics | ai_handoffs
   const [activeTab, setActiveTab] = useState("tickets")
+
+  // AI Handoffs queue state
+  const [handoffs, setHandoffs] = useState([])
+  const [handoffFilter, setHandoffFilter] = useState("unclaimed") // unclaimed | claimed | all
+  const [unclaimedHandoffCount, setUnclaimedHandoffCount] = useState(0)
+  const [handoffsLoading, setHandoffsLoading] = useState(false)
+  const [selectedHandoff, setSelectedHandoff] = useState(null)
+  const [handoffMessages, setHandoffMessages] = useState([])
+  const [handoffDetailLoading, setDetailHandoffLoading] = useState(false)
+  const [handoffAgentReply, setHandoffAgentReply] = useState("")
+  const [handoffActionLoading, setHandoffActionLoading] = useState(false)
+  const [previewPhotoModal, setPreviewPhotoModal] = useState(null)
+  const handoffMessagesEndRef = useRef(null)
 
   // Ticket filters & search
   const [searchQuery, setSearchQuery] = useState("")
@@ -268,7 +282,9 @@ export default function CustomerCarePage() {
         loadTickets(),
         loadAgents(),
         loadAnalytics(),
-        loadTemplates()
+        loadTemplates(),
+        loadHandoffs(),
+        loadUnclaimedCount()
       ])
     } catch (err) {
       setError("Failed to fetch initial customer care details.")
@@ -308,6 +324,220 @@ export default function CustomerCarePage() {
       setTicketContext(null)
     }
   }, [selectedTicket?.id])
+
+  // Reload handoffs when handoffFilter changes
+  useEffect(() => {
+    loadHandoffs(handoffFilter)
+  }, [handoffFilter])
+
+  useEffect(() => {
+    if (selectedHandoff && handoffMessagesEndRef.current) {
+      handoffMessagesEndRef.current.scrollIntoView({ behavior: "smooth" })
+    }
+  }, [handoffMessages, selectedHandoff])
+
+  const loadUnclaimedCount = async () => {
+    try {
+      const res = await apiRequest("/ai/handoffs/?state=unclaimed")
+      const list = unwrapResults(res)
+      setUnclaimedHandoffCount(Array.isArray(list) ? list.length : 0)
+    } catch (_) {}
+  }
+
+  const loadHandoffs = async (stateFilter = handoffFilter) => {
+    setHandoffsLoading(true)
+    try {
+      const res = await apiRequest(`/ai/handoffs/?state=${stateFilter}`)
+      const list = unwrapResults(res)
+      const data = Array.isArray(list) ? list : []
+      setHandoffs(data)
+      if (stateFilter === "unclaimed") {
+        setUnclaimedHandoffCount(data.length)
+      }
+    } catch (err) {
+      console.error("[CustomerCare] loadHandoffs error:", err)
+      showToast("Error retrieving AI handoffs queue.", "error")
+    } finally {
+      setHandoffsLoading(false)
+    }
+  }
+
+  const openHandoffSplitView = async (handoff) => {
+    const convId = handoff.id || handoff.conversation_id
+    if (!convId) {
+      showToast("Missing conversation ID", "error")
+      return
+    }
+    const safeHandoff = { ...handoff, id: convId, conversation_id: convId }
+    setSelectedHandoff(safeHandoff)
+    setDetailHandoffLoading(true)
+    setHandoffAgentReply("")
+    try {
+      const res = await apiRequest(`/ai/conversations/${convId}/`)
+      const convData = res?.data || res
+      if (convData) {
+        setHandoffMessages(convData.messages || [])
+        setSelectedHandoff(prev => ({
+          ...prev,
+          ...safeHandoff,
+          id: convId,
+          conversation_id: convId,
+          claimed_by: convData.claimed_by ?? prev?.claimed_by,
+          claimed_by_name: convData.claimed_by_name ?? prev?.claimed_by_name,
+          claimed_at: convData.claimed_at ?? prev?.claimed_at,
+          ticket_id: convData.ticket_id ?? prev?.ticket_id,
+          ticket_number: convData.ticket_number ?? prev?.ticket_number,
+        }))
+      }
+    } catch (err) {
+      console.error("[CustomerCare] fetch handoff conversation error:", err)
+      showToast("Could not load conversation transcript.", "error")
+    } finally {
+      setDetailHandoffLoading(false)
+    }
+  }
+
+  const handleClaimHandoff = async (handoffId) => {
+    const id = handoffId || selectedHandoff?.id || selectedHandoff?.conversation_id
+    if (!id) return
+    setHandoffActionLoading(true)
+    try {
+      const res = await apiRequest(`/ai/handoffs/${id}/claim/`, { method: "POST" })
+      if (res?.success) {
+        showToast("Conversation claimed successfully!", "success")
+        const updatedClaimedBy = res.claimed_by
+        const updatedClaimedName = res.claimed_by_name
+        const updatedClaimedAt = res.claimed_at
+
+        setSelectedHandoff(prev => prev ? {
+          ...prev,
+          claimed_by: updatedClaimedBy,
+          claimed_by_name: updatedClaimedName,
+          claimed_at: updatedClaimedAt
+        } : null)
+
+        setHandoffs(prev => prev.map(h => (h.id === id || h.conversation_id === id) ? {
+          ...h,
+          claimed_by: updatedClaimedBy,
+          claimed_by_name: updatedClaimedName,
+          claimed_at: updatedClaimedAt
+        } : h))
+
+        await loadUnclaimedCount()
+      } else {
+        showToast(res?.message || "Could not claim conversation", "error")
+      }
+    } catch (err) {
+      const detail = err?.body?.detail || err?.body?.message || "Failed to claim conversation"
+      showToast(detail, "warn")
+      if (err?.status === 409 && err?.body?.claimed_by) {
+        setSelectedHandoff(prev => prev ? {
+          ...prev,
+          claimed_by: err.body.claimed_by,
+          claimed_by_name: err.body.claimed_by_name
+        } : null)
+      }
+    } finally {
+      setHandoffActionLoading(false)
+    }
+  }
+
+  const handleCreateTicketFromHandoff = async (handoffId) => {
+    const id = handoffId || selectedHandoff?.id || selectedHandoff?.conversation_id
+    if (!id) return
+    setHandoffActionLoading(true)
+    try {
+      const res = await apiRequest(`/ai/handoffs/${id}/create-ticket/`, { method: "POST" })
+      if (res?.success) {
+        showToast(`Ticket ${res.ticket_number} created and assigned to you!`, "success")
+        setSelectedHandoff(prev => prev ? {
+          ...prev,
+          ticket_id: res.ticket_id,
+          ticket_number: res.ticket_number,
+          claimed_by: res.assigned_agent,
+          claimed_by_name: res.assigned_agent_name
+        } : null)
+
+        setHandoffs(prev => prev.map(h => (h.id === id || h.conversation_id === id) ? {
+          ...h,
+          ticket_id: res.ticket_id,
+          ticket_number: res.ticket_number,
+          claimed_by: res.assigned_agent,
+          claimed_by_name: res.assigned_agent_name
+        } : h))
+
+        await Promise.all([
+          loadTickets(),
+          loadAnalytics(),
+          loadUnclaimedCount()
+        ])
+      } else {
+        showToast(res?.message || "Ticket creation failed", "error")
+      }
+    } catch (err) {
+      const detail = err?.body?.detail || err?.body?.message || "Error creating ticket"
+      showToast(detail, "error")
+    } finally {
+      setHandoffActionLoading(false)
+    }
+  }
+
+  const handleSendAgentReply = async (e) => {
+    if (e) e.preventDefault()
+    const id = selectedHandoff?.id || selectedHandoff?.conversation_id
+    if (!handoffAgentReply.trim() || !id) return
+
+    const replyText = handoffAgentReply.trim()
+    setHandoffActionLoading(true)
+    try {
+      const res = await apiRequest(`/ai/handoffs/${id}/reply/`, {
+        method: "POST",
+        json: { message: replyText }
+      })
+      if (res?.success) {
+        setHandoffMessages(prev => [
+          ...prev,
+          {
+            id: res.message_id || `agent-msg-${Date.now()}`,
+            sender: "assistant",
+            content: res.message,
+            text: res.message,
+            metadata: { is_human_agent: true, agent_name: res.sender_name },
+            created_at: res.created_at || new Date().toISOString()
+          }
+        ])
+        setHandoffAgentReply("")
+        showToast("Message sent to customer", "success")
+      } else {
+        showToast(res?.message || "Failed to send message", "error")
+      }
+    } catch (err) {
+      const detail = err?.body?.detail || err?.body?.message || "Failed to send message"
+      showToast(detail, "error")
+    } finally {
+      setHandoffActionLoading(false)
+    }
+  }
+
+  // Polling for live messages when an AI handoff conversation is open
+  useEffect(() => {
+    const convId = selectedHandoff?.id || selectedHandoff?.conversation_id
+    if (!convId) return
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await apiRequest(`/ai/conversations/${convId}/`)
+        const convData = res?.data || res
+        if (convData?.messages && Array.isArray(convData.messages)) {
+          setHandoffMessages(convData.messages)
+        }
+      } catch {
+        // Silent poll error
+      }
+    }, 3500)
+
+    return () => clearInterval(interval)
+  }, [selectedHandoff?.id, selectedHandoff?.conversation_id])
 
   const handleCustomerNameChange = async (val) => {
     setNewCustomerName(val)
@@ -879,6 +1109,22 @@ export default function CustomerCarePage() {
           Customer Care
         </button>
         <button
+          onClick={() => { setActiveTab("ai_handoffs"); loadHandoffs(); }}
+          className={`px-5 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all duration-200 flex items-center gap-1.5 ${
+            activeTab === "ai_handoffs"
+              ? "bg-indigo-600 text-white shadow-sm"
+              : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+          }`}
+        >
+          <Bot size={14} />
+          <span>AI Hand-offs</span>
+          {unclaimedHandoffCount > 0 && (
+            <span className="inline-flex items-center justify-center px-1.5 py-0.2 text-[9px] font-black leading-none text-white bg-rose-500 rounded-full animate-pulse">
+              {unclaimedHandoffCount}
+            </span>
+          )}
+        </button>
+        <button
           onClick={() => setActiveTab("refund_approvals")}
           className={`px-5 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all duration-200 flex items-center gap-1.5 ${
             activeTab === "refund_approvals"
@@ -1404,6 +1650,227 @@ export default function CustomerCarePage() {
                 })}
               </div>
             </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: AI Hand-offs Queue */}
+      {activeTab === "ai_handoffs" && (
+        <div className="space-y-6">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <div className="flex items-center gap-3">
+                <span className="p-2.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-2xl">
+                  <Bot size={22} />
+                </span>
+                <div>
+                  <h2 className="text-sm font-black uppercase text-slate-800 dark:text-slate-100 tracking-wider flex items-center gap-2">
+                    <span>AI Mitra Live Hand-off Queue</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                      Live Chat Intakes
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Customer conversations handed off by AI Mitra. Pick up a conversation, review packaged intake, chat with customer, and claim & create ticket.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {/* Filter Pills */}
+              <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200/80 dark:border-slate-700">
+                <button
+                  onClick={() => setHandoffFilter("unclaimed")}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+                    handoffFilter === "unclaimed"
+                      ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm font-extrabold"
+                      : "text-slate-500 hover:text-slate-900 dark:hover:text-slate-200"
+                  }`}
+                >
+                  <span>Unclaimed</span>
+                  {unclaimedHandoffCount > 0 && (
+                    <span className="px-1.5 py-0.5 text-[9px] bg-rose-500 text-white rounded-full leading-none">
+                      {unclaimedHandoffCount}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setHandoffFilter("claimed")}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    handoffFilter === "claimed"
+                      ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm font-extrabold"
+                      : "text-slate-500 hover:text-slate-900 dark:hover:text-slate-200"
+                  }`}
+                >
+                  Claimed
+                </button>
+                <button
+                  onClick={() => setHandoffFilter("all")}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    handoffFilter === "all"
+                      ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm font-extrabold"
+                      : "text-slate-500 hover:text-slate-900 dark:hover:text-slate-200"
+                  }`}
+                >
+                  All
+                </button>
+              </div>
+
+              <button
+                onClick={() => loadHandoffs(handoffFilter)}
+                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl transition-all shadow-sm"
+                title="Refresh handoffs"
+              >
+                <RefreshCw size={15} className={handoffsLoading ? "animate-spin" : ""} />
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+            {handoffsLoading ? (
+              <div className="p-12 text-center text-slate-400 font-medium text-sm flex items-center justify-center gap-2">
+                <RefreshCw className="animate-spin" size={16} /> Loading handoff conversations...
+              </div>
+            ) : handoffs.length === 0 ? (
+              <div className="p-12 text-center text-slate-400">
+                <Bot className="mx-auto text-slate-300 dark:text-slate-700 mb-3" size={44} />
+                <h3 className="font-bold text-slate-700 dark:text-slate-300">
+                  {handoffFilter === "unclaimed" ? "No unclaimed hand-offs" : "No hand-offs found"}
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  {handoffFilter === "unclaimed"
+                    ? "All customer hand-offs have been picked up or there are no new intakes."
+                    : "No conversations match the current filter selection."}
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50/80 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-800">
+                      <th className="py-3.5 px-4 text-[10px] font-black uppercase tracking-wider text-slate-400">Customer</th>
+                      <th className="py-3.5 px-4 text-[10px] font-black uppercase tracking-wider text-slate-400">Order ID</th>
+                      <th className="py-3.5 px-4 text-[10px] font-black uppercase tracking-wider text-slate-400">Intake Reason</th>
+                      <th className="py-3.5 px-4 text-[10px] font-black uppercase tracking-wider text-slate-400">Status</th>
+                      <th className="py-3.5 px-4 text-[10px] font-black uppercase tracking-wider text-slate-400">Photo</th>
+                      <th className="py-3.5 px-4 text-[10px] font-black uppercase tracking-wider text-slate-400">Handed Off</th>
+                      <th className="py-3.5 px-4 text-[10px] font-black uppercase tracking-wider text-slate-400">Claim State</th>
+                      <th className="py-3.5 px-4 text-[10px] font-black uppercase tracking-wider text-slate-400">Ticket</th>
+                      <th className="py-3.5 px-4 text-[10px] font-black uppercase tracking-wider text-slate-400 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                    {handoffs.map((h, hIdx) => {
+                      const isUnclaimed = !h.claimed_by
+                      const isClaimedByMe = h.claimed_by && currentUser && (h.claimed_by === currentUser.id)
+                      const hasTicket = Boolean(h.ticket_id)
+                      const rowKey = h.id || h.conversation_id || `handoff-${hIdx}`
+
+                      return (
+                        <tr
+                          key={rowKey}
+                          onClick={() => openHandoffSplitView(h)}
+                          className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
+                        >
+                          <td className="py-3.5 px-4">
+                            <div className="font-bold text-slate-800 dark:text-slate-200">
+                              {h.customer_name || "Unknown Customer"}
+                            </div>
+                            <div className="text-[10px] text-slate-400">
+                              {h.customer_phone || h.customer_email || `ID: ${h.customer || "N/A"}`}
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            {h.order_id ? (
+                              <span className="font-mono font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md text-[11px]">
+                                #{h.order_id}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 text-[11px]">—</span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 max-w-[220px]">
+                            <div className="truncate font-medium text-slate-700 dark:text-slate-300" title={h.reason}>
+                              {h.reason || "Return / Refund intake"}
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                              {h.status || "handed_off"}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            {h.photo_url ? (
+                              <div
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setPreviewPhotoModal(h.photo_url)
+                                }}
+                                className="w-9 h-9 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 hover:ring-2 hover:ring-indigo-500 transition-all bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 cursor-zoom-in"
+                                title="Click to view photo"
+                              >
+                                <img
+                                  src={h.photo_url}
+                                  alt="Proof"
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    e.target.onerror = null
+                                    e.target.style.display = "none"
+                                  }}
+                                />
+                                <ImageIcon size={14} className="text-slate-400" />
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 text-[10px]">None</span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-500 font-medium text-[11px] whitespace-nowrap">
+                            {h.handed_off_at ? new Date(h.handed_off_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : "Recently"}
+                          </td>
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            {isUnclaimed ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 animate-pulse">
+                                <Clock size={11} /> Unclaimed
+                              </span>
+                            ) : isClaimedByMe ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
+                                <UserCheck size={11} /> Claimed (You)
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                <User size={11} /> {h.claimed_by_name || `Agent #${h.claimed_by}`}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            {hasTicket ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                                <CheckCircle size={10} /> {h.ticket_number || `#${h.ticket_id}`}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 text-[10px]">No Ticket</span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                openHandoffSplitView(h)
+                              }}
+                              className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 text-indigo-600 dark:text-indigo-400 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ml-auto"
+                            >
+                              <span>Open Chat</span>
+                              <ChevronRight size={13} />
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2957,6 +3424,416 @@ export default function CustomerCarePage() {
                   >
                     Close Profile
                   </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* AI Hand-off Split View Drawer Modal */}
+      {createPortal(
+        <AnimatePresence>
+          {selectedHandoff && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm"
+                onClick={() => setSelectedHandoff(null)}
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96, y: 16 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 16 }}
+                transition={{ type: "spring", damping: 28, stiffness: 260 }}
+                className="relative w-full max-w-7xl h-[92vh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-10 flex flex-col overflow-hidden"
+              >
+                {/* Header */}
+                <div className="p-4 md:p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/80 dark:bg-slate-950/40">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-100 dark:border-indigo-900 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-black">
+                      <Bot size={22} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-black text-sm uppercase tracking-wider text-slate-900 dark:text-white">
+                          AI Hand-off Intake: {selectedHandoff.customer_name || "Customer"}
+                        </h3>
+                        {selectedHandoff.ticket_number ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black border uppercase bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+                            <CheckCircle size={10} /> Ticket: {selectedHandoff.ticket_number}
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black border uppercase bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800">
+                            Awaiting Ticket Creation
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-0.5 flex items-center gap-2">
+                        <span>Conv ID: {selectedHandoff.id}</span>
+                        <span>•</span>
+                        <span>Handed off: {selectedHandoff.handed_off_at ? new Date(selectedHandoff.handed_off_at).toLocaleString() : "Recently"}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    {/* Claim Button / Status in Header */}
+                    {!selectedHandoff.claimed_by ? (
+                      <button
+                        onClick={() => handleClaimHandoff(selectedHandoff.id)}
+                        disabled={handoffActionLoading}
+                        className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all disabled:opacity-50 flex items-center gap-1.5"
+                      >
+                        <UserCheck size={14} />
+                        <span>Claim Chat</span>
+                      </button>
+                    ) : selectedHandoff.claimed_by === currentUser?.id ? (
+                      <span className="px-3 py-1 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 text-xs font-bold rounded-xl flex items-center gap-1.5">
+                        <UserCheck size={13} />
+                        <span>Claimed by You</span>
+                      </span>
+                    ) : (
+                      <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5">
+                        <Lock size={12} />
+                        <span>Claimed by {selectedHandoff.claimed_by_name || `Agent #${selectedHandoff.claimed_by}`}</span>
+                      </span>
+                    )}
+
+                    <button
+                      onClick={() => openHandoffSplitView(selectedHandoff)}
+                      className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-xl transition-all shadow-sm"
+                      title="Refresh transcript"
+                    >
+                      <RefreshCw size={14} className={handoffDetailLoading ? "animate-spin" : ""} />
+                    </button>
+
+                    <button
+                      onClick={() => setSelectedHandoff(null)}
+                      className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-xl transition-all shadow-sm"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Split Body */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 flex-1 overflow-hidden">
+                  {/* LEFT: Full Transcript & Agent Chat (Col 7) */}
+                  <div className="lg:col-span-7 flex flex-col h-full bg-white dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800 overflow-hidden">
+                    {/* Transcript Subheader */}
+                    <div className="px-5 py-2.5 bg-slate-50/60 dark:bg-slate-950/20 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                      <span className="text-[11px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
+                        <MessageSquare size={13} />
+                        <span>Conversation History</span>
+                      </span>
+                      <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800 flex items-center gap-1">
+                        <Shield size={11} /> AI Mitra Muted
+                      </span>
+                    </div>
+
+                    {/* Messages Scroll Area */}
+                    <div className="flex-1 overflow-y-auto p-5 space-y-3.5">
+                      {handoffDetailLoading ? (
+                        <div className="p-12 text-center text-slate-400 flex items-center justify-center gap-2">
+                          <RefreshCw className="animate-spin" size={16} /> Loading transcript...
+                        </div>
+                      ) : handoffMessages.length === 0 ? (
+                        <div className="p-8 text-center text-slate-400 text-xs">
+                          No messages recorded in this conversation yet.
+                        </div>
+                      ) : (
+                        handoffMessages.map((msg, idx) => {
+                          const isCustomer = msg.sender === "user"
+                          const isHumanAgent = msg.metadata?.is_human_agent || msg.sender === "agent"
+                          const isHandoffNotice = msg.metadata?.handed_to_human || (msg.text || msg.content || "").includes("connected you with our human support team")
+
+                          return (
+                            <React.Fragment key={msg.id || idx}>
+                              {/* Handoff line marker */}
+                              {isHandoffNotice && (
+                                <div className="my-3 flex items-center justify-center">
+                                  <div className="px-3.5 py-1.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-center shadow-xs">
+                                    <div className="flex items-center justify-center gap-1 text-[11px] font-black text-amber-700 dark:text-amber-400">
+                                      <Shield size={13} />
+                                      <span>⚡ AI Mitra Handed Off to Human Support Agent</span>
+                                    </div>
+                                    <div className="text-[9px] text-amber-600/80 dark:text-amber-400/80">
+                                      AI is now muted. Human agents have taken over this chat.
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className={`flex flex-col ${isCustomer ? "items-start" : "items-end"}`}>
+                                <div className="flex items-center gap-1.5 mb-1 px-1">
+                                  {isCustomer ? (
+                                    <>
+                                      <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                                      <span className="text-[10px] font-black uppercase text-slate-500">
+                                        {selectedHandoff.customer_name || "Customer"}
+                                      </span>
+                                    </>
+                                  ) : isHumanAgent ? (
+                                    <>
+                                      <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400">
+                                        Support Agent ({msg.metadata?.agent_name || "Agent"})
+                                      </span>
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="text-[10px] font-black uppercase text-indigo-500">
+                                        AI Mitra (Bot)
+                                      </span>
+                                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                                    </>
+                                  )}
+                                  <span className="text-[9px] text-slate-400">
+                                    {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
+                                  </span>
+                                </div>
+
+                                <div
+                                  className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs font-medium leading-relaxed whitespace-pre-wrap ${
+                                    isCustomer
+                                      ? "bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-tl-sm border border-slate-200/60 dark:border-slate-700/60"
+                                      : isHumanAgent
+                                      ? "bg-emerald-600 text-white rounded-tr-sm shadow-sm"
+                                      : "bg-indigo-50 dark:bg-indigo-950/40 text-slate-800 dark:text-slate-200 rounded-tr-sm border border-indigo-100 dark:border-indigo-900/60"
+                                  }`}
+                                >
+                                  {msg.text || msg.content}
+                                </div>
+                              </div>
+                            </React.Fragment>
+                          )
+                        })
+                      )}
+                      <div ref={handoffMessagesEndRef} />
+                    </div>
+
+                    {/* Agent In-Chat Reply Box */}
+                    <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/20">
+                      {!selectedHandoff.claimed_by ? (
+                        <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl flex items-center justify-between gap-3">
+                          <div className="text-xs text-amber-700 dark:text-amber-400 font-semibold">
+                            This conversation is unclaimed. Claim it to respond directly to the customer.
+                          </div>
+                          <button
+                            onClick={() => handleClaimHandoff(selectedHandoff.id)}
+                            disabled={handoffActionLoading}
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all whitespace-nowrap"
+                          >
+                            Claim Chat
+                          </button>
+                        </div>
+                      ) : selectedHandoff.claimed_by !== currentUser?.id && !["admin", "manager"].includes(currentUser?.role) ? (
+                        <div className="p-3 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-center text-xs text-slate-500 font-semibold">
+                          Locked: Claimed by {selectedHandoff.claimed_by_name || `Agent #${selectedHandoff.claimed_by}`}. Only the assigned agent can reply.
+                        </div>
+                      ) : (
+                        <form onSubmit={handleSendAgentReply} className="space-y-2">
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              placeholder="Type a message to the customer (AI stays muted)..."
+                              value={handoffAgentReply}
+                              onChange={(e) => setHandoffAgentReply(e.target.value)}
+                              disabled={handoffActionLoading}
+                              className="flex-1 px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                            <button
+                              type="submit"
+                              disabled={handoffActionLoading || !handoffAgentReply.trim()}
+                              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all disabled:opacity-50 flex items-center gap-1.5"
+                            >
+                              <Send size={13} />
+                              <span>Send</span>
+                            </button>
+                          </div>
+                          <p className="text-[10px] text-slate-400 font-medium">
+                            Your message appears in the customer's chat widget as a support agent turn.
+                          </p>
+                        </form>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* RIGHT: Intake Card & Actions (Col 5) */}
+                  <div className="lg:col-span-5 flex flex-col h-full bg-slate-50/60 dark:bg-slate-950/30 p-6 overflow-y-auto space-y-5">
+                    {/* Intake Card */}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                        <span className="text-xs font-black uppercase tracking-wider text-slate-500">
+                          Intake Summary
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
+                          AI Packaged
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <div className="text-[10px] font-bold uppercase text-slate-400">Customer</div>
+                          <div className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">
+                            {selectedHandoff.customer_name || "Unknown"}
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            {selectedHandoff.customer_email || selectedHandoff.customer_phone || `ID: ${selectedHandoff.customer || "N/A"}`}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-[10px] font-bold uppercase text-slate-400">Booking / Order</div>
+                          <div className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">
+                            {selectedHandoff.order_id ? `#${selectedHandoff.order_id}` : "Not specified"}
+                          </div>
+                          <div className="text-[10px] font-semibold text-slate-500 capitalize">
+                            Status: {selectedHandoff.status || "N/A"}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-[10px] font-bold uppercase text-slate-400 mb-1">Customer Reason</div>
+                        <div className="p-3 bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-800/70 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 leading-relaxed">
+                          {selectedHandoff.reason || "Return / Refund requested via AI Mitra."}
+                        </div>
+                      </div>
+
+                      {/* Photo Thumbnail */}
+                      <div>
+                        <div className="text-[10px] font-bold uppercase text-slate-400 mb-1.5 flex items-center justify-between">
+                          <span>Attached Evidence</span>
+                          {selectedHandoff.photo_url && (
+                            <span className="text-[9px] text-indigo-600 dark:text-indigo-400 font-bold">Authenticated Gate</span>
+                          )}
+                        </div>
+                        {selectedHandoff.photo_url ? (
+                          <div className="space-y-2">
+                            <div
+                              onClick={() => setPreviewPhotoModal(selectedHandoff.photo_url)}
+                              className="relative rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 cursor-zoom-in group max-h-48 flex items-center justify-center"
+                            >
+                              <img
+                                src={selectedHandoff.photo_url}
+                                alt="Intake proof"
+                                className="w-full h-44 object-contain group-hover:scale-102 transition-transform"
+                                onError={(e) => {
+                                  e.target.onerror = null
+                                  e.target.parentElement.innerHTML = '<div class="p-6 text-slate-400 text-xs text-center">Photo available on authenticated endpoint</div>'
+                                }}
+                              />
+                              <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold gap-1">
+                                <Search size={14} /> Click to expand
+                              </div>
+                            </div>
+                            <div className="text-[10px] text-slate-400 truncate">
+                              File: {selectedHandoff.photo_name || "support_photo.jpg"}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-4 bg-slate-50 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-700 rounded-xl text-center text-slate-400 text-xs">
+                            No photo uploaded during intake
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Ticket Creation Card (Human Action Boundary) */}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
+                      <div className="text-xs font-black uppercase tracking-wider text-slate-500">
+                        Official Ticket Action
+                      </div>
+
+                      {selectedHandoff.ticket_id ? (
+                        <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl space-y-2">
+                          <div className="flex items-center gap-1.5 text-xs font-black text-emerald-700 dark:text-emerald-400">
+                            <CheckCircle2 size={16} />
+                            <span>Customer Care Ticket Created</span>
+                          </div>
+                          <div className="text-xs text-slate-700 dark:text-slate-300 font-bold">
+                            Ticket Number: <span className="font-mono">{selectedHandoff.ticket_number}</span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setSelectedHandoff(null)
+                              setActiveTab("tickets")
+                              openTicketDetail(selectedHandoff.ticket_id)
+                            }}
+                            className="w-full mt-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5"
+                          >
+                            <span>Open in Customer Care</span>
+                            <ExternalLink size={13} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                            Clicking below creates an official <strong className="text-slate-700 dark:text-slate-200">CustomerCareTicket</strong> from this intake data and assigns it to you.
+                          </p>
+
+                          <div className="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl text-[10px] text-slate-400 font-semibold border border-slate-100 dark:border-slate-800">
+                            🛡️ <strong>Safety Boundary:</strong> The AI never creates tickets automatically. Ticket creation is strictly triggered by human agent action.
+                          </div>
+
+                          <button
+                            onClick={() => handleCreateTicketFromHandoff(selectedHandoff.id)}
+                            disabled={handoffActionLoading}
+                            className="w-full py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md shadow-indigo-600/20 transition-all disabled:opacity-50 flex items-center justify-center gap-2 active:scale-98"
+                          >
+                            <Plus size={15} />
+                            <span>Claim & Create Ticket</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* Photo Preview Lightbox Modal */}
+      {createPortal(
+        <AnimatePresence>
+          {previewPhotoModal && (
+            <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
+                onClick={() => setPreviewPhotoModal(null)}
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="relative max-w-4xl max-h-[85vh] bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl z-10 flex flex-col"
+              >
+                <div className="p-3 border-b border-slate-800 flex justify-between items-center bg-slate-950/60">
+                  <span className="text-xs font-bold text-slate-300">Customer Proof Photo</span>
+                  <button
+                    onClick={() => setPreviewPhotoModal(null)}
+                    className="p-1.5 text-slate-400 hover:text-white bg-slate-800 rounded-lg transition-all"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+                <div className="p-4 flex items-center justify-center overflow-auto max-h-[75vh]">
+                  <img
+                    src={previewPhotoModal}
+                    alt="Customer intake photo"
+                    className="max-h-[70vh] w-auto object-contain rounded-lg"
+                  />
                 </div>
               </motion.div>
             </div>

@@ -1,6 +1,7 @@
 from django.test import TestCase
 from ai_assistant.rag.allowlist import KnowledgeAllowlist, DisallowedKnowledgeSourceError
 from ai_assistant.rag.retriever import KnowledgeRetriever
+from ai_assistant.rag.embedder import Embedder
 from ai_assistant.models import KnowledgeChunk, KnowledgeCategory
 
 
