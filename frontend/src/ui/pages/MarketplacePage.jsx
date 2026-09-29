@@ -37,6 +37,7 @@ import {
   fetchMarketplaceBaskets,
   fetchMarketplaceBasketDetail,
   addBasketToCart,
+  fetchMarketplaceDeliverySlots,
 } from "../../services/marketplaceApi.js"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
@@ -442,6 +443,13 @@ export function MarketplacePage() {
   const [trackingModalOpen, setTrackingModalOpen] = useState(false)
   const [cancelLoading, setCancelLoading] = useState(false)
 
+  // Delivery Slot Selection State
+  const [slotTypeMode, setSlotTypeMode] = useState("EXPRESS") // "EXPRESS" (Fast Delivery) | "STANDARD" (Schedule a Slot)
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0])
+  const [availableSlots, setAvailableSlots] = useState([])
+  const [slotsLoading, setSlotsLoading] = useState(false)
+  const [selectedSlot, setSelectedSlot] = useState(null)
+
   // Delivery Address & Location
   const [deliveryAddress, setDeliveryAddress] = useState("Hosur, Tamil Nadu")
   const [savedAddresses, setSavedAddresses] = useState([])
@@ -473,6 +481,100 @@ export function MarketplacePage() {
     if (currentCategorySlug === "all" || !activeCategoryNode) return []
     return getCategoryPathFromTree(categoryTree, currentCategorySlug)
   }, [categoryTree, currentCategorySlug, activeCategoryNode])
+
+  // Primary warehouse ID for delivery slots (v1 limitation: for multi-warehouse orders, delivery slot is resolved against primary/first warehouse group)
+  const primaryWarehouseId = useMemo(() => {
+    if (cart?.warehouse_groups?.length > 0) {
+      return cart.warehouse_groups[0].warehouse_id
+    }
+    const itemWithWh = cart?.items?.find((it) => it.warehouse_id !== null && it.warehouse_id !== undefined)
+    return itemWithWh?.warehouse_id || null
+  }, [cart])
+
+  // Slot Date Options (Today + next 3 days)
+  const slotDateOptions = useMemo(() => {
+    const dates = []
+    const today = new Date()
+    for (let i = 0; i < 4; i++) {
+      const d = new Date()
+      d.setDate(today.getDate() + i)
+      const iso = d.toISOString().split("T")[0]
+      let label = ""
+      if (i === 0) label = "Today"
+      else if (i === 1) label = "Tomorrow"
+      else {
+        label = d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })
+      }
+      dates.push({ date: iso, label })
+    }
+    return dates
+  }, [])
+
+  // Fetch Delivery Slots when cart drawer opens or warehouse / date changes
+  useEffect(() => {
+    if (!cartDrawerOpen || !cart?.items?.length) return
+
+    let isMounted = true
+    setSlotsLoading(true)
+
+    fetchMarketplaceDeliverySlots({
+      warehouse_id: primaryWarehouseId,
+      date: selectedDate,
+    })
+      .then((res) => {
+        if (!isMounted) return
+        const rawData = res?.data
+        const slots = Array.isArray(rawData)
+          ? rawData
+          : Array.isArray(rawData?.slots)
+          ? rawData.slots
+          : Array.isArray(rawData?.results)
+          ? rawData.results
+          : []
+        setAvailableSlots(slots)
+
+        // In Fast Delivery mode, auto-pick earliest available EXPRESS slot
+        if (slotTypeMode === "EXPRESS") {
+          const expressSlot = slots.find((s) => s.slot_type === "EXPRESS" && s.available !== false)
+          if (expressSlot) {
+            setSelectedSlot(expressSlot)
+          } else {
+            // Fallback to first available slot if no EXPRESS slot configured
+            const anyAvailable = slots.find((s) => s.available !== false)
+            if (anyAvailable) setSelectedSlot(anyAvailable)
+            else setSelectedSlot(null)
+          }
+        } else {
+          // In STANDARD mode, maintain selected slot if valid, else pick first available STANDARD slot
+          setSelectedSlot((prev) => {
+            if (prev && slots.some((s) => s.id === prev.id && s.available !== false)) {
+              return prev
+            }
+            const firstStandard = slots.find((s) => s.slot_type === "STANDARD" && s.available !== false)
+            return firstStandard || slots.find((s) => s.available !== false) || null
+          })
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load delivery slots:", err)
+        if (isMounted) setAvailableSlots([])
+      })
+      .finally(() => {
+        if (isMounted) setSlotsLoading(false)
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [cartDrawerOpen, primaryWarehouseId, selectedDate, slotTypeMode, cart?.items?.length])
+
+  const handleSwitchSlotMode = (mode) => {
+    setSlotTypeMode(mode)
+    if (mode === "EXPRESS") {
+      const todayIso = new Date().toISOString().split("T")[0]
+      setSelectedDate(todayIso)
+    }
+  }
 
   // Deduplicated / aggregated root categories only (no leaf/child categories) for Instamart sidebar & top pill bar
   const uniqueRootCategories = useMemo(() => {
@@ -908,6 +1010,9 @@ export function MarketplacePage() {
           customer_email: user?.email || "",
           payment_method: "COD",
           fulfilment_type: "DELIVERY",
+          delivery_slot_id: selectedSlot?.id || null,
+          delivery_slot_label: selectedSlot?.label || "",
+          delivery_date: selectedDate || null,
         })
 
         if (res?.success && res?.data) {
@@ -939,6 +1044,9 @@ export function MarketplacePage() {
         customer_email: user?.email || "",
         payment_method: "UPI",
         fulfilment_type: "DELIVERY",
+        delivery_slot_id: selectedSlot?.id || null,
+        delivery_slot_label: selectedSlot?.label || "",
+        delivery_date: selectedDate || null,
       })
 
       if (!intentRes?.success || !intentRes?.data) {
@@ -2222,6 +2330,169 @@ export function MarketplacePage() {
                       </p>
                     </div>
 
+                    {/* Delivery Slot Section */}
+                    <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs font-black text-slate-400 uppercase tracking-wider">
+                          Delivery Slot
+                        </div>
+                        {slotsLoading && (
+                          <RefreshCw className="w-3.5 h-3.5 text-emerald-600 animate-spin" />
+                        )}
+                      </div>
+
+                      {/* Mode Toggle: Fast Delivery vs Schedule a Slot */}
+                      <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100/80 rounded-xl">
+                        <button
+                          type="button"
+                          onClick={() => handleSwitchSlotMode("EXPRESS")}
+                          className={`py-2 px-2.5 rounded-lg text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                            slotTypeMode === "EXPRESS"
+                              ? "bg-white text-emerald-800 shadow-xs ring-1 ring-slate-200/60"
+                              : "text-slate-600 hover:text-slate-900"
+                          }`}
+                        >
+                          <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />
+                          <span>Fast Delivery</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleSwitchSlotMode("STANDARD")}
+                          className={`py-2 px-2.5 rounded-lg text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                            slotTypeMode === "STANDARD"
+                              ? "bg-white text-emerald-800 shadow-xs ring-1 ring-slate-200/60"
+                              : "text-slate-600 hover:text-slate-900"
+                          }`}
+                        >
+                          <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                          <span>Schedule a Slot</span>
+                        </button>
+                      </div>
+
+                      {/* Fast Delivery View */}
+                      {slotTypeMode === "EXPRESS" && (
+                        <div className="space-y-2">
+                          {selectedSlot ? (
+                            <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-black shrink-0">
+                                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                </div>
+                                <div>
+                                  <div className="text-xs font-black text-emerald-950">
+                                    {selectedSlot.label}
+                                  </div>
+                                  <div className="text-[10px] text-emerald-700 font-medium">
+                                    Earliest express dispatch for today
+                                  </div>
+                                </div>
+                              </div>
+                              <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-200/70 text-emerald-900 px-2 py-0.5 rounded-md shrink-0">
+                                Express
+                              </span>
+                            </div>
+                          ) : !slotsLoading ? (
+                            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs space-y-1">
+                              <p className="font-bold flex items-center gap-1.5">
+                                <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                No fast delivery slots available today.
+                              </p>
+                              <p className="text-[11px] text-amber-800">
+                                Please switch to <strong>Schedule a Slot</strong> to select a time slot.
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="py-4 text-center text-xs text-slate-400 font-medium">
+                              Checking express availability...
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Schedule a Slot View */}
+                      {slotTypeMode === "STANDARD" && (
+                        <div className="space-y-3 pt-1">
+                          {/* Date Strip */}
+                          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                            {slotDateOptions.map((opt) => {
+                              const isDateSelected = selectedDate === opt.date
+                              return (
+                                <button
+                                  key={opt.date}
+                                  type="button"
+                                  onClick={() => setSelectedDate(opt.date)}
+                                  className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all border cursor-pointer ${
+                                    isDateSelected
+                                      ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                                  }`}
+                                >
+                                  {opt.label}
+                                </button>
+                              )
+                            })}
+                          </div>
+
+                          {/* Slots Grid */}
+                          <div className="space-y-1.5">
+                            {slotsLoading ? (
+                              <div className="py-4 text-center text-xs text-slate-400 font-medium flex items-center justify-center gap-2">
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin text-slate-400" />
+                                <span>Loading available slots...</span>
+                              </div>
+                            ) : availableSlots.length === 0 ? (
+                              <div className="py-3 text-center text-xs text-slate-400 font-medium bg-slate-50 rounded-xl border border-slate-100">
+                                No slots configured for this date.
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {availableSlots.map((slot) => {
+                                  const isSelected = selectedSlot?.id === slot.id
+                                  const isAvailable = slot.available !== false
+                                  return (
+                                    <button
+                                      key={slot.id}
+                                      type="button"
+                                      disabled={!isAvailable}
+                                      onClick={() => isAvailable && setSelectedSlot(slot)}
+                                      className={`p-2.5 rounded-xl border text-left flex items-center justify-between transition-all ${
+                                        !isAvailable
+                                          ? "bg-slate-50 border-slate-200/60 opacity-50 cursor-not-allowed text-slate-400"
+                                          : isSelected
+                                          ? "bg-emerald-50 border-emerald-500 text-emerald-950 ring-2 ring-emerald-500/20 shadow-xs cursor-pointer font-bold"
+                                          : "bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50/60 cursor-pointer"
+                                      }`}
+                                    >
+                                      <div className="min-w-0 pr-1">
+                                        <div className="text-xs font-black truncate">
+                                          {slot.label}
+                                        </div>
+                                        {slot.start_time && slot.end_time && (
+                                          <div className="text-[10px] text-slate-400 font-medium">
+                                            {slot.start_time} - {slot.end_time}
+                                          </div>
+                                        )}
+                                      </div>
+                                      {!isAvailable ? (
+                                        <span className="text-[9px] font-black uppercase tracking-wider bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded shrink-0">
+                                          Full
+                                        </span>
+                                      ) : isSelected ? (
+                                        <span className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                                          <Check className="w-3 h-3 stroke-[3]" />
+                                        </span>
+                                      ) : null}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
                     {/* Bill Summary */}
                     <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-2.5 text-xs">
                       <div className="font-black text-slate-900 uppercase tracking-wider text-[11px] mb-2">
@@ -2306,7 +2577,7 @@ export function MarketplacePage() {
                 <div className="p-4 bg-white border-t border-slate-200 shrink-0">
                   <button
                     type="button"
-                    disabled={checkoutLoading}
+                    disabled={checkoutLoading || !selectedSlot}
                     onClick={handleProceedToCheckout}
                     className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-2xl text-sm font-black shadow-lg shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
@@ -2319,6 +2590,11 @@ export function MarketplacePage() {
                       </>
                     )}
                   </button>
+                  {!selectedSlot && (
+                    <p className="text-center text-[11px] text-slate-400 font-medium mt-2">
+                      Please select a delivery slot to proceed
+                    </p>
+                  )}
                 </div>
               )}
             </motion.div>

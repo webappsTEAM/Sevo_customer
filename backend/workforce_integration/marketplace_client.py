@@ -209,6 +209,33 @@ class MarketplaceIntegrationClient:
             return {"success": False, "message": "Marketplace validation service unreachable"}
 
     @classmethod
+    def get_delivery_slots(cls, warehouse_id=None, date=None) -> dict:
+        """
+        Fetches available delivery slots from Vendor Seller Hub PublicDeliverySlotsView.
+        GET {base}/marketplace/delivery-slots/?warehouse_id=&date=
+        """
+        params = {}
+        if warehouse_id is not None and str(warehouse_id).strip() != "":
+            params["warehouse_id"] = warehouse_id
+        if date:
+            params["date"] = str(date).strip()
+        headers = cls._headers()
+        if not headers:
+            return {"success": False, "message": "Integration secret not configured", "data": []}
+        try:
+            url = f"{cls._get_base_url()}/marketplace/delivery-slots/"
+            response = requests.get(url, params=params, headers=headers, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                slots_data = data.get("data") if isinstance(data, dict) and "data" in data else data
+                return {"success": True, "data": slots_data}
+            logger.warning(f"Vendor delivery slots returned {response.status_code}: {response.text[:300]}")
+            return {"success": False, "status_code": response.status_code, "message": "Failed to fetch delivery slots from vendor", "data": []}
+        except Exception as e:
+            logger.error(f"Error fetching delivery slots: {e}")
+            return {"success": False, "message": "Delivery slot service unreachable", "data": []}
+
+    @classmethod
     def intake_order(
         cls,
         source_order_id: str,
@@ -223,6 +250,9 @@ class MarketplaceIntegrationClient:
         delivery_group_id: str = "",
         warehouse_id: int = None,
         warehouse_name: str = "",
+        delivery_slot_id: int = None,
+        delivery_slot: str = "",
+        delivery_date: str = None,
     ) -> dict:
         """
         Intakes canonical customer order to Vendor Seller Hub and atomically reserves stock.
@@ -238,6 +268,9 @@ class MarketplaceIntegrationClient:
             "customer_phone": customer_phone,
             "customer_email": customer_email,
             "fulfilment_type": fulfilment_type or "DELIVERY",
+            "delivery_slot_id": delivery_slot_id,
+            "delivery_slot": delivery_slot,
+            "delivery_date": str(delivery_date) if delivery_date else None,
             "delivery_address": delivery_address if isinstance(delivery_address, dict) else {"formatted": str(delivery_address)},
             "payment_snapshot": payment_snapshot,
             "items": items,

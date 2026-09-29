@@ -139,6 +139,22 @@ export function loadRazorpayScript() {
 }
 
 /**
+ * Fetch available delivery slots for a warehouse and date from the vendor app.
+ */
+export async function fetchMarketplaceDeliverySlots({ warehouse_id, date } = {}) {
+  const params = new URLSearchParams()
+  if (warehouse_id !== undefined && warehouse_id !== null && warehouse_id !== "") {
+    params.append("warehouse_id", warehouse_id)
+  }
+  if (date) {
+    params.append("date", date)
+  }
+  const qs = params.toString()
+  const url = qs ? `/orders/marketplace/delivery-slots/?${qs}` : "/orders/marketplace/delivery-slots/"
+  return await apiRequest(url, { method: "GET" })
+}
+
+/**
  * Initiate Razorpay Payment intent for Marketplace Checkout (Step 1).
  */
 export async function initiateMarketplacePayment({
@@ -148,6 +164,9 @@ export async function initiateMarketplacePayment({
   customer_email = "",
   payment_method = "UPI",
   fulfilment_type = "DELIVERY",
+  delivery_slot_id = null,
+  delivery_slot_label = "",
+  delivery_date = null,
 }) {
   return await apiRequest("/orders/marketplace/checkout/initiate-payment/", {
     method: "POST",
@@ -158,6 +177,9 @@ export async function initiateMarketplacePayment({
       customer_email,
       payment_method,
       fulfilment_type,
+      delivery_slot_id,
+      delivery_slot_label,
+      delivery_date,
     },
   })
 }
@@ -191,6 +213,9 @@ export async function checkoutMarketplaceOrder({
   payment_method = "UPI",
   payment_transaction_id = "",
   fulfilment_type = "DELIVERY",
+  delivery_slot_id = null,
+  delivery_slot_label = "",
+  delivery_date = null,
 }) {
   return await apiRequest("/orders/marketplace/checkout/", {
     method: "POST",
@@ -202,6 +227,9 @@ export async function checkoutMarketplaceOrder({
       payment_method,
       payment_transaction_id,
       fulfilment_type,
+      delivery_slot_id,
+      delivery_slot_label,
+      delivery_date,
     },
   })
 }

@@ -82,6 +82,9 @@ class MarketplaceCheckoutSerializer(serializers.Serializer):
     payment_method = serializers.CharField(required=False, default="UPI")
     payment_transaction_id = serializers.CharField(required=False, allow_blank=True, default="")
     fulfilment_type = serializers.CharField(required=False, default="DELIVERY")
+    delivery_slot_id = serializers.IntegerField(required=False, allow_null=True, default=None)
+    delivery_slot_label = serializers.CharField(required=False, allow_blank=True, default="")
+    delivery_date = serializers.DateField(required=False, allow_null=True, default=None)
 
 
 # ─── Unified "My Orders" read view ──────────────────────────────────────────

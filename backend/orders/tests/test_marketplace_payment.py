@@ -395,3 +395,81 @@ class MarketplacePaymentTests(TestCase):
         self.assertEqual(MarketplaceOrder.objects.filter(customer=self.customer).count(), 0)
         self.cart.refresh_from_db()
         self.assertEqual(self.cart.status, CartStatus.ACTIVE)
+
+    @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.get_delivery_slots")
+    def test_get_delivery_slots_endpoint(self, mock_get_slots):
+        """
+        Tests GET /api/orders/marketplace/delivery-slots/ forwards parameters and returns vendor slots.
+        """
+        mock_get_slots.return_value = {
+            "success": True,
+            "data": [
+                {"id": 1, "label": "Instant Delivery (30-45 mins)", "slot_type": "EXPRESS", "available": True},
+                {"id": 2, "label": "9:00 AM - 12:00 PM", "slot_type": "STANDARD", "available": False},
+            ],
+        }
+
+        response = self.client.get("/api/orders/marketplace/delivery-slots/?warehouse_id=1&date=2026-09-29")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        mock_get_slots.assert_called_once_with(warehouse_id="1", date="2026-09-29")
+        data = response.data.get("data", [])
+        self.assertEqual(len(data), 2)
+        self.assertEqual(data[0]["label"], "Instant Delivery (30-45 mins)")
+        self.assertTrue(data[0]["available"])
+
+    @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.intake_order")
+    @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.validate_cart")
+    @patch("orders.marketplace_views._get_razorpay_client")
+    def test_delivery_slot_propagates_through_payment_intent_and_order_intake(
+        self, mock_get_client, mock_validate_cart, mock_intake_order
+    ):
+        """
+        Tests that delivery_slot_id, delivery_slot_label, and delivery_date survive the
+        initiate -> verify payment flow and are stored on MarketplaceOrder.delivery_slot and passed to vendor intake.
+        """
+        mock_validate_cart.return_value = {"success": True, "is_valid": True, "validation": {"items": []}}
+        mock_intake_order.return_value = {
+            "success": True,
+            "data": {"order": {"id": 999, "order_number": "VEND-00999"}},
+        }
+
+        mock_rp = MagicMock()
+        mock_rp.order.create.return_value = {"id": "order_rzp_slot_001", "amount": 55000, "currency": "INR"}
+        mock_rp.utility.verify_payment_signature.return_value = True
+        mock_get_client.return_value = mock_rp
+
+        payload = dict(self.checkout_payload)
+        payload["delivery_slot_id"] = 5
+        payload["delivery_slot_label"] = "Express Delivery (45 mins)"
+        payload["delivery_date"] = "2026-09-29"
+
+        # 1. Initiate Payment
+        init_res = self.client.post("/api/orders/marketplace/checkout/initiate-payment/", payload, format="json")
+        self.assertEqual(init_res.status_code, status.HTTP_200_OK)
+
+        intent = MarketplacePaymentIntent.objects.filter(razorpay_order_id="order_rzp_slot_001").first()
+        self.assertIsNotNone(intent)
+        self.assertEqual(intent.checkout_payload.get("delivery_slot_id"), 5)
+        self.assertEqual(intent.checkout_payload.get("delivery_slot_label"), "Express Delivery (45 mins)")
+        self.assertEqual(intent.checkout_payload.get("delivery_date"), "2026-09-29")
+
+        # 2. Verify Payment
+        verify_payload = {
+            "razorpay_order_id": "order_rzp_slot_001",
+            "razorpay_payment_id": "pay_slot_1234",
+            "razorpay_signature": "valid_sig",
+        }
+        verify_res = self.client.post("/api/orders/marketplace/checkout/verify-payment/", verify_payload, format="json")
+        self.assertEqual(verify_res.status_code, status.HTTP_201_CREATED)
+
+        # 3. Verify Order delivery_slot field
+        order = MarketplaceOrder.objects.filter(payment_transaction_id="pay_slot_1234").first()
+        self.assertIsNotNone(order)
+        self.assertEqual(order.delivery_slot, "Express Delivery (45 mins)")
+
+        # 4. Verify vendor intake call received the slot kwargs
+        mock_intake_order.assert_called()
+        intake_kwargs = mock_intake_order.call_args[1]
+        self.assertEqual(intake_kwargs.get("delivery_slot_id"), 5)
+        self.assertEqual(intake_kwargs.get("delivery_slot"), "Express Delivery (45 mins)")
+        self.assertEqual(intake_kwargs.get("delivery_date"), "2026-09-29")

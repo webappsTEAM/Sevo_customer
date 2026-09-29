@@ -17,7 +17,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
-from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny
 
 from accounts.permissions import IsCustomer
 from carts.models import Cart, CartType, CartStatus
@@ -142,6 +142,9 @@ def _finalize_marketplace_orders(
     customer_phone = str(checkout_payload.get("customer_phone") or getattr(customer, "phone", "") or "")
     customer_email = str(checkout_payload.get("customer_email") or getattr(customer, "email", "") or "")
     fulfilment_type = checkout_payload.get("fulfilment_type", "DELIVERY")
+    delivery_slot_label = checkout_payload.get("delivery_slot_label") or checkout_payload.get("delivery_slot") or ""
+    delivery_slot_id = checkout_payload.get("delivery_slot_id")
+    delivery_date = checkout_payload.get("delivery_date")
 
     # Double-submit protection: Idempotency check
     if idempotency_key:
@@ -319,6 +322,7 @@ def _finalize_marketplace_orders(
                     payment_method=payment_method,
                     payment_status=payment_status,
                     payment_transaction_id=payment_transaction_id,
+                    delivery_slot=delivery_slot_label,
                     idempotency_key=f"{idempotency_key}_{source_order_id}",
                 )
 
@@ -354,6 +358,9 @@ def _finalize_marketplace_orders(
                         "customer_phone": customer_phone,
                         "customer_email": customer_email,
                         "fulfilment_type": fulfilment_type,
+                        "delivery_slot_id": delivery_slot_id,
+                        "delivery_slot": delivery_slot_label,
+                        "delivery_date": str(delivery_date) if delivery_date else None,
                         "delivery_address": delivery_address,
                         "payment_snapshot": payment_snapshot,
                         "items": intake_items,
@@ -374,6 +381,9 @@ def _finalize_marketplace_orders(
                     "customer_phone": customer_phone,
                     "customer_email": customer_email,
                     "fulfilment_type": fulfilment_type,
+                    "delivery_slot_id": delivery_slot_id,
+                    "delivery_slot": delivery_slot_label,
+                    "delivery_date": str(delivery_date) if delivery_date else None,
                     "delivery_address": delivery_address,
                     "payment_snapshot": payment_snapshot,
                     "intake_items": intake_items,
@@ -389,6 +399,9 @@ def _finalize_marketplace_orders(
             customer_phone=item["customer_phone"],
             customer_email=item["customer_email"],
             fulfilment_type=item["fulfilment_type"],
+            delivery_slot_id=item["delivery_slot_id"],
+            delivery_slot=item["delivery_slot"],
+            delivery_date=item["delivery_date"],
             delivery_address={"formatted": item["delivery_address"]},
             payment_snapshot=item["payment_snapshot"],
             items=item["intake_items"],
@@ -568,6 +581,10 @@ class MarketplaceInitiatePaymentView(APIView):
         else:
             return _error("Razorpay payment gateway is not configured.", status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+        payload_to_store = dict(valid_data)
+        if payload_to_store.get("delivery_date") is not None:
+            payload_to_store["delivery_date"] = str(payload_to_store["delivery_date"])
+
         intent = MarketplacePaymentIntent.objects.create(
             customer=request.user,
             cart=cart,
@@ -575,7 +592,7 @@ class MarketplaceInitiatePaymentView(APIView):
             amount=total_amount,
             currency="INR",
             status=MarketplacePaymentIntent.Status.CREATED,
-            checkout_payload=valid_data,
+            checkout_payload=payload_to_store,
             idempotency_key=idempotency_key,
         )
 
@@ -748,6 +765,31 @@ class MarketplaceRazorpayWebhookView(APIView):
                     )
 
         return Response({"status": "ok"}, status=status.HTTP_200_OK)
+
+
+class MarketplaceDeliverySlotsView(APIView):
+    """
+    GET /api/orders/marketplace/delivery-slots/?warehouse_id=&date=
+    Fetches available delivery slots for the given warehouse and date from the Vendor app.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        warehouse_id = request.query_params.get("warehouse_id")
+        date_str = request.query_params.get("date")
+
+        res = MarketplaceIntegrationClient.get_delivery_slots(
+            warehouse_id=warehouse_id,
+            date=date_str,
+        )
+
+        if res.get("success"):
+            return _success(res.get("data", []))
+        else:
+            return _error(
+                res.get("message", "Failed to fetch delivery slots."),
+                status_code=res.get("status_code", status.HTTP_400_BAD_REQUEST),
+            )
 
 
 class MarketplaceCheckoutView(APIView):
