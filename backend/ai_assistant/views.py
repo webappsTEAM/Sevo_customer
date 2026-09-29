@@ -317,14 +317,19 @@ class AIChatView(APIView):
                                 fallback_lines.append(f"• **{name}**: {price_str}{dur_str}")
                             fallback_lines.append("\nWould you like me to help you book one of these services?")
                     elif t_name in ("get_customer_orders", "get_order_details"):
-                        orders = t_res.get("orders") or ([t_res.get("order")] if t_res.get("order") else [])
-                        if orders:
-                            fallback_lines.append("Here are your current bookings:")
-                            for o in orders[:5]:
-                                oid = o.get("order_id") or o.get("id")
-                                title = o.get("service_title") or o.get("service_name") or "Booking"
-                                st = o.get("status", "Active")
-                                fallback_lines.append(f"• **{title}** (ID: {oid}) - Status: **{st}**")
+                        bookings = t_res.get("bookings") or ([t_res.get("order")] if t_res.get("order") else [])
+                        if bookings:
+                            is_delayed_q = any(w in user_message.lower() for w in ["delay", "still not", "not delivered", "where is", "status", "track"])
+                            if is_delayed_q:
+                                fallback_lines.append("I’m sorry for the delay. Let me check your order status.\n\nHere are your orders:")
+                            else:
+                                fallback_lines.append("Here are your current orders:")
+                            for b in bookings[:5]:
+                                bid = b.get("booking_id") or b.get("id") or b.get("order_id")
+                                title = b.get("issue_title") or b.get("service_category") or b.get("title") or "Order"
+                                st = b.get("status_display") or b.get("status") or "Active"
+                                fallback_lines.append(f"• **Order #{bid}**: {title} (Status: **{st}**)")
+                            fallback_lines.append("\nWhich order are you referring to?")
                 if fallback_lines:
                     final_answer = "\n".join(fallback_lines)
 
@@ -337,10 +342,26 @@ class AIChatView(APIView):
         # 9. Output Guard: Scrub secrets, tokens, enforce 599 fallback and technician sentinel
         safe_response = OutputGuard.sanitize_llm_response(final_answer, is_followup=context.get("is_followup", False))
 
+        # Extract choice chips if bot is asking which order the customer refers to
+        options = []
+        if "which order are you referring to" in safe_response.lower():
+            for et in executed_tools:
+                if et.get("tool") == "get_customer_orders":
+                    t_bookings = et.get("result", {}).get("bookings", [])
+                    for b in t_bookings[:5]:
+                        bid = b.get("booking_id") or b.get("id")
+                        title = b.get("issue_title") or b.get("service_category") or "Order"
+                        options.append({
+                            "label": f"Order #{bid} ({title})",
+                            "value": f"Order #{bid}",
+                        })
+
         # Save assistant message
         msg_metadata = {}
         if rag_chunks:
             msg_metadata["sources"] = [rc["title"] for rc in rag_chunks]
+        if options:
+            msg_metadata["options"] = options
         asst_msg = ChatMessage.objects.create(
             conversation=conversation,
             sender=SenderType.ASSISTANT,
@@ -368,7 +389,7 @@ class AIChatView(APIView):
                 "agent": agent_type,
                 "sources": [rc["title"] for rc in rag_chunks] if not executed_tools else [],
                 "expects": "text",
-                "options": [],
+                "options": options,
                 "handed_off": False,
                 "created_at": asst_msg.created_at.isoformat(),
             },

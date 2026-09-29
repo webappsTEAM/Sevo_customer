@@ -96,3 +96,84 @@ class BusinessRulesTests(TestCase):
         actions = result["order"]["available_actions"]
         # In progress bookings cannot be cancelled
         self.assertFalse(actions.get("can_cancel", True))
+
+    def test_sevo_branding_in_system_prompt(self):
+        """Chatbot system prompt must mandate SEVO branding and forbid Cal services."""
+        from ai_assistant.router.agent_router import AgentRouter
+        prompt = AgentRouter.get_system_prompt("customer", {"user": self.user})
+        self.assertIn("SEVO Customer Web App", prompt)
+        self.assertIn("NEVER address or refer to the platform, company, or web app as 'Cal services'", prompt)
+        self.assertIn("Customer is angry → Acknowledge → Apologize → Help", prompt)
+        self.assertIn("Always be humble and polite", prompt)
+
+    def test_output_guard_replaces_calservices_with_sevo(self):
+        """OutputGuard must replace any mention of CalServices or Cal services with SEVO."""
+        text1 = "Welcome to CalServices! How can I help you today?"
+        self.assertEqual(OutputGuard.sanitize_llm_response(text1), "Welcome to SEVO! How can I help you today?")
+
+        text2 = "According to Cal Services policy, your booking is confirmed."
+        self.assertEqual(OutputGuard.sanitize_llm_response(text2), "According to SEVO policy, your booking is confirmed.")
+
+    def test_chatbot_personality_rules_conversational_behavior(self):
+        """Mock provider handles customer complaints, mistakes, frustration and thanks with humility."""
+        from ai_assistant.llm.mock_provider import MockDeterministicProvider
+        provider = MockDeterministicProvider()
+
+        # Bad service complaint
+        res = provider.generate([{"role": "user", "content": "Your service is very bad. What is this?"}], [], "", {})
+        self.assertIn("We apologize for the inconvenience", res.content)
+        self.assertIn("I’m sorry about this", res.content)
+
+        # Delayed delivery
+        res = provider.generate([{"role": "user", "content": "Why is my order still not delivered?"}], [], "", {})
+        self.assertIn("I’m sorry for the delay", res.content)
+
+        # Frustration
+        res = provider.generate([{"role": "user", "content": "This is useless!"}], [], "", {})
+        self.assertIn("I’m sorry this has been frustrating", res.content)
+
+        # Company mistake
+        res = provider.generate([{"role": "user", "content": "You people made a mistake."}], [], "", {})
+        self.assertIn("We’re sorry about the mistake", res.content)
+
+        # Helping
+        res = provider.generate([{"role": "user", "content": "Are you even helping me?"}], [], "", {})
+        self.assertIn("Yes, I’m here to help", res.content)
+
+        # Already told
+        res = provider.generate([{"role": "user", "content": "I already told you this!"}], [], "", {})
+        self.assertIn("I’m sorry about that", res.content)
+
+        # Thanks
+        res = provider.generate([{"role": "user", "content": "Thanks"}], [], "", {})
+        self.assertEqual(res.content, "You’re very welcome!")
+
+        # Bye
+        res = provider.generate([{"role": "user", "content": "Bye"}], [], "", {})
+        self.assertEqual(res.content, "Goodbye! Have a great day!")
+
+    def test_delayed_order_lists_orders_and_asks_which_order(self):
+        """When user asks why order is delayed, bot lists orders and asks 'Which order are you referring to?'."""
+        from ai_assistant.llm.mock_provider import MockDeterministicProvider
+        provider = MockDeterministicProvider()
+        context = {"user": self.user, "user_id": self.user.id}
+
+        # Step 1: Detects tool call to list customer orders
+        res1 = provider.generate([{"role": "user", "content": "Why is my order still not delivered?"}], [], "", context)
+        self.assertTrue(len(res1.tool_calls) > 0)
+        self.assertEqual(res1.tool_calls[0]["function"]["name"], "get_customer_orders")
+
+        # Step 2: Synthesize tool results with orders
+        raw_tool_result = {
+            "bookings": [
+                {"booking_id": 5937, "issue_title": "AC Inspection", "status_display": "On The Way"},
+                {"booking_id": 5938, "issue_title": "Vegetable Basket", "status_display": "Confirmed"},
+            ]
+        }
+        res2 = provider._synthesize_tool_result(raw_tool_result, "Why is my order still not delivered?", context)
+        self.assertIn("I’m sorry for the delay. Let me check your order status.", res2.content)
+        self.assertIn("Order #5937", res2.content)
+        self.assertIn("Order #5938", res2.content)
+        self.assertIn("Which order are you referring to?", res2.content)
+
+

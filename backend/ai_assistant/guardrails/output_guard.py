@@ -103,6 +103,10 @@ class OutputGuard:
         scrubbed = re.sub(r"`?available_actions`?", "available options", scrubbed)
         scrubbed = re.sub(r"`?status_display`?", "status", scrubbed)
 
+        # Mandatory Branding Rule: Chatbot must always address the web app as SEVO and not Cal services
+        scrubbed = re.sub(r"(?i)\bcal\s*services\b(?!\.vercel|\.app|-vendor)", "SEVO", scrubbed)
+        scrubbed = re.sub(r"(?i)\bcalservices\b(?!\.vercel|\.app|-vendor)", "SEVO", scrubbed)
+
         # If this is an ongoing follow-up turn, strip repetitive greetings at the very beginning
         if is_followup and scrubbed:
             scrubbed = re.sub(r"^(?:Hello|Hi|Hey)(?:\s+[\w]+)?(?:\s*!\s*|\s*,\s*)", "", scrubbed.strip(), flags=re.IGNORECASE)
