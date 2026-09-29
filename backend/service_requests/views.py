@@ -2109,22 +2109,28 @@ def _build_tracking_payload(sr, has_full_access):
 
     # Retrieve Cash Payment Confirmation OTP if one was generated for this booking or any related stage
     payment_confirmation_otp = None
+    all_payment_notifs = []
     all_sr_ids = [str(x) for x in [target_sr.id, target_sr.request_id, sr.id, sr.request_id] if x]
+    if getattr(sr, "parent_request", None):
+        all_sr_ids.extend([str(sr.parent_request.id), str(sr.parent_request.request_id)])
+    if getattr(target_sr, "parent_request", None):
+        all_sr_ids.extend([str(target_sr.parent_request.id), str(target_sr.parent_request.request_id)])
+
     try:
         import re
         from django.db import connection
         with connection.cursor() as cursor:
             placeholders = ", ".join(["%s"] * len(all_sr_ids))
             cursor.execute(
-                f"SELECT message FROM workforce_notification "
+                f"SELECT message, created_at FROM workforce_notification "
                 f"WHERE related_object_id IN ({placeholders}) "
                 f"AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
-                f"ORDER BY created_at DESC LIMIT 1;",
+                f"ORDER BY created_at DESC;",
                 all_sr_ids,
             )
-            row = cursor.fetchone()
-            if row and row[0]:
-                m = re.search(r'OTP\s+([0-9]{6})', row[0])
+            all_payment_notifs = cursor.fetchall()
+            if all_payment_notifs and all_payment_notifs[0][0]:
+                m = re.search(r'OTP\s+([0-9]{6})', all_payment_notifs[0][0])
                 if m:
                     payment_confirmation_otp = m.group(1)
     except Exception:
@@ -2161,7 +2167,17 @@ def _build_tracking_payload(sr, has_full_access):
     quote_obj = None
     quotation_history = []
     if not (sr.service_category or "").startswith("goods_transport") and (sr.service_category or "") != "packers_movers":
-        for b_cand in [sr.request_id, sr.id, target_sr.request_id, target_sr.id, getattr(target_sr, "workforce_job_id", None), getattr(sr, "workforce_job_id", None)]:
+        candidate_ids = [
+            sr.request_id, sr.id,
+            target_sr.request_id, target_sr.id,
+            getattr(target_sr, "workforce_job_id", None), getattr(sr, "workforce_job_id", None)
+        ]
+        if getattr(sr, "parent_request", None):
+            candidate_ids.extend([sr.parent_request.request_id, sr.parent_request.id])
+        if getattr(target_sr, "parent_request", None):
+            candidate_ids.extend([target_sr.parent_request.request_id, target_sr.parent_request.id])
+
+        for b_cand in candidate_ids:
             if b_cand:
                 q_res = WorkforceIntegrationService.get_quote_by_booking_id(str(b_cand))
                 if q_res and q_res.get("quote"):
@@ -2190,7 +2206,28 @@ def _build_tracking_payload(sr, has_full_access):
     q_total = Decimal(str(quote_obj.get("net_payable") or quote_obj.get("grand_total") or quote_obj.get("total_amount") or total_amt)) if quote_obj else Decimal(str(total_amt))
     q_advance = Decimal(str(quote_obj.get("advance_amount") or (q_total * Decimal("0.50")))) if quote_obj else Decimal("0.00")
     q_balance = max(Decimal("0.00"), q_total - total_paid) if total_paid > 0 else (Decimal(str(quote_obj.get("balance_amount") or (q_total - q_advance))) if quote_obj else Decimal("0.00"))
-    is_advance_paid = (total_paid >= q_advance and q_advance > 0) or (target_sr.payment_status in ["paid", "advance_paid", "collected"])
+
+    is_milestone_booking = bool(quote_obj and float(q_advance) > 0 and float(q_balance) > 0)
+
+    if is_milestone_booking:
+        # If 2 or more payment notifications exist, the 1st was for Advance and the current is for Balance:
+        if len(all_payment_notifs) >= 2:
+            is_advance_paid = True
+            active_milestone = "BALANCE"
+        elif target_sr.payment_status in ["advance_paid", "paid"] and target_sr.payment_status != "cash_pending":
+            is_advance_paid = True
+            active_milestone = "BALANCE"
+        elif total_paid >= q_advance and q_advance > 0:
+            is_advance_paid = True
+            active_milestone = "BALANCE"
+        else:
+            # Advance is not verified yet (either pending initial collection or cash OTP pending verification)
+            is_advance_paid = False
+            active_milestone = "ADVANCE"
+    else:
+        is_advance_paid = (total_paid >= q_advance and q_advance > 0) or (target_sr.payment_status in ["paid", "advance_paid", "collected"])
+        active_milestone = "FULL"
+
     is_fully_paid = (total_paid >= q_total and q_total > 0) or (target_sr.payment_status in ["paid", "collected"] and target_sr.status in ["completed", "closed"])
 
     duration_days = int(quote_obj.get("estimated_duration_days") or quote_obj.get("duration_days") or 1) if quote_obj else 1
@@ -2282,9 +2319,10 @@ def _build_tracking_payload(sr, has_full_access):
             "grand_total": float(q_total),
             "advance_amount": float(q_advance),
             "balance_amount": float(q_balance),
-            "total_paid": float(total_paid),
+            "total_paid": float(q_advance if (is_advance_paid and not is_fully_paid) else (total_paid if total_paid > 0 else (q_total if is_fully_paid else 0.0))),
             "advance_paid": is_advance_paid,
             "balance_paid": is_fully_paid,
+            "active_milestone": active_milestone,
         },
         "project_timeline": {
             "estimated_duration_days": duration_days,

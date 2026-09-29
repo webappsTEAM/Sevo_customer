@@ -215,6 +215,27 @@ export const resolveAcServiceImage = (nameOrIdOrSlug) => {
 
 let BOOKING_CURRENCY_SYMBOL = "₹";
 
+export const triggerPdfDownload = (token, filename = 'Quotation.pdf') => {
+  if (!token) {
+    alert("Quotation reference not available for download.");
+    return;
+  }
+  const cleanToken = encodeURIComponent(String(token).trim());
+  const downloadUrl = `/api/booking/quote/${cleanToken}/pdf/?download=1`;
+  const a = document.createElement('a');
+  a.href = downloadUrl;
+  a.download = filename || `Quotation_${token}.pdf`;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    try {
+      document.body.removeChild(a);
+    } catch (_) {}
+  }, 300);
+};
+
 export function getAuthoritativeItemPrice(item, booking) {
   if (!item) return 0;
   if (typeof item.price === 'number' && !isNaN(item.price)) {
@@ -2484,9 +2505,12 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const [showMapModal, setShowMapModal] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [copiedOtp, setCopiedOtp] = useState(false)
+  const [copiedPaymentOtp, setCopiedPaymentOtp] = useState(false)
   const [showDeclineReasonModal, setShowDeclineReasonModal] = useState(false)
   const [declineReasonCode, setDeclineReasonCode] = useState("")
   const [declineReasonNotes, setDeclineReasonNotes] = useState("")
+  const [showRequestChangesModal, setShowRequestChangesModal] = useState(false)
+  const [changeNotes, setChangeNotes] = useState("")
   const [quoteExpanded, setQuoteExpanded] = useState(true)
   const [expandedPrevQuotes, setExpandedPrevQuotes] = useState({})
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -2744,7 +2768,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   )
 
   const isProofSubmitted = Boolean(
-    liveData?.status && ["proof_submitted", "awaiting_verification"].includes(String(liveData.status).toLowerCase())
+    liveData?.status && ["proof_submitted", "awaiting_verification", "payment_pending", "waiting_for_payment"].includes(String(liveData.status).toLowerCase())
   )
 
   const empInfo = liveData?.assigned_employee || liveData?.technician || successData?.technician || null
@@ -2793,6 +2817,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const etaMinutes = liveData?.technician?.eta_minutes || liveData?.eta_minutes || null
   const distKm = liveData?.technician?.distance_km || liveData?.distance_km || null
   const startOtp = liveData?.start_otp || null
+  const paymentConfirmationOtp = liveData?.payment_confirmation_otp || null
   const trackingToken = liveData?.tracking_token || null
   // Build secure tracking page URL (dedicated standalone page)
   const trackingPageUrl = trackingToken
@@ -2804,6 +2829,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const destLat = rawDestLat != null && !isNaN(parseFloat(rawDestLat)) ? parseFloat(rawDestLat) : null
   const destLng = rawDestLng != null && !isNaN(parseFloat(rawDestLng)) ? parseFloat(rawDestLng) : null
   const currentStatus = (liveData?.status || successData?.status || "confirmed").toLowerCase()
+  const isCashPending = currentStatus === "cash_pending" || liveData?.payment_status === "cash_pending" || Boolean(paymentConfirmationOtp)
 
   const rawTechLat = liveData?.technician_location?.latitude ?? liveData?.technician?.latitude ?? successData?.technician_latitude ?? null
   const rawTechLng = liveData?.technician_location?.longitude ?? liveData?.technician?.longitude ?? successData?.technician_longitude ?? null
@@ -2812,7 +2838,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     rawTechLng != null && !isNaN(parseFloat(rawTechLng))
   )
   const isArrived = currentStatus === "arrived" || currentStatus === "technician_arrived"
-  const isInProgress = currentStatus === "in_progress" || currentStatus === "inspection_in_progress"
+  const isInProgress = ["in_progress", "inspection_in_progress", "service_started", "work_in_progress"].includes(currentStatus)
   const isOnTheWay = currentStatus === "on_the_way" || currentStatus === "technician_on_the_way" || (currentStatus === "accepted" && hasValidTechnicianGPS)
 
   const trackingBookingObj = {
@@ -2837,6 +2863,14 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       navigator.clipboard.writeText(startOtp)
       setCopiedOtp(true)
       setTimeout(() => setCopiedOtp(false), 2000)
+    }
+  }
+
+  const handleCopyPaymentOtp = () => {
+    if (navigator.clipboard && paymentConfirmationOtp) {
+      navigator.clipboard.writeText(paymentConfirmationOtp)
+      setCopiedPaymentOtp(true)
+      setTimeout(() => setCopiedPaymentOtp(false), 2000)
     }
   }
 
@@ -3376,22 +3410,34 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             )}
           </motion.div>
           <h2 style={{ margin: '0 0 0.25rem', fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>
-            {isArrived
-              ? 'Partner Arrived at Location! 🏠'
-              : isInProgress
-                ? 'Service in Progress 🛠️'
-                : isOnTheWay
-                  ? 'Partner On The Way! 🛵'
-                  : 'Partner Accepted Your Booking! 🎉'}
+            {isCompleted
+              ? 'Service Completed! 🎉'
+              : isCashPending
+                ? 'Cash Payment Verification 💰'
+                : isProofSubmitted
+                  ? 'Proof Submitted - Verification 📋'
+                  : isInProgress
+                    ? 'Service in Progress 🛠️'
+                    : isArrived
+                      ? 'Partner Arrived at Location! 🏠'
+                      : isOnTheWay
+                        ? 'Partner On The Way! 🛵'
+                        : 'Partner Accepted Your Booking! 🎉'}
           </h2>
           <p style={{ margin: '0 0 0.5rem', color: '#64748b', fontSize: '0.88rem' }}>
-            {isArrived
-              ? <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> has arrived at your service address</>
-              : isInProgress
-                ? <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> is servicing your request</>
-                : isOnTheWay
-                  ? <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> is en route to your location</>
-                  : <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> accepted your booking</>}
+            {isCompleted
+              ? <>Thank you! Your service with <strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> is complete</>
+              : isCashPending
+                ? <>Please share the <strong style={{ color: '#059669' }}>Cash Payment OTP</strong> with <strong style={{ color: '#0f172a' }}>{techName || 'your technician'}</strong> to confirm payment</>
+                : isProofSubmitted
+                  ? <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> submitted job proof. Awaiting payment/closing</>
+                  : isInProgress
+                    ? <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> is actively servicing your request</>
+                    : isArrived
+                      ? <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> has arrived at your service address</>
+                      : isOnTheWay
+                        ? <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> is en route to your location</>
+                        : <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> accepted your booking</>}
           </p>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#f5f3ff', border: '1px solid #7C3AED30', borderRadius: 99, padding: '4px 14px', flexWrap: 'wrap', justifyContent: 'center' }}>
             <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#7C3AED', textTransform: 'uppercase' }}>Booking Ref</span>
@@ -3633,15 +3679,30 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               </div>
             </div>
 
-            {isArrived ? (
+            {isCompleted ? (
               <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #10B981, #059669)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 900 }}>At Site</div>
-                <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>ARRIVED</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 900 }}>Completed</div>
+                <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>FINISHED</div>
+              </div>
+            ) : isCashPending ? (
+              <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #10B981, #059669)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 900 }}>Cash Payment</div>
+                <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>OTP PENDING</div>
+              </div>
+            ) : isProofSubmitted ? (
+              <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #3B82F6, #1D4ED8)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 900 }}>Proof Submitted</div>
+                <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>VERIFICATION</div>
               </div>
             ) : isInProgress ? (
               <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #3B82F6, #1D4ED8)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
                 <div style={{ fontSize: '0.85rem', fontWeight: 900 }}>In Progress</div>
                 <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>ACTIVE</div>
+              </div>
+            ) : isArrived ? (
+              <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #10B981, #059669)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 900 }}>At Site</div>
+                <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>ARRIVED</div>
               </div>
             ) : (hasValidTechnicianGPS && etaMinutes != null) ? (
               <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #FC8019, #f97316)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
@@ -3798,8 +3859,72 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         </motion.div>
       )}
 
-      {/* ─────────────────── 6-DIGIT SERVICE START OTP CARD (IF ACCEPTED) ─────────────────── */}
-      {isAccepted && (
+      {/* ─────────────────── 6-DIGIT CASH PAYMENT CONFIRMATION OTP (AMOUNT OTP) ─────────────────── */}
+      {(paymentConfirmationOtp || isCashPending) && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{
+            background: 'linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)',
+            borderRadius: 14,
+            padding: '12px 16px',
+            border: '1.5px solid #10b981',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '1rem',
+            boxShadow: '0 4px 14px rgba(16, 185, 129, 0.15)',
+            gap: 12,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#059669', flexShrink: 0 }}>
+              <KeyRound size={20} color="#059669" />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#047857', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                {liveData?.milestones && liveData.milestones.advance_amount && !liveData.milestones.advance_paid
+                  ? `💰 Milestone 1: 50% Advance Payment OTP (₹${liveData.milestones.advance_amount})`
+                  : liveData?.milestones && liveData.milestones.balance_amount && liveData.milestones.advance_paid
+                    ? `💰 Milestone 2: Balance Payment OTP (₹${liveData.milestones.balance_amount})`
+                    : '💰 Cash Payment Confirmation OTP'}
+              </div>
+              <div style={{ fontSize: '0.76rem', color: '#065f46', marginTop: 1 }}>
+                {liveData?.milestones && liveData.milestones.advance_amount && !liveData.milestones.advance_paid
+                  ? `Technician reported 50% advance collection (₹${liveData.milestones.advance_amount}). Share this OTP to authorize commencement of work.`
+                  : 'Technician reported cash collection. Share this 6-digit OTP with your technician to verify payment.'}
+              </div>
+            </div>
+          </div>
+          <div
+            onClick={handleCopyPaymentOtp}
+            title="Click to copy Payment OTP"
+            style={{
+              cursor: 'pointer',
+              fontFamily: 'monospace',
+              fontSize: '1.25rem',
+              fontWeight: 900,
+              color: '#047857',
+              background: 'white',
+              padding: '6px 14px',
+              borderRadius: 10,
+              border: '1.5px dashed #10b981',
+              letterSpacing: '2px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              whiteSpace: 'nowrap',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.05)',
+            }}
+          >
+            <span>{paymentConfirmationOtp || "Pending"}</span>
+            {copiedPaymentOtp ? <Check size={14} color="#10B981" /> : <Copy size={14} color="#059669" />}
+          </div>
+        </motion.div>
+      )}
+
+      {/* ─────────────────── 6-DIGIT SERVICE START OTP CARD (IF ACCEPTED & PRE-START) ─────────────────── */}
+      {isAccepted && startOtp && !isWorkStartedOrDone && !isProofSubmitted && !isCashPending && (
         <div style={{
           background: '#fff7ed',
           borderRadius: 14,
@@ -4608,23 +4733,75 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         )}
 
         {/* Total Amount & Payment Method Footer */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f5f3ff', border: '1px solid #7C3AED25', borderRadius: 12, padding: '0.75rem 0.95rem' }}>
-          <div>
-            <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#6D28D9', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Payment Mode</div>
-            <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#4c1d95', marginTop: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
-              {paymentMethod === "ONLINE" ? "💳 Online Payment" : "💵 Cash on Service (COD)"}
-              <span style={{ fontSize: '0.68rem', fontWeight: 800, background: paymentMethod === "ONLINE" ? "#dcfce7" : "#fef3c7", color: paymentMethod === "ONLINE" ? "#15803d" : "#b45309", padding: "1px 6px", borderRadius: 6, marginLeft: 4 }}>
-                {paymentStatusText}
-              </span>
+        {(() => {
+          const ms = liveData?.milestones;
+          const hasMilestones = Boolean(ms && ms.advance_amount > 0);
+          const isAdvanceOnlyPaid = hasMilestones && ms.advance_paid && !ms.balance_paid;
+          const isFullyPaidMilestone = hasMilestones && ms.advance_paid && ms.balance_paid;
+
+          let dynamicBadgeText = paymentStatusText;
+          let dynamicBadgeBg = paymentMethod === "ONLINE" ? "#dcfce7" : "#fef3c7";
+          let dynamicBadgeColor = paymentMethod === "ONLINE" ? "#15803d" : "#b45309";
+
+          if (hasMilestones) {
+            if (isFullyPaidMilestone) {
+              dynamicBadgeText = "Fully Paid";
+              dynamicBadgeBg = "#dcfce7";
+              dynamicBadgeColor = "#15803d";
+            } else if (isCashPending && !ms.advance_paid) {
+              dynamicBadgeText = "50% Advance Cash Pending";
+              dynamicBadgeBg = "#fef3c7";
+              dynamicBadgeColor = "#b45309";
+            } else if (isCashPending && ms.advance_paid) {
+              dynamicBadgeText = "Balance Cash Pending";
+              dynamicBadgeBg = "#fef3c7";
+              dynamicBadgeColor = "#b45309";
+            } else if (isAdvanceOnlyPaid) {
+              dynamicBadgeText = "50% Advance Paid";
+              dynamicBadgeBg = "#dbeafe";
+              dynamicBadgeColor = "#1e40af";
+            } else {
+              dynamicBadgeText = "50% Advance Due";
+              dynamicBadgeBg = "#fef3c7";
+              dynamicBadgeColor = "#b45309";
+            }
+          }
+
+          return (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f5f3ff', border: '1px solid #7C3AED25', borderRadius: 12, padding: '0.75rem 0.95rem', flexWrap: 'wrap', gap: 8 }}>
+              <div>
+                <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#6D28D9', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Payment Mode</div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#4c1d95', marginTop: 1, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                  {paymentMethod === "ONLINE" ? "💳 Online Payment" : "💵 Cash on Service (COD)"}
+                  <span style={{ fontSize: '0.68rem', fontWeight: 800, background: dynamicBadgeBg, color: dynamicBadgeColor, padding: "1px 6px", borderRadius: 6, marginLeft: 4 }}>
+                    {dynamicBadgeText}
+                  </span>
+                </div>
+                {hasMilestones && (
+                  <div style={{ fontSize: '0.7rem', color: '#6b21a8', marginTop: 3, fontWeight: 700 }}>
+                    {isFullyPaidMilestone ? (
+                      <>Paid in Full: <strong>₹{(ms.grand_total || displayTotal).toLocaleString("en-IN")}</strong></>
+                    ) : isAdvanceOnlyPaid && !isCashPending ? (
+                      <>Advance Paid: <strong>₹{ms.advance_amount.toLocaleString("en-IN")}</strong> · Due on Completion: <strong>₹{ms.balance_amount.toLocaleString("en-IN")}</strong></>
+                    ) : isAdvanceOnlyPaid && isCashPending ? (
+                      <>Advance Paid: <strong>₹{ms.advance_amount.toLocaleString("en-IN")}</strong> · Balance (<strong>₹{ms.balance_amount.toLocaleString("en-IN")}</strong>) Pending OTP Verification</>
+                    ) : (
+                      <>Advance Due: <strong>₹{ms.advance_amount.toLocaleString("en-IN")}</strong> {isCashPending ? "(OTP Verification Pending)" : ""} · Balance: <strong>₹{ms.balance_amount.toLocaleString("en-IN")}</strong></>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#6D28D9', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  {hasMilestones ? "Total Estimate" : "Total Amount"}
+                </div>
+                <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#6D28D9' }}>
+                  ₹{Number(displayTotal).toLocaleString("en-IN")}
+                </div>
+              </div>
             </div>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#6D28D9', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Amount</div>
-            <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#6D28D9' }}>
-              ₹{Number(displayTotal).toLocaleString("en-IN")}
-            </div>
-          </div>
-        </div>
+          );
+        })()}
       </motion.div>
 
       {/* ─────────────────── MASONRY SPLIT PAYMENT CARD ─────────────────── */}
@@ -6433,6 +6610,24 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
     );
   };
 
+  const isUpcomingTab = activeTab === "Upcoming & Active" || (activeTab === "My Bookings" && bookingListFilter === "active");
+  const isPastTab = activeTab === "Past Services" || activeTab === "30-Day Warranties" || activeTab === "Book Again" || (activeTab === "My Bookings" && bookingListFilter === "completed");
+  const currentFilter = (activeTab === "Upcoming & Active" || bookingListFilter === "active")
+    ? "active"
+    : (activeTab === "Past Services" || activeTab === "30-Day Warranties" || activeTab === "Book Again" || bookingListFilter === "completed")
+      ? "completed"
+      : "all";
+
+  const allCount = (nonDraftBookings || []).length;
+  const activeCount = (liveActiveBookings || []).length;
+  const completedCount = (completedBookings || []).length;
+
+  const displayedBookings = currentFilter === "active"
+    ? liveActiveBookings
+    : currentFilter === "completed"
+      ? completedBookings
+      : nonDraftBookings;
+
   const renderTabContent = () => {
     switch (activeTab) {
       case "My Profile":
@@ -6625,6 +6820,11 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
           </motion.div>
         )
       case "My Bookings":
+      case "Upcoming & Active":
+      case "Past Services":
+      case "Book Again":
+      case "30-Day Warranties":
+      case "My Invoices":
         return (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
             <div style={{ marginBottom: '1.25rem' }}>
@@ -6926,6 +7126,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                             );
                           })()}
                         </div>
+                      </div>
 
                       {/* Quotation Ready Action Banner */}
                       {(() => {
@@ -6935,7 +7136,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                         const decisionToken = activeQuote?.decision_token;
                         const targetToken = decisionToken || activeQuote?.quote_number || b.request_id || b.id;
                         return (
-                          <div style={{ marginTop: 12, padding: '12px 16px', background: 'linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%)', border: '1.5px solid #3b82f6', borderRadius: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                          <div style={{ marginTop: 14, padding: '12px 16px', background: 'linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%)', border: '1.5px solid #3b82f6', borderRadius: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, width: '100%' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                               <div style={{ width: 34, height: 34, borderRadius: 8, background: '#2563eb', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 <FileText size={18} />
@@ -6985,7 +7186,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
                           {/* GT-D-02: multi-stop trip editor, logistics bookings only */}
                           {LOGISTICS_STOP_CATEGORIES.includes(b.service_category) && (
-                            <div style={{ marginTop: 8 }}>
+                            <div style={{ marginTop: 8, width: '100%' }}>
                               <button
                                 onClick={() => toggleStopsEditor(b)}
                                 style={{ padding: '6px 14px', background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe', borderRadius: 8, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
@@ -7035,7 +7236,6 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                               )}
                             </div>
                           )}
-                        </div>
                       </div>
 
                       {b.child_requests && b.child_requests.length > 0 && (
@@ -13354,10 +13554,24 @@ export function BookingPage() {
     }
     if (photoFile) data.append("photo", photoFile)
 
+    const isEstimation = Boolean(
+      category?.slug === "ac-inspection" ||
+      category?.id === "ac-inspection" ||
+      (cart && cart.some(c =>
+        c.jobType === "ESTIMATION" ||
+        c.id === "serv-hvac-ac-inspection" ||
+        c.id === "ac-inspection" ||
+        c.id === "hvac-ac-inspection" ||
+        (c.ac_brand && c.ac_type) ||
+        (c.name && c.name.toLowerCase().includes("inspection"))
+      ))
+    );
+
     if (isEstimation) {
       const estItem = (cart && cart.find(c => c.jobType === "ESTIMATION" || c.id === "serv-hvac-ac-inspection" || c.id === "ac-inspection" || c.id === "hvac-ac-inspection" || (c.ac_brand && c.ac_type) || (c.name && c.name.toLowerCase().includes("inspection")))) || (cart && cart[0]) || {};
       data.append("job_type", "ESTIMATION");
-      data.append("estimation_fee", String(estItem.price || dynamicAcInspectionFee || "199"));
+      const estFee = String(estItem.price || (typeof dynamicAcInspectionFee !== "undefined" ? dynamicAcInspectionFee : "199"));
+      data.append("estimation_fee", estFee);
       const rawAc = String(estItem.ac_type || "SPLIT").toUpperCase();
       const normalizedAcType = rawAc.includes("WINDOW") ? "WINDOW" : (rawAc.includes("SPLIT") ? "SPLIT" : (rawAc.includes("CASSETTE") ? "CASSETTE" : (rawAc.includes("TOWER") ? "TOWER" : "SPLIT")));
       data.append("ac_type", normalizedAcType);
@@ -14473,7 +14687,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
   const [paintLocation, setPaintLocation] = useState(() => getCustomerLocation(user?.id) || "Hosur, Tamil Nadu")
   const [paintSearchRotateIdx, setPaintSearchRotateIdx] = useState(0)
   const [expandedFaq, setExpandedFaq] = React.useState(null)
-  const [activeTab, setActiveTab] = useState("paint-interior")
+  const [activeTab, setActiveTab] = useState("paint-exterior")
 
   const getHaversineDistance = (lat1, lon1, lat2, lon2) => {
     const R = 6371;
@@ -14490,7 +14704,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
   const customerLng = formData?.longitude ? parseFloat(formData.longitude) : 77.8253;
   const distanceKm = getHaversineDistance(12.7409, 77.8253, customerLat, customerLng);
   const currentFee = distanceKm > 15 ? 300 : 0;
-  const PAINT_SEARCH_HINTS = ["Interior Painting", "Exterior Painting", "Waterproofing", "Wood Polish", "Texture Finish"];
+  const PAINT_SEARCH_HINTS = ["Exterior Painting", "Interior Painting", "Waterproofing", "Wood Polish", "Texture Finish"];
   useEffect(() => {
     const t = setInterval(() => setPaintSearchRotateIdx(i => (i + 1) % PAINT_SEARCH_HINTS.length), 2800);
     return () => clearInterval(t);
@@ -14598,8 +14812,8 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
   };
 
   const PAINTING_CATEGORIES = [
-    { id: "paint-interior", slug: "interior-painting", name: "Interior Painting", image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop" },
     { id: "paint-exterior", slug: "exterior-painting", name: "Exterior Painting", image: "https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=300&q=80&fit=crop" },
+    { id: "paint-interior", slug: "interior-painting", name: "Interior Painting", image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop" },
     { id: "paint-waterproofing", slug: "waterproofing", name: "Waterproofing", image: "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=300&q=80&fit=crop" },
     { id: "paint-wood-metal", slug: "wood-metal", name: "Wood & Metal", image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=300&q=80&fit=crop" },
     { id: "paint-texture", slug: "texture-decor", name: "Texture Decor", image: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=300&q=80&fit=crop" }

@@ -3291,8 +3291,8 @@ export function LandingPage() {
       "microwave-repair": ["microwave"],
 
       // Paintings
-      "paintings": ["interior-painting", "exterior-painting", "waterproofing", "wood-metal", "texture-decor"],
-      "painting": ["interior-painting", "exterior-painting", "waterproofing", "wood-metal", "texture-decor"],
+      "paintings": ["exterior-painting", "interior-painting", "waterproofing", "wood-metal", "texture-decor"],
+      "painting": ["exterior-painting", "interior-painting", "waterproofing", "wood-metal", "texture-decor"],
       "interior-painting": ["interior-painting"],
       "exterior-painting": ["exterior-painting"],
       "waterproofing": ["waterproofing"],
