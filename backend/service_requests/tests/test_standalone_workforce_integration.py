@@ -89,6 +89,19 @@ class StandaloneWorkforceIntegrationTests(TestCase):
         self.assertEqual(payload["customer"]["name"], "Ananya Sharma")
         self.assertEqual(payload["start_otp"], "7502")
         self.assertEqual(payload["tracking_token"], str(self.booking.tracking_token))
+        self.assertEqual(payload["catalog_service_id"], self.booking.catalog_service_id)
+        self.assertEqual(payload["package_id"], self.booking.package_id)
+        self.assertEqual(payload["package_version"], self.booking.package_version)
+        self.assertEqual(payload["package_display"], self.booking.package_display)
+        self.assertEqual(call_kwargs["headers"]["Idempotency-Key"], "AC0001")
+        self.assertEqual(payload["idempotency_key"], "AC0001")
+
+        # A duplicate Celery delivery must be a no-op once the shared booking
+        # holds the Workforce job reference.
+        duplicate = WorkforceIntegrationService.dispatch_job(self.booking)
+        self.assertTrue(duplicate.get("success"))
+        self.assertTrue(duplicate.get("already_dispatched"))
+        self.assertEqual(mock_post.call_count, 1)
 
     def test_02_webhook_signature_verification(self):
         """Test Step 2: Vendor webhook requires valid HMAC-SHA256 signature."""

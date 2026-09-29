@@ -126,7 +126,11 @@ export function useReverseGeocode(coords) {
             signal,
           })
           if (res?.success && res.data) {
-            resolvedData = res.data
+            const fmt = res.data.formatted_address || ""
+            const isCoordOnly = /^[-+]?([0-9]*[.])?[0-9]+,\s*[-+]?([0-9]*[.])?[0-9]+$/.test(fmt.trim())
+            if (!isCoordOnly) {
+              resolvedData = res.data
+            }
           }
         } catch (e) { }
       }

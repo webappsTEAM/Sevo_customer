@@ -71,7 +71,19 @@ scratch/
 /src/
 start_db_tunnel.ps1
 tunnel_daemon.py
+check_db*.py
+debug_ws*.py
+fix_runner*.py
+fix_models.py
+fix_timeout.py
+wipe_db.py
+start_all.bat
+start_customer.bat
+backend/scratch_*.py
+backend/test_sql_flush.py
+backend/quicktims/pg_test_settings.py
 
 # Local keys and AI agent outputs
 .ssh/
 Claude outputs/
+

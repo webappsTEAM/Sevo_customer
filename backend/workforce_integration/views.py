@@ -1285,8 +1285,10 @@ class WorkforceBookingFromQuoteView(APIView):
             payment_status=ServiceRequest.PaymentStatus.PENDING
         )
 
-        # Dispatch newly created quoted work booking to the workforce system
-        WorkforceIntegrationService.dispatch_job(new_sr.id)
+        # Persist delivery with the new booking instead of making a synchronous
+        # cross-service request in the customer HTTP transaction.
+        from service_requests.services.workforce_dispatch_outbox import queue_workforce_dispatch
+        queue_workforce_dispatch(new_sr)
 
         # Write analytic BookingStatusEvent
         try:
