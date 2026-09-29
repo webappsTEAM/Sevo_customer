@@ -83,10 +83,14 @@ export function useCustomerTracking({ bookingId, jobId, trackingToken }) {
   const lastKnownGpsRef = useRef(null)
   const lastKnownBearingRef = useRef(0)
   const isFetchingRef = useRef(false) // in-flight guard: prevents overlapping REST polls
+  // An expired/missing tracking credential cannot recover through polling.
+  // Keep the error visible, but never keep sending unauthorised requests.
+  const pollingBlockedRef = useRef(false)
 
   /* ── Authoritative REST Fetch ── */
   const fetchLive = useCallback(async () => {
     if (!mountedRef.current) return
+    if (pollingBlockedRef.current) return
     if (isFetchingRef.current) return  // skip cycle if previous request still in-flight
     isFetchingRef.current = true
     try {
@@ -106,11 +110,13 @@ export function useCustomerTracking({ bookingId, jobId, trackingToken }) {
       if (!mountedRef.current) return
 
       if (res.status === 404) {
+        pollingBlockedRef.current = true
         setErrorKind("not_found")
         setLoading(false)
         return
       }
       if (res.status === 401 || res.status === 403) {
+        pollingBlockedRef.current = true
         setErrorKind("unauthorized")
         setLoading(false)
         return

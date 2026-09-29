@@ -31,9 +31,9 @@ class GeminiProvider(BaseLLMProvider):
     Supports native tool / function calling, RAG synthesis, and automatic model fallback.
     """
 
-    CANDIDATE_MODELS = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.6-flash"]
+    CANDIDATE_MODELS = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-flash-latest"]
 
-    def __init__(self, api_key: str, model: str = "gemini-3.5-flash"):
+    def __init__(self, api_key: str, model: str = "gemini-3.8-flash"):
         self.api_key = api_key
         self.model = model
 

@@ -238,7 +238,17 @@ class BookingCreateViewHomeServicesPricingIntegrationTests(TestCase):
         if isinstance(saved_cart, str):
             saved_cart = json.loads(saved_cart)
         self.assertEqual(saved_cart[0]["price"], float(expected_unit_price))
-        self.assertEqual(saved_cart[0]["package_id"], self.pkg.id)
+        self.assertEqual(saved_cart[0]["package_id"], str(self.pkg.id))
+
+        # Dispatch must receive database IDs, never just the customer-facing
+        # package label held in cart_data.  This is the shared Customer /
+        # Workforce contract used by canonical technician eligibility.
+        self.assertEqual(sr.catalog_service_id, str(self.pkg.service_id))
+        self.assertEqual(sr.package_id, str(self.pkg.id))
+        self.assertEqual(sr.package_version, str(self.pkg.version))
+        self.assertEqual(sr.catalog_mapping_status, "MAPPED")
+        self.assertEqual(saved_cart[0]["catalog_service_id"], str(self.pkg.service_id))
+        self.assertEqual(saved_cart[0]["package_version"], str(self.pkg.version))
 
         # Clean up created booking
         sr.delete()

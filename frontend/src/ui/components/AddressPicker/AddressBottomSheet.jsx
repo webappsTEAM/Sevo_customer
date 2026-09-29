@@ -45,10 +45,18 @@ export function AddressBottomSheet({
   }, [])
 
   useEffect(() => {
-    if (initialLocation?.id || initialLocation?.saved_address_id) {
+    if (initialLocation?.isSaved || initialLocation?.is_saved || (initialLocation?.id && !String(initialLocation.id).startsWith("addr_") && !String(initialLocation.id).startsWith("search-") && !String(initialLocation.id).startsWith("loc_"))) {
       setSelectedSavedId(initialLocation.id || initialLocation.saved_address_id)
+    } else {
+      setSelectedSavedId(null)
     }
   }, [initialLocation])
+
+  useEffect(() => {
+    if (address?.formatted_address) {
+      setSelectedSavedId(null)
+    }
+  }, [address?.formatted_address, address?.latitude, address?.longitude])
 
   const activeAddr = address?.formatted_address ? address : (initialLocation?.formatted_address ? initialLocation : address)
   const hasAddress = Boolean(activeAddr?.formatted_address)
@@ -227,7 +235,12 @@ export function AddressBottomSheet({
         {/* Use my current location option */}
         <div
           style={styles.currentLocRow}
-          onClick={() => typeof onUseCurrentLocation === "function" && onUseCurrentLocation()}
+          onClick={() => {
+            setSelectedSavedId(null)
+            if (typeof onUseCurrentLocation === "function") {
+              onUseCurrentLocation()
+            }
+          }}
         >
           <div style={styles.greenIconBadge}>
             <Navigation size={17} style={{ color: "#00875A" }} />

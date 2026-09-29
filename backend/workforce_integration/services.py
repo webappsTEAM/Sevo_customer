@@ -90,6 +90,17 @@ class WorkforceIntegrationService:
         if not sr:
             return {"success": False, "error": "Booking not found"}
 
+        # Vendor and Customer operate on the same ServiceRequest row. Once a
+        # Workforce job reference is recorded, a later Celery retry must not
+        # create another allocation request merely because an earlier response
+        # was delivered twice.
+        if getattr(sr, "workforce_job_id", None):
+            return {
+                "success": True,
+                "workforce_job_id": str(sr.workforce_job_id),
+                "already_dispatched": True,
+            }
+
         # Extract logistics vehicle / fitment requirements if present
         logistics_info = None
         tier = getattr(sr, "logistics_tier", None)
@@ -136,6 +147,14 @@ class WorkforceIntegrationService:
                 "payment_status": sr.payment_status,
             },
             "cart_data": sr.cart_data,
+            # Canonical service/package snapshots are immutable booking facts,
+            # not UI labels. The Vendor also reads the shared row, but sending
+            # them across the boundary keeps the contract explicit and makes a
+            # future separated deployment safe.
+            "catalog_service_id": getattr(sr, "catalog_service_id", "") or "",
+            "package_id": getattr(sr, "package_id", "") or "",
+            "package_version": getattr(sr, "package_version", "") or "",
+            "package_display": getattr(sr, "package_display", {}) or {},
             "start_otp": sr.start_otp,
             "tracking_token": str(sr.tracking_token) if sr.tracking_token else None,
             "logistics": logistics_info,
@@ -170,7 +189,13 @@ class WorkforceIntegrationService:
         try:
 
             url = f"{WORKFORCE_API_BASE_URL}/jobs/dispatch/"
-            response = requests.post(url, json=payload, headers=cls._internal_headers(), timeout=10)
+            headers = cls._internal_headers()
+            # request_id is generated once for the shared booking and is the
+            # cross-service idempotency key. Do not use a random key here: a
+            # retry must identify the same business operation.
+            headers["Idempotency-Key"] = str(sr.request_id)
+            payload["idempotency_key"] = str(sr.request_id)
+            response = requests.post(url, json=payload, headers=headers, timeout=10)
             if response.status_code in [200, 201]:
                 data = response.json()
                 workforce_job_id = data.get("workforce_job_id") or data.get("job_id")
