@@ -9,7 +9,7 @@ from django.db.models import Q
 from companies.models import Company
 from settings_hub.models import TeamInvite
 
-from rest_framework import permissions, serializers, status
+from rest_framework import permissions, serializers, status, parsers
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -644,29 +644,50 @@ class MyReferralCodeView(APIView):
 
 class ProfileUpdateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
 
     def patch(self, request):
         try:
             from .serializers import ProfileUpdateSerializer
             data = request.data.dict() if hasattr(request.data, 'dict') else dict(request.data)
 
+            avatar_file = request.FILES.get('avatar') or request.FILES.get('image')
+            remove_flag = str(data.pop('remove_avatar', '')).lower() in ('true', '1', 'yes')
+
+            has_avatar_field = 'avatar' in request.data or 'image' in request.data
             avatar_val = data.pop('avatar', None)
             data.pop('profile_picture', None)
+            data.pop('image', None)
 
-            if avatar_val:
-                if isinstance(avatar_val, str) and avatar_val.strip():
-                    if '/media/' in avatar_val:
-                        request.user.avatar.name = avatar_val.split('/media/')[-1]
-                    else:
-                        request.user.avatar.name = avatar_val
-                    try:
-                        request.user.save(update_fields=['avatar'])
-                    except Exception:
-                        request.user.save()
-
-            avatar_file = request.FILES.get('avatar') or request.FILES.get('image')
             if avatar_file:
+                # User uploaded a new avatar file
+                if request.user.avatar:
+                    try:
+                        request.user.avatar.delete(save=False)
+                    except Exception:
+                        pass
                 request.user.avatar = avatar_file
+                try:
+                    request.user.save(update_fields=['avatar'])
+                except Exception:
+                    request.user.save()
+            elif remove_flag or (has_avatar_field and avatar_val in (None, '', 'null', 'None')):
+                # User explicitly requested to remove avatar
+                if request.user.avatar:
+                    try:
+                        request.user.avatar.delete(save=False)
+                    except Exception:
+                        pass
+                request.user.avatar = None
+                try:
+                    request.user.save(update_fields=['avatar'])
+                except Exception:
+                    request.user.save()
+            elif avatar_val and isinstance(avatar_val, str) and avatar_val.strip():
+                if '/media/' in avatar_val:
+                    request.user.avatar.name = avatar_val.split('/media/')[-1]
+                else:
+                    request.user.avatar.name = avatar_val.lstrip('/')
                 try:
                     request.user.save(update_fields=['avatar'])
                 except Exception:
@@ -675,6 +696,10 @@ class ProfileUpdateView(APIView):
             serializer = ProfileUpdateSerializer(request.user, data=data, partial=True, context={"request": request})
             if serializer.is_valid():
                 serializer.save()
+                try:
+                    request.user.refresh_from_db()
+                except Exception:
+                    pass
                 return Response({"success": True, "data": UserSerializer(request.user, context={"request": request}).data})
             return Response({"success": False, "message": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as err:

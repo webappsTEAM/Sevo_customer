@@ -55,7 +55,11 @@ class CheckoutOrchestrationTests(TestCase):
         )
 
         elec_cat = CatalogCategory.objects.create(name="Electrician", slug="electrician", is_active=True)
-        Service.objects.create(category=elec_cat, name="Fan Repair", slug="electrician", is_active=True)
+        elec_srv = Service.objects.create(category=elec_cat, name="Electrician Services", slug="electrician", is_active=True)
+        Package.objects.create(
+            service=elec_srv, name="Fan Repair", slug="electrician-fan-repair",
+            base_price=Decimal("150.00"), status="ACTIVE",
+        )
 
         from datetime import timedelta
         self.service_payload = {
@@ -67,6 +71,8 @@ class CheckoutOrchestrationTests(TestCase):
             "latitude": 12.7409,
             "longitude": 77.8253,
             "preferred_date": (timezone.localdate() + timedelta(days=1)).strftime("%Y-%m-%d"),
+            "preferred_time": "10:00 AM",
+            "time_slot": "10:00 AM - 12:00 PM",
             "cart_data": [{"id": "electrician-fan-repair", "name": "Fan Repair", "quantity": 1}],
         }
 

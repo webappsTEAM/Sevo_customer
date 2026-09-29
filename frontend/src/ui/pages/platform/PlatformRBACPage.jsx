@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react"
 import { Shield, Check, Save, RefreshCw, AlertCircle, Info } from "lucide-react"
-import { apiRequest } from "../../../api/client.js"
+import { apiRequest, extractApiErrorMessage } from "../../../api/client.js"
 
 export default function PlatformRBACPage() {
   const [modules, setModules] = useState([])
@@ -24,7 +24,7 @@ export default function PlatformRBACPage() {
         setSelectedRole(res.roles[0])
       }
     } catch (err) {
-      setError(err?.message || "Failed to load RBAC permission matrix.")
+      setError(extractApiErrorMessage(err, "Failed to load RBAC permission matrix."))
     } finally {
       setLoading(false)
     }
@@ -64,7 +64,7 @@ export default function PlatformRBACPage() {
       })
       setMessage(res.message || "Permissions saved successfully!")
     } catch (err) {
-      setError(err?.message || "Failed to save RBAC matrix.")
+      setError(extractApiErrorMessage(err, "Failed to save RBAC matrix."))
     } finally {
       setSaving(false)
     }

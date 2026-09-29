@@ -78,7 +78,11 @@ export function CustomerTrackingStatusCard({
     data?.service_category?.toLowerCase().includes("transport")
   )
   const logisticsLeg = (data?.logistics?.leg || "").toUpperCase()
-  const stops = Array.isArray(data?.logistics?.stops) ? data.logistics.stops : []
+  // Progress counts the intermediate stops the customer added; pickup and drop
+  // are the trip's ends and have their own status steps.
+  const stops = (Array.isArray(data?.logistics?.stops) ? data.logistics.stops : []).filter(
+    (s) => !["PICKUP", "DROP"].includes(String(s?.stop_type || "").toUpperCase()),
+  )
   const completedStops = stops.filter((s) => s.completed_at).length
   const totalStops = stops.length
 
@@ -135,13 +139,22 @@ export function CustomerTrackingStatusCard({
     dynamicSub = "Reached delivery site — unloading items now"
     dynamicTheme = "blue"
   } else if (logisticsLeg === "EN_ROUTE_DROP" || logisticsLeg === "IN_TRANSIT") {
-    dynamicTag = "EN ROUTE TO DESTINATION"
-    dynamicTitle = `${techName || "Driver"} is en route to drop destination`
+    // Multi-stop trip: the driver's next target may be an intermediate stop, not the final drop
+    // (the tracking payload's `destination` says which -- see _build_tracking_payload).
+    const nextIsStop = String(data?.destination?.stop_type || "").toUpperCase() === "WAYPOINT"
+    const stopNumber = nextIsStop
+      ? stops.filter((s) => String(s.stop_type || "").toUpperCase() === "WAYPOINT").findIndex((s) => s.sequence === data.destination.stop_sequence) + 1
+      : 0
+    const targetLabel = nextIsStop ? (stopNumber > 0 ? `Stop ${stopNumber}` : "next stop") : "drop"
+    dynamicTag = nextIsStop ? `EN ROUTE TO ${targetLabel.toUpperCase()}` : "EN ROUTE TO DESTINATION"
+    dynamicTitle = nextIsStop
+      ? `${techName || "Driver"} is heading to ${targetLabel}`
+      : `${techName || "Driver"} is en route to drop destination`
     dynamicSub = (
       <>
         {cleanDist && <strong>{cleanDist}</strong>}
         {cleanDist && cleanEta && <span className="ltp-ftc-sep">·</span>}
-        {cleanEta ? <strong>~{cleanEta} ETA to drop</strong> : <span>In transit to destination…</span>}
+        {cleanEta ? <strong>~{cleanEta} ETA to {targetLabel}</strong> : <span>In transit to {nextIsStop ? targetLabel : "destination"}…</span>}
       </>
     )
     dynamicTheme = "orange"
@@ -221,7 +234,7 @@ export function CustomerTrackingStatusCard({
             {dynamicTag}
           </span>
           <div className="flex items-center gap-2">
-            {totalStops > 1 && (
+            {totalStops > 0 && (
               <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-900/10 text-slate-700">
                 Stops: {completedStops}/{totalStops}
               </span>

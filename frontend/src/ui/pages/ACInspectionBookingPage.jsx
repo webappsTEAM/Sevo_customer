@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Wrench,
   ShieldCheck,
@@ -95,6 +95,7 @@ function getDefaultBookingDateTime() {
  */
 export function ACInspectionBookingPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth?.() || {};
 
   const [acDetails, setAcDetails] = useState({ type: "Split", brand: "LG", capacity: "1.5 Ton", quantity: 1 });
@@ -117,6 +118,55 @@ export function ACInspectionBookingPage() {
   const [selectedTime, setSelectedTime] = useState(defaultDateTime.time);
 
   const availableSlots = useMemo(() => getAvailableSlots(selectedDate), [selectedDate]);
+
+  // Dynamic server slot state connected to Time Slot Management
+  const [serverSlots, setServerSlots] = useState(null);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [isDateClosed, setIsDateClosed] = useState(false);
+  const [closedReason, setClosedReason] = useState("");
+
+  useEffect(() => {
+    if (!selectedDate) return;
+    let isCancelled = false;
+    setSlotsLoading(true);
+
+    apiRequest(`/services/resolve/time-slots/?date=${selectedDate}&service=ac-service-cleaning&category=ac-appliance`)
+      .then((res) => {
+        if (isCancelled) return;
+        if (res?.success && res.data) {
+          if (!res.data.is_open) {
+            setIsDateClosed(true);
+            setClosedReason(res.data.reason || "AC diagnostic visits are closed on this date.");
+            setServerSlots([]);
+            setSelectedTime("");
+          } else {
+            setIsDateClosed(false);
+            setClosedReason("");
+            const avail = (res.data.all_slots || [])
+              .filter((s) => s.available)
+              .map((s) => s.time || s.value);
+            setServerSlots(avail);
+            if (avail.length > 0) {
+              if (!selectedTime || !avail.includes(selectedTime)) {
+                setSelectedTime(avail[0]);
+              }
+            } else {
+              setSelectedTime("");
+            }
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not load dynamic AC slots, falling back to defaults", err);
+      })
+      .finally(() => {
+        if (!isCancelled) setSlotsLoading(false);
+      });
+
+    return () => { isCancelled = true; };
+  }, [selectedDate]);
+
+  const effectiveSlots = serverSlots !== null ? serverSlots : availableSlots;
 
   function handleDateChange(newDate) {
     setSelectedDate(newDate);
@@ -151,23 +201,27 @@ export function ACInspectionBookingPage() {
   const [showSummary, setShowSummary] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [inspectionConfig, setInspectionConfig] = useState(null);
   const [dynamicFee, setDynamicFee] = useState(() => getDynamicEstimationFee() || 199);
 
   useEffect(() => {
     let isMounted = true;
-    async function loadDynamicFee() {
+    async function loadDynamicConfig() {
       try {
         const res = await apiRequest("/service-requests/ac-inspection/rate-card/");
-        if (isMounted && res?.data?.diagnostic_fee != null) {
-          const loadedFee = Number(res.data.diagnostic_fee);
-          setDynamicFee(loadedFee);
-          setDynamicEstimationFee(loadedFee);
+        if (isMounted && res?.data) {
+          setInspectionConfig(res.data);
+          if (res.data.diagnostic_fee != null) {
+            const loadedFee = Number(res.data.diagnostic_fee);
+            setDynamicFee(loadedFee);
+            setDynamicEstimationFee(loadedFee);
+          }
         }
       } catch (err) {
-        console.warn("[ACInspectionBookingPage] Failed to fetch dynamic fee:", err);
+        console.warn("[ACInspectionBookingPage] Failed to fetch dynamic config:", err);
       }
     }
-    loadDynamicFee();
+    loadDynamicConfig();
     return () => { isMounted = false; };
   }, []);
 
@@ -177,10 +231,12 @@ export function ACInspectionBookingPage() {
   );
 
   const trimmedEmail = contact.email.trim();
-  const isEmailValid = !trimmedEmail || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail);
-  const isSlotValid = availableSlots.length > 0 && availableSlots.includes(selectedTime);
+  const isSlotValid = !isDateClosed && effectiveSlots.length > 0 && Boolean(selectedTime);
+
+  const isInspectionEnabled = inspectionConfig?.is_active !== false;
 
   const canReview =
+    isInspectionEnabled &&
     contact.name.trim().length > 1 &&
     /^\d{10}$/.test(contact.phone.trim()) &&
     address.trim().length > 4 &&
@@ -244,10 +300,11 @@ export function ACInspectionBookingPage() {
     const inspectionCartItem = {
       id: inspectionCartId,
       db_id: inspectionCartId,
-      name: "AC Inspection & Diagnostic",
+      name: inspectionConfig?.title || "AC Inspection & Diagnostic Visit",
       price: dynamicFee,
       quantity: qty,
       duration: "45 mins",
+      image: inspectionConfig?.image || "media/catalog/packages/appliance_cleaning_thumb.webp",
       ac_brand: acDetails.brand,
       ac_type: (acDetails.type || "").toUpperCase().includes("WINDOW") ? "WINDOW" : "SPLIT",
       ac_type_label: acDetails.type || "Split AC",
@@ -289,11 +346,31 @@ export function ACInspectionBookingPage() {
         {/* Back + Header */}
         <button
           type="button"
-          onClick={() => navigate(routes.landing)}
+          onClick={() => {
+            const isPreview = searchParams.get("preview") === "true" || (typeof window !== "undefined" && window.parent !== window);
+            const isEdit = searchParams.get("edit") === "true";
+            if (window.history.length > 1) {
+              navigate(-1);
+            } else {
+              const query = isPreview ? `?preview=true${isEdit ? "&edit=true" : ""}` : "";
+              navigate(`${routes.landing}${query}`);
+            }
+          }}
           className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 mb-4 cursor-pointer"
         >
           <ArrowLeft size={14} /> Back to Home
         </button>
+
+        {/* Disabled Notice */}
+        {!isInspectionEnabled && (
+          <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold flex items-center gap-3 mb-5 shadow-xs">
+            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+            <div>
+              <span className="font-bold">AC Inspection is Currently Unavailable: </span>
+              <span>This diagnostic service is temporarily offline and cannot be booked right now. Please check back later.</span>
+            </div>
+          </div>
+        )}
 
         <div className="bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-6 mb-5 flex items-start gap-4 shadow-xs">
           <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
@@ -301,12 +378,21 @@ export function ACInspectionBookingPage() {
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">{ESTIMATION_TITLE}</h1>
+              <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
+                {inspectionConfig?.title || ESTIMATION_TITLE}
+              </h1>
               <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2.5 py-1 rounded-full">
-                {ESTIMATION_SUBTITLE}
+                {inspectionConfig?.subtitle ? "Diagnostic Visit" : ESTIMATION_SUBTITLE}
               </span>
+              {!isInspectionEnabled && (
+                <span className="text-[10px] font-black uppercase tracking-wider text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-full">
+                  Offline
+                </span>
+              )}
             </div>
-            <p className="text-xs text-slate-500 font-medium mt-1">{ESTIMATION_DESCRIPTION}</p>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              {inspectionConfig?.subtitle || ESTIMATION_DESCRIPTION}
+            </p>
           </div>
           <div className="text-right shrink-0">
             <div className="text-[10px] text-slate-400 font-bold uppercase">Inspection Fee</div>
@@ -455,31 +541,38 @@ export function ACInspectionBookingPage() {
               />
             </div>
             <div>
-              <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block mb-1.5">
-                <Clock size={11} className="inline -mt-0.5 mr-1" /> Preferred Slot
+              <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block mb-1.5 flex items-center justify-between">
+                <span><Clock size={11} className="inline -mt-0.5 mr-1" /> Preferred Slot</span>
+                {slotsLoading && <span className="text-[10px] text-slate-400 font-semibold normal-case">Checking live slots...</span>}
               </label>
               <select
                 value={selectedTime}
+                disabled={isDateClosed || effectiveSlots.length === 0}
                 onChange={(e) => setSelectedTime(e.target.value)}
-                className="w-full h-11 bg-slate-50 border border-slate-200/90 rounded-xl px-3.5 text-xs font-bold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-all"
+                className="w-full h-11 bg-slate-50 border border-slate-200/90 rounded-xl px-3.5 text-xs font-bold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-all disabled:opacity-50"
               >
-                {availableSlots.length > 0 ? (
-                  availableSlots.map((slot) => (
+                {effectiveSlots.length > 0 ? (
+                  effectiveSlots.map((slot) => (
                     <option key={slot} value={slot}>
                       {slot}
                     </option>
                   ))
                 ) : (
                   <option value="" disabled>
-                    No slots available today
+                    {isDateClosed ? "Service closed on this date" : "No slots available on this date"}
                   </option>
                 )}
               </select>
             </div>
           </div>
-          {availableSlots.length === 0 && (
+          {isDateClosed && (
+            <p className="text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200/70 rounded-xl px-3 py-2 mt-2">
+              {closedReason || "AC diagnostic visits are not available on this date. Please pick another date above."}
+            </p>
+          )}
+          {!isDateClosed && effectiveSlots.length === 0 && (
             <p className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200/70 rounded-xl px-3 py-2 mt-2">
-              All technician visit slots for today have closed. Please select tomorrow or a later date above.
+              All technician visit slots for this date have closed or are full. Please select tomorrow or a later date above.
             </p>
           )}
         </div>

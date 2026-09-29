@@ -7,12 +7,17 @@ import {
   Settings, Home, MapPin, ChevronRight, Info, Check,
   Sparkles, Award, Tag, Headphones, ArrowRight, X,
   Layers, Star, ChevronLeft, SlidersHorizontal, AlertCircle,
-  Trash2, Calculator, Calendar
+  Trash2, Calculator, Calendar, Eye, EyeOff, ExternalLink, Loader2
 } from "lucide-react"
 import { resolveImageUrl } from "../../utils/imageUrl.js"
 import { apiRequest } from "../../api/client.js"
+import { useAuth } from "../../state/auth/useAuth.js"
+import { isSuperAdmin } from "../../auth/authorization.js"
 import { useEditMode } from "../../state/editMode/useEditMode.js"
-import { EditableText, EditableImage } from "./SuperAdminEditControls.jsx"
+import { EditableText, EditableImage, useCanEditCustomerUI } from "./SuperAdminEditControls.jsx"
+import { ACInspectionDetailsModal } from "./estimation/ACInspectionDetailsModal.jsx"
+import { ACInspectionCustomizerModal } from "./estimation/ACInspectionCustomizerModal.jsx"
+import { fetchACInspectionConfig, DEFAULT_AC_INSPECTION_CONFIG, updateACConfigDB } from "../../services/estimation/acInspectionData.js"
 import { getCustomerSelectedAddress } from "../../utils/customerLocationStorage.js"
 
 // Feature icons map for dynamic icon resolution
@@ -62,6 +67,34 @@ export function ModernServiceCatalogView({
   const [selectedPackage, setSelectedPackage] = useState(null)
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false)
   const [detailsPackage, setDetailsPackage] = useState(null) // package currently shown in the "See details" modal
+  const [isChangeServiceModalOpen, setIsChangeServiceModalOpen] = useState(false)
+  const [showAcInspectionModal, setShowAcInspectionModal] = useState(false)
+  const [showInspectionDetailsModal, setShowInspectionDetailsModal] = useState(false)
+  const [showInspectionCustomizerModal, setShowInspectionCustomizerModal] = useState(false)
+  const [inspectionConfig, setInspectionConfig] = useState(() => {
+    try {
+      const cached = localStorage.getItem("calservices_ac_inspection_config")
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        return { ...DEFAULT_AC_INSPECTION_CONFIG, ...parsed }
+      }
+    } catch (e) {}
+    return DEFAULT_AC_INSPECTION_CONFIG
+  })
+
+  const [isInspectionSelected, setIsInspectionSelected] = useState(() => {
+    const s = (searchParams.get("subtab") || searchParams.get("subTab") || "").toLowerCase()
+    if (!s.includes("inspection")) return false
+    try {
+      const cached = localStorage.getItem("calservices_ac_inspection_config")
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        if (parsed.is_active === false) return false
+      }
+    } catch (e) {}
+    return true
+  })
+
 
   // categoryProp (from LandingPage's URL-based lookup against the old static
   // categoriesData.js list) almost never matches a real category for
@@ -137,7 +170,12 @@ export function ModernServiceCatalogView({
   // this page via the admin panel's Edit Preview iframe), package name,
   // description, price and image become inline-editable right here on the
   // live catalog page instead of only being changeable from the admin panel.
+  const { user } = useAuth()
   const { isEditMode: serviceEditMode } = useEditMode()
+  const canEditCustomerUI = useCanEditCustomerUI()
+  const isSuperAdminOrStaff = Boolean(isSuperAdmin(user) || ["admin", "staff", "manager", "super_admin", "superadmin"].includes(String(user?.role || "").toLowerCase()))
+  const canSuperAdminEdit = Boolean(canEditCustomerUI || serviceEditMode || isSuperAdminOrStaff)
+
 
   const handleSaveServiceField = async (item, field, value) => {
     if (!item?.id) return
@@ -508,21 +546,40 @@ export function ModernServiceCatalogView({
         const aliasSubTab = urlSubTab ? (SUBTAB_ALIASES[normKey(urlSubTab)] || normKey(urlSubTab)) : ""
         let initialSub = initialSubFromCatKey || null
         if (urlSubTab) {
-          const found = matchedSubs.find(s => {
-            const sNormName = normKey(s.name)
-            const sNormSlug = normKey(s.slug)
-            return (
-              sNormName === normKey(urlSubTab) ||
-              sNormSlug === normKey(urlSubTab) ||
-              sNormName === aliasSubTab ||
-              sNormSlug === aliasSubTab ||
-              sNormName.includes(aliasSubTab) ||
-              sNormSlug.includes(aliasSubTab) ||
-              aliasSubTab.includes(sNormSlug) ||
-              (sNormSlug.length > 3 && aliasSubTab.includes(sNormSlug))
-            )
-          })
-          if (found) initialSub = found
+          const isUrlInspection = urlSubTab.toLowerCase().includes("inspection")
+          const isConfigDisabled = (() => {
+            try {
+              const c = localStorage.getItem("calservices_ac_inspection_config")
+              if (c) return JSON.parse(c).is_active === false
+            } catch (e) {}
+            return false
+          })()
+
+          if (isUrlInspection && !isConfigDisabled) {
+            setIsInspectionSelected(true)
+            initialSub = null
+          } else {
+            setIsInspectionSelected(false)
+            const found = matchedSubs.find(s => {
+              const sNormName = normKey(s.name)
+              const sNormSlug = normKey(s.slug)
+              return (
+                sNormName === normKey(urlSubTab) ||
+                sNormSlug === normKey(urlSubTab) ||
+                sNormName === aliasSubTab ||
+                sNormSlug === aliasSubTab ||
+                sNormName.includes(aliasSubTab) ||
+                sNormSlug.includes(aliasSubTab) ||
+                aliasSubTab.includes(sNormSlug) ||
+                (sNormSlug.length > 3 && aliasSubTab.includes(sNormSlug))
+              )
+            })
+            if (found) {
+              initialSub = found
+            } else if (isUrlInspection && matchedSubs.length > 0) {
+              initialSub = matchedSubs[0]
+            }
+          }
         }
         if (!initialSub) {
           // Default to first subservice that actually has packages, otherwise fallback to first
@@ -653,6 +710,173 @@ export function ModernServiceCatalogView({
       onCheckout(cartItems)
     }
   }
+  const handleProceedToCheckout = handleProceedToSchedule
+
+  useEffect(() => {
+    if (isAcApplianceCategory) {
+      fetchACInspectionConfig().then(cfg => {
+        if (cfg) setInspectionConfig(cfg)
+      })
+    }
+
+    const handleConfigUpdate = (e) => {
+      if (e?.detail) {
+        setInspectionConfig(e.detail)
+      } else {
+        fetchACInspectionConfig().then(cfg => {
+          if (cfg) setInspectionConfig(cfg)
+        })
+      }
+    }
+
+    window.addEventListener("ac_inspection_config_updated", handleConfigUpdate)
+    window.addEventListener("storage", (e) => {
+      if (e.key === "calservices_ac_inspection_config") {
+        fetchACInspectionConfig().then(cfg => {
+          if (cfg) setInspectionConfig(cfg)
+        })
+      }
+    })
+
+    return () => {
+      window.removeEventListener("ac_inspection_config_updated", handleConfigUpdate)
+    }
+  }, [isAcApplianceCategory])
+
+  const configuredInspectionFee = useMemo(() => {
+    if (inspectionConfig?.fee) return Number(inspectionConfig.fee)
+    const pkg = (packages || []).find(
+      p => p.slug === "ac-inspection" ||
+           p.id === "serv-hvac-ac-inspection" ||
+           p.id === "hvac-ac-inspection" ||
+           (p.name && p.name.toLowerCase().includes("inspection"))
+    )
+    return Number(pkg?.offer_price || pkg?.price || pkg?.base_price) || 199
+  }, [packages, inspectionConfig])
+
+  const inspectionCartItem = useMemo(() => {
+    return (cartItems || []).find(
+      c => c.id === "serv-hvac-ac-inspection" || c.jobType === "ESTIMATION" || c.db_id === "serv-hvac-ac-inspection"
+    )
+  }, [cartItems])
+
+  const inspectionQty = inspectionCartItem?.quantity || 0
+
+  const setInspectionCartQty = (qty) => {
+    const inspectionCartId = "serv-hvac-ac-inspection"
+    const unitPrice = configuredInspectionFee || 199
+
+    updateCart((prev) => {
+      const list = Array.isArray(prev) ? prev : []
+      const remainingCart = list.filter(
+        c => c.id !== inspectionCartId && c.id !== "hvac-ac-inspection" && c.db_id !== inspectionCartId && c.jobType !== "ESTIMATION"
+      )
+
+      if (qty <= 0) {
+        return remainingCart
+      }
+
+      const item = {
+        id: inspectionCartId,
+        db_id: inspectionCartId,
+        name: inspectionConfig?.title || "AC Inspection & Diagnostic",
+        price: unitPrice,
+        platform_fee: 29,
+        quantity: qty,
+        duration: "45 mins",
+        image: inspectionConfig?.image || "media/catalog/packages/appliance_cleaning_thumb.webp",
+        ac_brand: "",
+        ac_type: "SPLIT",
+        ac_type_label: "Split AC",
+        ac_capacity: "1.5_TON",
+        ac_quantity: qty,
+        ac_images: [],
+        ac_notes: "",
+        customer_symptom: "AC Inspection requested",
+        primaryFile: null,
+        primaryPreview: null,
+        description: `Split AC • ${qty} Unit${qty > 1 ? 's' : ''}`,
+        categoryName: category?.name || "AC & Appliances",
+        category_id: category?.id || "acappliance",
+        categorySlug: category?.slug || "acappliance",
+        jobType: "ESTIMATION",
+      }
+
+      return [...remainingCart, item]
+    })
+  }
+
+  const handleSelectInspection = () => {
+    if (!isInspectionEnabled) return
+    setIsInspectionSelected(true)
+    setActiveSubService(null)
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.set("subtab", "inspection")
+      next.set("subTab", "inspection")
+      return next
+    }, { replace: true })
+  }
+
+  const handleAcInspectionSubmit = (inspectionData) => {
+    const qty = Math.max(1, Number(inspectionData.quantity) || 1)
+    setInspectionCartQty(qty)
+  }
+
+  const isInspectionEnabled = inspectionConfig?.is_active !== false
+  const effectiveIsInspectionSelected = Boolean(isInspectionSelected && isInspectionEnabled)
+
+  useEffect(() => {
+    if (!isInspectionEnabled) {
+      if (isInspectionSelected) {
+        setIsInspectionSelected(false)
+      }
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev)
+        const sub = (next.get("subtab") || next.get("subTab") || "").toLowerCase()
+        if (sub.includes("inspection")) {
+          next.delete("subtab")
+          next.delete("subTab")
+          return next
+        }
+        return prev
+      }, { replace: true })
+
+      if (!activeSubService && services.length > 0) {
+        const firstAc = services.find(s => isACServiceItem(s)) || services[0]
+        setActiveSubService(firstAc)
+      }
+    }
+  }, [isInspectionEnabled, isInspectionSelected, activeSubService, services, setSearchParams])
+
+  const [isTogglingInspectionActive, setIsTogglingInspectionActive] = useState(false)
+
+  const handleToggleInspectionActive = async () => {
+    setIsTogglingInspectionActive(true)
+    const nextState = inspectionConfig?.is_active === false ? true : false
+    try {
+      const res = await updateACConfigDB({ is_active: nextState })
+      const updatedConfig = (res?.success && res.data) ? res.data : { ...inspectionConfig, is_active: nextState }
+      setInspectionConfig(updatedConfig)
+      if (!nextState) {
+        setIsInspectionSelected(false)
+        if (!activeSubService && services.length > 0) {
+          const firstAc = services.find(s => isACServiceItem(s)) || services[0]
+          setActiveSubService(firstAc)
+        }
+      }
+    } catch (e) {
+      console.error("Failed to toggle AC inspection active state:", e)
+    } finally {
+      setIsTogglingInspectionActive(false)
+    }
+  }
+
+  const handleDirectBookInspection = () => {
+    if (!isInspectionEnabled) return
+    handleSelectInspection()
+  }
+
 
   return (
     <div className="w-full min-h-screen bg-[#F8FAF9] text-slate-800 pb-28 lg:pb-16">
@@ -664,7 +888,7 @@ export function ModernServiceCatalogView({
             <button
               type="button"
               onClick={onClose}
-              className="hover:text-emerald-700 transition-colors shrink-0"
+              className="hover:text-emerald-700 transition-colors shrink-0 cursor-pointer"
             >
               Home
             </button>
@@ -750,12 +974,13 @@ export function ModernServiceCatalogView({
               {/* Mobile Horizontal Subservice Pill Tab Bar (Sticky on mobile, Blinkit style) */}
               <div className="lg:hidden w-full overflow-x-auto scrollbar-none py-1.5 sm:py-2 -mx-3 px-3 sm:mx-0 sm:px-0 flex items-center gap-1.5 sm:gap-2 border-b border-slate-200/80 bg-white/95 backdrop-blur-md sticky top-0 z-20">
                 {services.map(sub => {
-                  const isSelected = activeSubService?.id === sub.id
+                  const isSelected = !effectiveIsInspectionSelected && activeSubService?.id === sub.id
                   return (
                     <button
                       key={sub.id}
                       type="button"
                       onClick={() => {
+                        setIsInspectionSelected(false)
                         setActiveSubService(sub)
                         setSearchParams((prev) => {
                           const next = new URLSearchParams(prev)
@@ -781,11 +1006,15 @@ export function ModernServiceCatalogView({
                     </button>
                   )
                 })}
-                {isAcApplianceCategory && (
+                {isAcApplianceCategory && isInspectionEnabled && (
                   <button
                     type="button"
-                    onClick={() => navigate("/ac-inspection")}
-                    className="flex items-center gap-1 px-3.5 py-1.5 rounded-full border border-amber-300 bg-amber-50 text-amber-800 text-xs font-bold shrink-0 shadow-xs cursor-pointer"
+                    onClick={handleDirectBookInspection}
+                    className={`flex items-center gap-1 px-3.5 py-1.5 rounded-full border text-xs font-bold shrink-0 shadow-xs cursor-pointer transition-all ${
+                      effectiveIsInspectionSelected
+                        ? "border-amber-500 bg-amber-500 text-slate-950 font-black ring-2 ring-amber-400/30"
+                        : "border-amber-300 bg-amber-50 text-amber-800"
+                    }`}
                   >
                     <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
                     <span>Book Inspection</span>
@@ -799,7 +1028,7 @@ export function ModernServiceCatalogView({
                   Services
                 </h3>
                 {services.map(sub => {
-                  const isSelected = activeSubService?.id === sub.id
+                  const isSelected = !effectiveIsInspectionSelected && activeSubService?.id === sub.id
                   const IconComp = resolveServiceIcon(sub.name)
 
                   return (
@@ -807,6 +1036,7 @@ export function ModernServiceCatalogView({
                       key={sub.id}
                       type="button"
                       onClick={() => {
+                        setIsInspectionSelected(false)
                         setActiveSubService(sub)
                         setSearchParams((prev) => {
                           const next = new URLSearchParams(prev)
@@ -848,8 +1078,8 @@ export function ModernServiceCatalogView({
                 {isAcApplianceCategory && (
                   <button
                     type="button"
-                    onClick={() => navigate("/ac-inspection")}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-dashed border-amber-300 bg-amber-50/60 hover:bg-amber-50 transition-all cursor-pointer text-left"
+                    onClick={handleDirectBookInspection}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all cursor-pointer text-left ${effectiveIsInspectionSelected ? "border-amber-500 bg-amber-100/80 shadow-xs ring-2 ring-amber-400/30" : "border-dashed border-amber-300 bg-amber-50/60 hover:bg-amber-50"}`}
                   >
                     <div className="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center bg-white text-amber-600 border border-amber-200 shadow-xs">
                       <AlertCircle className="w-5 h-5" />
@@ -966,6 +1196,7 @@ export function ModernServiceCatalogView({
                       key={sub.id}
                       type="button"
                       onClick={() => {
+                        setIsInspectionSelected(false)
                         setActiveSubService(sub)
                         setSearchParams((prev) => {
                           const next = new URLSearchParams(prev)
@@ -992,15 +1223,25 @@ export function ModernServiceCatalogView({
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-                    {isGoodsTransportCategory ? "Choose Your Vehicle" : "Choose a Package"}
+                    {isGoodsTransportCategory
+                      ? "Choose Your Vehicle"
+                      : effectiveIsInspectionSelected
+                        ? (inspectionConfig?.title || "AC Inspection & Diagnostic Visit")
+                        : "Choose a Package"}
+
                   </h3>
                   {isGoodsTransportCategory && (
                     <p className="text-xs text-slate-500 font-medium mt-0.5">
                       Select the right vehicle for your goods
                     </p>
                   )}
+                  {effectiveIsInspectionSelected && (
+                    <p className="text-xs text-slate-500 font-medium mt-0.5">
+                      {inspectionConfig?.subtitle || "Certified doorstep diagnostic and itemized quote before repair"}
+                    </p>
+                  )}
                 </div>
-                {currentServicePackages.length > 1 && (
+                {!effectiveIsInspectionSelected && currentServicePackages.length > 1 && (
                   <button
                     type="button"
                     onClick={() => setIsCompareModalOpen(true)}
@@ -1019,11 +1260,223 @@ export function ModernServiceCatalogView({
                   category keeps the horizontal-row layout. Same underlying
                   data/handlers (getCartQty/addToCart/setDetailsPackage/etc)
                   either way, just a different skin. */}
-              <div className={isGoodsTransportCategory
-                ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-                : "flex flex-col gap-3.5"
-              }>
-                {currentServicePackages.map(pkg => {
+              {isAcApplianceCategory && effectiveIsInspectionSelected ? (
+                <div className="flex flex-col gap-3.5">
+                  {/* ── Admin Storefront Quick Control Strip ── */}
+                  {canSuperAdminEdit && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-50 via-orange-50/50 to-white border border-amber-200/90 shadow-2xs">
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black ${
+                          isInspectionEnabled ? "bg-emerald-600 text-white" : "bg-slate-300 text-slate-700"
+                        }`}>
+                          <Wrench className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-black text-slate-900">AC Inspection Control:</span>
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                              isInspectionEnabled
+                                ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                : "bg-slate-200 text-slate-700 border border-slate-300"
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${isInspectionEnabled ? "bg-emerald-600 animate-pulse" : "bg-slate-500"}`} />
+                              {isInspectionEnabled ? "Active & Live on Storefront" : "Disabled on Storefront"}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                            {isInspectionEnabled
+                              ? "Customers can view details and book diagnostic visits directly."
+                              : "Service is disabled on storefront. Regular customers cannot book this."}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Instant Enable / Disable Storefront Toggle */}
+                        <button
+                          type="button"
+                          onClick={handleToggleInspectionActive}
+                          disabled={isTogglingInspectionActive}
+                          className={`px-3.5 py-1.5 rounded-xl text-xs font-black shadow-xs transition-all flex items-center gap-1.5 cursor-pointer ${
+                            isInspectionEnabled
+                              ? "bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100"
+                              : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-600/20"
+                          }`}
+                          title={isInspectionEnabled ? "Disable AC inspection on live website" : "Enable AC inspection on live website"}
+                        >
+                          {isTogglingInspectionActive ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : isInspectionEnabled ? (
+                            <>
+                              <EyeOff className="w-3.5 h-3.5" />
+                              <span>Disable on Storefront</span>
+                            </>
+                          ) : (
+                            <>
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>Enable on Storefront</span>
+                            </>
+                          )}
+                        </button>
+
+                        {/* Quick Customize Modal Button */}
+                        <button
+                          type="button"
+                          onClick={() => setShowInspectionCustomizerModal(true)}
+                          className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
+                          title="Customize diagnostic fees, descriptions, and checklists"
+                        >
+                          <Settings className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Customize Details</span>
+                        </button>
+
+                        <a
+                          href="/catalog/ac-inspection-rates"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors flex items-center gap-1"
+                          title="Open full rate card management page"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">Rate Card</span>
+                        </a>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Notice if disabled */}
+                  {!isInspectionEnabled && (
+                    <div className="p-3.5 rounded-2xl bg-amber-50/90 border border-amber-200 text-amber-900 text-xs font-medium flex items-center gap-2.5">
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <div>
+                        <span className="font-bold">Inspection Visits Currently Disabled: </span>
+                        <span>Customers cannot book this visit right now. Use the toggle above to enable it whenever ready.</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Inspection Card: Matching other services simple proper layout ── */}
+                  <div
+                    className={`relative bg-white rounded-2xl p-4 sm:p-5 border transition-all flex flex-col sm:flex-row items-start sm:items-center gap-4 ${
+                      !isInspectionEnabled
+                        ? "border-slate-200 opacity-80 bg-slate-50/50"
+                        : inspectionQty > 0
+                          ? "border-emerald-600 shadow-xs ring-1 ring-emerald-500/30"
+                          : "border-slate-200/90 hover:border-slate-300 hover:shadow-2xs"
+                    }`}
+                  >
+                    {/* Thumbnail Image */}
+                    <div className="w-full sm:w-32 h-32 sm:h-28 shrink-0 rounded-xl overflow-hidden bg-slate-50 border border-slate-100 flex items-center justify-center relative">
+                      <img
+                        src={resolveImageUrl(inspectionConfig?.image || "media/catalog/packages/appliance_cleaning_thumb.webp")}
+                        alt={inspectionConfig?.title || "AC Inspection & Diagnostic Visit"}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = "/media/catalog/packages/appliance_cleaning_thumb.webp";
+                        }}
+                      />
+                      {!isInspectionEnabled && (
+                        <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-2xs flex items-center justify-center">
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-white/90 text-slate-800 shadow-xs">
+                            Disabled
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-sm sm:text-base font-black text-slate-900 leading-snug">
+                          {inspectionConfig?.title || "AC Inspection & Diagnostic Visit"}
+                        </h4>
+                        {!isInspectionEnabled && (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-slate-100 text-slate-600 border border-slate-200">
+                            Offline
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 font-normal line-clamp-2 leading-relaxed">
+                        {inspectionConfig?.subtitle || "Certified technician visits with diagnostic instruments, inspects cooling, gas pressure & electricals, and provides an itemized quotation before repair."}
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            setShowInspectionDetailsModal(true);
+                          }}
+                          className="relative z-10 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 underline decoration-indigo-200 underline-offset-2 cursor-pointer"
+                        >
+                          See details
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Price + Action matching other services */}
+                    <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 sm:w-48 shrink-0 sm:border-l sm:border-slate-100 sm:pl-4 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                      <div className="flex items-baseline gap-2 sm:flex-col sm:items-end sm:gap-0.5">
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-lg font-black text-slate-900">
+                            ₹{configuredInspectionFee}
+                          </span>
+                        </div>
+                        <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide">
+                          Diagnostic Fee
+                        </div>
+                      </div>
+
+                      {/* Quantity stepper / + Add button matching other services */}
+                      {!isInspectionEnabled ? (
+                        <button
+                          type="button"
+                          disabled
+                          className="py-2 px-4 sm:w-full rounded-xl font-bold text-xs bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed text-center"
+                        >
+                          Unavailable
+                        </button>
+                      ) : inspectionQty === 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => setInspectionCartQty(1)}
+                          className="py-2 px-4 sm:w-full rounded-xl font-bold text-xs transition-colors cursor-pointer whitespace-nowrap border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-center"
+                        >
+                          + Add
+                        </button>
+                      ) : (
+                        <div className="flex items-center justify-between gap-2 sm:w-full py-1.5 px-2 rounded-xl bg-emerald-600 text-white">
+                          <button
+                            type="button"
+                            onClick={() => setInspectionCartQty(inspectionQty - 1)}
+                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 font-black text-sm cursor-pointer transition-colors"
+                            aria-label="Decrease quantity"
+                          >
+                            −
+                          </button>
+                          <span className="text-xs font-black min-w-[1.25rem] text-center">
+                            {inspectionQty}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setInspectionCartQty(inspectionQty + 1)}
+                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 font-black text-sm cursor-pointer transition-colors"
+                            aria-label="Increase quantity"
+                          >
+                            +
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className={isGoodsTransportCategory
+                  ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                  : "flex flex-col gap-3.5"
+                }>
+                  {currentServicePackages.map(pkg => {
                   const qty = getCartQty(pkg)
                   const isSelected = qty > 0
 
@@ -1352,6 +1805,7 @@ export function ModernServiceCatalogView({
                   )
                 })}
               </div>
+            )}
             </div>
 
           </div>
@@ -1906,6 +2360,27 @@ export function ModernServiceCatalogView({
             </button>
           </div>
         </div>
+      )}
+      {/* AC Inspection Modals */}
+      {showInspectionDetailsModal && (
+        <ACInspectionDetailsModal
+          isOpen={showInspectionDetailsModal}
+          onClose={() => setShowInspectionDetailsModal(false)}
+          config={inspectionConfig}
+          onBookInspection={handleDirectBookInspection}
+          onIncrementInspection={() => setInspectionCartQty(inspectionQty + 1)}
+          onDecrementInspection={() => setInspectionCartQty(Math.max(0, inspectionQty - 1))}
+          inCart={inspectionQty > 0}
+          cartQty={inspectionQty}
+        />
+      )}
+      {showInspectionCustomizerModal && (
+        <ACInspectionCustomizerModal
+          isOpen={showInspectionCustomizerModal}
+          onClose={() => setShowInspectionCustomizerModal(false)}
+          currentConfig={inspectionConfig}
+          onSaved={(newCfg) => setInspectionConfig(newCfg)}
+        />
       )}
     </div>
   )

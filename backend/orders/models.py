@@ -364,6 +364,17 @@ class MarketplaceOrder(models.Model):
     seller_id = models.IntegerField(db_index=True)
     seller_name = models.CharField(max_length=255, blank=True, default="")
 
+    # Phase U: Consolidated delivery group & fulfillment warehouse linkage
+    delivery_group_id = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Shared identifier linking sibling marketplace orders checked out together from the same warehouse.",
+    )
+    warehouse_id = models.IntegerField(null=True, blank=True, db_index=True)
+    warehouse_name = models.CharField(max_length=255, blank=True, default="")
+
     vendor_order_id = models.IntegerField(null=True, blank=True, db_index=True)
     vendor_order_number = models.CharField(max_length=50, blank=True, default="")
 
@@ -519,5 +530,51 @@ class MarketplaceOrderEvent(models.Model):
 
     def __str__(self):
         return f"Event {self.event_id} ({self.event_type}: {self.vendor_status} -> {self.mapped_status}) on {self.order.order_number}"
+
+
+class MarketplacePaymentIntent(models.Model):
+    """
+    Tracks Razorpay payment intents created for Marketplace checkout.
+    Persists the authoritative cart snapshot and payload before payment collection.
+    Vendor order intake and stock decrement only happen after verified payment confirmation.
+    """
+
+    class Status(models.TextChoices):
+        CREATED = "CREATED", "Created"
+        PAID = "PAID", "Paid"
+        FAILED = "FAILED", "Failed"
+        EXPIRED = "EXPIRED", "Expired"
+
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="marketplace_payment_intents",
+        help_text="Customer who initiated this payment intent.",
+    )
+    cart = models.ForeignKey(
+        "carts.Cart",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="payment_intents",
+        help_text="The marketplace cart this intent was created against.",
+    )
+    razorpay_order_id = models.CharField(max_length=100, unique=True, db_index=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, help_text="Authoritative amount in INR.")
+    currency = models.CharField(max_length=10, default="INR")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.CREATED, db_index=True)
+    checkout_payload = models.JSONField(default=dict, blank=True, help_text="Snapshot of validated checkout fields.")
+    razorpay_payment_id = models.CharField(max_length=100, blank=True, default="")
+    razorpay_signature = models.CharField(max_length=255, blank=True, default="")
+    idempotency_key = models.CharField(max_length=128, blank=True, default="", db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "orders_marketplacepaymentintent"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"PaymentIntent {self.razorpay_order_id} ({self.status}) - ₹{self.amount}"
 
 

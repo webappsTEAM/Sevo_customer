@@ -49,8 +49,10 @@ class CustomerInspectionService:
         config = configuration or ACInspectionConfiguration.get_solo()
         diagnostic_fee = config.diagnostic_fee if config else Decimal("199.00")
         currency = config.currency if config else "INR"
-        name_snapshot = inspection_name or "AC Inspection & Diagnostic Visit"
-        qty = max(1, int(quantity or 1))
+        name_snapshot = config.title if (config and config.title) else (inspection_name or "AC Inspection & Diagnostic Visit")
+        if inspection_name and inspection_name != "AC Inspection & Diagnostic Visit":
+            name_snapshot = inspection_name
+        qty = max(1, quantity or 1)
 
         # 3. Create the parent CustomerInspection within current or caller transaction
         customer_inspection = CustomerInspection.objects.create(

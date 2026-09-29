@@ -80,6 +80,24 @@ def _completed_stop_count(booking):
     return stops.exclude(completed_at=None).count()
 
 
+def _payable_after_adjustments(booking, transport_fare):
+    """(amount the customer pays, coupon discount) for a reconciled transport fare."""
+    fare = _dec(transport_fare)
+    discount = Decimal("0.00")
+    cpn = getattr(booking, "coupon", None) if booking.coupon_id else None
+    if cpn is not None:
+        if cpn.discount_type == "flat":
+            raw = _dec(cpn.discount_value)
+        else:
+            raw = _money(fare * (_dec(cpn.discount_value) / Decimal("100")))
+        cap = _dec(cpn.max_discount)
+        if cap > 0:
+            raw = min(raw, cap)
+        discount = _money(min(fare, raw))
+    premium = _dec(booking.insurance_premium) if booking.insurance_opted_in else Decimal("0.00")
+    return _money(fare - discount + premium), discount
+
+
 def reconcile_booking_fare(booking, actual_distance_km=None, notes=""):
     """
     Build (or refresh) the FareReconciliation row for one booking.
@@ -215,6 +233,18 @@ def reconcile_booking_fare(booking, actual_distance_km=None, notes=""):
             "source": "gt_waiting_charge_policy",
         })
 
+    # --- 2c. Toll / parking pass-throughs the driver evidenced ---------
+    from .extra_charges import extra_charges_total
+    pass_through = extra_charges_total(booking)
+    if pass_through:
+        final_amount = _money(final_amount + pass_through)
+        adjustments.append({
+            "code": "TOLL_PARKING",
+            "label": "Toll / parking (at actuals)",
+            "amount": str(pass_through),
+            "source": "gt_extra_charge_policy",
+        })
+
     # --- 3. Additional work the customer approved ---------------------
     extensions_total = _approved_extensions_total(booking)
     if extensions_total != 0:
@@ -269,8 +299,30 @@ def reconcile_booking_fare(booking, actual_distance_km=None, notes=""):
         )
         # Only touch what the rest of the system charges against when the
         # reconciliation genuinely resolves to a different number.
-        if delta != 0 and booking.total_amount != final_amount:
-            booking.total_amount = final_amount
-            booking.save(update_fields=["total_amount", "updated_at"])
+        #
+        # What the customer pays is NOT final_amount alone: the booking may carry a coupon (applied
+        # to the transport fare when it was booked) and transit-insurance premium (billed on top).
+        # Writing the bare transport fare back would silently erase the discount and drop the
+        # premium the moment the fare changed by a rupee.
+        if delta != 0:
+            payable, discount = _payable_after_adjustments(booking, final_amount)
+            if booking.total_amount != payable:
+                booking.total_amount = payable
+                update = ["total_amount", "updated_at"]
+                if booking.coupon_id:
+                    booking.subtotal_amount = final_amount
+                    booking.discount_amount = discount
+                    booking.final_amount = payable
+                    update += ["subtotal_amount", "discount_amount", "final_amount"]
+                booking.save(update_fields=update)
+
+    # Prepaid (online / wallet) trips: settle the difference between what was paid and the final fare
+    # (refund request for an overpayment; a balance the customer pays for an underpayment).
+    try:
+        from service_requests.services.prepaid_variance import settle_prepaid_variance
+        settle_prepaid_variance(booking)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("Prepaid fare-variance settlement failed for booking %s", getattr(booking, "pk", None))
 
     return recon

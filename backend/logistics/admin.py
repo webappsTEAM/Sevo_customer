@@ -1,13 +1,13 @@
 from django.contrib import admin
 
-from .models import Lane, ServiceArea, ServiceTier, GoodsCategory, GoodsItem, PackersMoversConfig, GTFaq, LogisticsSlot
+from .models import Lane, ServiceArea, ServiceTier, GoodsCategory, GoodsItem, PackersMoversConfig, GTFaq, LogisticsSlot, ProhibitedGoodsRule, PackersMoversSurchargeRule
 
 
 @admin.register(ServiceTier)
 class ServiceTierAdmin(admin.ModelAdmin):
     list_display = [
         "name", "category", "vehicle_class", "city", "starting_price", "base_fare", "per_km_rate",
-        "free_km", "minimum_fare", "loading_unloading_charge", "additional_stop_charge",
+        "free_km", "minimum_fare", "loading_unloading_charge", "additional_stop_charge", "max_additional_stops",
         "surge_multiplier", "max_weight_kg", "max_cft", "order", "is_active"
     ]
     list_filter = ["category", "vehicle_class", "weight_class", "city", "is_active"]
@@ -18,7 +18,7 @@ class ServiceTierAdmin(admin.ModelAdmin):
             "fields": ("name", "slug", "category", "vehicle_class", "city", "weight_class", "order", "is_active", "description", "image", "includes")
         }),
         ("Rate Card & Pricing", {
-            "fields": ("starting_price", "base_fare", "per_km_rate", "free_km", "minimum_fare", "loading_unloading_charge", "additional_stop_charge", "surge_multiplier", "currency")
+            "fields": ("starting_price", "base_fare", "per_km_rate", "free_km", "minimum_fare", "loading_unloading_charge", "additional_stop_charge", "max_additional_stops", "surge_multiplier", "currency")
         }),
         ("Physical Capacity & Fitment", {
             "fields": ("max_weight_kg", "max_cft", "capacity_label", "dimensions_label")
@@ -107,3 +107,15 @@ class LogisticsSlotAdmin(admin.ModelAdmin):
     ordering = ["category", "city", "order", "start_time"]
 
 
+@admin.register(ProhibitedGoodsRule)
+class ProhibitedGoodsRuleAdmin(admin.ModelAdmin):
+    list_display = ["label", "applies_to_packers_movers", "is_active", "updated_at"]
+    list_filter = ["is_active", "applies_to_packers_movers"]
+    search_fields = ["label", "keywords"]
+
+
+@admin.register(PackersMoversSurchargeRule)
+class PackersMoversSurchargeRuleAdmin(admin.ModelAdmin):
+    list_display = ["name", "rule_type", "city", "percent", "flat_amount", "is_active"]
+    list_filter = ["rule_type", "is_active", "city"]
+    search_fields = ["name"]

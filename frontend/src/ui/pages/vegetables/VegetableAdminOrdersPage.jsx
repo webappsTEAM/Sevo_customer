@@ -3,9 +3,10 @@ import { motion, AnimatePresence } from "framer-motion"
 import {
   Package, Search, RefreshCw, Clock, CheckCircle2,
   Truck, XCircle, AlertCircle, Eye, Phone, MapPin,
-  Calendar, User, Layers, ArrowRight, ShieldAlert, Sparkles, Filter
+  Calendar, User, Layers, ArrowRight, ShieldAlert, Sparkles, Filter, Settings2
 } from "lucide-react"
 import { apiRequest, extractApiErrorMessage } from "../../../api/client.js"
+import VegetableDeliverySlotAdminModal from "../../components/vegetables/VegetableDeliverySlotAdminModal.jsx"
 
 const STATUS_CONFIG = {
   PLACED: {
@@ -60,6 +61,10 @@ export default function VegetableAdminOrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [transitionLoading, setTransitionLoading] = useState(false)
   const [transitionError, setTransitionError] = useState("")
+
+  // Delivery Slot Admin Modal
+  const [isSlotModalOpen, setIsSlotModalOpen] = useState(false)
+
 
   const fetchOrders = async () => {
     try {
@@ -135,13 +140,23 @@ export default function VegetableAdminOrdersPage() {
           </div>
         </div>
 
-        <button
-          onClick={fetchOrders}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-border/80 hover:bg-muted/80 text-foreground text-sm font-medium shadow-sm transition-all self-start md:self-auto"
-        >
-          <RefreshCw size={16} className={loading ? "animate-spin text-muted-foreground" : "text-muted-foreground"} />
-          <span>Refresh Orders</span>
-        </button>
+        <div className="flex items-center gap-2.5 self-start md:self-auto">
+          <button
+            onClick={() => setIsSlotModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 text-emerald-800 dark:text-emerald-300 text-sm font-bold shadow-2xs transition-all cursor-pointer"
+          >
+            <Clock size={16} />
+            <span>Delivery Slots &amp; Weekday Template</span>
+          </button>
+
+          <button
+            onClick={fetchOrders}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-border/80 hover:bg-muted/80 text-foreground text-sm font-medium shadow-sm transition-all"
+          >
+            <RefreshCw size={16} className={loading ? "animate-spin text-muted-foreground" : "text-muted-foreground"} />
+            <span>Refresh Orders</span>
+          </button>
+        </div>
       </div>
 
       {/* Status Pipeline Tabs */}
@@ -249,6 +264,11 @@ export default function VegetableAdminOrdersPage() {
                       <Clock size={13} />
                       {order.created_at ? new Date(order.created_at).toLocaleString() : "—"}
                     </span>
+                    {order.delivery_slot && (
+                      <span className="text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200/80 px-2 py-0.5 rounded-md flex items-center gap-1">
+                        🚚 {order.delivery_date ? `${order.delivery_date} • ` : ""}{order.delivery_slot}
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-muted-foreground">
@@ -402,8 +422,12 @@ export default function VegetableAdminOrdersPage() {
                   </div>
 
                   <div className="p-4 rounded-xl bg-card border border-border/80 space-y-2">
-                    <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Delivery Address</div>
-                    <div className="text-xs text-foreground leading-relaxed flex items-start gap-1.5">
+                    <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Delivery Schedule & Address</div>
+                    <div className="text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 p-2 rounded-lg flex items-center gap-2">
+                      <Clock size={14} className="text-emerald-700 shrink-0" />
+                      <span>{selectedOrder.delivery_date ? `${selectedOrder.delivery_date} — ` : ""}{selectedOrder.delivery_slot || "Standard Delivery"}</span>
+                    </div>
+                    <div className="text-xs text-foreground leading-relaxed flex items-start gap-1.5 pt-1">
                       <MapPin size={14} className="text-emerald-500 shrink-0 mt-0.5" />
                       <span>{selectedOrder.delivery_address || "No address provided"}</span>
                     </div>
@@ -444,10 +468,38 @@ export default function VegetableAdminOrdersPage() {
                   </div>
                 </div>
 
-                {/* Total Summary */}
-                <div className="p-4 rounded-xl bg-muted/40 border border-border flex items-center justify-between">
-                  <div className="font-semibold text-sm">Grand Total</div>
-                  <div className="text-xl font-extrabold text-foreground">₹{selectedOrder.total_amount?.toFixed(2)}</div>
+                {/* Total Summary Breakdown */}
+                <div className="p-4 rounded-xl bg-muted/40 border border-border space-y-2">
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Produce Items Subtotal</span>
+                    <span className="font-semibold text-foreground">₹{(selectedOrder.items_subtotal || selectedOrder.total_amount)?.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Delivery Fee</span>
+                    <span className="font-semibold text-foreground">
+                      {selectedOrder.delivery_fee === 0 ? "FREE" : `₹${selectedOrder.delivery_fee?.toFixed(2)}`}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Handling &amp; Packaging</span>
+                    <span className="font-semibold text-foreground">₹{selectedOrder.handling_fee?.toFixed(2) || "2.00"}</span>
+                  </div>
+                  {selectedOrder.small_cart_fee > 0 && (
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Small Cart Fee</span>
+                      <span className="font-semibold text-foreground">₹{selectedOrder.small_cart_fee?.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {selectedOrder.tip_amount > 0 && (
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Delivery Partner Tip</span>
+                      <span className="font-semibold text-emerald-600">₹{selectedOrder.tip_amount?.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="pt-2 border-t border-border flex items-center justify-between">
+                    <div className="font-bold text-sm">Grand Total</div>
+                    <div className="text-xl font-extrabold text-foreground">₹{selectedOrder.total_amount?.toFixed(2)}</div>
+                  </div>
                 </div>
               </div>
 
@@ -464,6 +516,12 @@ export default function VegetableAdminOrdersPage() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Weekday Slots & Overrides Admin Modal */}
+      <VegetableDeliverySlotAdminModal
+        isOpen={isSlotModalOpen}
+        onClose={() => setIsSlotModalOpen(false)}
+      />
     </div>
   )
 }

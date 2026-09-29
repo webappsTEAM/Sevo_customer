@@ -39,6 +39,11 @@ def build_customer_tracking_url(service_request_or_token) -> str:
     else:
         token = str(service_request_or_token or "").strip()
 
+    return f"{_frontend_base_url()}/tracking/{token}"
+
+
+def _frontend_base_url() -> str:
+    """FRONTEND_URL plus the production base path (see build_customer_tracking_url)."""
     frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173").rstrip("/")
     subpath = os.getenv("FRONTEND_SUBPATH", "").strip().rstrip("/")
     if not subpath:
@@ -49,8 +54,13 @@ def build_customer_tracking_url(service_request_or_token) -> str:
         subpath = f"/{subpath}"
     if subpath and frontend_url.endswith(subpath):
         subpath = ""
+    return f"{frontend_url}{subpath}"
 
-    return f"{frontend_url}{subpath}/tracking/{token}"
+
+def build_feedback_url(feedback_token) -> str:
+    """Public, token-keyed rating page. Honors the same production base path as the tracking link:
+    the feedback links used to be built from the bare FRONTEND_URL and 404'd behind '/sevo'."""
+    return f"{_frontend_base_url()}/feedback/{feedback_token}"
 
 
 # ── Canonical SMS Notification Dispatcher ─────────────────────────────────────
@@ -342,8 +352,7 @@ def send_completion_and_feedback_email(service_request, feedback_token: str) -> 
         )
         return
 
-    frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173")
-    feedback_url = f"{frontend_url}/feedback/{feedback_token}"
+    feedback_url = build_feedback_url(feedback_token)
 
     # ServiceRequest.assigned_employee was removed by migration 0038 when the
     # workforce concern moved to the vendor app, so this raised AttributeError
@@ -436,8 +445,7 @@ def send_feedback_link(service_request, feedback_token: str) -> None:
     Kept for backward compatibility (admin resend-feedback/ endpoint).
     Sends only the feedback link email when admin manually resends.
     """
-    frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173")
-    link = f"{frontend_url}/feedback/{feedback_token}"
+    link = build_feedback_url(feedback_token)
     category_name = _get_category_display_name(service_request)
 
     subject = f"How was your service? [{service_request.request_id}]"
@@ -842,10 +850,34 @@ def notify_gt_delivery_completed(service_request, technician_name="") -> None:
     tracking_url = build_customer_tracking_url(service_request)
     tech_display = technician_name or getattr(service_request, "technician_name", "") or "Your driver"
 
+    # Rating link: a delivered trip gets its own feedback token (nothing else issues one for GT --
+    # the admin "verify" step that creates it for home services is not part of a delivery).
+    feedback_url = ""
+    try:
+        from .services.trip_feedback import ensure_trip_feedback
+        _fb = ensure_trip_feedback(service_request)
+        if _fb is not None and not _fb.is_submitted:
+            feedback_url = build_feedback_url(_fb.feedback_token)
+    except Exception as fb_err:
+        logger.warning("[GTDelivery] Could not prepare rating link for %s: %s", service_request.request_id, fb_err)
+
+    # The final, reconciled fare is set at DELIVERED (Porter finalises the fare after the trip);
+    # tell the customer what they are charged instead of leaving them to find it in the app.
+    _final = getattr(service_request, "total_amount", None)
+    try:
+        fare_text = f"Rs. {float(_final):,.2f}" if _final is not None and float(_final) > 0 else ""
+    except (TypeError, ValueError):
+        fare_text = ""
+
     # 1. SMS delivery-completed notification
     phone = (getattr(service_request, "phone", "") or "").strip()
     if phone:
-        sms_msg = f"SEVO: Your goods for booking {service_request.request_id} have been delivered. Details: {tracking_url}"
+        sms_msg = f"SEVO: Your goods for booking {service_request.request_id} have been delivered."
+        if fare_text:
+            sms_msg += f" Final fare {fare_text}."
+        sms_msg += f" Details: {tracking_url}"
+        if feedback_url:
+            sms_msg += f" Rate your driver: {feedback_url}"
         event_key = f"booking:{service_request.request_id}:gt-delivered"
         try:
             send_sms_notification(
@@ -876,6 +908,8 @@ def notify_gt_delivery_completed(service_request, technician_name="") -> None:
             "Pickup": service_request.address or "N/A",
             "Drop-off": getattr(service_request, "drop_address", "") or "N/A",
             "Driver": tech_display,
+            **({"Final fare": fare_text} if fare_text else {}),
+            **({"Rate your driver": feedback_url} if feedback_url else {}),
         },
         cta_url=tracking_url,
         cta_text="View Trip Details",
@@ -884,7 +918,8 @@ def notify_gt_delivery_completed(service_request, technician_name="") -> None:
     try:
         _sent = send_mail(
             subject,
-            f"Your goods for booking {service_request.request_id} have been delivered. Details: {tracking_url}",
+            f"Your goods for booking {service_request.request_id} have been delivered. Details: {tracking_url}"
+            + (f" Rate your driver: {feedback_url}" if feedback_url else ""),
             settings.DEFAULT_FROM_EMAIL,
             [customer_email],
             html_message=body,
@@ -919,10 +954,19 @@ _PM_LEG_NOTICE_COPY = {
         "Your move is complete -- all items have been delivered and unpacked.",
         "Move Completed",
     ),
-    "COMPLETED": (
-        "Your move is complete -- all items have been delivered and unpacked.",
-        "Move Completed",
-    ),
+    # Bug found: COMPLETED used to carry the identical copy as DELIVERED.
+    # PM_LEG_SEQUENCE treats DELIVERED and COMPLETED as two distinct,
+    # forward-only legs a normal move genuinely transitions through, and each
+    # leg transition calls notify_pm_move_update() separately (see
+    # workforce_integration/views.py), so every customer received the same
+    # "your move is complete" SMS + email twice -- the SMS dedup key is keyed
+    # per-leg (pm-delivered vs pm-completed), not per logical event, so it
+    # didn't catch this, and the email path has no dedup at all. DELIVERED is
+    # the customer-meaningful moment (goods actually arrived/unpacked);
+    # COMPLETED is an internal finalization step with nothing new to tell the
+    # customer, so it intentionally has no entry here and notify_pm_move_update
+    # no-ops for it (see the `if not copy: return` below) rather than sending
+    # a second identical notice.
 }
 
 
@@ -1687,3 +1731,23 @@ def broadcast_tracking_event(service_request, event_type="job_updated", custom_d
     except Exception as e:
         logger.warning("[Tracking WS] Failed to broadcast event %s for SR %s: %s", event_type, getattr(service_request, "request_id", None), e)
 
+
+def notify_delivery_exception(service_request) -> None:
+    """Tell the customer the driver reported a problem on the trip (receiver unavailable, ...)."""
+    exc = service_request.delivery_exception if isinstance(service_request.delivery_exception, dict) else {}
+    if exc.get("status") != "OPEN":
+        return
+    tracking_url = build_customer_tracking_url(service_request)
+    label = exc.get("label") or "A problem was reported on your trip"
+    phone = (getattr(service_request, "phone", "") or "").strip()
+    if phone:
+        try:
+            send_sms_notification(
+                mobile_number=phone,
+                message=f"SEVO: Booking {service_request.request_id}: {label}. Please contact your driver or support. Details: {tracking_url}",
+                event_key=f"booking:{service_request.request_id}:gt-exception:{exc.get('type')}:{exc.get('leg')}",
+                service_request=service_request,
+                preference_field="booking_confirmations",
+            )
+        except Exception as sms_err:
+            logger.warning("[GTException] SMS failed for %s: %s", service_request.request_id, sms_err)

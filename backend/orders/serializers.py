@@ -28,6 +28,9 @@ class GroceryOrderSerializer(serializers.ModelSerializer):
 
 class GroceryCheckoutSerializer(serializers.Serializer):
     delivery_address = serializers.CharField(allow_blank=False, trim_whitespace=True)
+    delivery_date = serializers.DateField(required=False, allow_null=True)
+    delivery_slot = serializers.CharField(required=False, allow_blank=True, default="")
+    tip_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
 
 
 class MarketplaceOrderItemSerializer(serializers.ModelSerializer):
@@ -60,7 +63,8 @@ class MarketplaceOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = MarketplaceOrder
         fields = [
-            "id", "order_number", "seller_id", "seller_name",
+            "id", "order_number", "delivery_group_id", "warehouse_id", "warehouse_name",
+            "seller_id", "seller_name",
             "vendor_order_id", "vendor_order_number", "status", "status_label",
             "total_amount", "subtotal_amount", "delivery_fee",
             "delivery_address", "customer_name", "customer_phone", "customer_email",
@@ -73,6 +77,15 @@ class MarketplaceOrderSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class DeliverySlotField(serializers.Field):
+    """Permissive field accepting dictionary slot structure or plain string representation."""
+    def to_internal_value(self, data):
+        return data
+
+    def to_representation(self, value):
+        return value
+
+
 class MarketplaceCheckoutSerializer(serializers.Serializer):
     delivery_address = serializers.CharField(allow_blank=False, trim_whitespace=True)
     customer_name = serializers.CharField(required=False, allow_blank=True, default="")
@@ -81,6 +94,7 @@ class MarketplaceCheckoutSerializer(serializers.Serializer):
     payment_method = serializers.CharField(required=False, default="UPI")
     payment_transaction_id = serializers.CharField(required=False, allow_blank=True, default="")
     fulfilment_type = serializers.CharField(required=False, default="DELIVERY")
+    delivery_slot = DeliverySlotField(required=False, allow_null=True, default="")
 
 
 # ─── Unified "My Orders" read view ──────────────────────────────────────────
@@ -134,17 +148,27 @@ def serialize_marketplace_order(order):
         "order_type": "marketplace",
         "id": order.id,
         "order_number": order.order_number,
+        "delivery_group_id": order.delivery_group_id,
+        "warehouse_id": order.warehouse_id,
+        "warehouse_name": order.warehouse_name,
         "seller_id": order.seller_id,
         "seller_name": order.seller_name,
         "status": order.status,
         "status_label": order.get_status_display(),
+        "payment_method": order.payment_method,
+        "payment_status": order.payment_status,
         "total_amount": order.total_amount,
         "created_at": order.created_at,
         "detail": {
             "delivery_address": order.delivery_address,
+            "delivery_group_id": order.delivery_group_id,
+            "warehouse_id": order.warehouse_id,
+            "warehouse_name": order.warehouse_name,
             "seller_name": order.seller_name,
             "status": order.status,
             "status_label": order.get_status_display(),
+            "payment_method": order.payment_method,
+            "payment_status": order.payment_status,
             "items": [
                 {
                     "seller_product_id": item.seller_product_id,

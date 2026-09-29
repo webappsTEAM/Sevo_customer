@@ -31,7 +31,7 @@ from workforce_integration.services import WorkforceIntegrationService
 
 from . import services as sr_services
 from .models import (
-    Complaint, ServiceFeedback, ServiceRequest, Service,
+    Complaint, ServiceFeedback, ServiceRequest, Service, Package,
     WorkExtension, WorkExtensionItem, JobReschedule, SupplementalInvoice,
     RescheduleRequest, RescheduleAttachment, RescheduleStatus, RescheduleReason, TimeSlotChoices,
     RefundRequest, RefundStatus, RefundType, RefundReason, RefundEvidence,
@@ -92,6 +92,87 @@ def _error(message, status_code=400, extra=None, errors=None, **kwargs):
     if kwargs:
         body.update(kwargs)
     return Response(body, status=status_code)
+
+
+def _apply_verified_catalog_snapshot(cart_data, explicit_package_id=None):
+    """Attach database-verified catalog IDs to a booking cart.
+
+    ``ServiceRequest`` is the shared Customer/Workforce contract.  Checkout
+    originally retained a selected package only inside ``cart_data``; the
+    Workforce eligibility engine deliberately ignores client labels and needs
+    canonical service/package IDs.  Resolve every supplied package ID against
+    the active Customer catalog before saving so the snapshot cannot be forged
+    by the browser or drift with a later catalog edit.
+
+    A booking can contain add-ons or multiple package lines.  The first
+    selected package is retained in the legacy top-level fields for backwards
+    compatibility, while every package cart line gets its own canonical
+    ``catalog_service_id``.  Workforce can therefore enforce every selected
+    service rather than trusting a display name.
+    """
+    if not isinstance(cart_data, list):
+        return {}
+
+    raw_ids = []
+    if explicit_package_id not in (None, "", "undefined", "null"):
+        raw_ids.append(str(explicit_package_id).strip())
+    for item in cart_data:
+        if not isinstance(item, dict):
+            continue
+        package_id = item.get("package_id")
+        if package_id not in (None, "", "undefined", "null"):
+            raw_ids.append(str(package_id).strip())
+
+    # Cart entries without a catalog package (for example a free-text
+    # consultation or a quotation adjustment) remain intentionally unmapped.
+    unique_ids = list(dict.fromkeys(package_id for package_id in raw_ids if package_id))
+    if not unique_ids:
+        return {}
+
+    if any(not package_id.isdigit() for package_id in unique_ids):
+        raise ValidationError({"cart_data": "Selected package IDs must be canonical numeric catalog IDs."})
+
+    packages = {
+        str(package.id): package
+        for package in Package.objects.select_related("service", "service__category").filter(
+            id__in=[int(package_id) for package_id in unique_ids],
+            status="ACTIVE",
+            service__is_active=True,
+        )
+    }
+    missing_ids = [package_id for package_id in unique_ids if package_id not in packages]
+    if missing_ids:
+        raise ValidationError({"cart_data": f"Selected package is unavailable: {', '.join(missing_ids)}."})
+
+    for item in cart_data:
+        if not isinstance(item, dict):
+            continue
+        package_id = str(item.get("package_id") or "").strip()
+        package = packages.get(package_id)
+        if not package:
+            continue
+        # These values are server-derived.  Never preserve a browser-supplied
+        # service ID/version alongside a verified package ID.
+        item["catalog_service_id"] = str(package.service_id)
+        item["package_id"] = str(package.id)
+        item["package_version"] = str(package.version)
+
+    primary_id = str(explicit_package_id).strip() if explicit_package_id not in (None, "", "undefined", "null") else unique_ids[0]
+    primary_package = packages[primary_id]
+    return {
+        "catalog_service_id": str(primary_package.service_id),
+        "package_id": str(primary_package.id),
+        "package_version": str(primary_package.version),
+        "package_display": {
+            "id": str(primary_package.id),
+            "slug": primary_package.slug,
+            "name": primary_package.name,
+            "service_id": str(primary_package.service_id),
+            "service_slug": primary_package.service.slug,
+            "category_slug": primary_package.service.category.slug,
+        },
+        "catalog_mapping_status": "MAPPED",
+    }
 
 # Fixes EC-08: tracking_token never expired -- a link handed to a customer
 # (or forwarded, screenshotted, left in an old SMS/email) stayed a valid
@@ -511,6 +592,8 @@ class BookingCreateView(APIView):
                 drop_lng=serializer.validated_data.get("drop_longitude"),
                 cart_data=serializer.validated_data.get("cart_data"),
                 waypoints=req_waypoints,
+                move_date=serializer.validated_data.get("preferred_date"),
+                move_time=serializer.validated_data.get("preferred_time"),
             )
         except UnresolvedLogisticsFareError as err:
             # Fixes GT-B-01: a logistics booking with neither a resolvable
@@ -553,6 +636,24 @@ class BookingCreateView(APIView):
                     code="ZERO_DISTANCE_ROUTE",
                 )
 
+        # Logistics coupons are checked against the Admin-set coupon rules BEFORE the
+        # booking exists, so an invalid / expired / exhausted / ineligible code is
+        # refused with a reason instead of being silently dropped (which would leave
+        # the customer with a price they did not expect) or wrongly honoured.
+        if _service_slug in LOGISTICS_CATEGORIES:
+            _gt_coupon_code = str(request.data.get("coupon_code") or request.data.get("coupon_code_snapshot") or "").strip().upper()
+            if _gt_coupon_code:
+                from service_requests.services.coupon_rules import check_logistics_coupon
+                _gt_cpn = Coupon.objects.filter(code__iexact=_gt_coupon_code).first()
+                _ok, _ccode, _cmsg = check_logistics_coupon(
+                    _gt_cpn, user=request.user, amount=corrected_fare, service_category=_service_slug,
+                )
+                if not _ok:
+                    if idem_cache_key:
+                        from django.core.cache import cache
+                        cache.delete(idem_cache_key)
+                    return _error(_cmsg, 400, error=_cmsg, code=_ccode)
+
         # Fixes HS-B-01: Full server-side price authority for Home Services bookings.
         # Browser-submitted prices in cart_data or total_amount are NEVER trusted.
         # resolve_home_services_fare looks up authoritative Package/AddOn prices from
@@ -583,6 +684,19 @@ class BookingCreateView(APIView):
         else:
             cart_data = _cart_for_check
         payment_method = (request.data.get("payment_method") or "COD").upper()
+        # Transit insurance is billed on top of the fare and the premium belongs to the platform, so
+        # it can only be taken when SEVO collects the money (online / wallet), never as driver cash.
+        _premium = Decimal("0.00")
+        if serializer.validated_data.get("insurance_opted_in"):
+            if payment_method != "ONLINE":
+                if idem_cache_key:
+                    from django.core.cache import cache
+                    cache.delete(idem_cache_key)
+                return _error(
+                    "Transit insurance is available with online or wallet payment only.",
+                    400, errors={"insurance_opted_in": ["Choose online or wallet payment to add insurance."]},
+                )
+            _premium = Decimal(str(serializer.validated_data.get("insurance_premium") or 0))
         if payment_method == "ONLINE":
             initial_status = ServiceRequest.Status.WAITING_FOR_PAYMENT
             initial_payment_status = ServiceRequest.PaymentStatus.PROCESSING
@@ -775,6 +889,22 @@ class BookingCreateView(APIView):
                         item["price"] = p_val
             serializer.validated_data["cart_data"] = clean_cart
 
+        # Promote the selected catalog package(s) from cart_data into the
+        # shared ServiceRequest contract.  The checkout frontend sends the
+        # package ID inside each cart line; do not trust that raw value until
+        # it has been resolved against the active database catalog.
+        try:
+            catalog_snapshot = _apply_verified_catalog_snapshot(
+                clean_cart,
+                explicit_package_id=request.data.get("package_id"),
+            )
+        except ValidationError as exc:
+            if idem_cache_key:
+                from django.core.cache import cache
+                cache.delete(idem_cache_key)
+            messages = getattr(exc, "message_dict", None) or getattr(exc, "messages", None) or str(exc)
+            return _error("Selected service package is invalid.", 400, errors=messages)
+
         save_kwargs = {
             "company": company,
             "customer": customer_user,
@@ -782,7 +912,7 @@ class BookingCreateView(APIView):
             "status": initial_status,
             "payment_method": payment_method,
             "payment_status": initial_payment_status,
-            "total_amount": corrected_fare,
+            "total_amount": Decimal(str(corrected_fare)) + _premium,
             # GT-B-01: the itemised quote behind total_amount, when the
             # fare was distance-computed. Empty for flat-priced bookings.
             "fare_breakdown": _jsonable_fare_breakdown(fare_breakdown),
@@ -799,10 +929,25 @@ class BookingCreateView(APIView):
             validate_slot_availability_for_booking,
         )
         resolved_svc, _ = resolve_service(
-            service_param=request.data.get("service_id") or serializer.validated_data.get("catalog_service_id") or serializer.validated_data.get("service_category"),
-            package_param=request.data.get("package_id"),
+            service_param=(
+                request.data.get("service_id")
+                or catalog_snapshot.get("catalog_service_id")
+                or serializer.validated_data.get("catalog_service_id")
+                or serializer.validated_data.get("service_category")
+            ),
+            package_param=catalog_snapshot.get("package_id") or request.data.get("package_id"),
             category_param=serializer.validated_data.get("service_category"),
         )
+
+        # A booking that resolves directly to a Service (without a package,
+        # such as a consultation) still records the database service ID.  A
+        # supplied label/slug is never stored as the canonical identifier.
+        if not catalog_snapshot and resolved_svc:
+            catalog_snapshot = {
+                "catalog_service_id": str(resolved_svc.id),
+                "catalog_mapping_status": "MAPPED",
+            }
+        save_kwargs.update(catalog_snapshot)
 
         try:
             with atomic_transaction():
@@ -947,6 +1092,7 @@ class BookingCreateView(APIView):
 
                     disc = min(subtotal, disc)
                     final_tot = max(0.0, subtotal - disc)
+                final_tot += float(_premium)          # insurance is not discountable
 
                 sr.coupon = cpn
                 sr.coupon_code_snapshot = cpn.code
@@ -974,8 +1120,8 @@ class BookingCreateView(APIView):
                 sr.save(update_fields=["coupon", "coupon_code_snapshot", "subtotal_amount", "discount_amount", "final_amount", "total_amount"])
 
                 with atomic_transaction():
-                    cpn.current_usage += 1
-                    cpn.save(update_fields=["current_usage"])
+                    # Atomic increment: two simultaneous redemptions must both be counted.
+                    Coupon.objects.filter(pk=cpn.pk).update(current_usage=F("current_usage") + 1)
                     CouponUsage.objects.create(
                         coupon=cpn,
                         customer=sr.customer,
@@ -1031,22 +1177,11 @@ class BookingCreateView(APIView):
         #   (a) No payment-status gate — WAITING_FOR_PAYMENT bookings were dispatched
         #       immediately, reaching the Workforce system before the customer paid.
         #   (b) Raw threads bypass the Celery task's idempotency guard and retry logic.
-        # Now uses async_dispatch_service_request.delay() which is idempotent (skips
-        # if already DISPATCHED), retries with exponential backoff, and tracks
-        # dispatch_status on the booking for observability.
+        # Record the dispatch intent in the booking transaction.  Background
+        # delivery is at-least-once; Vendor deduplicates by request_id.
         if sr.status == ServiceRequest.Status.CONFIRMED:
-            def _dispatch_cod_booking():
-                try:
-                    from service_requests.tasks import async_dispatch_service_request
-                    async_dispatch_service_request.delay(sr.id)
-                except Exception as dispatch_err:
-                    logger.warning(f"Could not queue workforce dispatch for booking {sr.id}: {dispatch_err}")
-                    try:
-                        from service_requests.tasks import async_dispatch_service_request
-                        async_dispatch_service_request(sr.id)
-                    except Exception as direct_err:
-                        logger.error(f"Direct dispatch also failed for booking {sr.id}: {direct_err}")
-            transaction.on_commit(_dispatch_cod_booking)
+            from service_requests.services.workforce_dispatch_outbox import queue_workforce_dispatch
+            queue_workforce_dispatch(sr)
 
         # Fixes HS-A-02 (partial): tell the customer an account was
         # created for them by this booking, since User.objects.create()
@@ -1756,44 +1891,47 @@ def _haversine_meters(lat1, lon1, lat2, lon2):
         return None
 
 
-def _get_consultation_fee_and_distance(service_category, customer_lat, customer_lng, vendor_id=None):
+_DELIVERY_OTP_VISIBLE_LEGS = {
+    "EN_ROUTE_DROP", "UNLOADING",            # Goods & Transport
+    "IN_TRANSIT", "ARRIVED_DROP", "REASSEMBLY", "UNPACKING",  # Packers & Movers
+}
+
+
+def _latest_delivery_otp(sr):
     """
-    Dynamically computes the consultation fee and distance using database configuration
-    (ConsultationPricingConfig) and the actual registered VendorWarehouse coordinates.
+    The delivery OTP the vendor app issued for this booking, or None.
+
+    Read-only lookup of the DELIVERY_OTP notification the vendor writes for the
+    customer (see WorkforceJobLogisticsCheckpointView / issue_delivery_otp).
+    Only while the trip is at the drop end (a code from an earlier attempt is
+    never shown once the trip is delivered, and never before the driver has
+    reached the drop).
     """
-    from service_requests.models import ConsultationPricingConfig, VendorWarehouse
-    from decimal import Decimal
-
-    norm_cat = (service_category or "").strip().lower()
-    config = (
-        ConsultationPricingConfig.objects.filter(service_category=norm_cat, is_active=True).first()
-        or ConsultationPricingConfig.objects.filter(service_category__in=["painting", "mason", "general", "consultation"], is_active=True).first()
-    )
-    free_radius_km = float(config.free_radius_km) if config else 15.0
-    standard_fee = Decimal(str(config.standard_fee)) if config else Decimal("300.00")
-
-    wh_lat, wh_lng = 12.7409, 77.8253  # default fallback hub
-    if vendor_id:
-        wh = VendorWarehouse.objects.filter(vendor_id=vendor_id, is_active=True).order_by("-is_primary").first()
-        if wh and wh.latitude is not None and wh.longitude is not None:
-            wh_lat, wh_lng = float(wh.latitude), float(wh.longitude)
-    else:
-        wh = VendorWarehouse.objects.filter(is_primary=True, is_active=True).first()
-        if wh and wh.latitude is not None and wh.longitude is not None:
-            wh_lat, wh_lng = float(wh.latitude), float(wh.longitude)
-
-    dist_km = 0.0
-    if customer_lat is not None and customer_lng is not None:
-        dist_m = _haversine_meters(wh_lat, wh_lng, float(customer_lat), float(customer_lng))
-        if dist_m is not None:
-            dist_km = dist_m / 1000.0
-
-    fee = Decimal("0.00") if dist_km <= free_radius_km else standard_fee
-    return fee, dist_km, wh_lat, wh_lng, free_radius_km
+    leg = (getattr(sr, "logistics_leg", "") or "").strip().upper()
+    if leg not in _DELIVERY_OTP_VISIBLE_LEGS:
+        return None
+    try:
+        import re
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT message FROM workforce_notification "
+                "WHERE related_object_id IN (%s, %s) "
+                "AND notification_type = 'DELIVERY_OTP' "
+                "ORDER BY created_at DESC LIMIT 1;",
+                [str(sr.id), str(sr.request_id or "")],
+            )
+            row = cursor.fetchone()
+            if row and row[0]:
+                m = re.search(r'OTP\s+([0-9]{6})', row[0])
+                if m:
+                    return m.group(1)
+    except Exception:
+        pass
+    return None
 
 
-
-def _build_tracking_payload(sr, has_full_access):
+def _build_tracking_payload(sr, has_full_access, include_delivery_otp=False, include_feedback=False):
     """
     Constructs the canonical live tracking response payload for a booking.
     Sensitive data (technician phone, Service Start OTP) is strictly omitted
@@ -1837,9 +1975,16 @@ def _build_tracking_payload(sr, has_full_access):
             stops = []
         if stops:
             target_stop = None
-            if target_sr.logistics_leg in post_pickup_legs:
-                drop_stops = [s for s in stops if s.stop_type == TripStop.StopType.DROP]
-                target_stop = drop_stops[-1] if drop_stops else stops[-1]
+            if sr.logistics_leg in post_pickup_legs:
+                if len(stops) > 2:
+                    pending = [
+                        s for s in stops
+                        if s.stop_type != TripStop.StopType.PICKUP and s.completed_at is None
+                    ]
+                    target_stop = pending[0] if pending else None
+                if target_stop is None:
+                    drop_stops = [s for s in stops if s.stop_type == TripStop.StopType.DROP]
+                    target_stop = drop_stops[-1] if drop_stops else stops[-1]
             else:
                 pickup_stops = [s for s in stops if s.stop_type == TripStop.StopType.PICKUP]
                 target_stop = pickup_stops[0] if pickup_stops else stops[0]
@@ -1847,6 +1992,8 @@ def _build_tracking_payload(sr, has_full_access):
                 dest_lat = float(target_stop.latitude)
                 dest_lng = float(target_stop.longitude)
                 dest_address = target_stop.address or dest_address
+                dest_stop_seq = target_stop.sequence
+                dest_stop_type = target_stop.stop_type
         elif (
             target_sr.logistics_leg in post_pickup_legs
             and target_sr.drop_latitude is not None
@@ -2109,34 +2256,96 @@ def _build_tracking_payload(sr, has_full_access):
 
     # Retrieve Cash Payment Confirmation OTP if one was generated for this booking or any related stage
     payment_confirmation_otp = None
-    all_payment_notifs = []
-    all_sr_ids = [str(x) for x in [target_sr.id, target_sr.request_id, sr.id, sr.request_id] if x]
-    if getattr(sr, "parent_request", None):
-        all_sr_ids.extend([str(sr.parent_request.id), str(sr.parent_request.request_id)])
-    if getattr(target_sr, "parent_request", None):
-        all_sr_ids.extend([str(target_sr.parent_request.id), str(target_sr.parent_request.request_id)])
+    if sr.status not in ["cancelled", "rejected"]:
+        try:
+            import re
+            from django.db import connection
+            # SAVEPOINT guards against missing table (e.g. test env) without
+            # aborting the outer PostgreSQL transaction.
+            with connection.cursor() as cursor:
+                cursor.execute("SAVEPOINT _otp_lookup_1")
+                try:
+                    cursor.execute(
+                        "SELECT message FROM workforce_notification "
+                        "WHERE related_object_id IN (%s, %s) "
+                        "AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
+                        "ORDER BY created_at DESC LIMIT 1;",
+                        [str(sr.id), str(sr.request_id or "")],
+                    )
+                    row = cursor.fetchone()
+                    if row and row[0]:
+                        m = re.search(r'OTP\s+([0-9]{6})', row[0])
+                        if m:
+                            payment_confirmation_otp = m.group(1)
+                    cursor.execute("RELEASE SAVEPOINT _otp_lookup_1")
+                except Exception:
+                    cursor.execute("ROLLBACK TO SAVEPOINT _otp_lookup_1")
+        except Exception:
+            pass
 
-    try:
-        import re
-        from django.db import connection
-        with connection.cursor() as cursor:
-            placeholders = ", ".join(["%s"] * len(all_sr_ids))
-            cursor.execute(
-                f"SELECT message, created_at FROM workforce_notification "
-                f"WHERE related_object_id IN ({placeholders}) "
-                f"AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
-                f"ORDER BY created_at DESC;",
-                all_sr_ids,
-            )
-            all_payment_notifs = cursor.fetchall()
-            if all_payment_notifs and all_payment_notifs[0][0]:
-                m = re.search(r'OTP\s+([0-9]{6})', all_payment_notifs[0][0])
-                if m:
-                    payment_confirmation_otp = m.group(1)
-    except Exception:
-        pass
+    payment_confirmation_otp = None
+    if sr.payment_status in ("cash_pending", "cash_collected", "pending"):
+        try:
+            import re
+            from django.db import connection
+            # Use a SAVEPOINT so that a DB error (e.g. missing table in test
+            # environments) does not abort the outer PostgreSQL transaction and
+            # poison every subsequent query in this request.
+            with connection.cursor() as cursor:
+                cursor.execute("SAVEPOINT _otp_lookup")
+                try:
+                    cursor.execute(
+                        "SELECT message FROM workforce_notification "
+                        "WHERE related_object_id = %s "
+                        "AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
+                        "ORDER BY created_at DESC LIMIT 1;",
+                        [str(sr.id)],
+                    )
+                    row = cursor.fetchone()
+                    if row and row[0]:
+                        m = re.search(r'OTP\s+([0-9]{6})', row[0])
+                        if m:
+                            payment_confirmation_otp = m.group(1)
+                    cursor.execute("RELEASE SAVEPOINT _otp_lookup")
+                except Exception:
+                    cursor.execute("ROLLBACK TO SAVEPOINT _otp_lookup")
+        except Exception:
+            pass
 
-    created_at_raw = getattr(target_sr, 'created_at', None) or getattr(sr, 'created_at', None) or getattr(sr, 'submitted_at', None)
+    # Goods & Transport / Packers & Movers delivery OTP. The vendor app
+    # issues it when the driver's GPS is verified at the drop and records it as
+    # a DELIVERY_OTP notification addressed to the customer (the same table the
+    # payment-confirmation OTP above is read from) -- but nothing in this app
+    # ever surfaced it, so the customer had no way to obtain the code the driver
+    # must enter to complete the delivery. Same guard rails as the other OTPs:
+    # full-access viewers only, hidden once the booking is terminal, and only
+    # shown while the trip is at the drop end and not yet delivered.
+    #
+    # Deliberately opt-in (include_delivery_otp): this builder also feeds the
+    # technician-facing endpoints and the websocket group broadcast, and the
+    # driver must never be able to read the code the customer is meant to give
+    # them. Only the customer/token/admin live-location endpoint asks for it.
+    delivery_otp = None
+    if include_delivery_otp and has_full_access and sr.service_category in LOGISTICS_CATEGORIES and not is_terminal:
+        delivery_otp = _latest_delivery_otp(sr)
+
+    # Rating handle for a delivered trip. Same opt-in / full-access rule as the delivery OTP: the
+    # feedback token is a bearer credential for the rating form, so it is only handed to the
+    # customer/token-holder/admin live-location endpoint -- never to the driver-facing builders or
+    # the websocket group broadcast that share this function.
+    trip_feedback = None
+    if include_feedback and has_full_access and sr.service_category in LOGISTICS_CATEGORIES:
+        from .services.trip_feedback import trip_feedback_summary
+        trip_feedback = trip_feedback_summary(sr)
+
+    # Prepaid trip whose final fare rose above what was paid: same customer-only rule.
+    trip_balance_due = None
+    if include_feedback and has_full_access and sr.service_category in LOGISTICS_CATEGORIES:
+        from .services.prepaid_variance import balance_due as _bal
+        _b = _bal(sr)
+        trip_balance_due = str(_b) if _b > 0 else None
+
+    created_at_raw = getattr(sr, 'created_at', None) or getattr(sr, 'submitted_at', None)
     if created_at_raw and hasattr(created_at_raw, 'isoformat'):
         created_at_str = created_at_raw.isoformat()
     elif created_at_raw:
@@ -2292,6 +2501,9 @@ def _build_tracking_payload(sr, has_full_access):
             "address": dest_address,
             "latitude": dest_lat,
             "longitude": dest_lng,
+            # Which stop of a multi-stop trip this is (None for single pickup/drop bookings).
+            "stop_sequence": dest_stop_seq,
+            "stop_type": dest_stop_type,
         },
         "technician": technician_data,
         "technician_name": tech_name if is_accepted else "",
@@ -2306,7 +2518,12 @@ def _build_tracking_payload(sr, has_full_access):
         "eta_minutes": eta_minutes,
         "start_otp": start_otp,
         "payment_confirmation_otp": payment_confirmation_otp,
-        "tracking_token": str(target_sr.tracking_token or sr.tracking_token) if (has_full_access and (target_sr.tracking_token or sr.tracking_token)) else None,
+        "delivery_otp": delivery_otp,
+        "feedback": trip_feedback,
+        "balance_due": trip_balance_due,
+        "extra_charges": [e for e in (sr.extra_charges if isinstance(sr.extra_charges, list) else []) if isinstance(e, dict) and e.get("status") == "APPLIED"],
+        "delivery_exception": (sr.delivery_exception if isinstance(sr.delivery_exception, dict) and sr.delivery_exception.get("status") == "OPEN" else None),
+        "tracking_token": str(sr.tracking_token) if (has_full_access and sr.tracking_token) else None,
         "vehicle_number": tracking.get("vehicle_number") if (tracking and isinstance(tracking, dict)) else "",
         "vehicle_type": tracking.get("vehicle_type") if (tracking and isinstance(tracking, dict)) else "",
         "pickup_address": target_sr.address or sr.address or "",
@@ -2402,7 +2619,7 @@ class CustomerBookingLiveLocationView(APIView):
         if not (token_matches or is_admin_user or is_owner):
             return _error("Valid tracking token or authentication required.", 401)
 
-        payload = _build_tracking_payload(sr, has_full_access=True)
+        payload = _build_tracking_payload(sr, has_full_access=True, include_delivery_otp=True, include_feedback=True)
         return _success(data=payload)
 
 
@@ -2430,7 +2647,7 @@ class CustomerPublicTrackingView(APIView):
         if _tracking_token_is_expired(sr):  # Fixes EC-08
             return _error("Tracking link not found or expired.", 404)
 
-        payload = _build_tracking_payload(sr, has_full_access=True)
+        payload = _build_tracking_payload(sr, has_full_access=True, include_delivery_otp=True, include_feedback=True)
         return _success(data=payload)
 
 
@@ -2562,6 +2779,8 @@ class FeedbackTokenView(APIView):
         serializer = ServiceFeedbackSubmitSerializer(fb, data=request.data)
         if not serializer.is_valid():
             return Response({"success": False, "errors": serializer.errors}, status=400)
+        if serializer.validated_data.get("rating") is None:
+            return Response({"success": False, "errors": {"rating": ["Rating is required."]}}, status=400)
 
         with atomic_transaction():
             serializer.save(is_submitted=True, submitted_at=timezone.now())
@@ -2570,7 +2789,9 @@ class FeedbackTokenView(APIView):
         try:
             from workforce_integration.services import WorkforceIntegrationService
             sr = fb.service_request
-            tech_id = getattr(sr, "workforce_job_id", "") or str(sr.id)
+            # The technician the rating is about, snapshotted when the job was done. (This used to send
+            # the JOB id in the technician slot, which the vendor resolved as an employee id.)
+            tech_id = fb.technician_id or ""
             WorkforceIntegrationService.send_technician_feedback(
                 service_request=sr,
                 technician_id=tech_id,
@@ -2777,18 +2998,10 @@ class AdminSRAssignView(APIView):
 
             sr.save()
 
-            def _do_dispatch():
-                try:
-                    from service_requests.tasks import async_dispatch_service_request
-                    async_dispatch_service_request.delay(sr.id)
-                except Exception:
-                    try:
-                        from service_requests.tasks import async_dispatch_service_request
-                        async_dispatch_service_request(sr.id)
-                    except Exception as err:
-                        logger.error(f"Manual admin dispatch failed for booking {sr.id}: {err}")
-
-            transaction.on_commit(_do_dispatch)
+            # Customer-side manual assignment is not a dispatch mechanism:
+            # Workforce owns eligibility, offers, and technician assignment.
+            # Leave this request for the Workforce state machine rather than
+            # overwriting assignment data from Marketplace.
 
         # Broadcast live tracking update to customer
         try:
@@ -3963,6 +4176,13 @@ class CustomerCouponValidateView(APIView):
         if not coupon:
             return _standard_response(success=False, error={"code": "INVALID_COUPON", "message": f"Coupon code '{code}' is not valid."}, status_code=400)
 
+        _cat = str(request.data.get("service_category", "") or "").strip().lower()
+        if _cat in LOGISTICS_CATEGORIES:
+            from service_requests.services.coupon_rules import check_logistics_coupon
+            _ok, _ccode, _cmsg = check_logistics_coupon(coupon, user=request.user, amount=cart_total, service_category=_cat)
+            if not _ok:
+                return _standard_response(success=False, error={"code": _ccode, "message": _cmsg}, status_code=400)
+
         min_req = float(coupon.min_booking)
         if cart_total < min_req:
             diff = min_req - cart_total
@@ -4078,6 +4298,14 @@ class CustomerInsuranceClaimListCreateView(APIView):
             return _standard_response(success=False, error={"code": "CLAIM_FAILED", "message": str(e)}, status_code=400)
 
         return _standard_response(success=True, data=InsuranceClaimSerializer(claim).data, status_code=201)
+
+
+class CustomerClaimableBookingsView(APIView):
+    """GET /api/insurance-claims/eligible-bookings/ -- bookings the customer can claim on now."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        return _standard_response(success=True, data=sr_services.claimable_bookings(request.user))
 
 
 class AdminInsuranceClaimListView(APIView):
@@ -4867,28 +5095,8 @@ class CustomerQuoteDecideView(APIView):
                             timezone.now().isoformat(), order_err,
                         )
 
-                    # Dispatch job to workforce management system asynchronously.
-                    # Previously synchronous — a slow Workforce API response would block
-                    # the customer's HTTP request that approved the quote. Now uses the
-                    # Celery task which is idempotent and retries on transient failures.
-                    def _dispatch_quoted_booking():
-                        try:
-                            from service_requests.tasks import async_dispatch_service_request
-                            async_dispatch_service_request.delay(new_sr.id)
-                        except Exception as _dispatch_err:
-                            logger.warning(
-                                "Could not queue workforce dispatch for quoted booking %s: %s",
-                                new_sr.id, _dispatch_err,
-                            )
-                            try:
-                                from service_requests.tasks import async_dispatch_service_request
-                                async_dispatch_service_request(new_sr.id)
-                            except Exception as _direct_err:
-                                logger.error(
-                                    "Direct dispatch also failed for quoted booking %s: %s",
-                                    new_sr.id, _direct_err,
-                                )
-                    transaction.on_commit(_dispatch_quoted_booking)
+                    from service_requests.services.workforce_dispatch_outbox import queue_workforce_dispatch
+                    queue_workforce_dispatch(new_sr)
 
                     # Log analytics event
                     from customer_analytics.models import BookingStatusEvent
@@ -5230,7 +5438,15 @@ class ACRateCardPublicView(APIView):
         cat_serializer = ACRateCardPublicCategorySerializer(categories, many=True)
         return _success(data={
             "diagnostic_fee": float(config.diagnostic_fee),
+            "fee": int(config.diagnostic_fee) if config.diagnostic_fee == int(config.diagnostic_fee) else float(config.diagnostic_fee),
             "currency": config.currency,
+            "title": config.title or "AC Inspection & Diagnostic Visit",
+            "subtitle": config.subtitle or "",
+            "image": config.image or "",
+            "badges": config.badges or [],
+            "includes": config.includes or [],
+            "ready": config.ready or [],
+            "is_active": bool(config.is_active),
             "categories": cat_serializer.data,
             "total_items": ACInspectionRateItem.objects.filter(is_active=True).count(),
         })

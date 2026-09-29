@@ -76,7 +76,7 @@ def is_mason_category(value) -> bool:
     return str(value).strip().lower() in MASON_CATEGORY_ALIASES
 
 
-def _generate_request_id(category_or_slug=None):
+def _generate_request_id(category_or_slug=None, skip=0):
     """
     Generate category-prefixed unique ID (e.g. HM0001, AC0001, PL0001, EL0001).
     Guarantees global uniqueness across all ServiceRequests.
@@ -97,6 +97,9 @@ def _generate_request_id(category_or_slug=None):
 
     last = ServiceRequest.objects.filter(request_id__startswith=prefix).order_by("-id").first()
     num = (last.id + 1) if last and last.id else (ServiceRequest.objects.count() + 1)
+    # `skip` > 0 only on a retry after a unique-id collision with a concurrent booking: every racing
+    # request would otherwise recompute the very same next number and keep colliding.
+    num += max(0, int(skip))
     req_id = f"{prefix}{str(num).zfill(4)}"
     while ServiceRequest.objects.filter(request_id=req_id).exists():
         num += 1
@@ -369,6 +372,10 @@ class ServiceRequest(models.Model):
     # INSURANCE_MAX_LIABILITY) -- what "a stated liability cap" in the
     # finding refers to.
     insurance_opted_in = models.BooleanField(default=False)
+    # Customer's own GSTIN, when they are GST-registered and want it on the
+    # invoice (Porter's customer terms: registered customers intimate it at
+    # booking). Optional; validated for format only -- never used to change a fare.
+    customer_gstin = models.CharField(max_length=15, blank=True, default="")
     insurance_premium = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     insurance_liability_cap = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     # GT-B-03: logistics-only sub-phase, independent of Status -- see the
@@ -377,6 +384,10 @@ class ServiceRequest(models.Model):
     logistics_leg = models.CharField(max_length=20, choices=LogisticsLeg.choices, blank=True, default="")
     logistics_leg_updated_at = models.DateTimeField(null=True, blank=True)
     logistics_leg_history = models.JSONField(default=list, blank=True)
+    # Driver-reported trip exception (receiver unavailable ...): {type,label,notes,leg,status,reported_at}.
+    delivery_exception = models.JSONField(default=dict, blank=True)
+    # Driver-reported toll / parking pass-throughs (see services/extra_charges.py).
+    extra_charges = models.JSONField(default=list, blank=True)
     # GT-B-03 (completing it): the three fields above shipped, but nothing
     # in either backend ever wrote them -- the model comment referred to a
     # set_logistics_leg() that did not exist, so logistics_leg was
@@ -711,7 +722,7 @@ class ServiceRequest(models.Model):
         # under concurrent load). Retry with a freshly generated id a bounded
         # number of times inside a savepoint, so one collision doesn't also
         # abort whatever outer transaction the caller may be in.
-        _max_attempts = 5
+        _max_attempts = 8
         for _attempt in range(1, _max_attempts + 1):
             try:
                 with transaction.atomic():  # type: ignore[attr-defined]
@@ -720,7 +731,9 @@ class ServiceRequest(models.Model):
             except IntegrityError:
                 if not _request_id_was_generated or _attempt == _max_attempts:
                     raise
-                self.request_id = _generate_request_id(self.service_category)
+                import random
+                self.request_id = _generate_request_id(
+                    self.service_category, skip=random.randint(1, 5 * _attempt * _attempt))
 
         if is_new or old_status != self.status:
             from service_requests.state_machine import record_transition
@@ -1208,6 +1221,15 @@ class Package(models.Model):
         max_digits=10, decimal_places=2, null=True, blank=True,
         help_text="Goods & Transport only: floor applied after everything else. Mirrors ServiceTier.minimum_fare.",
     )
+    gt_gst_rate = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0.00")), MaxValueValidator(Decimal("100.00"))],
+        help_text=(
+            "Goods & Transport only: GST percentage already INCLUDED in the fare (18.00 = 18%). The fare does not "
+            "change; invoices show the GST component. Enter 0 to remove GST; blank leaves the tier unchanged. "
+            "Mirrors ServiceTier.gst_rate."
+        ),
+    )
 
     created_at     = models.DateTimeField(auto_now_add=True)
     updated_at     = models.DateTimeField(auto_now=True)
@@ -1525,7 +1547,7 @@ class RescheduleRequest(models.Model):
 
     # Proposed new date & slot
     new_date              = models.DateField()
-    new_time_slot         = models.CharField(max_length=20, choices=TimeSlotChoices.choices, default=TimeSlotChoices.SLOT_09_10)
+    new_time_slot         = models.CharField(max_length=100, blank=True, default="09:00 - 10:00")
 
     reason                = models.CharField(max_length=50, choices=RescheduleReason.choices, default=RescheduleReason.SCHEDULE_CONFLICT)
     additional_notes      = models.TextField(blank=True, default="")
@@ -1830,6 +1852,15 @@ class GTCancellationPolicy(models.Model):
             return Decimal("0")
         if self.applies_only_after_assignment:
             assigned_at = getattr(service_request, "accepted_at", None) or getattr(service_request, "assigned_at", None)
+            if not assigned_at:
+                try:
+                    latest = (
+                        service_request.assignments.filter(accepted_at__isnull=False)
+                        .order_by("-accepted_at").first()
+                    )
+                    assigned_at = latest.accepted_at if latest else None
+                except Exception:
+                    assigned_at = None
             if not assigned_at:
                 return Decimal("0")
             if self.grace_period_seconds:
@@ -3431,6 +3462,38 @@ class ACInspectionConfiguration(models.Model):
     )
     currency = models.CharField(max_length=10, default="INR")
     is_active = models.BooleanField(default=True)
+    title = models.CharField(
+        max_length=255,
+        default="AC Inspection & Diagnostic Visit",
+        blank=True,
+        help_text="Customer-facing service title"
+    )
+    subtitle = models.TextField(
+        default="Not sure about the fault? Certified technician visits with diagnostic instruments, inspects cooling, gas pressure & electricals, and provides an itemized quotation before repair.",
+        blank=True,
+        help_text="Customer-facing description of the diagnostic visit"
+    )
+    image = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        help_text="Storage path or URL to the inspection service image"
+    )
+    badges = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="JSON list of service highlight badges"
+    )
+    includes = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="JSON list of diagnostic inspection check points"
+    )
+    ready = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="JSON list of customer preparation instructions"
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -3439,9 +3502,36 @@ class ACInspectionConfiguration(models.Model):
 
     @classmethod
     def get_solo(cls):
+        default_badges = [
+            "₹199 Diagnostic Fee",
+            "Adjustable Against Repair",
+            "Pay at Doorstep",
+        ]
+        default_includes = [
+            "Comprehensive 21-point system & safety diagnostics",
+            "Cooling delta temp scan & gas pressure test",
+            "Compressor load & capacitor electrical scan",
+            "Itemized quotation before any repair work",
+        ]
+        default_ready = [
+            "Continuous power supply and remote control available for testing",
+            "Clear access to indoor and outdoor AC units",
+            "Area below indoor unit cleared of electronics & valuables",
+            "Outdoor unit safely accessible via balcony, terrace, or window",
+        ]
         obj, _ = cls.objects.get_or_create(
             id=1,
-            defaults={"diagnostic_fee": Decimal("199.00"), "currency": "INR", "is_active": True}
+            defaults={
+                "diagnostic_fee": Decimal("199.00"),
+                "currency": "INR",
+                "is_active": True,
+                "title": "AC Inspection & Diagnostic Visit",
+                "subtitle": "Not sure about the fault? Certified technician visits with diagnostic instruments, inspects cooling, gas pressure & electricals, and provides an itemized quotation before repair.",
+                "image": "",
+                "badges": default_badges,
+                "includes": default_includes,
+                "ready": default_ready,
+            }
         )
         return obj
 
@@ -4136,30 +4226,106 @@ class ServiceDateOverride(models.Model):
         reason_txt = f" ({self.reason})" if self.reason else ""
         return f"{self.service.name} on {self.date}: {status}{reason_txt}"
 
-class ConsultationPricingConfig(models.Model):
-    service_category = models.CharField(max_length=100, unique=True, db_index=True)
-    free_radius_km = models.DecimalField(max_digits=6, decimal_places=2, default=15.0)
-    standard_fee = models.DecimalField(max_digits=10, decimal_places=2, default=300.0)
+
+class GTExtraChargePolicy(models.Model):
+    """
+    Admin control for toll / parking pass-throughs a driver reports with a receipt.
+    is_enabled defaults to False: with no enabled policy no extra charge is ever accepted or billed.
+    The customer pays the actual receipt amount, bounded by the caps below.
+    """
+    service_category = models.CharField(
+        max_length=100, blank=True, default="",
+        help_text="Blank applies to all GT bookings; a category value overrides it.",
+    )
+    is_enabled = models.BooleanField(default=False)
+    allow_toll = models.BooleanField(default=True)
+    allow_parking = models.BooleanField(default=True)
+    max_amount_per_item = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Largest single toll/parking receipt accepted. Blank = no limit.",
+    )
+    max_total_per_booking = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Cap on the total pass-through billed per booking. Blank = no limit.",
+    )
+    require_receipt_photo = models.BooleanField(
+        default=False,
+        help_text="When on, a receipt photo must be uploaded by the driver; a typed reference alone is refused.",
+    )
     is_active = models.BooleanField(default=True)
-    description = models.CharField(max_length=255, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        verbose_name = "GT Extra Charge (Toll/Parking) Policy"
+        verbose_name_plural = "GT Extra Charge (Toll/Parking) Policies"
+
     def __str__(self):
-        return f"{self.service_category}: Free <= {self.free_radius_km}km, otherwise ₹{self.standard_fee}"
+        return f"GTExtraChargePolicy({self.service_category or 'platform-wide'}, enabled={self.is_enabled})"
 
 
-class VendorWarehouse(models.Model):
-    vendor = models.ForeignKey("companies.Company", on_delete=models.CASCADE, related_name="warehouses")
-    name = models.CharField(max_length=255, default="Main Warehouse")
-    address = models.TextField(blank=True, default="")
-    latitude = models.DecimalField(max_digits=9, decimal_places=6, default=12.7409)
-    longitude = models.DecimalField(max_digits=9, decimal_places=6, default=77.8253)
-    is_primary = models.BooleanField(default=True)
+def get_gt_extra_charge_policy(category):
+    cat = str(category or "").strip().lower()
+    qs = GTExtraChargePolicy.objects.filter(is_active=True, is_enabled=True)
+    return qs.filter(service_category__iexact=cat).first() or qs.filter(service_category="").first()
+
+
+class GTInsurancePolicy(models.Model):
+    """
+    Admin override for transit-insurance terms. With no active row the INSURANCE_RATE /
+    INSURANCE_MAX_LIABILITY settings apply exactly as before; an active row replaces them.
+    Set is_offered=False to stop offering insurance without a deploy.
+    """
+    is_offered = models.BooleanField(default=True)
+    premium_rate = models.DecimalField(
+        max_digits=6, decimal_places=4, default=0.02,
+        help_text="Premium as a fraction of the declared value (0.02 = 2%).",
+    )
+    max_liability = models.DecimalField(
+        max_digits=12, decimal_places=2, default=500000,
+        help_text="Highest declared value / liability cap.",
+    )
     is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def __str__(self):
-        return f"{self.vendor.company_name} - {self.name} ({self.latitude}, {self.longitude})"
+    class Meta:
+        verbose_name = "GT Insurance Policy"
+        verbose_name_plural = "GT Insurance Policy"
 
+    def __str__(self):
+        return f"GTInsurancePolicy(offered={self.is_offered}, rate={self.premium_rate})"
+
+
+class GTClaimPolicy(models.Model):
+    """
+    Admin control for goods damage/loss claims on goods-transport and packers-and-movers bookings.
+    With no enabled row the behaviour is unchanged: only insurance-opted-in bookings can claim, with
+    no time limit. An enabled row adds Porter-style included liability for every completed booking
+    (capped at the lower of the fare and included_liability_cap) and an optional claim window.
+    """
+    service_category = models.CharField(
+        max_length=100, blank=True, default="",
+        help_text="Blank applies to all GT bookings; a category value overrides it.",
+    )
+    is_enabled = models.BooleanField(default=False)
+    included_liability_cap = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Rupee cap of the liability that comes with every booking, without paid insurance. Blank = uninsured bookings cannot claim.",
+    )
+    cap_at_fare = models.BooleanField(
+        default=True, help_text="Also limit the included liability to the booking's fare (lower of the two).",
+    )
+    claim_window_hours = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Claims must be filed within this many hours of delivery. Blank = no limit.",
+    )
+    require_photo = models.BooleanField(default=False, help_text="Require at least one damage photo.")
+    is_active = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "GT Claim Policy"
+        verbose_name_plural = "GT Claim Policies"
+
+    def __str__(self):
+        return f"GTClaimPolicy({self.service_category or 'platform-wide'}, enabled={self.is_enabled})"

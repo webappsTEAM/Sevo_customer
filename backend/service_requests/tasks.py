@@ -1,90 +1,42 @@
 from celery import shared_task
 import logging
-from django.utils import timezone
 
 logger = logging.getLogger("service_requests.dispatch")
 
 
-@shared_task(bind=True, max_retries=4, default_retry_delay=15)
-def async_dispatch_service_request(self, service_request_id: int):
-    """
-    Asynchronously dispatches a ServiceRequest to the external Workforce system.
-    Retries up to 4 times with exponential backoff on failure.
-    Updates dispatch_status, dispatch_attempts, last_dispatch_error, and last_dispatched_at.
+@shared_task
+def async_dispatch_service_request(service_request_id: int):
+    """Compatibility entry point for legacy callers.
+
+    It now creates a durable intent rather than treating Celery delivery as the
+    source of truth.  The outbox processor owns retries and status updates.
     """
     from service_requests.models import ServiceRequest
-    from workforce_integration.services import WorkforceIntegrationService
+    from service_requests.services.workforce_dispatch_outbox import (
+        deliver_workforce_dispatch_event,
+        request_workforce_dispatch,
+    )
 
-    sr = ServiceRequest.objects.filter(pk=service_request_id).first()
-    if not sr:
-        logger.warning(f"async_dispatch_service_request: ServiceRequest ID {service_request_id} not found.")
+    booking = ServiceRequest.objects.filter(pk=service_request_id).first()
+    if not booking:
+        logger.warning("async_dispatch_service_request: ServiceRequest ID %s not found.", service_request_id)
         return {"success": False, "error": "Booking not found"}
+    event = request_workforce_dispatch(booking)
+    if not event:
+        return {"success": True, "duplicate": True, "workforce_job_id": booking.workforce_job_id or None}
+    return deliver_workforce_dispatch_event(str(event.event_id))
 
-    # If already dispatched and workforce_job_id is assigned, skip redundant dispatch
-    if sr.dispatch_status == ServiceRequest.DispatchStatus.DISPATCHED and sr.workforce_job_id:
-        logger.info(f"Booking {sr.request_id} is already dispatched (Job ID: {sr.workforce_job_id}).")
-        return {"success": True, "workforce_job_id": sr.workforce_job_id}
 
-    # Only dispatch bookings that are in a confirmed, active state.
-    # WAITING_FOR_PAYMENT bookings must not be sent to Workforce before payment clears.
-    # CANCELLED / REJECTED / terminal bookings must never be dispatched.
-    _DISPATCHABLE_STATUSES = {
-        ServiceRequest.Status.CONFIRMED,
-        ServiceRequest.Status.REVIEWED,
-        ServiceRequest.Status.UNASSIGNED,
-        ServiceRequest.Status.NEW_REQUEST,
-    }
-    if sr.status not in _DISPATCHABLE_STATUSES:
-        logger.warning(
-            f"async_dispatch_service_request: Booking {sr.request_id} is in status "
-            f"'{sr.status}' which is not dispatchable. Skipping dispatch."
-        )
-        return {"success": False, "error": f"Booking status '{sr.status}' is not dispatchable"}
+@shared_task
+def deliver_workforce_dispatch_event(event_id: str):
+    from service_requests.services.workforce_dispatch_outbox import deliver_workforce_dispatch_event as deliver
+    return deliver(event_id)
 
-    sr.dispatch_attempts += 1
-    sr.last_dispatched_at = timezone.now()
 
-    try:
-        res = WorkforceIntegrationService.dispatch_job(sr)
-        if res.get("success"):
-            sr.dispatch_status = ServiceRequest.DispatchStatus.DISPATCHED
-            sr.last_dispatch_error = ""
-            sr.save(update_fields=["dispatch_status", "dispatch_attempts", "last_dispatch_error", "last_dispatched_at", "updated_at"])
-            logger.info(f"Booking {sr.request_id} successfully dispatched on attempt {sr.dispatch_attempts}.")
-            return res
-        else:
-            err_msg = res.get("message") or res.get("error") or "Workforce dispatch returned failure"
-            sr.last_dispatch_error = str(err_msg)[:500]
-            if self.request.retries < self.max_retries:
-                sr.dispatch_status = ServiceRequest.DispatchStatus.PENDING_RETRY
-                sr.save(update_fields=["dispatch_status", "dispatch_attempts", "last_dispatch_error", "last_dispatched_at", "updated_at"])
-                countdown = 15 * (2 ** self.request.retries)
-                logger.warning(f"Booking {sr.request_id} dispatch failed (attempt {sr.dispatch_attempts}): {err_msg}. Retrying in {countdown}s...")
-                raise self.retry(countdown=countdown, exc=Exception(err_msg))
-            else:
-                sr.dispatch_status = ServiceRequest.DispatchStatus.FAILED
-                sr.save(update_fields=["dispatch_status", "dispatch_attempts", "last_dispatch_error", "last_dispatched_at", "updated_at"])
-                logger.error(f"Booking {sr.request_id} dispatch permanently FAILED after {sr.dispatch_attempts} attempts: {err_msg}")
-                return {"success": False, "error": err_msg, "exhausted": True}
-    except self.MaxRetriesExceededError:
-        sr.dispatch_status = ServiceRequest.DispatchStatus.FAILED
-        sr.save(update_fields=["dispatch_status", "dispatch_attempts", "last_dispatch_error", "last_dispatched_at", "updated_at"])
-        logger.error(f"Booking {sr.request_id} dispatch permanently FAILED (Max retries exceeded).")
-        return {"success": False, "error": "Max retries exceeded", "exhausted": True}
-    except Exception as exc:
-        if self.request.retries < self.max_retries:
-            sr.dispatch_status = ServiceRequest.DispatchStatus.PENDING_RETRY
-            sr.last_dispatch_error = str(exc)[:500]
-            sr.save(update_fields=["dispatch_status", "dispatch_attempts", "last_dispatch_error", "last_dispatched_at", "updated_at"])
-            countdown = 15 * (2 ** self.request.retries)
-            logger.warning(f"Booking {sr.request_id} dispatch exception on attempt {sr.dispatch_attempts}: {exc}. Retrying in {countdown}s...")
-            raise self.retry(countdown=countdown, exc=exc)
-        else:
-            sr.dispatch_status = ServiceRequest.DispatchStatus.FAILED
-            sr.last_dispatch_error = str(exc)[:500]
-            sr.save(update_fields=["dispatch_status", "dispatch_attempts", "last_dispatch_error", "last_dispatched_at", "updated_at"])
-            logger.error(f"Booking {sr.request_id} dispatch permanently FAILED: {exc}")
-            return {"success": False, "error": str(exc), "exhausted": True}
+@shared_task(name="service_requests.process_pending_workforce_dispatches")
+def process_pending_workforce_dispatches_task():
+    from service_requests.services.workforce_dispatch_outbox import process_pending_workforce_dispatches
+    return process_pending_workforce_dispatches(limit=50)
 
 
 @shared_task
@@ -98,3 +50,10 @@ def generate_due_amc_bookings():
     from service_requests.services import generate_due_bookings
     created, failed = generate_due_bookings()
     return f"AMC generation: {len(created)} booking(s) created, {len(failed)} series failed."
+
+
+@shared_task
+def expire_unpaid_online_bookings_task():
+    """Schedule from the admin's periodic tasks (e.g. every 5 minutes)."""
+    from service_requests.services.payment_expiry import expire_unpaid_online_bookings
+    return expire_unpaid_online_bookings()

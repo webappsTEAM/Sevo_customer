@@ -3,6 +3,7 @@ import { Save, Camera, User, Globe, Languages, Phone, Link as LinkIcon, Loader2 
 import { apiRequest } from "../../../api/client.js"
 import { useAuth } from "../../../state/auth/useAuth.js"
 import { Input, Select, TextArea } from "../../components/kit.jsx"
+import { resolveImageUrl } from "../../../utils/imageUrl.js"
 
 const TIMEZONES = [
   "UTC", "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
@@ -27,13 +28,15 @@ const LANGUAGES = [
 ]
 
 export default function ProfileSection({ markDirty, showToast, Field, SectionHeader }) {
-  const { user, refreshMe } = useAuth()
+  const { user, refreshMe, updateUser } = useAuth()
   const fileRef = useRef(null)
 
   const [saving, setSaving] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [avatarPreview, setAvatarPreview] = useState(null)
   const [avatarFile, setAvatarFile] = useState(null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [imgError, setImgError] = useState(false)
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
@@ -53,7 +56,9 @@ export default function ProfileSection({ markDirty, showToast, Field, SectionHea
         timezone: user.timezone || "UTC",
         language: user.language || "en",
       })
-      if (user.avatar_url || user.avatar) setAvatarPreview(user.avatar_url || user.avatar)
+      const photo = user.avatar_url || user.avatar || null
+      setAvatarPreview(photo)
+      setImgError(false)
     }
   }, [user])
 
@@ -65,34 +70,65 @@ export default function ProfileSection({ markDirty, showToast, Field, SectionHea
   const handleAvatarChange = async e => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 5 * 1024 * 1024) { showToast("Avatar must be under 5 MB.", "error"); return }
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("Avatar must be under 5 MB.", "error")
+      return
+    }
+
+    // Instant local preview
+    const previewUrl = URL.createObjectURL(file)
     setAvatarFile(file)
-    setAvatarPreview(URL.createObjectURL(file))
+    setAvatarPreview(previewUrl)
+    setImgError(false)
+    setUploadingAvatar(true)
 
     // Upload immediately
     try {
       const body = new FormData()
       body.append("avatar", file)
-      await apiRequest("/auth/profile/", { method: "PATCH", body })
-      if (refreshMe) await refreshMe()
-      showToast("Profile picture updated successfully.")
+      const res = await apiRequest("/auth/profile/", { method: "PATCH", body })
+      const updatedUser = res?.data || res?.user
+      if (updatedUser?.avatar_url) {
+        setAvatarPreview(updatedUser.avatar_url)
+      }
+      if (updateUser && updatedUser?.username) {
+        updateUser(updatedUser)
+      } else if (refreshMe) {
+        await refreshMe()
+      }
+      showToast("Profile photo updated successfully.")
+      setAvatarFile(null)
     } catch (err) {
-      showToast(err?.body?.message || "Failed to save profile picture.", "error")
+      setAvatarPreview(user?.avatar_url || user?.avatar || null)
+      showToast(err?.body?.message || err?.message || "Failed to save profile picture.", "error")
+    } finally {
+      setUploadingAvatar(false)
+      if (fileRef.current) fileRef.current.value = ""
     }
   }
 
   const handleRemoveAvatar = async () => {
+    setUploadingAvatar(true)
     try {
-      await apiRequest("/auth/profile/", {
+      const res = await apiRequest("/auth/profile/", {
         method: "PATCH",
-        json: { avatar: null }
+        json: { avatar: null, remove_avatar: true }
       })
+      const updatedUser = res?.data || res?.user
       setAvatarPreview(null)
       setAvatarFile(null)
-      if (refreshMe) await refreshMe()
-      showToast("Profile picture removed successfully.")
+      setImgError(false)
+      if (updateUser && updatedUser?.username) {
+        updateUser(updatedUser)
+      } else if (refreshMe) {
+        await refreshMe()
+      }
+      showToast("Profile photo removed successfully.")
     } catch (err) {
-      showToast(err?.body?.message || "Failed to remove profile picture.", "error")
+      showToast(err?.body?.message || err?.message || "Failed to remove profile picture.", "error")
+    } finally {
+      setUploadingAvatar(false)
+      if (fileRef.current) fileRef.current.value = ""
     }
   }
 
@@ -100,15 +136,23 @@ export default function ProfileSection({ markDirty, showToast, Field, SectionHea
     setSaving(true)
     try {
       const body = new FormData()
-      Object.entries(form).forEach(([k, v]) => body.append(k, v))
+      Object.entries(form).forEach(([k, v]) => {
+        if (v !== undefined && v !== null) body.append(k, v)
+      })
       if (avatarFile) body.append("avatar", avatarFile)
 
-      await apiRequest("/auth/profile/", { method: "PATCH", body })
-      if (refreshMe) await refreshMe()
+      const res = await apiRequest("/auth/profile/", { method: "PATCH", body })
+      const updatedUser = res?.data || res?.user
+      if (updateUser && updatedUser?.username) {
+        updateUser(updatedUser)
+      } else if (refreshMe) {
+        await refreshMe()
+      }
       showToast("Profile saved successfully.")
       setIsEditing(false)
+      setAvatarFile(null)
     } catch (err) {
-      showToast(err?.body?.message || "Failed to save profile.", "error")
+      showToast(err?.body?.message || err?.message || "Failed to save profile.", "error")
     } finally {
       setSaving(false)
     }
@@ -124,24 +168,74 @@ export default function ProfileSection({ markDirty, showToast, Field, SectionHea
       <div className="stCard">
         <div className="flex items-center gap-5">
           <div style={{ position: "relative" }}>
-            <div className="stIdentityAvatar" style={{ width: 72, height: 72, borderRadius: 16, fontSize: 26 }}>
-              {avatarPreview
-                ? <img src={avatarPreview.includes("demo.localhost") ? `${window.location.origin}${avatarPreview.substring(avatarPreview.indexOf('/media/'))}` : avatarPreview} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 16 }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                : initials}
+            <div
+              className="stIdentityAvatar"
+              style={{
+                width: 72,
+                height: 72,
+                borderRadius: 16,
+                fontSize: 26,
+                overflow: "hidden",
+                position: "relative",
+              }}
+            >
+              {avatarPreview && !imgError ? (
+                <img
+                  src={resolveImageUrl(avatarPreview)}
+                  alt="avatar"
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  onError={() => setImgError(true)}
+                />
+              ) : (
+                initials
+              )}
+              {uploadingAvatar && (
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    background: "rgba(0,0,0,0.45)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 16,
+                  }}
+                >
+                  <Loader2 className="animate-spin text-white" size={24} />
+                </div>
+              )}
             </div>
             <button
+              type="button"
+              disabled={uploadingAvatar}
               onClick={() => fileRef.current?.click()}
+              title="Upload new photo"
               style={{
-                position: "absolute", bottom: -4, right: -4,
-                width: 26, height: 26, borderRadius: "50%",
-                background: "#1A56DB", color: "#fff", border: "2.5px solid #fff",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer",
+                position: "absolute",
+                bottom: -4,
+                right: -4,
+                width: 26,
+                height: 26,
+                borderRadius: "50%",
+                background: "#1A56DB",
+                color: "#fff",
+                border: "2.5px solid #fff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: uploadingAvatar ? "not-allowed" : "pointer",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.18)",
               }}
             >
               <Camera size={12} />
             </button>
-            <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleAvatarChange} />
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={handleAvatarChange}
+            />
           </div>
           <div>
             <div style={{ fontSize: 15, fontWeight: 800, color: "var(--fg)" }}>
@@ -158,20 +252,42 @@ export default function ProfileSection({ markDirty, showToast, Field, SectionHea
                 ? "Customer"
                 : user?.role || "Staff"} · {user?.email}
             </div>
-            <button
-              onClick={() => fileRef.current?.click()}
-              style={{ marginTop: 8, fontSize: 12, color: "#1A56DB", fontWeight: 600, background: "none", border: "none", cursor: "pointer", padding: 0 }}
-            >
-              Change photo
-            </button>
-            {user?.avatar_url && (
+            <div className="flex items-center gap-3 mt-2">
               <button
-                onClick={handleRemoveAvatar}
-                style={{ marginTop: 8, marginLeft: 12, fontSize: 12, color: "var(--muted)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                type="button"
+                disabled={uploadingAvatar}
+                onClick={() => fileRef.current?.click()}
+                style={{
+                  fontSize: 12,
+                  color: "#1A56DB",
+                  fontWeight: 600,
+                  background: "none",
+                  border: "none",
+                  cursor: uploadingAvatar ? "not-allowed" : "pointer",
+                  padding: 0,
+                }}
               >
-                Remove
+                Change photo
               </button>
-            )}
+              {(avatarPreview || user?.avatar_url || user?.avatar) && (
+                <button
+                  type="button"
+                  disabled={uploadingAvatar}
+                  onClick={handleRemoveAvatar}
+                  style={{
+                    fontSize: 12,
+                    color: "#dc2626",
+                    fontWeight: 600,
+                    background: "none",
+                    border: "none",
+                    cursor: uploadingAvatar ? "not-allowed" : "pointer",
+                    padding: 0,
+                  }}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

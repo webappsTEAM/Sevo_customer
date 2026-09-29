@@ -19,6 +19,15 @@ logger = logging.getLogger("workforce_integration")
 
 _raw_base_url = getattr(settings, "WORKFORCE_API_BASE_URL", None) or os.getenv("WORKFORCE_API_BASE_URL")
 _raw_webhook_secret = getattr(settings, "WORKFORCE_WEBHOOK_SECRET", None) or os.getenv("WORKFORCE_WEBHOOK_SECRET")
+# Publicly-known placeholder values (repo defaults / .env.example) are not secrets: outside
+# local DEBUG/tests they count as "not configured" so production fails closed instead of
+# authenticating webhooks with a value anyone can read in the repository.
+if _raw_webhook_secret and str(_raw_webhook_secret).strip() in (
+    "caldim_secure_webhook_token_2026",
+    "dev-insecure-workforce-webhook-secret-local-testing-only",
+    "wf_webhook_secret_default",
+) and not (settings.DEBUG or "test" in sys.argv or getattr(settings, "TESTING", False)):
+    _raw_webhook_secret = None
 
 if not _raw_base_url or not _raw_webhook_secret:
     if settings.DEBUG or "test" in sys.argv or getattr(settings, "TESTING", False):
@@ -90,6 +99,18 @@ class WorkforceIntegrationService:
         if not sr:
             return {"success": False, "error": "Booking not found"}
 
+        # Vendor and Customer operate on the same ServiceRequest row. Once a
+        # Workforce job reference is recorded, a later Celery retry must not
+        # create another allocation request merely because an earlier response
+        # was delivered twice.
+        wf_job_id = getattr(sr, "workforce_job_id", None)
+        if wf_job_id and not hasattr(wf_job_id, "_mock_name") and str(wf_job_id).strip():
+            return {
+                "success": True,
+                "workforce_job_id": str(wf_job_id),
+                "already_dispatched": True,
+            }
+
         # Extract logistics vehicle / fitment requirements if present
         logistics_info = None
         tier = getattr(sr, "logistics_tier", None)
@@ -136,6 +157,14 @@ class WorkforceIntegrationService:
                 "payment_status": sr.payment_status,
             },
             "cart_data": sr.cart_data,
+            # Canonical service/package snapshots are immutable booking facts,
+            # not UI labels. The Vendor also reads the shared row, but sending
+            # them across the boundary keeps the contract explicit and makes a
+            # future separated deployment safe.
+            "catalog_service_id": getattr(sr, "catalog_service_id", "") or "",
+            "package_id": getattr(sr, "package_id", "") or "",
+            "package_version": getattr(sr, "package_version", "") or "",
+            "package_display": getattr(sr, "package_display", {}) or {},
             "start_otp": sr.start_otp,
             "tracking_token": str(sr.tracking_token) if sr.tracking_token else None,
             "logistics": logistics_info,
@@ -170,7 +199,13 @@ class WorkforceIntegrationService:
         try:
 
             url = f"{WORKFORCE_API_BASE_URL}/jobs/dispatch/"
-            response = requests.post(url, json=payload, headers=cls._internal_headers(), timeout=10)
+            headers = cls._internal_headers()
+            # request_id is generated once for the shared booking and is the
+            # cross-service idempotency key. Do not use a random key here: a
+            # retry must identify the same business operation.
+            headers["Idempotency-Key"] = str(sr.request_id)
+            payload["idempotency_key"] = str(sr.request_id)
+            response = requests.post(url, json=payload, headers=headers, timeout=10)
             if response.status_code in [200, 201]:
                 data = response.json()
                 workforce_job_id = data.get("workforce_job_id") or data.get("job_id")
@@ -436,8 +471,11 @@ class WorkforceIntegrationService:
         Dispatches customer verified rating and feedback score to the Workforce employee profile.
         """
         sr = cls._resolve_sr(service_request)
-        if not sr or not technician_id:
+        if not sr:
             return {"success": True, "fallback": True}
+        # The vendor resolves the technician from the job (authoritative); the id in the URL is only a
+        # hint, so a missing snapshot must not swallow the rating.
+        technician_id = technician_id or ""
 
         payload = {
             "booking_id": sr.request_id,
@@ -449,7 +487,7 @@ class WorkforceIntegrationService:
         }
 
         try:
-            url = f"{WORKFORCE_API_BASE_URL}/technicians/{technician_id}/feedback/"
+            url = f"{WORKFORCE_API_BASE_URL}/technicians/{technician_id or 'assigned'}/feedback/"
             response = requests.post(url, json=payload, headers=cls._internal_headers(), timeout=5)
             if response.status_code in [200, 201, 204]:
                 return {"success": True}

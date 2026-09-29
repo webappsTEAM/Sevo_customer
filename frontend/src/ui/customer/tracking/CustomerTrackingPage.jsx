@@ -17,6 +17,7 @@ import { useCustomerTracking } from "./useCustomerTracking.js"
 import { CustomerTrackingMap } from "./CustomerTrackingMap.jsx"
 import { CustomerTrackingHeader } from "./CustomerTrackingHeader.jsx"
 import { CustomerTrackingStatusCard } from "./CustomerTrackingStatusCard.jsx"
+import { settleBookingPayment } from "../../../api/gtPaymentService.js"
 import { getFreshnessBadge } from "./trackingUtils.js"
 import "../../pages/LiveTrackingPage.css"
 
@@ -62,6 +63,16 @@ const LOGISTICS_TIMELINE_STEPS = [
   { label: "Goods In Transit", emoji: "📦" },
   { label: "Goods Delivered", emoji: "✅" },
 ]
+
+// A multi-stop booking stores its whole route as TripStops (PICKUP, each
+// WAYPOINT, DROP). Pickup and drop already have their own rows and pins, so the
+// "Stop 1..n" list and the numbered map pins must be the intermediate stops only
+// -- otherwise the pickup and drop appear a second time as numbered stops.
+function intermediateStops(logistics) {
+  return (Array.isArray(logistics?.stops) ? logistics.stops : []).filter(
+    (s) => !["PICKUP", "DROP"].includes(String(s?.stop_type || "").toUpperCase()),
+  )
+}
 
 function getTimelineIdx(s, isLogistics = false, logisticsLeg = "") {
   s = (s || "").toLowerCase()
@@ -109,6 +120,7 @@ export function CustomerTrackingPage({
 
   const [copiedOtp, setCopiedOtp] = useState(false)
   const [copiedPayOtp, setCopiedPayOtp] = useState(false)
+  const [copiedDeliveryOtp, setCopiedDeliveryOtp] = useState(false)
 
   // Multi-service booking (Sept 2026): when this booking is one task of a
   // multi-service parent Order (data.order_id + sibling_task_count > 1,
@@ -351,11 +363,14 @@ export function CustomerTrackingPage({
   const techRating = data?.assigned_employee?.rating ?? data?.technician?.rating ?? null
   const techJobs = data?.assigned_employee?.jobs_completed ?? data?.technician?.jobs_completed ?? null
   const startOtp = data?.start_otp || null
+  const [balancePaying, setBalancePaying] = useState(false)
+  const [balanceMsg, setBalanceMsg] = useState("")
 
   const etaMins = data?.technician?.eta_minutes ?? data?.eta_minutes ?? null
   const distKm = data?.technician?.distance_km ?? data?.distance_km ?? null
   const freshness = data?.freshness || "LIVE"
   const paymentConfirmationOtp = data?.payment_confirmation_otp || null
+  const deliveryOtp = data?.delivery_otp || null
 
   const copyOtp = () => {
     if (!startOtp || !navigator.clipboard) return
@@ -369,6 +384,13 @@ export function CustomerTrackingPage({
     navigator.clipboard.writeText(paymentConfirmationOtp)
     setCopiedPayOtp(true)
     setTimeout(() => setCopiedPayOtp(false), 2000)
+  }
+
+  const copyDeliveryOtp = () => {
+    if (!deliveryOtp || !navigator.clipboard) return
+    navigator.clipboard.writeText(deliveryOtp)
+    setCopiedDeliveryOtp(true)
+    setTimeout(() => setCopiedDeliveryOtp(false), 2000)
   }
 
   const openWA = () => {
@@ -523,8 +545,12 @@ export function CustomerTrackingPage({
               startOtp={startOtp}
               vendorName={vendorName}
               requestId={data?.request_id || activeIdentifier}
+              // Bug found: intermediate TripStop waypoints (already fetched
+              // into data.logistics.stops and listed in the address panel
+              // below) were never passed to the map, so they never appeared
+              // as markers and never factored into the camera's fitBounds.
               routePoints={isLogistics && (data?.pickup_location || data?.drop_location)
-                ? { pickup: data?.pickup_location, drop: data?.drop_location }
+                ? { pickup: data?.pickup_location, drop: data?.drop_location, stops: intermediateStops(data?.logistics) }
                 : null}
             />
 
@@ -871,6 +897,75 @@ export function CustomerTrackingPage({
               </div>
             )}
 
+            {/* Prepaid trip whose final fare rose above what was paid */}
+            {isLogistics && data?.balance_due && !isCancelled && (
+              <div className="ltp-card" role="status" style={{ border: "1px solid #93c5fd", background: "#eff6ff" }}>
+                <strong style={{ color: "#1e3a8a" }}>Balance due: ₹{data.balance_due}</strong>
+                <div style={{ fontSize: "0.85rem", color: "#1e40af", margin: "4px 0 8px" }}>
+                  The final fare is higher than what you paid online (extra distance, stops or waiting time).
+                </div>
+                <button type="button" disabled={balancePaying}
+                  style={{ padding: "8px 14px", borderRadius: 10, background: "#1d4ed8", color: "#fff", fontWeight: 700, border: 0 }}
+                  onClick={async () => {
+                    setBalancePaying(true); setBalanceMsg("")
+                    const r = await settleBookingPayment({ bookingId: data.job_id, trackingToken, method: "online" })
+                    setBalanceMsg(r.ok ? "Payment received. Thank you!" : (r.message || "Payment was not completed."))
+                    setBalancePaying(false)
+                  }}>
+                  {balancePaying ? "Processing…" : "Pay balance"}
+                </button>
+                {balanceMsg && <div style={{ fontSize: "0.8rem", marginTop: 6 }}>{balanceMsg}</div>}
+              </div>
+            )}
+
+            {/* Toll / parking receipts the driver added (billed at actuals) */}
+            {isLogistics && Array.isArray(data?.extra_charges) && data.extra_charges.length > 0 && !isCancelled && (
+              <div className="ltp-card" style={{ border: "1px solid #bae6fd", background: "#f0f9ff" }}>
+                <strong style={{ color: "#075985" }}>Toll / parking added by your driver</strong>
+                {data.extra_charges.map((c) => (
+                  <div key={c.charge_id} style={{ fontSize: "0.85rem", color: "#0c4a6e", marginTop: 4 }}>
+                    {c.label}: ₹{c.amount}
+                    {/^https?:\/\//.test(c.receipt_photo_url || "") && (
+                      <> · <a href={c.receipt_photo_url} target="_blank" rel="noopener noreferrer">View receipt</a></>
+                    )}
+                  </div>
+                ))}
+                <div style={{ fontSize: "0.75rem", color: "#0369a1", marginTop: 6 }}>
+                  Charged at the receipt amount and included in your final fare.
+                </div>
+              </div>
+            )}
+
+            {/* Driver-reported trip problem (receiver unavailable, address not found, ...) */}
+            {isLogistics && data?.delivery_exception?.status === "OPEN" && !isCancelled && (
+              <div className="ltp-card" role="alert" style={{ border: "1px solid #fdba74", background: "#fff7ed" }}>
+                <strong style={{ color: "#9a3412" }}>{data.delivery_exception.label}</strong>
+                <div style={{ fontSize: "0.85rem", color: "#7c2d12", marginTop: 4 }}>
+                  Your driver reported this at the {data.delivery_exception.leg === "EN_ROUTE_PICKUP" || data.delivery_exception.leg === "LOADING" ? "pickup" : "drop"} point.
+                  Please reach out to the driver or contact support so the trip can continue.
+                </div>
+              </div>
+            )}
+
+            {/* Delivery OTP Card (goods & transport / packers & movers) */}
+            {isLogistics && deliveryOtp && !isCancelled && (
+              <div className="ltp-card ltp-otp-card highlight-arrived">
+                <div className="ltp-otp-left">
+                  <KeyRound size={18} color="#ea580c" />
+                  <div>
+                    <div className="ltp-otp-label">DELIVERY OTP</div>
+                    <div className="ltp-otp-hint">
+                      Share this code with the driver only after your goods have been delivered
+                    </div>
+                  </div>
+                </div>
+                <button className="ltp-otp-val" onClick={copyDeliveryOtp} aria-label="Copy Delivery OTP" title="Click to copy">
+                  {deliveryOtp}
+                  {copiedDeliveryOtp ? <Check size={13} color="#10b981" /> : <Copy size={13} />}
+                </button>
+              </div>
+            )}
+
             {/* Assigned Technician & Vendor Card */}
             {isAccepted ? (
               <motion.div className="ltp-card" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
@@ -1004,7 +1099,7 @@ export function CustomerTrackingPage({
                   </div>
                 </div>
                 {/* Intermediate Stops (if any) */}
-                {Array.isArray(data?.logistics?.stops) && data.logistics.stops.length > 0 && data.logistics.stops.map((stop, sIdx) => (
+                {intermediateStops(data?.logistics).map((stop, sIdx) => (
                   <div key={stop.id || sIdx} className="ltp-addr-row" style={{ marginBottom: 8, paddingLeft: 6, borderLeft: "2px dashed #94a3b8" }}>
                     <div style={{ width: 16, height: 16, borderRadius: "50%", background: "#f1f5f9", color: "#475569", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, flexShrink: 0, marginTop: 2 }}>{sIdx + 1}</div>
                     <div>

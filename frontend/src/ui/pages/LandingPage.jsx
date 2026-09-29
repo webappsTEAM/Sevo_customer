@@ -3075,14 +3075,51 @@ export function LandingPage() {
 
       setIsLoadingLocation(true)
       try {
+        const isCoords = (s) => /^(\s*GPS Location\s*\()?[-+]?([0-9]*[.])?[0-9]+,\s*[-+]?([0-9]*[.])?[0-9]+\)?\s*$/i.test(String(s || "").trim())
+        const autoUpgradeCoords = (rawStr, lat, lng) => {
+          let targetLat = lat
+          let targetLng = lng
+          if (!targetLat || !targetLng) {
+            const m = String(rawStr || "").match(/([-+]?[0-9]*\.[0-9]+),\s*([-+]?[0-9]*\.[0-9]+)/)
+            if (m) {
+              targetLat = parseFloat(m[1])
+              targetLng = parseFloat(m[2])
+            }
+          }
+          if (targetLat && targetLng) {
+            getAddress(targetLat, targetLng).then(display => {
+              if (display && isMounted && !isCoords(display)) {
+                setActiveLocationLabel(display)
+                setCustomerLocation(user.id, display)
+              }
+            }).catch(() => {})
+          }
+        }
+
         // 1. Read customer-scoped selected address first
         const currentSelected = getCustomerSelectedAddress(user.id)
         const scopedLoc = getCustomerLocation(user.id)
-        if (scopedLoc && isMounted) {
-          setActiveLocationLabel(scopedLoc)
+
+        // If customer has an active explicitly selected or detected location, prioritize it!
+        const hasActiveSelection = currentSelected && (currentSelected.formatted_address || currentSelected.address_line1) && !isCoords(currentSelected.formatted_address)
+
+        if (hasActiveSelection) {
+          const label = currentSelected.formatted_address || currentSelected.address_line1 || currentSelected.locality || ""
+          if (label && isMounted) {
+            setActiveLocationLabel(label)
+            if (currentSelected.latitude && currentSelected.longitude) {
+              verifyServiceZone(Number(currentSelected.latitude), Number(currentSelected.longitude), label)
+            }
+          }
+          return
         }
 
-        // 2. Query backend for this customer's saved addresses
+        if (scopedLoc && isMounted && !isCoords(scopedLoc)) {
+          setActiveLocationLabel(scopedLoc)
+          return
+        }
+
+        // 2. Query backend for this customer's saved addresses (only if no active selection)
         const res = await apiRequest("/auth/customer/addresses/")
         const addresses = res?.data || (Array.isArray(res) ? res : [])
         if (!isMounted) return
@@ -3102,12 +3139,18 @@ export function LandingPage() {
             setActiveLocationLabel(label)
             setCustomerSelectedAddress(user.id, activeAddr)
             setCustomerLocation(user.id, label)
+            if (isCoords(label)) {
+              autoUpgradeCoords(label, activeAddr.latitude, activeAddr.longitude)
+            }
             if (activeAddr.latitude && activeAddr.longitude) {
               verifyServiceZone(Number(activeAddr.latitude), Number(activeAddr.longitude), label)
             }
           }
         } else if (scopedLoc && isMounted) {
           setActiveLocationLabel(scopedLoc)
+          if (isCoords(scopedLoc)) {
+            autoUpgradeCoords(scopedLoc)
+          }
         } else {
           // No saved addresses for this customer: check customer profile last known location
           const lastLoc = user?.last_known_location || user?.lastKnownLocation
@@ -3115,6 +3158,9 @@ export function LandingPage() {
           if (lastLocStr && isMounted) {
             setActiveLocationLabel(lastLocStr)
             setCustomerLocation(user.id, lastLocStr)
+            if (isCoords(lastLocStr)) {
+              autoUpgradeCoords(lastLocStr, lastLoc?.latitude, lastLoc?.longitude)
+            }
           } else if (isMounted) {
             setActiveLocationLabel(null)
           }
@@ -4092,21 +4138,20 @@ export function LandingPage() {
                   <span className="truncate">
                     {(() => {
                       if (isLoadingLocation) return "Loading..."
-                      if (activeLocationLabel) return activeLocationLabel
+                      const isCoord = (str) => /^(\s*GPS Location\s*\()?[-+]?([0-9]*[.])?[0-9]+,\s*[-+]?([0-9]*[.])?[0-9]+\)?\s*$/i.test(String(str || "").trim())
+                      if (activeLocationLabel && !isCoord(activeLocationLabel)) return activeLocationLabel
                       const locObj = user?.last_known_location || user?.lastKnownLocation
                       if (locObj) {
-                        if (typeof locObj === "string" && locObj.trim()) return locObj
-                        if (locObj.label) return locObj.label
+                        const raw = typeof locObj === "string" ? locObj.trim() : (locObj.label || locObj.formatted_address || "")
+                        if (raw && !isCoord(raw)) return raw
                       }
-                      if (user?.address) return user.address
-                      return "Bengaluru, 560001"
+                      if (user?.address && !isCoord(user.address)) return user.address
+                      if (activeLocationLabel) return activeLocationLabel
+                      return "Hosur, 635109"
                     })()}
                   </span>
                   <ChevronDown className="w-3 h-3 text-slate-400 shrink-0 ml-auto" />
                 </button>
-                <span className="hidden md:inline-flex items-center bg-emerald-50 dark:bg-emerald-950/40 text-[#0B8F7A] dark:text-emerald-400 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-200/80 dark:border-emerald-800 shrink-0">
-                  Auto-detected
-                </span>
               </div>
             </div>
 

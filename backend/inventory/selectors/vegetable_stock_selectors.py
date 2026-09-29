@@ -22,13 +22,25 @@ from inventory.utils.unit_conversion import (
 
 def _safe_get_stock_item(product) -> Optional[Any]:
     """
-    Safely retrieves product.stock_item.
+    Safely retrieves product.stock_item or reverse product.vegetable_stock.
     Handles ObjectDoesNotExist which getattr does not catch.
     """
-    try:
-        return getattr(product, "stock_item", None)
-    except ObjectDoesNotExist:
+    if not product:
         return None
+    try:
+        item = getattr(product, "stock_item", None)
+        if item:
+            return item
+    except ObjectDoesNotExist:
+        pass
+    try:
+        item = getattr(product, "vegetable_stock", None)
+        if item:
+            return item
+    except ObjectDoesNotExist:
+        pass
+    return None
+
 
 
 def get_stock_status(product) -> Dict[str, Any]:
@@ -49,6 +61,11 @@ def get_stock_status(product) -> Dict[str, Any]:
             item = None
     if not item and hasattr(product, "_cached_vegetable"):
         item = getattr(product, "_cached_vegetable", None)
+    if not item:
+        try:
+            item = getattr(product, "vegetable_stock", None)
+        except Exception:
+            item = None
     if not item:
         return {"in_stock": True, "max_quantity": None}
 
@@ -90,7 +107,6 @@ def get_bulk_admin_stock_status(products: list, for_date: Optional[date] = None)
     """
     if not products:
         return {}
-
     target_date = for_date or timezone.localdate()
 
     # Collect stock items that are present

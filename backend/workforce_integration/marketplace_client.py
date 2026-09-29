@@ -220,6 +220,9 @@ class MarketplaceIntegrationClient:
         delivery_address: dict,
         payment_snapshot: dict,
         items: list,
+        delivery_group_id: str = "",
+        warehouse_id: int = None,
+        warehouse_name: str = "",
     ) -> dict:
         """
         Intakes canonical customer order to Vendor Seller Hub and atomically reserves stock.
@@ -238,6 +241,9 @@ class MarketplaceIntegrationClient:
             "delivery_address": delivery_address if isinstance(delivery_address, dict) else {"formatted": str(delivery_address)},
             "payment_snapshot": payment_snapshot,
             "items": items,
+            "delivery_group_id": delivery_group_id,
+            "warehouse_id": warehouse_id,
+            "warehouse_name": warehouse_name,
         }
         try:
             url = f"{cls._get_base_url()}/marketplace/orders/intake/"

@@ -21,6 +21,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
+from service_requests.booking_window import next_bookable_date
 from rest_framework.test import APIClient
 
 from logistics.models import GoodsCategory, GoodsItem, LogisticsCategory, ServiceTier
@@ -214,7 +215,7 @@ class GTClosureProductionVerificationTests(TestCase):
                 "drop_address": "Koramangala, Bengaluru",
                 "drop_latitude": DROP_COORDS["lat"],
                 "drop_longitude": DROP_COORDS["lng"],
-                "preferred_date": str(timezone.localdate()),
+                "preferred_date": str(next_bookable_date(service_category="goods_transport_truck")),
                 "preferred_time": "Immediate / Next Available",
                 "total_amount": "10.00",  # Client price tampering attempt
                 "payment_method": "COD",
@@ -274,7 +275,7 @@ class GTClosureProductionVerificationTests(TestCase):
                 "drop_address": "Zuzuvadi",
                 "drop_latitude": DROP_COORDS["lat"],
                 "drop_longitude": DROP_COORDS["lng"],
-                "preferred_date": str(timezone.localdate()),
+                "preferred_date": str(next_bookable_date(service_category="goods_transport_truck")),
                 "preferred_time": "Immediate / Next Available",
                 "total_amount": "100.00",
                 "payment_method": "COD",

@@ -21,7 +21,7 @@ class KnowledgeRetriever:
     """
 
     @classmethod
-    def retrieve(cls, query: str, top_k: int = 3, min_score: float = 0.38) -> List[Dict[str, Any]]:
+    def retrieve(cls, query: str, top_k: int = 3, min_score: float = 0.45) -> List[Dict[str, Any]]:
         clean_q = (query or "").strip()
         if not clean_q:
             return []
@@ -58,7 +58,7 @@ class KnowledgeRetriever:
                 composite_score = vec_sim
 
             # Filter out weak matches: must meet composite threshold and demonstrate genuine relevance
-            is_relevant = (composite_score >= min_score and (vec_sim >= 0.52 or text_score >= 0.30))
+            is_relevant = (composite_score >= min_score and (vec_sim >= 0.56 or text_score >= 0.35))
 
             if is_relevant:
                 scored_results.append({

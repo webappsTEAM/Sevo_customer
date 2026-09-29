@@ -104,6 +104,10 @@ class OutboxService:
         events = EventOutbox.objects.filter(
             status__in=[EventOutbox.Status.PENDING, EventOutbox.Status.FAILED],
             retry_count__lt=5,
+        ).exclude(
+            # Workforce delivery has different retry and acknowledgement
+            # semantics.  Do not let the WebSocket publisher consume it.
+            event_type="workforce.dispatch_requested",
         ).order_by("created_at")[:max_count]
 
         published_count = 0

@@ -1,18 +1,19 @@
 import uuid
 from decimal import Decimal
 from unittest.mock import patch, MagicMock
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
 from accounts.models import User
 from companies.models import Company
-from service_requests.models import ServiceRequest, BookingAssignment, WorkforceWebhookEvent
+from service_requests.models import EventOutbox, ServiceRequest, BookingAssignment, WorkforceWebhookEvent
 from workforce_integration.services import WORKFORCE_WEBHOOK_SECRET
 from service_requests.consumers import TrackingConsumer
 
 
+@override_settings(SECURE_SSL_REDIRECT=False)
 class CustomerWorkforceIntegrationVerificationTests(TestCase):
     """
     Verification test suite confirming customer-side dispatch safety,
@@ -119,6 +120,39 @@ class CustomerWorkforceIntegrationVerificationTests(TestCase):
             res = async_dispatch_service_request(self.booking.id)
             self.assertTrue(res["success"])
             mock_dispatch.assert_not_called()
+
+    def test_03a_dispatch_outbox_retries_without_losing_the_booking(self):
+        """A broker/network failure leaves a durable, retryable delivery intent."""
+        from service_requests.services.workforce_dispatch_outbox import (
+            EVENT_TYPE,
+            deliver_workforce_dispatch_event,
+            request_workforce_dispatch,
+        )
+
+        event = request_workforce_dispatch(self.booking)
+        self.assertIsNotNone(event)
+        self.assertEqual(event.event_type, EVENT_TYPE)
+
+        with patch("workforce_integration.services.WorkforceIntegrationService.dispatch_job") as mock_dispatch:
+            mock_dispatch.return_value = {"success": False, "message": "temporary outage"}
+            failed = deliver_workforce_dispatch_event(str(event.event_id))
+
+        self.assertFalse(failed["success"])
+        event.refresh_from_db()
+        self.assertEqual(event.status, EventOutbox.Status.FAILED)
+        self.assertEqual(event.retry_count, 1)
+        self.booking.refresh_from_db()
+        self.assertEqual(self.booking.dispatch_status, ServiceRequest.DispatchStatus.PENDING_RETRY)
+
+        with patch("workforce_integration.services.WorkforceIntegrationService.dispatch_job") as mock_dispatch:
+            mock_dispatch.return_value = {"success": True, "workforce_job_id": "WFJ-RETRY-1"}
+            delivered = deliver_workforce_dispatch_event(str(event.event_id))
+
+        self.assertTrue(delivered["success"])
+        event.refresh_from_db()
+        self.assertEqual(event.status, EventOutbox.Status.PUBLISHED)
+        self.booking.refresh_from_db()
+        self.assertEqual(self.booking.dispatch_status, ServiceRequest.DispatchStatus.DISPATCHED)
 
     # ──────────────────────────────────────────────────────────────────────────
     # 2. Webhook Event Mappings & Aliases

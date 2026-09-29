@@ -33,11 +33,13 @@ export async function fetchMarketplaceProductDetail(productId) {
 /**
  * Fetch Seller Hub categories.
  */
-export async function fetchMarketplaceCategories({ tree = true, hide_empty = true, parent_id = null } = {}) {
+export async function fetchMarketplaceCategories({ tree = true, hide_empty = true, parent_id = null, top_level = false, level = null } = {}) {
   const params = new URLSearchParams()
   if (tree !== undefined) params.append("tree", tree ? "true" : "false")
   if (hide_empty !== undefined) params.append("hide_empty", hide_empty ? "true" : "false")
   if (parent_id !== null && parent_id !== undefined) params.append("parent_id", parent_id)
+  if (top_level) params.append("top_level", "true")
+  if (level) params.append("level", level)
 
   const queryString = params.toString()
   const url = queryString ? `/marketplace/categories/?${queryString}` : "/marketplace/categories/"
@@ -113,16 +115,85 @@ export async function validateMarketplaceCart(sellerId, items) {
 }
 
 /**
- * Place canonical marketplace order.
+ * Load Razorpay Checkout SDK dynamically if not already loaded.
+ */
+export function loadRazorpayScript() {
+  return new Promise((resolve) => {
+    if (window.Razorpay) {
+      resolve(true)
+      return
+    }
+    const existing = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]')
+    if (existing) {
+      existing.addEventListener("load", () => resolve(true))
+      existing.addEventListener("error", () => resolve(false))
+      return
+    }
+    const script = document.createElement("script")
+    script.src = "https://checkout.razorpay.com/v1/checkout.js"
+    script.async = true
+    script.onload = () => resolve(true)
+    script.onerror = () => resolve(false)
+    document.body.appendChild(script)
+  })
+}
+
+/**
+ * Initiate Razorpay Payment intent for Marketplace Checkout (Step 1).
+ */
+export async function initiateMarketplacePayment({
+  delivery_address,
+  customer_name = "",
+  customer_phone = "",
+  customer_email = "",
+  payment_method = "UPI",
+  fulfilment_type = "DELIVERY",
+  delivery_slot = null,
+}) {
+  return await apiRequest("/orders/marketplace/checkout/initiate-payment/", {
+    method: "POST",
+    json: {
+      delivery_address,
+      customer_name,
+      customer_phone,
+      customer_email,
+      payment_method,
+      fulfilment_type,
+      ...(delivery_slot ? { delivery_slot } : {}),
+    },
+  })
+}
+
+/**
+ * Verify Razorpay Payment signature and finalize Marketplace orders (Step 2).
+ */
+export async function verifyMarketplacePayment({
+  razorpay_order_id,
+  razorpay_payment_id,
+  razorpay_signature,
+}) {
+  return await apiRequest("/orders/marketplace/checkout/verify-payment/", {
+    method: "POST",
+    json: {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+    },
+  })
+}
+
+/**
+ * Place canonical marketplace order (COD or Direct fallback).
  */
 export async function checkoutMarketplaceOrder({
   delivery_address,
   customer_name = "",
   customer_phone = "",
   customer_email = "",
-  payment_method = "UPI",
+  payment_method = "COD",
   payment_transaction_id = "",
   fulfilment_type = "DELIVERY",
+  delivery_slot = null,
 }) {
   return await apiRequest("/orders/marketplace/checkout/", {
     method: "POST",
@@ -134,6 +205,7 @@ export async function checkoutMarketplaceOrder({
       payment_method,
       payment_transaction_id,
       fulfilment_type,
+      ...(delivery_slot ? { delivery_slot } : {}),
     },
   })
 }

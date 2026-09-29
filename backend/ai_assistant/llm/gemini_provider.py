@@ -31,9 +31,12 @@ class GeminiProvider(BaseLLMProvider):
     Supports native tool / function calling, RAG synthesis, and automatic model fallback.
     """
 
-    CANDIDATE_MODELS = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.6-flash"]
+    CANDIDATE_MODELS = [
+        "gemini-3.8-flash",
+        "gemini-flash-latest",
+    ]
 
-    def __init__(self, api_key: str, model: str = "gemini-3.5-flash"):
+    def __init__(self, api_key: str, model: str = "gemini-3.8-flash"):
         self.api_key = api_key
         self.model = model
 
@@ -48,7 +51,7 @@ class GeminiProvider(BaseLLMProvider):
         contents: List[Dict[str, Any]] = []
         for m in messages:
             raw_role = m.get("role", "user")
-            content_str = str(m.get("content") or "").strip()
+            content_str = (m.get("content") or "").strip()
             if not content_str:
                 continue
 
@@ -132,11 +135,13 @@ class GeminiProvider(BaseLLMProvider):
                 continue
 
         if data is None:
-            logger.error("All Gemini candidate models failed: %s", last_error)
-            return LLMResponse(
-                content="I apologize, but I am currently experiencing temporary service limitations. Please try again shortly.",
-                tool_calls=[],
-                raw={"error": str(last_error)},
+            logger.warning("All Gemini candidate models failed (quota/network: %s). Falling back to deterministic provider.", last_error)
+            from ai_assistant.llm.mock_provider import MockDeterministicProvider
+            return MockDeterministicProvider().generate(
+                messages=messages,
+                tools=tools,
+                system_prompt=system_prompt,
+                context=context,
             )
 
         candidates = data.get("candidates", [])
