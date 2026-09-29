@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Lane, ServiceArea, ServiceTier, GoodsCategory, GoodsItem, PackersMoversConfig, GTFaq, LogisticsSlot
+from .models import Lane, ServiceArea, ServiceTier, GoodsCategory, GoodsItem, PackersMoversConfig, GTFaq, LogisticsSlot, ProhibitedGoodsRule, PackersMoversSurchargeRule
 
 
 @admin.register(ServiceTier)
@@ -107,3 +107,15 @@ class LogisticsSlotAdmin(admin.ModelAdmin):
     ordering = ["category", "city", "order", "start_time"]
 
 
+@admin.register(ProhibitedGoodsRule)
+class ProhibitedGoodsRuleAdmin(admin.ModelAdmin):
+    list_display = ["label", "applies_to_packers_movers", "is_active", "updated_at"]
+    list_filter = ["is_active", "applies_to_packers_movers"]
+    search_fields = ["label", "keywords"]
+
+
+@admin.register(PackersMoversSurchargeRule)
+class PackersMoversSurchargeRuleAdmin(admin.ModelAdmin):
+    list_display = ["name", "rule_type", "city", "percent", "flat_amount", "is_active"]
+    list_filter = ["rule_type", "is_active", "city"]
+    search_fields = ["name"]

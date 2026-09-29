@@ -291,6 +291,12 @@ class LogisticsQuoteView(APIView):
         except (TypeError, ValueError):
             stop_count = 2
 
+        raw_loading_help = data.get("loading_help", True)
+        if isinstance(raw_loading_help, str):
+            loading_help = raw_loading_help.strip().lower() not in ("false", "0", "no", "")
+        else:
+            loading_help = bool(raw_loading_help) if raw_loading_help is not None else True
+
         # Cargo evaluation & Vehicle fitment enforcement (Porter-like safety protection)
         cargo_items = data.get("cargo_items") or data.get("items")
         goods_category = data.get("goods_category_id") or data.get("goods_category") or data.get("goods_type")
@@ -364,6 +370,7 @@ class LogisticsQuoteView(APIView):
                 stop_count=stop_count,
                 cargo_summary=cargo_summary,
                 waypoints=waypoints,
+                loading_help=loading_help,
             )
         except TooManyStopsError as exc:
             return Response(
@@ -677,6 +684,8 @@ class PackersMoversQuoteView(APIView):
                 relocation_type=relocation_type,
                 service_tier_id=selected_tier_id,
                 extra_stops=extra_stops,
+                move_date=data.get("move_date") or data.get("preferred_date"),
+                move_time=data.get("move_time") or data.get("preferred_time"),
             )
         except Exception as e:
             logger.exception("Error computing Packers & Movers quote: %s", e)

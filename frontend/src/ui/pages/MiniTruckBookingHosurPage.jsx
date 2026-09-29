@@ -7,6 +7,12 @@ import {
   User, Mail, MessageSquare, AlertCircle, Zap, Calendar, Check, Ban, RefreshCw
 } from "lucide-react"
 import { routes } from "../routes.js"
+import { CouponField } from "../components/CouponField.jsx"
+import { GTPolicyNote } from "../components/GTPolicyNote.jsx"
+import { GTPaymentMethodPicker } from "../components/GTPaymentMethodPicker.jsx"
+import { TransitInsuranceOption } from "../components/TransitInsuranceOption.jsx"
+import { settleBookingPayment } from "../../api/gtPaymentService.js"
+import { GstinField, isValidGstin, LoadingHelpToggle } from "../components/GstinField.jsx"
 import { extractApiErrorMessage } from "../../api/client.js"
 import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchLogisticsQuote, checkRouteCoverage, checkPointCoverage, fetchGoodsCategories, fetchGoodsItems, evaluateCargoFitment, fetchLogisticsSlots, fetchGTFaqs, fetchLogisticsCities } from "../../api/logisticsService.js"
 import { GoodsCargoSelectorModal } from "../../components/logistics/GoodsCargoSelectorModal.jsx"
@@ -808,6 +814,11 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
   const quote = serverQuote
   const setQuote = setServerQuote
   const [bookingError, setBookingError] = useState("")
+  const [customerGstin, setCustomerGstin] = useState("")
+  const [coupon, setCoupon] = useState(null)
+  const [payMethod, setPayMethod] = useState("cod")   // "cod" | "online" | "wallet"
+  const [insurance, setInsurance] = useState(null)      // { declaredValue, premium, cap } | null
+  const [loadingHelp, setLoadingHelp] = useState(true)
   const [bookingSubmitting, setBookingSubmitting] = useState(false)
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [serverSlotsAvailability, setServerSlotsAvailability] = useState(null)
@@ -1303,6 +1314,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
           quantity: i.quantity,
         })),
         goodsCategoryId: selectedGoodsCategoryObj?.id,
+        loadingHelp,
       })
       if (cancelled) return
       setQuoteLoading(false)
@@ -1322,6 +1334,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
     JSON.stringify(cargoItems.map((i) => [i.goods_item_id || i.goods_item, i.quantity])),
     JSON.stringify(intermediateStops.map((s) => [s.address, s.coords?.lat, s.coords?.lng])),
     selectedGoodsCategoryObj?.id,
+    loadingHelp,
   ])
 
 
@@ -1430,6 +1443,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
         bestFor: bestForText,
       },
       _tierId: tier.id,
+      loading_unloading_charge: Number(tier.loading_unloading_charge) || 0,
       vehicle_class: tier.vehicle_class || "",
       is_active: tier.is_active !== false,
       max_weight_kg: Number(tier.max_weight_kg) || 0,
@@ -1655,6 +1669,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
             quantity: i.quantity,
           })),
           goodsCategoryId: selectedGoodsCategoryObj?.id,
+          loadingHelp,
         })
         setQuoteLoading(false)
         if (freshQuote && !freshQuote.error && freshQuote.total != null) {
@@ -1792,6 +1807,8 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
 
       const payload = {
         customer_name: resolvedName,
+        ...(coupon?.code ? { coupon_code: coupon.code } : {}),
+        ...(customerGstin && isValidGstin(customerGstin) ? { customer_gstin: customerGstin } : {}),
         phone: cleanPhone,
         email: customerEmail,
         city: currentCitySlug,
@@ -1809,7 +1826,8 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
         preferred_date: dateString,
         preferred_time: timeString,
         total_amount: fare,
-        payment_method: "COD",
+        payment_method: payMethod === "cod" ? "COD" : "ONLINE",
+        ...(insurance && payMethod !== "cod" ? { insurance_opted_in: true, declared_value: insurance.declaredValue } : {}),
 
         stops: validStops,
         cart_data: [{
@@ -1854,6 +1872,18 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
       }
       bookingAttemptKeyRef.current = null
       const token = res?.data?.tracking_token || res?.tracking_token || null
+      // Prepaid booking: take the payment now. The booking exists but is not dispatched until it
+      // clears. On failure the same idempotency key is kept, so pressing Book again re-uses THIS
+      // booking (no duplicate) and retries the payment.
+      if (payMethod !== "cod") {
+        const paid = await settleBookingPayment({
+          bookingId: res?.data?.id || res?.id, trackingToken: token, method: payMethod,
+        })
+        if (!paid.ok) {
+          bookingAttemptKeyRef.current = attemptKey
+          throw { status: 0, body: { message: `${paid.message || "Payment was not completed."} Your booking is saved - tap Book again to retry the payment.` } }
+        }
+      }
       const authoritativeAmount = res?.data?.total_amount != null
         ? Number(res.data.total_amount)
         : (res?.total_amount != null ? Number(res.total_amount) : null)
@@ -1904,6 +1934,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
               quantity: i.quantity,
             })),
             goodsCategoryId: selectedGoodsCategoryObj?.id,
+            loadingHelp,
           }).then((fresh) => {
             if (fresh && !fresh.error && fresh.total != null) {
               setServerQuote(fresh)
@@ -3616,6 +3647,13 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                           </div>
                         </div>
 
+                        <LoadingHelpToggle charge={(selectedVehicle || selectedVehicleEffective)?.loading_unloading_charge} checked={loadingHelp} onChange={setLoadingHelp} />
+                        <GTPolicyNote serviceCategory="goods_transport_truck" />
+                        <GTPaymentMethodPicker value={payMethod} onChange={setPayMethod} total={serverQuote?.total != null ? Number(serverQuote.total) + Number(insurance?.premium || 0) : null} />
+                        <TransitInsuranceOption value={insurance} onChange={setInsurance} payMethod={payMethod} />
+                        <CouponField serviceCategory="goods_transport_truck" cartTotal={serverQuote?.total} value={coupon} onChange={setCoupon} />
+                        <GstinField value={customerGstin} onChange={setCustomerGstin} />
+
                         {/* Booking Error Banner */}
                         {bookingError && (
                           <div className="p-3.5 bg-rose-50 border border-rose-300 rounded-xl flex items-start gap-2.5 text-rose-800 text-xs font-semibold">
@@ -4225,7 +4263,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                     <span className="text-base">💵</span>
                     <div>
                       <p className="text-[10px] text-slate-400 uppercase font-bold">Payment Method</p>
-                      <p className="font-extrabold text-slate-800">Cash / COD</p>
+                      <p className="font-extrabold text-slate-800">{payMethod === "online" ? "Pay online" : payMethod === "wallet" ? "SEVO wallet" : "Cash / COD"}</p>
                     </div>
                   </div>
                   <div className="text-right">

@@ -451,14 +451,22 @@ def compute_packers_movers_quote(
     relocation_type: str = "Within City",
     service_tier_id: Optional[int] = None,
     extra_stops: int = 0,
+    move_date: Any = None,
+    move_time: Any = None,
 ) -> Dict[str, Any]:
     """
     Server-authoritative calculation for a complete relocation booking.
+    `move_date` / `move_time` (the booked date and slot) select any Admin-configured
+    date/time surcharge rules; with none configured they change nothing.
     `extra_stops` = stops between pickup and drop; each is charged the tier's admin-configured
     additional_stop_charge (0 by default, so unconfigured tiers price exactly as before).
     Returns the comprehensive quotation breakdown dictionary.
     """
     from .routing import get_route_eta
+    from . import pm_surcharge
+    surcharge_amount = Decimal("0.00")
+    surcharge_lines: list = []
+    surcharge_rules = pm_surcharge.applicable_rules(city, move_date, move_time)
     try:
         stops_n = max(0, extra_stops or 0)
     except (TypeError, ValueError):
@@ -696,6 +704,9 @@ def compute_packers_movers_quote(
         surge = vehicle.get("surge_multiplier") or Decimal("1.00")
         if surge > 0 and surge != Decimal("1.00"):
             subtotal = _money(subtotal * surge)
+        # Peak-day / off-hours surcharge (Admin rules), before GST like every other fare component.
+        surcharge_amount, surcharge_lines = pm_surcharge.compute_surcharge(subtotal, surcharge_rules)
+        subtotal = _money(subtotal + surcharge_amount)
         gst = _money(subtotal * gst_percentage)
         total = _money(subtotal + gst)
         min_fare = vehicle.get("minimum_fare")
@@ -898,7 +909,8 @@ def compute_packers_movers_quote(
         f"{round(float(drop_lat), 5)},{round(float(drop_lng), 5)}:"
         f"{canonical_inv_str}:{packing_clean}:{dismantling_required}:{unpacking_required}:"
         f"{pickup_floor}:{pickup_has_lift}:{drop_floor}:{drop_has_lift}:"
-        f"{relocation_type.lower()}:{pricing_config_fingerprint}:{str(total)}:{stops_n}"
+        f"{relocation_type.lower()}:{pricing_config_fingerprint}:{str(total)}:{stops_n}:"
+        f"{surcharge_amount}:{pm_surcharge.parse_move_date(move_date)}"
     )
     quote_hash = hashlib.sha256(raw_quote_str.encode("utf-8")).hexdigest()[:24]
 
@@ -926,6 +938,7 @@ def compute_packers_movers_quote(
         "drop_has_lift": drop_has_lift,
         "relocation_type": relocation_type,
         "extra_stops": stops_n,
+        "date_surcharge": str(surcharge_amount),
         "distance_km": str(distance_km),
         "subtotal": str(subtotal) if subtotal is not None else None,
         "total": str(total) if total is not None else None,
@@ -964,6 +977,11 @@ def compute_packers_movers_quote(
         "additional_stops": stops_n,
         "additional_stop_charge": stop_charge,
         "rate_additional_stop": stop_rate,
+        "date_surcharge": surcharge_amount,
+        "date_surcharge_lines": surcharge_lines,
+        "surcharge_applied": pm_surcharge.rule_signature(surcharge_rules),
+        "move_date": str(pm_surcharge.parse_move_date(move_date) or ""),
+        "move_time": str(move_time or ""),
         "rate_per_km": per_km_rate,
         "free_km": free_km,
         "currency": "INR",
@@ -1019,6 +1037,8 @@ def compute_packers_movers_quote(
             "transport_total": str(transport_total) if transport_total is not None else None,
             "additional_stops": stops_n,
             "additional_stops_charge": str(stop_charge),
+            "date_surcharge": str(surcharge_amount),
+            "date_surcharge_lines": surcharge_lines,
             "packing_tier": packing_clean,
             "packing_label": packing_label,
             "packing_rate_per_cft": str(packing_rate_per_cft) if packing_rate_per_cft is not None else None,
@@ -1252,6 +1272,19 @@ def verify_packers_movers_quote(
                 return False, cached, (
                     f"Quote stop mismatch: quote was priced for {int(cached.get('additional_stops') or 0)} "
                     f"stop(s) between pickup and drop, but {_req_stops} were submitted. Please recalculate the quote."
+                )
+
+        # Move date / slot: the surcharge rules that apply to the BOOKED date must be exactly the
+        # ones this quote was priced with, otherwise it is stale (e.g. quoted for a weekday, booked
+        # for a peak-day) and must be recalculated -- never silently under-charged.
+        if "move_date" in current_request:
+            from . import pm_surcharge as _pms
+            _expected = _pms.rule_signature(_pms.applicable_rules(
+                cached.get("city"), current_request.get("move_date"), current_request.get("move_time")))
+            if _expected != (cached.get("surcharge_applied") or []):
+                return False, cached, (
+                    "Quote date surcharge mismatch: the move date or time changed which surcharges apply "
+                    "since this quote was calculated. Please recalculate the quote."
                 )
 
         req_reloc = current_request.get("relocation_type")

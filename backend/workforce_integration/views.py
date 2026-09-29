@@ -730,7 +730,28 @@ class WorkforceWebhookView(APIView):
 
                                 transaction.on_commit(_send_pm_leg_notice)
 
+                            from service_requests.services.delivery_exception import resolve_delivery_exception
+                            resolve_delivery_exception(sr)      # trip moved on: the exception is over
                             transaction.on_commit(lambda: self._broadcast_event(sr, "logistics_leg_changed"))
+
+                # ── 12b-2. DRIVER-REPORTED TRIP EXCEPTION ───────────────────────────
+                elif event_type == "logistics.delivery_exception":
+                    from service_requests.services.delivery_exception import record_delivery_exception
+                    if sr.service_category in LOGISTICS_CATEGORIES and record_delivery_exception(sr, payload):
+                        def _notify_exception(_sr=sr):
+                            try:
+                                from service_requests.notifications import notify_delivery_exception
+                                notify_delivery_exception(_sr)
+                            except Exception:
+                                logger.exception("Could not send delivery-exception notice for booking %s", _sr.pk)
+                        transaction.on_commit(_notify_exception)
+                        transaction.on_commit(lambda: self._broadcast_event(sr, "delivery_exception"))
+
+                # ── 12b-3. DRIVER-REPORTED TOLL / PARKING RECEIPT ───────────────────
+                elif event_type == "logistics.extra_charge":
+                    from service_requests.services.extra_charges import record_extra_charge
+                    if sr.service_category in LOGISTICS_CATEGORIES and record_extra_charge(sr, payload):
+                        transaction.on_commit(lambda: self._broadcast_event(sr, "extra_charge"))
 
                 # ── 12c. TRIP STOP PROGRESS (GT-D-01) ───────────────────────────────
                 elif event_type in ["trip.stop_arrived", "trip.stop_completed", "job.stop_progress"]:

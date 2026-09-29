@@ -494,6 +494,8 @@ RAZORPAYX_MOCK_MODE = os.getenv("RAZORPAYX_MOCK_MODE", "0").strip().lower() in (
 # on a machine with no gateway credentials. Must never be enabled outside
 # local development.
 PAYMENT_SANDBOX_MODE = os.getenv("PAYMENT_SANDBOX_MODE", "0").strip().lower() in ("1", "true", "yes")
+# Unpaid online/wallet logistics bookings are cancelled after this many minutes.
+GT_ONLINE_PAYMENT_WINDOW_MINUTES = int(os.getenv("GT_ONLINE_PAYMENT_WINDOW_MINUTES", "30") or 30)
 
 # ── Workforce Integration ────────────────────────────────────────────────────
 WORKFORCE_API_BASE_URL = os.getenv("WORKFORCE_API_BASE_URL", "http://localhost:8001/api/workforce" if DEBUG else "https://vendor.sevo.co.in/api/workforce").rstrip("/")

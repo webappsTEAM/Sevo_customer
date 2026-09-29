@@ -76,7 +76,7 @@ export async function evaluateCargoFitment(payload) {
  * for display only, and never treat that as an authoritative fare.
  */
 export async function fetchLogisticsQuote({
-  serviceCategory, tierId, pickup, drop, stopCount, waypoints, cargoItems, goodsCategoryId, goodsCategorySlug, declaredWeightKg,
+  serviceCategory, tierId, pickup, drop, stopCount, waypoints, cargoItems, goodsCategoryId, goodsCategorySlug, declaredWeightKg, loadingHelp,
 }) {
   if (!serviceCategory || !tierId || !pickup?.lat || !pickup?.lng || !drop?.lat || !drop?.lng) {
     return { error: true, errorCode: "COORDINATES_REQUIRED" }
@@ -97,6 +97,7 @@ export async function fetchLogisticsQuote({
         ...(goodsCategoryId ? { goods_category_id: goodsCategoryId } : {}),
         ...(goodsCategorySlug ? { goods_category: goodsCategorySlug } : {}),
         ...(declaredWeightKg != null ? { declared_weight_kg: declaredWeightKg } : {}),
+        ...(loadingHelp === false ? { loading_help: false } : {}),
       },
     })
     const data = res?.data || res
@@ -172,6 +173,8 @@ export async function fetchPackersMoversQuote({
   city = "Hosur",
   serviceTierId = null,
   extraStops = 0,
+  moveDate = null,
+  moveTime = null,
 }) {
   if (!pickup?.lat || !pickup?.lng || !drop?.lat || !drop?.lng) {
     return { error: true, errorCode: "COORDINATES_REQUIRED", message: "Pickup and drop coordinates are required." }
@@ -196,6 +199,9 @@ export async function fetchPackersMoversQuote({
         relocation_type: relocationType,
         city,
         selected_tier_id: serviceTierId,
+        // Move date/slot: Admin peak-day / off-hours surcharge rules are priced server-side.
+        ...(moveDate ? { move_date: moveDate } : {}),
+        ...(moveTime ? { move_time: moveTime } : {}),
       },
     })
     const data = res?.data || res

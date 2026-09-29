@@ -8,6 +8,11 @@ import {
   ClipboardList, Settings, Zap, Wrench, Search, Plus, Calendar, AlertTriangle, Ban
 } from "lucide-react"
 import { routes } from "../routes.js"
+import { CouponField } from "../components/CouponField.jsx"
+import { GTPolicyNote } from "../components/GTPolicyNote.jsx"
+import { GTPaymentMethodPicker } from "../components/GTPaymentMethodPicker.jsx"
+import { settleBookingPayment } from "../../api/gtPaymentService.js"
+import { GstinField, isValidGstin } from "../components/GstinField.jsx"
 import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchPackersMoversQuote, fetchLogisticsSlots, fetchPackersMoversInventory, fetchGTFaqs, fetchLogisticsCities } from "../../api/logisticsService.js"
 import { createBooking, cancelBooking, getBookingStatus } from "../../api/bookingService.js"
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
@@ -948,6 +953,10 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
         // Stops between pickup and drop: priced server-side at the tier's admin-configured charge,
         // and the booking must carry the same number.
         extraStops: (extraStops || []).filter((s) => s && String(s.address || "").trim()).length,
+        moveDate: selectedDate?.fullDate
+          ? `${selectedDate.fullDate.getFullYear()}-${String(selectedDate.fullDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.fullDate.getDate()).padStart(2, "0")}`
+          : null,
+        moveTime: selectedSlot || null,
       })
       const quoteData = res?.data || res
       if (quoteData && quoteData.quote_id) {
@@ -979,6 +988,8 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
     dropFloor,
     dropHasLift,
     (extraStops || []).filter((s) => s && String(s.address || "").trim()).length,
+    selectedDate,
+    selectedSlot,
   ])
 
 
@@ -994,6 +1005,9 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
   const [cancelledBookingModalOpen, setCancelledBookingModalOpen] = useState(false)
   const [cancelledReasonText, setCancelledReasonText] = useState("")
   const [bookingError, setBookingError] = useState("")
+  const [customerGstin, setCustomerGstin] = useState("")
+  const [coupon, setCoupon] = useState(null)
+  const [payMethod, setPayMethod] = useState("cod")   // "cod" | "online" | "wallet"
   const [bookingSubmitting, setBookingSubmitting] = useState(false)
   const [lastBookingId, setLastBookingId] = useState(null)
   const [lastBookingAmount, setLastBookingAmount] = useState(null)
@@ -1796,6 +1810,8 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
 
       const payload = {
         customer_name: resolvedName,
+        ...(coupon?.code ? { coupon_code: coupon.code } : {}),
+        ...(customerGstin && isValidGstin(customerGstin) ? { customer_gstin: customerGstin } : {}),
         phone: cleanPhone,
         email: customerEmail,
         service_category: "packers_movers",
@@ -1810,7 +1826,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
         preferred_date: dateString,
         preferred_time: selectedSlot || "Morning",
         total_amount: fare,
-        payment_method: "COD",
+        payment_method: payMethod === "cod" ? "COD" : "ONLINE",
         cart_data: [{
           quote_id: quoteId,
           package: pmServerQuote?.vehicle?.name || pkg.name || "Packers & Movers",
@@ -1905,6 +1921,18 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
       }
       bookingAttemptKeyRef.current = null
       const token = res?.data?.tracking_token || res?.tracking_token || null
+      // Prepaid booking: take the payment now. The booking exists but is not dispatched until it
+      // clears. On failure the same idempotency key is kept, so pressing Book again re-uses THIS
+      // booking (no duplicate) and retries the payment.
+      if (payMethod !== "cod") {
+        const paid = await settleBookingPayment({
+          bookingId: res?.data?.id || res?.id, trackingToken: token, method: payMethod,
+        })
+        if (!paid.ok) {
+          bookingAttemptKeyRef.current = attemptKey
+          throw { status: 0, body: { message: `${paid.message || "Payment was not completed."} Your booking is saved - tap Book again to retry the payment.` } }
+        }
+      }
       const authoritativeAmount = res?.data?.total_amount != null
         ? res.data.total_amount
         : (res?.total_amount != null ? res.total_amount : null)
@@ -3055,6 +3083,13 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
               })}
             </div>
 
+            <div className="mb-4 space-y-3">
+              <GTPolicyNote serviceCategory="packers_movers" />
+              <GTPaymentMethodPicker value={payMethod} onChange={setPayMethod} total={pmServerQuote?.total} />
+              <CouponField serviceCategory="packers_movers" cartTotal={pmServerQuote?.total} value={coupon} onChange={setCoupon} />
+              <GstinField value={customerGstin} onChange={setCustomerGstin} />
+            </div>
+
             <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 flex items-center justify-between mb-4">
               <span className="flex items-center gap-1.5 font-medium">
                 <Clock className="w-3.5 h-3.5 text-emerald-600" />
@@ -3746,6 +3781,12 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                               <div className="flex justify-between">
                                 <span>Unpacking Service</span>
                                 <span className="font-semibold text-slate-800">₹ {pmServerQuote.pricing.unpacking_charge}</span>
+                              </div>
+                            )}
+                            {Number(pmServerQuote.pricing?.date_surcharge) > 0 && (
+                              <div className="flex justify-between">
+                                <span>{(pmServerQuote.pricing.date_surcharge_lines || []).map((l) => l.name).join(", ") || "Peak-day / off-hours surcharge"}</span>
+                                <span className="font-semibold text-slate-800">₹ {pmServerQuote.pricing.date_surcharge}</span>
                               </div>
                             )}
                             {pmServerQuote.pricing?.total ? (
