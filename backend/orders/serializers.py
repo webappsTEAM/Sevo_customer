@@ -77,6 +77,15 @@ class MarketplaceOrderSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class DeliverySlotField(serializers.Field):
+    """Permissive field accepting dictionary slot structure or plain string representation."""
+    def to_internal_value(self, data):
+        return data
+
+    def to_representation(self, value):
+        return value
+
+
 class MarketplaceCheckoutSerializer(serializers.Serializer):
     delivery_address = serializers.CharField(allow_blank=False, trim_whitespace=True)
     customer_name = serializers.CharField(required=False, allow_blank=True, default="")
@@ -85,6 +94,7 @@ class MarketplaceCheckoutSerializer(serializers.Serializer):
     payment_method = serializers.CharField(required=False, default="UPI")
     payment_transaction_id = serializers.CharField(required=False, allow_blank=True, default="")
     fulfilment_type = serializers.CharField(required=False, default="DELIVERY")
+    delivery_slot = DeliverySlotField(required=False, allow_null=True, default="")
 
 
 # ─── Unified "My Orders" read view ──────────────────────────────────────────
@@ -145,6 +155,8 @@ def serialize_marketplace_order(order):
         "seller_name": order.seller_name,
         "status": order.status,
         "status_label": order.get_status_display(),
+        "payment_method": order.payment_method,
+        "payment_status": order.payment_status,
         "total_amount": order.total_amount,
         "created_at": order.created_at,
         "detail": {
@@ -155,6 +167,8 @@ def serialize_marketplace_order(order):
             "seller_name": order.seller_name,
             "status": order.status,
             "status_label": order.get_status_display(),
+            "payment_method": order.payment_method,
+            "payment_status": order.payment_status,
             "items": [
                 {
                     "seller_product_id": item.seller_product_id,

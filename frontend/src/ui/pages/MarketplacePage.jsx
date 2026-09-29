@@ -28,6 +28,9 @@ import {
   clearMarketplaceCart,
   validateMarketplaceCart,
   checkoutMarketplaceOrder,
+  loadRazorpayScript,
+  initiateMarketplacePayment,
+  verifyMarketplacePayment,
   fetchMarketplaceOrderDetail,
   cancelMarketplaceOrder,
   fetchMyOrders,
@@ -425,6 +428,7 @@ export function MarketplacePage() {
   const [checkoutModalOpen, setCheckoutModalOpen] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [checkoutError, setCheckoutError] = useState("")
+  const [paymentMethod, setPaymentMethod] = useState("UPI")
   const [activeOrder, setActiveOrder] = useState(null)
   const [trackingModalOpen, setTrackingModalOpen] = useState(false)
   const [cancelLoading, setCancelLoading] = useState(false)
@@ -771,13 +775,47 @@ export function MarketplacePage() {
     }
   }
 
-  // Handle Checkout Order
+  // Handle Checkout Order (COD or Razorpay UPI)
   const handleProceedToCheckout = async () => {
     if (cart.items.length === 0) return
     setCheckoutError("")
     setCheckoutLoading(true)
+
+    // Option A: Cash on Delivery (COD) Flow
+    if (paymentMethod === "COD") {
+      try {
+        const res = await checkoutMarketplaceOrder({
+          delivery_address: deliveryAddress,
+          customer_name: user?.name || "",
+          customer_phone: user?.phone || "",
+          customer_email: user?.email || "",
+          payment_method: "COD",
+          fulfilment_type: "DELIVERY",
+        })
+
+        if (res?.success && res?.data) {
+          setActiveOrder(res.data)
+          setCartDrawerOpen(false)
+          setTrackingModalOpen(true)
+          reloadCart()
+          const amount = res.data.total_amount || cart.subtotal
+          showToast(`Order placed! Pay ₹${amount} in cash on delivery.`, "success")
+        } else {
+          setCheckoutError(res?.message || "Failed to place Cash on Delivery order.")
+        }
+      } catch (err) {
+        console.error("COD checkout error:", err)
+        setCheckoutError(err?.body?.message || err?.message || "Failed to place Cash on Delivery order.")
+      } finally {
+        setCheckoutLoading(false)
+      }
+      return
+    }
+
+    // Option B: UPI (Razorpay) Flow
     try {
-      const res = await checkoutMarketplaceOrder({
+      // Step 1: Initiate Payment Intent on backend
+      const intentRes = await initiateMarketplacePayment({
         delivery_address: deliveryAddress,
         customer_name: user?.name || "",
         customer_phone: user?.phone || "",
@@ -786,18 +824,114 @@ export function MarketplacePage() {
         fulfilment_type: "DELIVERY",
       })
 
-      if (res?.success && res?.data) {
-        setActiveOrder(res.data)
-        setCartDrawerOpen(false)
-        setTrackingModalOpen(true)
-        reloadCart()
-        showToast("Order placed successfully!", "success")
-      } else {
-        setCheckoutError(res?.message || "Order placement failed. Please verify item stock.")
+      if (!intentRes?.success || !intentRes?.data) {
+        setCheckoutError(intentRes?.message || "Failed to initialize payment.")
+        setCheckoutLoading(false)
+        return
       }
+
+      const intentData = intentRes.data
+
+      // If sandbox fallback mode is active (no keys configured on backend and in debug mode)
+      if (intentData.sandbox_fallback) {
+        const verifyRes = await verifyMarketplacePayment({
+          razorpay_order_id: intentData.razorpay_order_id,
+          razorpay_payment_id: `pay_mock_${Date.now()}`,
+          razorpay_signature: "sandbox_mock_signature",
+        })
+        if (verifyRes?.success && verifyRes?.data) {
+          setActiveOrder(verifyRes.data)
+          setCartDrawerOpen(false)
+          setTrackingModalOpen(true)
+          reloadCart()
+          showToast("Order placed successfully!", "success")
+        } else {
+          setCheckoutError(verifyRes?.message || "Order verification failed.")
+        }
+        setCheckoutLoading(false)
+        return
+      }
+
+      // Ensure Razorpay SDK is loaded
+      const isLoaded = await loadRazorpayScript()
+      if (!isLoaded || !window.Razorpay) {
+        setCheckoutError("Unable to load payment gateway. Please check your network connection.")
+        setCheckoutLoading(false)
+        return
+      }
+
+      // Step 2: Open Razorpay Checkout widget configured for UPI default
+      const options = {
+        key: intentData.key_id,
+        amount: intentData.amount_paise || Math.round(Number(intentData.amount) * 100),
+        currency: intentData.currency || "INR",
+        name: intentData.name || "Sevo Mart",
+        description: intentData.description || "Sevo Grocery Marketplace Order",
+        order_id: intentData.razorpay_order_id,
+        prefill: intentData.prefill || {
+          name: user?.name || "",
+          email: user?.email || "",
+          contact: user?.phone || "",
+        },
+        config: {
+          display: {
+            blocks: {
+              upi: {
+                name: "Pay by UPI",
+                instruments: [{ method: "upi" }],
+              },
+            },
+            sequence: ["block.upi"],
+            preferences: { show_default_blocks: false },
+          },
+        },
+        theme: {
+          color: "#059669",
+        },
+        handler: async (paymentResponse) => {
+          setCheckoutLoading(true)
+          setCheckoutError("")
+          try {
+            // Step 3: Authoritative HMAC signature verification on backend
+            const verifyRes = await verifyMarketplacePayment({
+              razorpay_order_id: paymentResponse.razorpay_order_id,
+              razorpay_payment_id: paymentResponse.razorpay_payment_id,
+              razorpay_signature: paymentResponse.razorpay_signature,
+            })
+
+            if (verifyRes?.success && verifyRes?.data) {
+              setActiveOrder(verifyRes.data)
+              setCartDrawerOpen(false)
+              setTrackingModalOpen(true)
+              reloadCart()
+              showToast("Payment successful! Order placed.", "success")
+            } else {
+              setCheckoutError(verifyRes?.message || "Payment verification failed. Please contact support.")
+            }
+          } catch (verifyErr) {
+            console.error("Payment verification error:", verifyErr)
+            setCheckoutError(verifyErr?.body?.message || verifyErr?.message || "Payment verification failed. Please try again.")
+          } finally {
+            setCheckoutLoading(false)
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setCheckoutLoading(false)
+          },
+        },
+      }
+
+      const rzp = new window.Razorpay(options)
+      rzp.on("payment.failed", (failedRes) => {
+        console.warn("Payment failed or declined:", failedRes)
+        setCheckoutError(failedRes?.error?.description || "Payment failed or was declined.")
+        setCheckoutLoading(false)
+      })
+      rzp.open()
     } catch (err) {
-      setCheckoutError(err?.body?.message || "Failed to place order. Please try again.")
-    } finally {
+      console.error("Checkout initiation error:", err)
+      setCheckoutError(err?.body?.message || err?.message || "Failed to initiate payment. Please try again.")
       setCheckoutLoading(false)
     }
   }
@@ -1687,6 +1821,54 @@ export function MarketplacePage() {
                       </div>
                     </div>
 
+                    {/* Payment Method Selector */}
+                    <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-2.5">
+                      <div className="text-xs font-black text-slate-400 uppercase tracking-wider">
+                        Payment Method
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMethod("UPI")}
+                          className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
+                            paymentMethod === "UPI"
+                              ? "bg-emerald-50/80 border-emerald-500 text-emerald-950 ring-2 ring-emerald-500/20"
+                              : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100/70"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-extrabold text-xs text-slate-900">UPI</span>
+                            <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                              paymentMethod === "UPI" ? "border-emerald-600 bg-emerald-600" : "border-slate-300 bg-white"
+                            }`}>
+                              {paymentMethod === "UPI" && <span className="w-1.5 h-1.5 rounded-full bg-white block" />}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-500 font-medium">Instant pay via QR/App</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMethod("COD")}
+                          className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
+                            paymentMethod === "COD"
+                              ? "bg-emerald-50/80 border-emerald-500 text-emerald-950 ring-2 ring-emerald-500/20"
+                              : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100/70"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-extrabold text-xs text-slate-900">Cash on Delivery</span>
+                            <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                              paymentMethod === "COD" ? "border-emerald-600 bg-emerald-600" : "border-slate-300 bg-white"
+                            }`}>
+                              {paymentMethod === "COD" && <span className="w-1.5 h-1.5 rounded-full bg-white block" />}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-500 font-medium">Pay cash at doorstep</span>
+                        </button>
+                      </div>
+                    </div>
+
                     {checkoutError && (
                       <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold p-3 rounded-xl flex items-center gap-2">
                         <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
@@ -1710,7 +1892,7 @@ export function MarketplacePage() {
                       <RefreshCw className="w-4 h-4 animate-spin" />
                     ) : (
                       <>
-                        <span>Place Order • ₹{cart.subtotal}</span>
+                        <span>{paymentMethod === "COD" ? `Place Order (Pay on Delivery) • ₹${cart.subtotal}` : `Place Order • ₹${cart.subtotal}`}</span>
                         <ChevronRight className="w-4 h-4" />
                       </>
                     )}
@@ -2023,9 +2205,21 @@ export function MarketplacePage() {
                         <span className="font-bold">₹{it.line_amount}</span>
                       </div>
                     ))}
-                    <div className="pt-2 border-t border-slate-100 flex justify-between font-black text-slate-900 text-sm">
-                      <span>Total Paid</span>
-                      <span>₹{activeOrder.total_amount}</span>
+                    <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                      <div className="flex justify-between font-black text-slate-900 text-sm">
+                        <span>{activeOrder.payment_method === "COD" ? "Amount to Pay on Delivery" : "Total Paid"}</span>
+                        <span>₹{activeOrder.total_amount}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-[11px] text-slate-500 font-medium">
+                        <span>Payment Method</span>
+                        <span className={`font-bold px-2 py-0.5 rounded-md ${
+                          activeOrder.payment_method === "COD"
+                            ? "bg-amber-100 text-amber-900"
+                            : "bg-emerald-100 text-emerald-900"
+                        }`}>
+                          {activeOrder.payment_method === "COD" ? "Cash on Delivery (Pending)" : "Paid via UPI"}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 )}
