@@ -11,7 +11,14 @@ class Migration(migrations.Migration):
         ('service_requests', '0099_rename_service_req_vendor__91bc67_idx_vcr_vendor_status_idx_and_more'),
     ]
 
-    operations = [
+    # SEVO GT Round 7: this file belongs to a regenerated duplicate branch
+    # (0099_rename_... -> 0100_acinspection... -> 0101_gtclaimpolicy...) brought in by merge 7ad1eda0.
+    # Every operation below already exists in the main chain (0098_acinspection..., 0099_package_gt_gst_rate,
+    # 0101_restore_dropped_indexes..., 0104/0106/0107 GT policies). Executing them again fails with
+    # "already exists", so they are kept only for reference and are NOT run. Final model state is unchanged
+    # (verified: makemigrations --check reports no changes).
+    operations = []
+    _duplicate_operations_not_run = [
         migrations.AddField(
             model_name='acinspectionconfiguration',
             name='badges',

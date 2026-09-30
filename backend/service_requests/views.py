@@ -532,6 +532,8 @@ class BookingCreateView(APIView):
                 company=company,
                 vehicle_class=(_tier.get_vehicle_class() if _tier is not None else ""),
                 vehicle_label=(getattr(_tier, "name", "") or ""),
+                # Intermediate stops must be covered (and located) too.
+                stops=(request.data.get("stops") or request.data.get("trip_stops") or request.data.get("waypoints")),
             )
             if not route_result.allowed:
                 if idem_cache_key:
@@ -542,6 +544,7 @@ class BookingCreateView(APIView):
                         "success": False,
                         "error_code": route_result.error_code,
                         "failed_point": route_result.failed_point,
+                        "failed_stop_index": route_result.failed_stop_index,
                         "message": route_result.message,
                     },
                     status=status.HTTP_400_BAD_REQUEST,
@@ -594,6 +597,9 @@ class BookingCreateView(APIView):
                 waypoints=req_waypoints,
                 move_date=serializer.validated_data.get("preferred_date"),
                 move_time=serializer.validated_data.get("preferred_time"),
+                booking_mode=serializer.validated_data.get("logistics_booking_mode"),
+                declared_weight_kg=serializer.validated_data.get("ptl_declared_weight_kg"),
+                load_assist=request.data.get("ptl_load_assist"),
             )
         except UnresolvedLogisticsFareError as err:
             # Fixes GT-B-01: a logistics booking with neither a resolvable
@@ -620,21 +626,40 @@ class BookingCreateView(APIView):
         # Services) are untouched.
         if _service_slug in ("goods_transport_truck", "goods_transport_two_wheeler"):
             _fb = fare_breakdown if isinstance(fare_breakdown, dict) else (dict(fare_breakdown) if fare_breakdown else {})
-            try:
-                _route_distance_km = float(_fb.get("distance_km") or 0)
-            except (TypeError, ValueError):
-                _route_distance_km = 0.0
-            if _route_distance_km <= 0.05:
-                if idem_cache_key:
-                    from django.core.cache import cache
-                    cache.delete(idem_cache_key)
-                return _error(
-                    "Your pickup and drop locations are the same (or too close together). "
-                    "Please choose a different drop location for your booking.",
-                    400,
-                    error="Pickup and drop resolve to the same location (zero-distance route).",
-                    code="ZERO_DISTANCE_ROUTE",
+            if "distance_km" in _fb:
+                try:
+                    _route_distance_km = float(_fb.get("distance_km") or 0)
+                except (TypeError, ValueError):
+                    _route_distance_km = 0.0
+                if _route_distance_km <= 0.05:
+                    if idem_cache_key:
+                        from django.core.cache import cache
+                        cache.delete(idem_cache_key)
+                    return _error(
+                        "Your pickup and drop locations are the same (or too close together). "
+                        "Please choose a different drop location for your booking.",
+                        400,
+                        error="Pickup and drop resolve to the same location (zero-distance route).",
+                        code="ZERO_DISTANCE_ROUTE",
+                    )
+
+        # Logistics coupons are checked against the Admin-set coupon rules BEFORE the
+        # booking exists, so an invalid / expired / exhausted / ineligible code is
+        # refused with a reason instead of being silently dropped (which would leave
+        # the customer with a price they did not expect) or wrongly honoured.
+        if _service_slug in LOGISTICS_CATEGORIES:
+            _gt_coupon_code = str(request.data.get("coupon_code") or request.data.get("coupon_code_snapshot") or "").strip().upper()
+            if _gt_coupon_code:
+                from service_requests.services.coupon_rules import check_logistics_coupon
+                _gt_cpn = Coupon.objects.filter(code__iexact=_gt_coupon_code).first()
+                _ok, _ccode, _cmsg = check_logistics_coupon(
+                    _gt_cpn, user=request.user, amount=corrected_fare, service_category=_service_slug,
                 )
+                if not _ok:
+                    if idem_cache_key:
+                        from django.core.cache import cache
+                        cache.delete(idem_cache_key)
+                    return _error(_cmsg, 400, error=_cmsg, code=_ccode)
 
         # Logistics coupons are checked against the Admin-set coupon rules BEFORE the
         # booking exists, so an invalid / expired / exhausted / ineligible code is
@@ -940,9 +965,25 @@ class BookingCreateView(APIView):
             # logistics leg -- the same way an unset customer_gstin did).
             "eway_bill_number": serializer.validated_data.get("eway_bill_number") or "",
         }
+        # Bug found: this block resolved tier_obj from the fare breakdown's
+        # tier_id (the case where the fare was priced off a Lane or a
+        # locked quote snapshot rather than the serializer's own
+        # logistics_tier field -- see classification_only_snapshot /
+        # resolve_logistics_fare_v2 in logistics_pricing.py) but never
+        # actually put it anywhere: it was assigned to a local variable and
+        # then dropped, so save_kwargs never got a "logistics_tier" key and
+        # the ServiceRequest was saved with logistics_tier left NULL even
+        # though fare_breakdown correctly identified which vehicle was
+        # purchased. fare_breakdown (JSON) still recorded the tier_id, but
+        # the actual FK the rest of the system (Vendor dispatch, admin
+        # views, tier-based queries) reads never got backfilled. Put the
+        # resolved tier into save_kwargs so the FK is set exactly when this
+        # block already determined it should be.
         if not serializer.validated_data.get("logistics_tier") and fare_breakdown and fare_breakdown.get("tier_id"):
             from logistics.models import ServiceTier
             tier_obj = ServiceTier.objects.filter(id=fare_breakdown["tier_id"]).first()
+            if tier_obj:
+                save_kwargs["logistics_tier"] = tier_obj
         from service_requests.services.time_slot_service import (
             resolve_service,
             validate_slot_availability_for_booking,
@@ -985,6 +1026,28 @@ class BookingCreateView(APIView):
                             cache.delete(idem_cache_key)
                         return _error(slot_err or "Sorry, this time slot is no longer available. Please select another slot.", 400)
 
+                if serializer.validated_data.get("logistics_booking_mode") == "ptl":
+                    # Serialize PTL bookings on the admin slot row and re-check capacity inside
+                    # the transaction, so two concurrent bookings cannot overfill a slot.
+                    from service_requests.services.ptl_pricing import PTLError, validate_ptl_slot
+                    _ptl_tier = serializer.validated_data.get("logistics_tier")
+                    try:
+                        _slot = validate_ptl_slot(
+                            preferred_date=serializer.validated_data.get("preferred_date"),
+                            preferred_time=serializer.validated_data.get("preferred_time"),
+                            city=getattr(_ptl_tier, "city", ""),
+                        )
+                        type(_slot).objects.select_for_update().get(pk=_slot.pk)
+                        validate_ptl_slot(
+                            preferred_date=serializer.validated_data.get("preferred_date"),
+                            preferred_time=serializer.validated_data.get("preferred_time"),
+                            city=getattr(_ptl_tier, "city", ""),
+                        )
+                    except PTLError as _e:
+                        if idem_cache_key:
+                            from django.core.cache import cache
+                            cache.delete(idem_cache_key)
+                        return _error(str(_e), 400, error=str(_e), code=_e.code)
                 sr = serializer.save(**save_kwargs)
 
                 # Hard-block on insufficient vegetable stock (mirrors GroceryCheckoutView's
@@ -1745,7 +1808,18 @@ class CustomerBookingCancelView(APIView):
                     # diverges once an admin enables a real advance
                     # percentage and a booking was cancelled after paying
                     # only the advance.
-                    refund_amount = _amount_actually_collected(sr) - cancellation_fee
+                    # Bug found: unlike the preview above (which floors at 0
+                    # via max(collected - fee, 0)), this had no floor.
+                    # GTCancellationPolicy.fee_for() caps the fee at
+                    # sr.total_amount, not at what was actually collected, so
+                    # once GTAdvancePaymentPolicy is enabled (advance-only
+                    # payment) a configured fee can legitimately exceed the
+                    # amount collected -- e.g. ₹2,000 collected as a 20%
+                    # advance on a ₹10,000 booking, FLAT/PERCENT fee computes
+                    # to ₹5,000 (capped at total_amount, not collected) --
+                    # producing a negative RefundRequest.amount with no
+                    # validation downstream. Floor at 0, matching the preview.
+                    refund_amount = max(_amount_actually_collected(sr) - cancellation_fee, 0)
                     refund_notes = f"Auto-created on booking cancellation. Cancellation reason: {reason}"
                     refund_type = RefundType.FULL
                     if cancellation_fee > 0:
@@ -1887,14 +1961,22 @@ def _jsonable_fare_breakdown(breakdown):
     binary floating point) so the stored quote is exact and safely serialized.
     """
     if breakdown is None:
-        return {}
-    if isinstance(breakdown, Decimal):
-        return str(breakdown)
-    if isinstance(breakdown, dict):
-        return {k: _jsonable_fare_breakdown(v) for k, v in breakdown.items()}
-    if isinstance(breakdown, (list, tuple)):
-        return [_jsonable_fare_breakdown(v) for v in breakdown]
-    return breakdown
+        return {}          # no breakdown at all -> an empty one (top level only)
+
+    def _convert(value):
+        # A None INSIDE the breakdown (e.g. no minimum fare, no GST rate, unknown distance source)
+        # must stay null -- turning it into {} handed clients an object where they expect a scalar.
+        if value is None:
+            return None
+        if isinstance(value, Decimal):
+            return str(value)
+        if isinstance(value, dict):
+            return {k: _convert(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [_convert(v) for v in value]
+        return value
+
+    return _convert(breakdown)
 
 
 def _haversine_meters(lat1, lon1, lat2, lon2):
@@ -1950,6 +2032,27 @@ def _latest_delivery_otp(sr):
     return None
 
 
+def _ptl_tracking_block(sr):
+    """Light PTL summary for the tracking page. `requote_eligible` uses the same
+    assert_revisable() rule the ptl-requote API enforces, so the UI never offers a
+    revision the server would refuse."""
+    if (getattr(sr, "logistics_booking_mode", "") or "spot") != "ptl":
+        return None
+    from service_requests.services.ptl_pricing import PTLError, assert_revisable
+    try:
+        assert_revisable(sr)
+        eligible = True
+    except PTLError:
+        eligible = False
+    fb = sr.fare_breakdown or {}
+    return {
+        "mode": "ptl",
+        "declared_weight_kg": str(sr.ptl_declared_weight_kg) if sr.ptl_declared_weight_kg is not None else None,
+        "loading_responsibility": fb.get("loading_responsibility") or "customer",
+        "requote_eligible": eligible,
+    }
+
+
 def _build_tracking_payload(sr, has_full_access, include_delivery_otp=False, include_feedback=False):
     """
     Constructs the canonical live tracking response payload for a booking.
@@ -1991,7 +2094,13 @@ def _build_tracking_payload(sr, has_full_access, include_delivery_otp=False, inc
         if stops:
             target_stop = None
             if sr.logistics_leg in post_pickup_legs:
-                if len(stops) > 2:
+                # Heading out after loading, the NEXT unfinished stop is the target -- Pickup ->
+                # Stop 1..n -> Destination -- not the final drop. Once at/after the drop (unloading,
+                # delivered, ...) the drop is always the target.
+                if sr.logistics_leg in (
+                    ServiceRequest.LogisticsLeg.EN_ROUTE_DROP,
+                    ServiceRequest.LogisticsLeg.IN_TRANSIT,
+                ):
                     pending = [
                         s for s in stops
                         if s.stop_type != TripStop.StopType.PICKUP and s.completed_at is None
@@ -2448,6 +2557,7 @@ def _build_tracking_payload(sr, has_full_access, include_delivery_otp=False, inc
         "cart_data": sr.cart_data or [],
         "vendor": vendor_data,
         "logistics": _build_logistics_progress(sr),
+        "ptl": _ptl_tracking_block(sr),
         "logistics_leg": getattr(sr, "logistics_leg", "") or "",
         "service_location": {
             "address": dest_address,
@@ -4358,8 +4468,12 @@ class CustomerWalletView(APIView):
     def get(self, request):
         wallet = sr_services.get_or_create_wallet(request.user)
         txs = sr_services.list_wallet_transactions(request.user, limit=50)
+        from service_requests.services.gt_operations import ops as _ops
         return _standard_response(success=True, data={
             "balance": str(wallet.balance),
+            "topup": {"enabled": bool(_ops("wallet_topup_enabled")),
+                      "max_topup": str(_ops("wallet_max_topup")) if _ops("wallet_max_topup") is not None else None,
+                      "max_balance": str(_ops("wallet_max_balance")) if _ops("wallet_max_balance") is not None else None},
             "transactions": [
                 {
                     "id": tx.id,
@@ -4542,6 +4656,133 @@ class CustomerBookingTripStopsView(APIView):
         except ValueError as e:
             return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": str(e)}, status_code=400)
         return _standard_response(success=True, data=TripStopSerializer(created, many=True).data)
+
+
+class CustomerBookingDropChangeView(APIView):
+    """
+    GT en-route destination change (Porter parity).
+    GET  ?latitude=&longitude=  -- price the change (nothing saved)
+    POST {drop_address, latitude, longitude, reason?} -- apply it
+    Fare is re-priced server-side; the client never sends an amount.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _get_booking(self, pk, identifier):
+        sr_id = pk or identifier
+        try:
+            if str(sr_id).isdigit():
+                return ServiceRequest.objects.get(pk=int(sr_id))
+            return ServiceRequest.objects.get(request_id=sr_id)
+        except ServiceRequest.DoesNotExist:
+            return None
+
+    def _fail(self, e):
+        return _standard_response(success=False, error={"code": e.code, "message": str(e)}, status_code=400)
+
+    def get(self, request, pk=None, identifier=None):
+        from service_requests.services.drop_change import DropChangeError, _is_owner_or_admin, preview_drop_change
+        sr = self._get_booking(pk, identifier)
+        if not sr:
+            return _error("Booking not found.", 404)
+        if not _is_owner_or_admin(sr, request.user):
+            return _error("You do not have permission to change this booking.", 403)
+        try:
+            data = preview_drop_change(sr, drop_lat=request.query_params.get("latitude"),
+                                       drop_lng=request.query_params.get("longitude"),
+                                       drop_address=request.query_params.get("drop_address") or "")
+        except DropChangeError as e:
+            return self._fail(e)
+        return _standard_response(success=True, data={k: v for k, v in data.items() if not k.startswith("_")})
+
+    def post(self, request, pk=None, identifier=None):
+        from service_requests.services.drop_change import DropChangeError, change_drop_location
+        sr = self._get_booking(pk, identifier)
+        if not sr:
+            return _error("Booking not found.", 404)
+        d = request.data
+        try:
+            data = change_drop_location(
+                sr, request.user,
+                drop_address=d.get("drop_address") or d.get("address"),
+                drop_lat=d.get("latitude", d.get("drop_latitude")),
+                drop_lng=d.get("longitude", d.get("drop_longitude")),
+                reason=d.get("reason") or "",
+            )
+        except PermissionError as e:
+            return _error(str(e), 403)
+        except DropChangeError as e:
+            return self._fail(e)
+        return _standard_response(success=True, data=data)
+
+
+class CustomerBookingPTLRequoteView(CustomerBookingDropChangeView):
+    """
+    Light PTL: revise a Part Truck Load quote before dispatch (declared weight and/or drop).
+    GET  ?declared_weight_kg=&drop_latitude=&drop_longitude=  -- revised quote, nothing saved
+    POST {declared_weight_kg?, drop_latitude?, drop_longitude?, drop_address?,
+          quote_id, quote_hash, expires_at, total_amount}      -- apply it
+    The total is server-computed; the submitted total must equal it.
+    """
+
+    def _ptl_fail(self, e):
+        return _standard_response(success=False, error={"code": e.code, "message": str(e)}, status_code=400)
+
+    @staticmethod
+    def _ptl_drop(lat, lng, address):
+        """Coordinates if sent; else geocode drop_address server-side (same as change-drop);
+        neither -> (None, None) = keep the current drop."""
+        from service_requests.services.drop_change import DropChangeError, _resolve
+        from service_requests.services.ptl_pricing import PTLError
+        if lat in (None, "") and not str(address or "").strip():
+            return None, None
+        try:
+            return _resolve(address, lat, lng)
+        except DropChangeError as e:
+            raise PTLError(e.code, str(e))
+
+    def get(self, request, pk=None, identifier=None):
+        from service_requests.services.drop_change import _is_owner_or_admin
+        from service_requests.services.ptl_pricing import PTLError, preview_ptl_revision
+        sr = self._get_booking(pk, identifier)
+        if not sr:
+            return _error("Booking not found.", 404)
+        if not _is_owner_or_admin(sr, request.user):
+            return _error("You do not have permission to change this booking.", 403)
+        q = request.query_params
+        try:
+            d_lat, d_lng = self._ptl_drop(q.get("drop_latitude") or q.get("latitude"),
+                                          q.get("drop_longitude") or q.get("longitude"), q.get("drop_address"))
+            data = preview_ptl_revision(
+                sr, declared_weight_kg=q.get("declared_weight_kg"), drop_lat=d_lat, drop_lng=d_lng,
+            )
+        except PTLError as e:
+            return self._ptl_fail(e)
+        return _standard_response(success=True, data=_jsonable_fare_breakdown(data))
+
+    def post(self, request, pk=None, identifier=None):
+        from service_requests.services.ptl_pricing import PTLError, apply_ptl_revision
+        sr = self._get_booking(pk, identifier)
+        if not sr:
+            return _error("Booking not found.", 404)
+        d = request.data
+        try:
+            d_lat, d_lng = self._ptl_drop(d.get("drop_latitude", d.get("latitude")),
+                                          d.get("drop_longitude", d.get("longitude")), d.get("drop_address"))
+            data = apply_ptl_revision(
+                sr, request.user,
+                declared_weight_kg=d.get("declared_weight_kg"),
+                drop_lat=d_lat, drop_lng=d_lng,
+                drop_address=d.get("drop_address") or "",
+                quote_id=d.get("quote_id"), quote_hash=d.get("quote_hash"),
+                expires_at=d.get("expires_at"),
+                submitted_amount=d.get("total_amount", d.get("total")),
+                reason=d.get("reason") or "",
+            )
+        except PermissionError as e:
+            return _error(str(e), 403)
+        except PTLError as e:
+            return self._ptl_fail(e)
+        return _standard_response(success=True, data=data)
 
 
 class CustomerBookingMessagesView(APIView):

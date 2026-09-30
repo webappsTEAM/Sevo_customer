@@ -1596,6 +1596,7 @@ const EMPTY_PACKAGE = {
   gt_weight_class: "",
   gt_city: "",
   gt_dimensions_label: "",
+  gt_max_weight_kg: "",
   gt_base_fare: "",
   gt_per_km_rate: "",
   gt_free_km: "",
@@ -2659,6 +2660,7 @@ export function CatalogPackagesPage() {
         gt_weight_class: editing.gt_weight_class || "",
         gt_city: editing.gt_city || "",
         gt_dimensions_label: editing.gt_dimensions_label || "",
+        gt_max_weight_kg: editing.gt_max_weight_kg !== "" && editing.gt_max_weight_kg != null && !isNaN(Number(editing.gt_max_weight_kg)) ? Number(editing.gt_max_weight_kg) : null,
         gt_base_fare: editing.gt_base_fare !== "" && editing.gt_base_fare != null && !isNaN(Number(editing.gt_base_fare)) ? Number(editing.gt_base_fare) : null,
         gt_per_km_rate: editing.gt_per_km_rate !== "" && editing.gt_per_km_rate != null && !isNaN(Number(editing.gt_per_km_rate)) ? Number(editing.gt_per_km_rate) : null,
         gt_free_km: editing.gt_free_km !== "" && editing.gt_free_km != null && !isNaN(Number(editing.gt_free_km)) ? Number(editing.gt_free_km) : null,
@@ -6791,6 +6793,14 @@ export function CatalogPackagesPage() {
                   placeholder="e.g. 6ft x 5ft"
                   value={editing.gt_dimensions_label || ""}
                   onChange={(e) => setEditing({ ...editing, gt_dimensions_label: e.target.value })}
+                />
+
+                <Input
+                  label="Max Cargo Weight (kg) -- used for fitment, PTL eligibility and dispatch"
+                  type="number"
+                  placeholder="e.g. 750"
+                  value={editing.gt_max_weight_kg ?? ""}
+                  onChange={(e) => setEditing({ ...editing, gt_max_weight_kg: e.target.value })}
                 />
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

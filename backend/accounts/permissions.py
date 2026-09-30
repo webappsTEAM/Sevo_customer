@@ -346,7 +346,7 @@ def is_super_admin(user) -> bool:
     role = str(getattr(user, "role", "")).lower()
     if role in {"super_admin", "superadmin", "platform_admin"}:
         return True
-    if getattr(user, "is_superuser", False) and role not in _NON_SUPER_ROLES:
+    if getattr(user, "is_superuser", False):
         return True
     return False
 

@@ -389,6 +389,7 @@ def _gt_tier_defaults_from_package(package, cat_enum):
         "image": package.image or "",
         "weight_class": package.gt_weight_class or "",
         "dimensions_label": package.gt_dimensions_label or "",
+        "max_weight_kg": package.gt_max_weight_kg,
         "base_fare": package.gt_base_fare,
         "per_km_rate": package.gt_per_km_rate,
         "free_km": package.gt_free_km if package.gt_free_km is not None else 0,
@@ -450,6 +451,18 @@ def _assert_gt_money_valid(data):
             continue
         if not value.is_finite() or value < 0:
             errors[field] = ["Must be a finite, non-negative number."]
+    # gt_max_weight_kg must be strictly positive when set -- unlike the rate/charge fields
+    # above (where 0 is a legitimate value, e.g. free_km), a vehicle tier that can carry
+    # "0 kg" or a negative weight is meaningless and would make every cargo-fitment check
+    # against it fail (or silently pass) in a confusing way.
+    if "gt_max_weight_kg" in data and data["gt_max_weight_kg"] not in (None, ""):
+        try:
+            _cap = Decimal(str(data["gt_max_weight_kg"]))
+            if not _cap.is_finite() or _cap <= 0:
+                errors.setdefault("gt_max_weight_kg", []).append("Must be a finite number greater than 0.")
+        except (InvalidOperation, TypeError, ValueError):
+            errors.setdefault("gt_max_weight_kg", []).append("Enter a valid number.")
+
     if errors:
         raise ValidationError(errors)
 
@@ -682,6 +695,10 @@ def update_package(package, data, actor, reason=None):
                 "gt_base_fare", "gt_per_km_rate", "gt_free_km",
                 "gt_loading_unloading_charge", "gt_additional_stop_charge",
                 "gt_surge_multiplier", "gt_minimum_fare", "gt_gst_rate",
+                # gt_max_weight_kg is not money, but an unauthorized capacity change carries the
+                # same blast radius as a price change (it changes what cargo a tier is allowed to
+                # accept and what a driver is dispatched to carry), so it is gated identically.
+                "gt_max_weight_kg",
             )
             if f in data and data[f] != getattr(package, f)
         }
@@ -800,6 +817,7 @@ def update_package(package, data, actor, reason=None):
                 ("gt_surge_multiplier", "surge_multiplier"),
                 ("gt_minimum_fare", "minimum_fare"),
                 ("gt_gst_rate", "gst_rate"),
+                ("gt_max_weight_kg", "max_weight_kg"),
             )
             for pkg_field, tier_field in _gt_field_map:
                 pkg_value = getattr(pkg, pkg_field, None)
