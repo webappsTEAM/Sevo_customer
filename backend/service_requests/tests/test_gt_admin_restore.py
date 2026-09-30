@@ -71,8 +71,10 @@ class RestoreGTAdminConfigTests(TestCase):
         for slug in GT:
             self.assertTrue(_gate(self.company, slug).allowed, slug)
         ace = ServiceTier.objects.get(slug="tata-ace")
+        # Evidence corrected 2026-09-29: Tata Ace's display label and stored
+        # max_weight_kg both read 750 kg now (was an inconsistent 850 kg).
         self.assertEqual((ace.category, ace.per_km_rate, ace.base_fare, ace.max_weight_kg),
-                         ("truck", Decimal("22.00"), Decimal("220.00"), Decimal("850.00")))
+                         ("truck", Decimal("22.00"), Decimal("220.00"), Decimal("750.00")))
         self.assertTrue(Package.objects.filter(gt_service_tier_id=ace.id).exists())   # Admin-editable
         self.assertEqual(Lane.objects.filter(category="truck", city__iexact="hosur").count(), 9)
         self.assertEqual(LogisticsSlot.objects.filter(category="truck").count(), 16)
@@ -84,6 +86,19 @@ class RestoreGTAdminConfigTests(TestCase):
         self.assertEqual(counts, (ServiceTier.objects.count(), Lane.objects.count(),
                                   ServiceZoneService.objects.count(), Package.objects.count()))
         self.assertNotIn("[MISSING", _run())
+
+    def test_legacy_slug_normalization_is_general_not_hosur_specific(self):
+        """Round 7: OLD slug -> canonical slug works for any city's zone and other historic spellings."""
+        self.zone.delete()
+        other = ServiceZone.objects.create(company=self.company, name="Coimbatore", zone_type="circle",
+                                           center_lat=11.0168, center_lng=76.9558, radius_meters=20000)
+        for slug in ("mini-truck", "two_wheeler", "packers-and-movers"):
+            ServiceZoneService.objects.create(zone=other, service_slug=slug)
+        self.assertIn("[LEGACY  ] Coverage", _run())
+        _run("--apply")
+        have = set(ServiceZoneService.objects.filter(zone=other).values_list("service_slug", flat=True))
+        self.assertTrue(set(GT) <= have, have)
+        self.assertFalse(ServiceZone.objects.filter(name__icontains="hosur").exists())  # no Hosur fallback zone
 
     def test_existing_admin_rows_are_never_overwritten_or_reactivated(self):
         Lane.objects.create(category="truck", city="Hosur", destination_label="Only lane", fare=Decimal("999"),

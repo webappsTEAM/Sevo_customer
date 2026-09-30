@@ -469,6 +469,69 @@ class PackageGtPricingRbacTests(APITestCase):
         # flagged as a remaining gap, see the audit findings doc).
         self.assertEqual(self.tier.per_km_rate, Decimal("28.00"))
 
+    def test_manager_cannot_change_gt_max_weight_kg_and_db_is_unchanged(self):
+        manager = _user("manager", 104)
+        with self.assertRaises(LogisticsPricingPermissionError):
+            update_package(
+                package=self.package,
+                data={"gt_max_weight_kg": Decimal("900.00")},
+                actor=manager,
+                reason="trying to raise capacity",
+            )
+        self.package.refresh_from_db()
+        self.tier.refresh_from_db()
+        self.assertIsNone(self.package.gt_max_weight_kg)
+        self.assertIsNone(self.tier.max_weight_kg)
+
+    def test_admin_can_change_gt_max_weight_kg_and_it_propagates_to_tier(self):
+        admin = _user("admin", 105)
+        update_package(
+            package=self.package,
+            data={"gt_max_weight_kg": Decimal("750.00")},
+            actor=admin,
+            reason="correct Tata Ace capacity to match Porter-referenced evidence",
+        )
+        self.package.refresh_from_db()
+        self.tier.refresh_from_db()
+        self.assertEqual(self.package.gt_max_weight_kg, Decimal("750.00"))
+        self.assertEqual(self.tier.max_weight_kg, Decimal("750.00"))
+
+    def test_admin_zero_or_negative_gt_max_weight_kg_is_rejected(self):
+        admin = _user("admin", 106)
+        for bad in (Decimal("0.00"), Decimal("-10.00")):
+            with self.assertRaises(ValidationError):
+                update_package(
+                    package=self.package,
+                    data={"gt_max_weight_kg": bad},
+                    actor=admin,
+                    reason="bad capacity value",
+                )
+        self.package.refresh_from_db()
+        self.assertIsNone(self.package.gt_max_weight_kg)
+
+    def test_admin_blank_gt_max_weight_kg_does_not_overwrite_existing_tier_capacity(self):
+        admin = _user("admin", 107)
+        # First set a real capacity so there is something to preserve.
+        update_package(
+            package=self.package,
+            data={"gt_max_weight_kg": Decimal("750.00")},
+            actor=admin,
+            reason="set initial capacity",
+        )
+        # A later edit that leaves gt_max_weight_kg blank/None must not wipe
+        # out the tier's already-synced capacity (matches every other gt_*
+        # field's blank-never-overwrites behavior in _gt_field_map).
+        update_package(
+            package=self.package,
+            data={"gt_max_weight_kg": None, "gt_per_km_rate": Decimal("29.00")},
+            actor=admin,
+            reason="unrelated rate tweak",
+        )
+        self.package.refresh_from_db()
+        self.tier.refresh_from_db()
+        self.assertEqual(self.tier.max_weight_kg, Decimal("750.00"))
+        self.assertEqual(self.package.gt_per_km_rate, Decimal("29.00"))
+
     def test_admin_change_without_reason_is_rejected_and_db_unchanged(self):
         admin = _user("admin", 103)
         with self.assertRaises(ValidationError):

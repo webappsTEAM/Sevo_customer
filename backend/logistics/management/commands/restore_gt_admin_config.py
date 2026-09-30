@@ -39,15 +39,28 @@ from django.db import transaction
 EVIDENCE = Path(__file__).resolve().parents[2] / "restore_data" / "gt_admin_config_2026-09-23.json"
 
 GT_ZONE_SLUGS = {
-    # canonical slug the booking gate requires -> legacy slug older zones carry
-    "goods_transport_truck": ("truck", "Mini Truck"),
-    "goods_transport_two_wheeler": ("two-wheeler", "Two Wheeler"),
-    "packers_movers": ("packers-movers", "Packers & Movers"),
+    # canonical slug the booking gate requires -> (legacy aliases older zones may carry, label).
+    # General rule for ANY city/zone: OLD slug -> normalize to CURRENT canonical slug -> verify.
+    # Nothing here is city-specific; extend the alias tuples if more historic spellings appear.
+    "goods_transport_truck": (("truck", "mini-truck", "mini_truck", "goods-transport-truck"), "Mini Truck"),
+    "goods_transport_two_wheeler": (("two-wheeler", "two_wheeler", "2-wheeler", "goods-transport-two-wheeler"),
+                                    "Two Wheeler"),
+    "packers_movers": (("packers-movers", "packers_and_movers", "packers-and-movers"), "Packers & Movers"),
 }
 
 
 _TIER_RATE_FIELDS = ("base_fare", "per_km_rate", "free_km", "minimum_fare", "loading_unloading_charge",
-                     "additional_stop_charge", "surge_multiplier")
+                     "additional_stop_charge", "surge_multiplier", "max_weight_kg")
+
+
+def _named_capacity_kg(name):
+    """Capacity stated in a tier's display name, e.g. '(750 kg Capacity)' or '(1.2 Ton Capacity)'."""
+    import re
+    m = re.search(r"\(\s*(?:up to\s*)?([\d.]+)\s*(kg|ton)", name or "", re.I)
+    if not m:
+        return None
+    val = Decimal(m.group(1))
+    return (val * 1000 if m.group(2).lower() == "ton" else val).quantize(Decimal("1"))
 
 
 def _fields(model):
@@ -144,16 +157,16 @@ class Command(BaseCommand):
                 self._row("OK", "Coverage", f"{label}: {', '.join(sorted(z.name for z in serving))}")
                 continue
             legacy_rows = [(z, a) for z in zones for a in z.zone_services.all()
-                           if a.service_slug == legacy and a.is_available]
+                           if a.service_slug in legacy and a.is_available]
             if legacy_rows:
                 names = ", ".join(sorted({z.name for z, _ in legacy_rows}))
                 if self.apply:
                     for z, a in legacy_rows:
                         ServiceZoneService.objects.get_or_create(
                             zone=z, service_slug=slug, defaults={"service_name": label, "is_available": True})
-                    self._row("RESTORED", "Coverage", f"{label}: added '{slug}' next to legacy '{legacy}' on {names}")
+                    self._row("RESTORED", "Coverage", f"{label}: added '{slug}' next to legacy slug(s) on {names}")
                 else:
-                    self._row("LEGACY", "Coverage", f"{label}: zones {names} only carry legacy slug '{legacy}', which the "
+                    self._row("LEGACY", "Coverage", f"{label}: zones {names} only carry a legacy slug ({'/'.join(sorted({a.service_slug for _, a in legacy_rows}))}), which the "
                                                     f"booking gate ignores -> {label} is refused there")
                 continue
 
@@ -222,6 +235,11 @@ class Command(BaseCommand):
             if pkg and tier:
                 note = "" if tier.is_active else " -- tier inactive (left as set)"
                 self._row("OK", "Vehicle tier", f"{label}: {tier.max_weight_kg or '?'} kg, per km {tier.per_km_rate}{note}")
+                named = _named_capacity_kg(tier.name)
+                if named and tier.max_weight_kg and Decimal(str(tier.max_weight_kg)) != named:
+                    # Advisory only: never auto-corrected, the Admin decides which number is right.
+                    self._row("WARN", "Vehicle tier", f"{tier.name}: display name says {named} kg but capacity "
+                                                      f"(max_weight_kg) is {tier.max_weight_kg} kg -> fix in Admin > Rate card")
             elif pkg and not tier:
                 def fix(pkg=pkg, ev_tier=ev_tier):
                     enum = cat._logistics_category_for_service_slug(pkg.service.slug, service=pkg.service, package=pkg)
@@ -239,6 +257,7 @@ class Command(BaseCommand):
                                 gt_loading_unloading_charge=tier.loading_unloading_charge,
                                 gt_additional_stop_charge=tier.additional_stop_charge,
                                 gt_surge_multiplier=tier.surge_multiplier, gt_minimum_fare=tier.minimum_fare,
+                                gt_max_weight_kg=tier.max_weight_kg,
                                 base_price=tier.starting_price,
                                 status="ACTIVE" if tier.is_active else "INACTIVE")
                     Package.objects.create(service=svc, gt_service_tier_id=tier.id, **data)

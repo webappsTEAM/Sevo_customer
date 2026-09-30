@@ -322,7 +322,7 @@
    "additional_stop_charge": "40.00",
    "surge_multiplier": "1.00",
    "minimum_fare": "220.00",
-   "max_weight_kg": "850.00",
+   "max_weight_kg": "750.00",
    "max_cft": "120.00",
    "crew_size": null,
    "includes": [

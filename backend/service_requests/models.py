@@ -1202,6 +1202,12 @@ class Package(models.Model):
         help_text="Goods & Transport only: display dimensions (e.g. '6ft x 5ft'). Mirrors ServiceTier.dimensions_label -- "
                    "the one ServiceTier display field with no other Package equivalent (capacity is covered by the Tag field).",
     )
+    gt_max_weight_kg = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Goods & Transport only: maximum cargo weight (kg) this vehicle tier can carry. "
+                   "Mirrors ServiceTier.max_weight_kg -- used for cargo fitment checks, PTL eligibility "
+                   "and dispatch/vehicle-compatibility. Blank leaves the tier's existing capacity untouched.",
+    )
     gt_base_fare = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True,
         help_text="Goods & Transport only: fixed component of the distance fare. Mirrors ServiceTier.base_fare.",
