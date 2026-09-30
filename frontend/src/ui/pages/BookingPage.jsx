@@ -10385,6 +10385,9 @@ function QuickCommerceCartCheckout({
   })
   const [selectedAddressId, setSelectedAddressId] = useState(() => savedAddresses[0]?.id || "addr_home")
   const [isDonationChecked, setIsDonationChecked] = useState(false)
+  const [selectedTip, setSelectedTip] = useState(null)
+  const [customTip, setCustomTip] = useState("")
+  const [isCustomTipOpen, setIsCustomTipOpen] = useState(false)
   const [showAddAddressModal, setShowAddAddressModal] = useState(false)
   const [newAddressText, setNewAddressText] = useState("")
   const [newAddressType, setNewAddressType] = useState("Home")
@@ -10439,12 +10442,13 @@ function QuickCommerceCartCheckout({
   const itemsOriginalTotal = cart.reduce((sum, item) => sum + (item.mrp || Math.round((item.price || 0) * 1.2)) * (item.quantity || 1), 0)
   const savings = Math.max(0, itemsOriginalTotal - itemsTotal)
 
-  const tipAmount = 0
-  const pricing = QUICK_COMMERCE_PRICING.calculateTotals(itemsTotal, { selectedTip: 0 })
+  const tipAmount = selectedTip === "custom" ? Math.max(0, parseInt(customTip, 10) || 0) : Math.max(0, selectedTip || 0)
+  const pricing = QUICK_COMMERCE_PRICING.calculateTotals(itemsTotal, { selectedTip: tipAmount })
   const deliveryCharge = pricing.deliveryCharge
   const handlingCharge = pricing.handlingCharge
   const smallCartFee = pricing.smallCartFee
   const surgeCharge = pricing.surgeCharge
+  const donationAmount = 0
   const grandTotal = pricing.grandTotal
 
   const handleUpdateQty = (id, delta) => {
@@ -10518,6 +10522,13 @@ function QuickCommerceCartCheckout({
       onRequireAuth && onRequireAuth()
       return
     }
+    // Bug found: this used to fall back to a hardcoded "9876543210" and
+    // submit it as the real ServiceRequest.phone whenever a logged-in user
+    // had no phone on file (e.g. email/Google-only signup) -- a fake,
+    // non-functional number would be persisted as the delivery contact, so
+    // whoever fulfills the order would be calling a number that isn't the
+    // customer's. Require a real phone before checkout instead of
+    // fabricating one.
     if (!user?.phone) {
       setErrorMsg("Please add a phone number to your profile before placing this order, so we can reach you for delivery.")
       return
@@ -10532,6 +10543,16 @@ function QuickCommerceCartCheckout({
         return
       }
 
+      // Real grocery checkout (DAILY_ESSENTIALS_IMPLEMENTATION_PLAN.md Phase
+      // 3 / frontend plan Phase 2) -- GroceryCheckoutView reads the
+      // customer's ACTIVE daily_essentials Cart from the backend and
+      // reserves stock atomically, hard-blocking on InsufficientStockError.
+      // No cart_data payload here: unlike the old /booking/ endpoint, this
+      // one is not told what's in the cart, it reads the real Cart rows
+      // that dailyEssentialsCartSync.js has been keeping in sync (Phase 1).
+      // No silent fallback on failure -- a real error (insufficient stock,
+      // network failure, anything) must surface as an error, never a
+      // fabricated success screen.
       const res = await apiRequest("/orders/grocery/checkout/", {
         method: "POST",
         json: {
@@ -10564,6 +10585,11 @@ function QuickCommerceCartCheckout({
           : `Your fresh vegetables will be packed and delivered on ${activeDateObj?.formatted || "scheduled date"} during ${selectedSlot?.slot_label || "6:00 PM – 8:00 PM"}.`
       })
     } catch (err) {
+      // GroceryCheckoutView's insufficient-stock response puts the
+      // human-readable text in `message` (and the machine-readable item
+      // detail in `errors`) -- extractApiErrorMessage() prefers `errors`
+      // first for other endpoints' sake, so check `message` here explicitly
+      // before falling back to it.
       setErrorMsg(err?.body?.message || extractApiErrorMessage(err, "Failed to place order. Please try again."))
     } finally {
       setIsSubmitting(false)
@@ -10983,6 +11009,61 @@ function QuickCommerceCartCheckout({
               </div>
             </div>
 
+            {/* (Donation box removed) */}
+
+            {/* Tip Your Delivery Partner Card */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-3xs space-y-3">
+              <h3 className="text-xs sm:text-sm font-bold text-slate-900">Support your delivery partner</h3>
+              <p className="text-[11px] sm:text-xs text-slate-400 font-medium leading-relaxed">
+                Add a tip to show appreciation. 100% of the tip goes directly to your rider.
+              </p>
+              <div className="grid grid-cols-4 gap-2 pt-1">
+                {[
+                  { label: "₹20", val: 20, desc: "Say Thanks" },
+                  { label: "₹30", val: 30, desc: "Buy a Chai" },
+                  { label: "₹50", val: 50, desc: "Show Love" },
+                  { label: "Custom", val: "custom", desc: "Other" },
+                ].map((t) => {
+                  const isSelected = selectedTip === t.val
+                  return (
+                    <button
+                      key={t.label}
+                      type="button"
+                      onClick={() => {
+                        if (selectedTip === t.val) {
+                          setSelectedTip(null)
+                          setIsCustomTipOpen(false)
+                        } else {
+                          setSelectedTip(t.val)
+                          setIsCustomTipOpen(t.val === "custom")
+                        }
+                      }}
+                      className={`py-3 px-2 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 active:scale-95 ${isSelected
+                        ? "bg-slate-900 border-slate-900 text-white shadow-2xs"
+                        : "bg-slate-50 hover:bg-white border-slate-200 text-slate-700 hover:border-slate-350"
+                        }`}
+                    >
+                      <span className="text-sm font-bold">{t.label}</span>
+                      <span className="text-[9px] font-semibold text-slate-405">{t.desc}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              {isCustomTipOpen && (
+                <div className="pt-2">
+                  <input
+                    type="number"
+                    min="0"
+                    value={customTip}
+                    onKeyDown={e => { if (['-', '+', 'e', 'E'].includes(e.key)) e.preventDefault() }}
+                    onChange={(e) => setCustomTip(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="Enter custom tip amount (₹)"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400"
+                  />
+                </div>
+              )}
+            </div>
+
             {/* Cancellation Policy Card */}
             <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4.5 space-y-1.5 shadow-3xs">
               <h3 className="text-xs font-bold text-slate-800">Cancellation Policy</h3>
@@ -11041,8 +11122,6 @@ function QuickCommerceCartCheckout({
           </button>
         </div>
       </div>
-
-
 
       {/* Standard Swiggy-Style Select Service Address Drawer */}
       {isAddressScreenOpen && (
