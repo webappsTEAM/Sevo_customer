@@ -163,6 +163,15 @@ def assert_catalog_matches_category(service_category, *, tier=None, lane=None):
             raise LogisticsCatalogMismatchError(
                 f"The selected {label} is no longer available."
             )
+        # Round 13: optional effective-date window (ServiceTier.effective_from/
+        # effective_to). Lane and any object without is_effective() are exempt
+        # (getattr default True), so this only ever restricts a tier that an
+        # admin actually scheduled.
+        is_effective = getattr(obj, "is_effective", None)
+        if callable(is_effective) and not is_effective():
+            raise LogisticsCatalogMismatchError(
+                f"The selected {label} is not currently available (outside its effective dates)."
+            )
 
 _PAISE = Decimal("0.01")
 
@@ -326,6 +335,8 @@ def quote_logistics_fare(
     cargo_summary=None,
     waypoints=None,
     loading_help=True,
+    service_category=None,
+    customer_gstin=None,
 ):
     """
     Compute a real, itemised, distance-based fare for one goods-transport
@@ -438,6 +449,33 @@ def quote_logistics_fare(
             total = minimum_fare
             minimum_applied = True
 
+    # Round 13 (Final Configurability Pass): GST/RCM configuration branch.
+    # Resolved only when a caller supplies service_category (every current
+    # caller may now do so; callers that don't are completely unaffected --
+    # resolve_tax_treatment(None, ...) is defined to return the exact
+    # no-RCM, gst_enabled=True default, so this is purely additive).
+    from .gst_policy import resolve_tax_treatment
+
+    _tax = resolve_tax_treatment(service_category, customer_gstin)
+    gst_rate_str = _gst_rate_str(tier) if _tax["gst_enabled"] else None
+    gst_included_amt = _gst_included(total, tier) if _tax["gst_enabled"] else Decimal("0.00")
+    rcm_applicable = bool(_tax["rcm_applicable"]) and gst_included_amt > 0
+    rcm_statement = _tax["rcm_statement"] if rcm_applicable else ""
+    taxable_value = total
+    if rcm_applicable:
+        # RCM: the supplier does not charge GST -- the recipient
+        # self-assesses and pays it directly to the tax authority. The
+        # previously GST-inclusive `total` therefore has its GST component
+        # removed from what the customer is actually charged; the invoice
+        # states the RCM statement in place of a charged GST line. This is
+        # the standard, universally-true RCM treatment (not a Porter value),
+        # and is only reached when an Admin has explicitly turned rcm_enabled
+        # on for this scope -- see GTTaxPolicy.
+        total = _money(total - gst_included_amt)
+        taxable_value = total
+        gst_included_amt = Decimal("0.00")
+        gst_rate_str = None
+
     source = route.get("source")
     is_authoritative = (source == "google_maps")
     is_estimate = not is_authoritative
@@ -546,8 +584,11 @@ def quote_logistics_fare(
         free_km=free_km,
         # GST INCLUDED in `total` (admin-configured per tier, blank/0 = none). Snapshotted like
         # the other rates so a later admin change never alters an existing booking's invoice.
-        gst_rate=_gst_rate_str(tier),
-        gst_included=_gst_included(total, tier),
+        gst_rate=gst_rate_str,
+        gst_included=gst_included_amt,
+        rcm_applicable=rcm_applicable,
+        rcm_statement=rcm_statement,
+        taxable_value=taxable_value,
         distance_source=source,
         is_authoritative=is_authoritative,
         is_estimate=is_estimate,
@@ -1014,6 +1055,7 @@ def resolve_logistics_fare_v2(
             stop_count=stop_count,
             cargo_summary=cargo_summary,
             waypoints=extracted_waypoints,
+            service_category=service_category,
         )
         if breakdown is not None:
             if not breakdown.get("is_cargo_fit", True):

@@ -435,6 +435,11 @@ class ConfigurableCancellationFeeTests(Base, TestCase):
     """Cancellation fees are admin policy (GTCancellationPolicy), Porter-style: free until a driver is assigned."""
 
     def setUp(self):
+        # Round 8: migration 0117 seeds a platform-wide default (Rs 50 flat, post-assignment
+        # only). These tests exercise the mechanism itself with hand-picked values, so they
+        # clear the seeded default first -- it is covered by test_gt_claim_policy_defaults.py.
+        from service_requests.models import GTCancellationPolicy
+        GTCancellationPolicy.objects.all().delete()
         self._world()
         q = self.quote(self.bike); self.assertEqual(self.book(self.bike, q).status_code, 201)
         self.sr = ServiceRequest.objects.latest("id")

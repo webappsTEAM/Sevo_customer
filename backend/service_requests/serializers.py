@@ -424,6 +424,10 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             "customer_gstin",
             # Light PTL: booking mode marker + declared cargo weight (per-kg pricing).
             "logistics_booking_mode", "ptl_declared_weight_kg",
+            # Gap 1: optional e-way-bill reference the customer can attach at booking time
+            # (or later, before dispatch, via the same detail endpoint an admin uses).
+            # SEVO records/attaches only -- no generation, no government API.
+            "eway_bill_number", "eway_bill_document",
         )
         extra_kwargs = {
             "issue_title":         {"required": False, "allow_blank": True},
@@ -459,6 +463,8 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             "customer_gstin":        {"required": False, "allow_blank": True},
             "logistics_booking_mode": {"required": False, "allow_blank": True},
             "ptl_declared_weight_kg": {"required": False, "allow_null": True},
+            "eway_bill_number":   {"required": False, "allow_blank": True},
+            "eway_bill_document": {"required": False, "allow_null": True},
         }
 
     def validate_customer_gstin(self, value):
@@ -953,6 +959,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             return ServiceRequestListSerializer(children, many=True, context=self.context).data
         return []
 
+
     def get_payment_confirmation_otp(self, obj):
         # N+1 fix: only query workforce_notification for COD-specific OTP states.
         # "pending" is the default online-payment status and never has a
@@ -1328,6 +1335,7 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
     feedback_token         = serializers.SerializerMethodField()
     feedback               = ServiceFeedbackNestedSerializer(read_only=True, allow_null=True)
     start_otp              = serializers.SerializerMethodField()
+    eway_bill_warning      = serializers.SerializerMethodField()
     payment_confirmation_otp = serializers.SerializerMethodField()
     active_extension       = serializers.SerializerMethodField()
     extension_amount       = serializers.SerializerMethodField()
@@ -1390,12 +1398,19 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
             "drop_contact_name", "drop_contact_phone", "drop_contact_email",
             "declared_value", "consignee_relationship",
             "insurance_opted_in", "insurance_premium", "insurance_liability_cap", "customer_gstin",
+            # Gap 1: e-way-bill record/attach fields + a non-blocking warning, visible to
+            # both the customer (their own booking) and Admin (booking detail view).
+            "eway_bill_number", "eway_bill_document", "eway_bill_warning",
             "start_otp", "payment_confirmation_otp", "active_extension", "latest_reschedule", "allowed_transitions", "available_actions",
             "has_feedback", "feedback_token", "feedback",
             "job_type", "request_kind", "catalog_service_id", "quote_number", "parent_request", "estimation", "customer_inspection",
             "created_at", "updated_at",
             "is_search_expired", "cancellation_reason", "cancellation_note", "cancelled_at",
         )
+
+    def get_eway_bill_warning(self, obj):
+        from .services.eway_bill import eway_bill_warning
+        return eway_bill_warning(obj)
 
     def get_payment_confirmation_otp(self, obj):
         # N+1 fix: only query for COD OTP states, not the default online-payment "pending".

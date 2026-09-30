@@ -14,13 +14,24 @@ CLAIMABLE_CATEGORIES = ("goods_transport_truck", "goods_transport_two_wheeler", 
 
 
 def policy_for(booking):
-    return policy_for_category(getattr(booking, "service_category", ""))
+    from .ptl_pricing import is_ptl
+    return policy_for_category(getattr(booking, "service_category", ""), is_ptl=is_ptl(booking))
 
 
-def policy_for_category(category):
+def policy_for_category(category, is_ptl=False):
+    """PTL bookings share service_category='goods_transport_truck' with ordinary Spot truck
+    bookings, so is_ptl=True is what lets a PTL-scoped GTClaimPolicy row (applies_to_ptl=True)
+    win over the generic truck row for PTL bookings; is_ptl=False (the default, and every
+    non-PTL caller) never matches a PTL-scoped row, so Spot/2W/P&M behaviour is unchanged."""
     from ..models import GTClaimPolicy
     cat = str(category or "").strip().lower()
     qs = GTClaimPolicy.objects.filter(is_active=True, is_enabled=True)
+    if is_ptl:
+        ptl_qs = qs.filter(applies_to_ptl=True)
+        pol = ptl_qs.filter(service_category__iexact=cat).first() or ptl_qs.filter(service_category="").first()
+        if pol is not None:
+            return pol
+    qs = qs.filter(applies_to_ptl=False)
     return qs.filter(service_category__iexact=cat).first() or qs.filter(service_category="").first()
 
 

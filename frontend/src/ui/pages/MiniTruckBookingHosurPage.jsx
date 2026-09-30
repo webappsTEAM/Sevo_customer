@@ -11,6 +11,7 @@ import { CouponField } from "../components/CouponField.jsx"
 import { GTPolicyNote } from "../components/GTPolicyNote.jsx"
 import { GTPaymentMethodPicker } from "../components/GTPaymentMethodPicker.jsx"
 import { TransitInsuranceOption } from "../components/TransitInsuranceOption.jsx"
+import { EwayBillField } from "../components/EwayBillField.jsx"
 import { settleBookingPayment } from "../../api/gtPaymentService.js"
 import { GstinField, isValidGstin, LoadingHelpToggle } from "../components/GstinField.jsx"
 import { extractApiErrorMessage } from "../../api/client.js"
@@ -827,6 +828,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
   const [coupon, setCoupon] = useState(null)
   const [payMethod, setPayMethod] = useState("cod")   // "cod" | "online" | "wallet"
   const [insurance, setInsurance] = useState(null)      // { declaredValue, premium, cap } | null
+  const [ewayBillNumber, setEwayBillNumber] = useState("")
   const [loadingHelp, setLoadingHelp] = useState(true)
   const [bookingSubmitting, setBookingSubmitting] = useState(false)
   const [showExitConfirm, setShowExitConfirm] = useState(false)
@@ -1837,6 +1839,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
         total_amount: fare,
         payment_method: payMethod === "cod" ? "COD" : "ONLINE",
         ...(insurance && payMethod !== "cod" ? { insurance_opted_in: true, declared_value: insurance.declaredValue } : {}),
+        ...(ewayBillNumber.trim() ? { eway_bill_number: ewayBillNumber.trim() } : {}),
 
         stops: validStops,
         cart_data: [{
@@ -3671,6 +3674,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                         <TransitInsuranceOption value={insurance} onChange={setInsurance} payMethod={payMethod} />
                         <CouponField serviceCategory="goods_transport_truck" cartTotal={serverQuote?.total} value={coupon} onChange={setCoupon} />
                         <GstinField value={customerGstin} onChange={setCustomerGstin} />
+                        <EwayBillField value={ewayBillNumber} onChange={setEwayBillNumber} />
 
                         {/* Booking Error Banner */}
                         {bookingError && (

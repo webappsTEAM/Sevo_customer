@@ -231,11 +231,46 @@ class ServiceTier(models.Model):
     # read-only.
     image = models.CharField(max_length=500, blank=True, default="")
     duration = models.CharField(max_length=50, blank=True, default="")
+    # `order` is this tier's priority: it already governs both display
+    # ordering and, via recommend_vehicles_for_cargo()'s use of the same
+    # queryset ordering, which tier is preferred when more than one fits a
+    # piece of cargo. Admin-configurable (DESCRIPTIVE_FIELDS in
+    # logistics/pricing_admin.py) -- no separate "priority" field is added;
+    # this is that field.
     order = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
 
+    # Round 13 (Final Configurability Pass): optional effective-date window,
+    # matching the "effective dates" configuration the round's spec asks for.
+    # Both null/blank by default so every existing tier keeps being bookable
+    # exactly as before -- this is purely opt-in scheduling. When set, a tier
+    # outside its window is treated as unavailable by
+    # assert_catalog_matches_category() (service_requests/services/
+    # logistics_pricing.py), the same gate that already refuses an inactive
+    # tier -- so quote and booking cannot disagree about whether a
+    # date-scoped tier is currently biddable.
+    effective_from = models.DateField(
+        null=True, blank=True,
+        help_text="Tier is not bookable before this date. Blank = no start restriction.",
+    )
+    effective_to = models.DateField(
+        null=True, blank=True,
+        help_text="Tier is not bookable after this date (inclusive). Blank = no end restriction.",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def is_effective(self, as_of=None):
+        """True when `as_of` (default: today) falls inside this tier's
+        optional effective-date window. Unset bounds never restrict."""
+        import datetime as _dt
+        today = as_of or _dt.date.today()
+        if self.effective_from and today < self.effective_from:
+            return False
+        if self.effective_to and today > self.effective_to:
+            return False
+        return True
 
     class Meta:
         ordering = ["category", "city", "order", "name"]

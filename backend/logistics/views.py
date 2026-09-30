@@ -474,6 +474,11 @@ class LogisticsQuoteView(APIView):
                 cargo_summary=cargo_summary,
                 waypoints=waypoints,
                 loading_help=loading_help,
+                # Round 13: GST/RCM configuration branch (off unless an
+                # Admin has configured a GTTaxPolicy with rcm_enabled=True
+                # for this category -- see gst_policy.resolve_tax_treatment).
+                service_category=category,
+                customer_gstin=data.get("customer_gstin"),
             )
         except TooManyStopsError as exc:
             return Response(

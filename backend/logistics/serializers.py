@@ -110,6 +110,8 @@ class ServiceTierPricingSerializer(serializers.ModelSerializer):
             "minimum_fare", "loading_unloading_charge", "additional_stop_charge",
             "max_additional_stops",
             "surge_multiplier", "gst_rate",
+            # Round 13: optional effective-date window
+            "effective_from", "effective_to",
             "updated_at",
         ]
         read_only_fields = ["id", "category", "slug", "city", "category_display",

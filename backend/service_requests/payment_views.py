@@ -1037,6 +1037,7 @@ class InvoiceDownloadView(APIView):
 
         base_total = 0.0
         gst_row = None
+        rcm_note = ""
         gt_snapshot = next(
             (i.get("logistics_snapshot") for i in cart
              if isinstance(i, dict) and isinstance(i.get("logistics_snapshot"), dict)),
@@ -1143,6 +1144,14 @@ class InvoiceDownloadView(APIView):
                     _gst_amt = _amt("gst_included")
                     _pct = _gst_rate.quantize(_D("0.01")).normalize()
                     gst_row = (f"Includes GST ({_pct:f}%):", _gst_amt, total_q)
+                # Round 13: Reverse Charge Mechanism. When the snapshot recorded RCM as
+                # applicable (Admin-configured GTTaxPolicy, opted in for this booking's
+                # category, at the time this booking was quoted), the supplier did not
+                # charge GST -- gst_row above never fires (gst_included was zeroed at quote
+                # time) -- and the invoice instead states the statement GST law requires on
+                # an RCM invoice. rcm_note is drawn separately below, not as a rows[] line
+                # item, since it is a statement, not a charge.
+                rcm_note = str(gt_snapshot.get("rcm_statement") or "").strip() if gt_snapshot.get("rcm_applicable") else ""
             for i, (name, amt) in enumerate(rows):
                 y -= 22
                 c.setFillColor(HexColor("#F8FAFC") if i % 2 == 0 else white)
@@ -1245,6 +1254,14 @@ class InvoiceDownloadView(APIView):
             y -= 18
             c.drawString(320, y + 4, gst_row[0])
             c.drawRightString(W - 35, y + 4, f"Rs. {gst_row[1]:,.2f}")
+
+        if rcm_note:
+            y -= 18
+            c.setFont("Helvetica-Oblique", 8)
+            c.setFillColor(HexColor("#B45309"))
+            _draw_text(c, 320, y + 4, rcm_note[:90], 8)
+            c.setFillColor(black)
+            c.setFont("Helvetica", 10)
 
         if ext_amount > 0:
             y -= 18

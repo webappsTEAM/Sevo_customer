@@ -25,7 +25,7 @@ from rest_framework.views import APIView
 
 from service_requests.models import (
     CatalogChangeLog, GTAdvancePaymentPolicy, GTCancellationPolicy, GTClaimPolicy, GTExtraChargePolicy,
-    GTInsurancePolicy, GTOperationsConfig, GTPTLPricingPolicy, GTWaitingChargePolicy,
+    GTInsurancePolicy, GTOperationsConfig, GTPTLPricingPolicy, GTTaxPolicy, GTWaitingChargePolicy,
 )
 
 from .admin_views import _can, _fail, _ok
@@ -38,6 +38,8 @@ _PERCENT = "percent"
 _INT = "int"
 _BOOL = "bool"
 _CHOICE = "choice"
+_TEXT = "text"
+_DATE = "date"
 
 KINDS: Dict[str, Any] = {
     "cancellation": {
@@ -138,6 +140,24 @@ KINDS: Dict[str, Any] = {
             "is_active": (_BOOL, None),
         },
     },
+    # Round 13 (Final Configurability Pass): GST/RCM configuration. gst_rate
+    # itself lives on ServiceTier/Package (already Admin-configurable there,
+    # see test_gt_gst_configurable.py) -- this kind only adds the RCM branch
+    # on top: opt-in, off by default, resolved by
+    # service_requests.services.gst_policy.resolve_tax_treatment().
+    "tax": {
+        "model": GTTaxPolicy,
+        "fields": {
+            "gst_enabled": (_BOOL, None),
+            "rcm_enabled": (_BOOL, None),
+            "rcm_applies_when_gstin_registered": (_BOOL, None),
+            "rcm_statement": (_TEXT, None),
+            "place_of_supply_note": (_TEXT, None),
+            "effective_from": (_DATE, "nullable"),
+            "effective_to": (_DATE, "nullable"),
+            "is_active": (_BOOL, None),
+        },
+    },
 }
 
 
@@ -160,6 +180,16 @@ class _Invalid(Exception):
 
 def _coerce(name, spec, raw):
     kind, extra = spec
+    if kind == _TEXT:
+        return str(raw or "").strip()[:4000]
+    if kind == _DATE:
+        if raw in (None, ""):
+            return None
+        from django.utils.dateparse import parse_date
+        value = parse_date(str(raw))
+        if value is None:
+            raise _Invalid(f"{name} must be a valid date (YYYY-MM-DD).")
+        return value
     if kind == _BOOL:
         if isinstance(raw, bool):
             return raw
@@ -261,6 +291,12 @@ def _validate_business_rules(kind, values):
         pct = Decimal(str(values.get("advance_percent") or 0))
         if not (0 < pct <= 100):
             raise _Invalid("An enabled advance payment needs an advance_percent between 0 and 100.")
+    if kind == "tax":
+        ef, et = values.get("effective_from"), values.get("effective_to")
+        if ef and et and et < ef:
+            raise _Invalid("effective_to cannot be before effective_from.")
+        if values.get("rcm_enabled") and not str(values.get("rcm_statement") or "").strip():
+            raise _Invalid("An enabled RCM policy needs a rcm_statement to print on the invoice.")
 
 
 def _clash(kind, category, exclude_id=None):

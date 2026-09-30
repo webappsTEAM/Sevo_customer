@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient, APITestCase
 
 from service_requests.models import (
-    CatalogChangeLog, GTAdvancePaymentPolicy, GTCancellationPolicy, GTWaitingChargePolicy,
+    CatalogChangeLog, GTAdvancePaymentPolicy, GTCancellationPolicy, GTClaimPolicy, GTWaitingChargePolicy,
     get_gt_cancellation_fee, get_gt_waiting_charge, ServiceRequest,
 )
 
@@ -27,12 +27,18 @@ def _user(role):
 
 class AdminGTPolicyApiTests(APITestCase):
     def setUp(self):
+        # Round 9 seeded Porter-documented default cancellation/claim policy rows
+        # (migration 0117) so every GT booking has a real, non-blank policy out of the
+        # box. These tests exercise the admin API against a clean slate, so clear the
+        # seeded defaults here -- this only affects this TestCase's own transaction.
+        GTCancellationPolicy.objects.all().delete()
+        GTClaimPolicy.objects.all().delete()
         self.client.force_authenticate(user=_user("admin"))
 
     def test_overview_lists_every_kind_and_the_categories(self):
         r = self.client.get(BASE)
         self.assertEqual(r.status_code, 200, r.data)
-        self.assertEqual(sorted(k for k in r.data["data"] if k != "categories"), ["advance", "cancellation", "claim", "extra_charge", "insurance", "operations", "ptl", "waiting"])
+        self.assertEqual(sorted(k for k in r.data["data"] if k != "categories"), ["advance", "cancellation", "claim", "extra_charge", "insurance", "operations", "ptl", "tax", "waiting"])
         self.assertIn("packers_movers", r.data["data"]["categories"])
 
     def test_anonymous_and_customers_are_refused(self):
@@ -125,6 +131,10 @@ class AdminGTPolicyApiTests(APITestCase):
 class AdminGTNewPolicyKindsTests(APITestCase):
     """Toll/parking, claims, insurance and operations settings are editable from the Admin API and drive runtime."""
     def setUp(self):
+        # See AdminGTPolicyApiTests.setUp -- clear Round 9's seeded defaults so this
+        # class's own policy-creation assertions run against a clean slate.
+        GTCancellationPolicy.objects.all().delete()
+        GTClaimPolicy.objects.all().delete()
         self.client.force_authenticate(user=_user("admin"))
 
     def test_extra_charge_policy_round_trip_and_validation(self):
