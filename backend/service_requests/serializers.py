@@ -426,7 +426,9 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             "logistics_booking_mode", "ptl_declared_weight_kg",
             # Gap 1: optional e-way-bill reference the customer can attach at booking time
             # (or later, before dispatch, via the same detail endpoint an admin uses).
-            # SEVO records/attaches only -- no generation, no government API.
+            # SEVO records/attaches only -- no generation, no government API. See the
+            # field's comment in models.py for why eway_bill_number exists at all
+            # (out-of-band DB drift, same as customer_gstin's crash class).
             "eway_bill_number", "eway_bill_document",
         )
         extra_kwargs = {
@@ -470,6 +472,10 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
     def validate_customer_gstin(self, value):
         from service_requests.gstin import normalize_gstin
         return normalize_gstin(value)
+
+    def validate_eway_bill_number(self, value):
+        from service_requests.gstin import normalize_eway_bill_number
+        return normalize_eway_bill_number(value)
 
     def validate_latitude(self, value):
         if value is not None and not (-90.0 <= float(value) <= 90.0):
