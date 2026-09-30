@@ -376,6 +376,23 @@ class ServiceRequest(models.Model):
     # invoice (Porter's customer terms: registered customers intimate it at
     # booking). Optional; validated for format only -- never used to change a fare.
     customer_gstin = models.CharField(max_length=15, blank=True, default="")
+    # Added 2026-09-30: the live database already has this column (a NOT
+    # NULL "eway_bill_number" on this table, confirmed by the same class of
+    # crash customer_gstin had -- "Failed to persist route trip stops: null
+    # value in column \"eway_bill_number\" ... violates not-null
+    # constraint", surfacing even for a plain grocery/vegetable order with
+    # no logistics leg at all), but no Django model field or migration for
+    # it existed anywhere in this repo (checked service_requests and every
+    # migration through 0101; also checked the separate VEN/CalTrack vendor
+    # codebase, which is its own Django project on its own database, so it
+    # can't be the source of this column either -- this is CUS-only drift).
+    # Registering it here -- see the accompanying migration, which only
+    # updates Django's migration state (SeparateDatabaseAndState) rather
+    # than re-adding a column that's already physically there -- means
+    # Django's ORM always supplies a real string on every ServiceRequest
+    # creation from now on, the same fix that resolved the customer_gstin
+    # crash.
+    eway_bill_number = models.CharField(max_length=20, blank=True, default="")
     insurance_premium = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     insurance_liability_cap = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     # GT-B-03: logistics-only sub-phase, independent of Status -- see the

@@ -920,6 +920,25 @@ class BookingCreateView(APIView):
             # remain valid even if admin later edits or removes the zone.
             "service_zone_id_snapshot": zone_result.zone_id,
             "service_zone_name_snapshot": zone_result.zone_name or "",
+            # GSTIN is optional (see service_requests/gstin.py) and the model
+            # column is NOT NULL with default=''. When the client omits the
+            # field entirely, validated_data can end up resolving it to None
+            # instead of the model default, and an explicit None passed to
+            # .create() always wins over the DB-level default -- crashing
+            # the whole booking (mislabeled "Failed to persist route trip
+            # stops" below, since it shares this same try/except). Guarantee
+            # a non-null string here the same way every other required field
+            # in this dict already is, rather than trusting validated_data.
+            "customer_gstin": serializer.validated_data.get("customer_gstin") or "",
+            # eway_bill_number: same reasoning as customer_gstin just above,
+            # except this column wasn't even a Django field until the
+            # migration/model change accompanying this line -- see
+            # models.py's comment on eway_bill_number for the full story
+            # (out-of-band DB drift: a live NOT NULL column with no
+            # corresponding migration anywhere in this repo, crashing every
+            # booking -- including plain grocery/vegetable orders with no
+            # logistics leg -- the same way an unset customer_gstin did).
+            "eway_bill_number": serializer.validated_data.get("eway_bill_number") or "",
         }
         if not serializer.validated_data.get("logistics_tier") and fare_breakdown and fare_breakdown.get("tier_id"):
             from logistics.models import ServiceTier

@@ -411,6 +411,11 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             "insurance_opted_in",
             # Optional customer GSTIN for the invoice (format-validated below).
             "customer_gstin",
+            # Optional E-Way Bill number for GT/logistics bookings that need
+            # one for GST compliance -- see the field's comment in models.py
+            # for why this is here at all (out-of-band DB drift, same as
+            # customer_gstin's crash class).
+            "eway_bill_number",
         )
         extra_kwargs = {
             "issue_title":         {"required": False, "allow_blank": True},
@@ -444,11 +449,16 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             "consignee_relationship": {"required": False, "allow_blank": True},
             "insurance_opted_in":    {"required": False},
             "customer_gstin":        {"required": False, "allow_blank": True},
+            "eway_bill_number":      {"required": False, "allow_blank": True},
         }
 
     def validate_customer_gstin(self, value):
         from service_requests.gstin import normalize_gstin
         return normalize_gstin(value)
+
+    def validate_eway_bill_number(self, value):
+        from service_requests.gstin import normalize_eway_bill_number
+        return normalize_eway_bill_number(value)
 
     def validate_latitude(self, value):
         if value is not None and not (-90.0 <= float(value) <= 90.0):
