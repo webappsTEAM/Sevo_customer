@@ -768,7 +768,7 @@ class MarketplaceOrderDetailView(APIView):
                 "orders_count": len(siblings),
                 "orders": [MarketplaceOrderSerializer(s).data for s in siblings],
                 "all_delivered": all(s.status == MarketplaceOrder.Status.DELIVERED for s in siblings),
-                "all_handed_over": all(s.status in [MarketplaceOrder.Status.HANDED_OVER, MarketplaceOrder.Status.DELIVERED] for s in siblings),
+                "all_handed_over": all(s.status in [MarketplaceOrder.Status.OUT_FOR_DELIVERY, MarketplaceOrder.Status.DELIVERED] for s in siblings),
             }
 
         return _success(order_data)

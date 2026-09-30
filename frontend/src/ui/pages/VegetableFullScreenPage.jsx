@@ -250,41 +250,48 @@ export function VegetableFullScreenPage() {
       apiRequest("/catalog/services/?service_slug=vegetables&status=ACTIVE")
         .then((res) => {
           if (!isMounted) return
-          if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-            const items = res.data.map((pkg) => {
-              const price = Math.round(Number(pkg.price || pkg.base_price) || 0)
-              const mrp = pkg.offer_price ? Math.round(Number(pkg.offer_price)) : null
-              const discount = pkg.tag || (mrp && mrp > price ? `${Math.round(((mrp - price) / mrp) * 100)}% OFF` : "")
-              const customPhoto = pkg.image && pkg.image.trim() ? pkg.image : getVegetableProducePhoto(pkg.name)
-              return {
-                id: pkg.id,
-                name: pkg.name,
-                unit: pkg.duration || "500 g",
-                price: price,
-                mrp: mrp,
-                discount: discount,
-                delivery: "8 MINS",
-                category: pkg.vegetable_category_name || "Daily Essentials",
-                category_parent: pkg.vegetable_category_parent_name || null,
-                category_full_path: pkg.vegetable_category_full_path || "",
-                image: customPhoto,
-                description: pkg.description || "",
-                in_stock: pkg.in_stock !== false,
-                max_quantity: typeof pkg.max_quantity === "number" ? pkg.max_quantity : null,
-                variants: Array.isArray(pkg.variants) ? pkg.variants : [],
-                custom_packs: Array.isArray(pkg.custom_packs) ? pkg.custom_packs : [],
-                customization: pkg.customization || {},
-                tag: pkg.tag || "",
-                standard_pack_enabled: pkg.customization?.standard_pack_enabled !== false,
-                enable_family_saver: pkg.customization?.enable_family_saver !== false,
-                show_net_price_bar: pkg.customization?.show_net_price_bar !== false,
-                show_add_to_basket_cta: pkg.customization?.show_add_to_basket_cta !== false,
-              }
-            })
-            setVegetables(items)
-            try {
-              localStorage.setItem('calservice_veg_catalog_cache_v2', JSON.stringify(items))
-            } catch {}
+          if (res.success && Array.isArray(res.data)) {
+            if (res.data.length > 0) {
+              const items = res.data.map((pkg) => {
+                const price = Math.round(Number(pkg.price || pkg.base_price) || 0)
+                const mrp = pkg.offer_price ? Math.round(Number(pkg.offer_price)) : null
+                const discount = pkg.tag || (mrp && mrp > price ? `${Math.round(((mrp - price) / mrp) * 100)}% OFF` : "")
+                const customPhoto = pkg.image && pkg.image.trim() ? pkg.image : getVegetableProducePhoto(pkg.name)
+                return {
+                  id: pkg.id,
+                  name: pkg.name,
+                  unit: pkg.duration || "500 g",
+                  price: price,
+                  mrp: mrp,
+                  discount: discount,
+                  delivery: "8 MINS",
+                  category: pkg.vegetable_category_name || "Daily Essentials",
+                  category_parent: pkg.vegetable_category_parent_name || null,
+                  category_full_path: pkg.vegetable_category_full_path || "",
+                  image: customPhoto,
+                  description: pkg.description || "",
+                  in_stock: pkg.in_stock !== false,
+                  max_quantity: typeof pkg.max_quantity === "number" ? pkg.max_quantity : null,
+                  variants: Array.isArray(pkg.variants) ? pkg.variants : [],
+                  custom_packs: Array.isArray(pkg.custom_packs) ? pkg.custom_packs : [],
+                  customization: pkg.customization || {},
+                  tag: pkg.tag || "",
+                  standard_pack_enabled: pkg.customization?.standard_pack_enabled !== false,
+                  enable_family_saver: pkg.customization?.enable_family_saver !== false,
+                  show_net_price_bar: pkg.customization?.show_net_price_bar !== false,
+                  show_add_to_basket_cta: pkg.customization?.show_add_to_basket_cta !== false,
+                }
+              })
+              setVegetables(items)
+              try {
+                localStorage.setItem('calservice_veg_catalog_cache_v2', JSON.stringify(items))
+              } catch {}
+            } else {
+              setVegetables([])
+              try {
+                localStorage.removeItem('calservice_veg_catalog_cache_v2')
+              } catch {}
+            }
           }
         })
         .catch((err) => {
@@ -720,18 +727,24 @@ export function VegetableFullScreenPage() {
           ) : filteredVegetables.length === 0 ? (
             <div className="py-20 text-center bg-white rounded-lg border border-slate-200">
               <span className="text-4xl">🥬</span>
-              <h3 className="text-base font-bold text-slate-800 mt-2">No vegetables found matching "{searchQuery}"</h3>
-              <p className="text-xs text-slate-500 mt-1">Try another search term or clear the category filters.</p>
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery("")
-                  setCategoryFilter("All")
-                }}
-                className="mt-4 px-4 py-2 rounded-lg bg-[#0C831F] text-white text-xs font-bold hover:bg-[#0a6d19] cursor-pointer"
-              >
-                Reset Filters
-              </button>
+              <h3 className="text-base font-bold text-slate-800 mt-2">
+                {searchQuery ? `No vegetables found matching "${searchQuery}"` : "No produce or vegetables available right now"}
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                {searchQuery || categoryFilter !== "All" ? "Try another search term or clear the category filters." : "Please check back later or explore other categories."}
+              </p>
+              {(searchQuery || categoryFilter !== "All") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("")
+                    setCategoryFilter("All")
+                  }}
+                  className="mt-4 px-4 py-2 rounded-lg bg-[#0C831F] text-white text-xs font-bold hover:bg-[#0a6d19] cursor-pointer"
+                >
+                  Reset Filters
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3">
