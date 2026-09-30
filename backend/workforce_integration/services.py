@@ -384,7 +384,7 @@ class WorkforceIntegrationService:
         ]
 
     @classmethod
-    def get_technician_tracking(cls, booking_id: str) -> dict:
+    def get_technician_tracking(cls, booking_id: str) -> dict | None:
         """
         Fetches the current live tracking coordinates and ETA for a technician assigned by the Workforce system.
         """
@@ -480,7 +480,7 @@ class WorkforceIntegrationService:
         payload = {
             "booking_id": sr.request_id,
             "workforce_job_id": sr.workforce_job_id or "",
-            "technician_id": str(technician_id),
+            "technician_id": technician_id,
             "rating": float(rating),
             "comments": comments,
             "submitted_at": timezone.now().isoformat(),
@@ -497,7 +497,7 @@ class WorkforceIntegrationService:
         return {"success": True, "fallback": True}
 
     @classmethod
-    def _build_quote_dict_from_db(cls, quote_id: int) -> dict:
+    def _build_quote_dict_from_db(cls, quote_id: int) -> dict | None:
         """
         Dynamically builds a comprehensive quote dictionary with items and measurements from PostgreSQL.
         """
@@ -691,7 +691,7 @@ class WorkforceIntegrationService:
                         ELSE 5
                       END ASC,
                       updated_at DESC, id DESC LIMIT 1
-                """, [str(token), str(token), f"{str(token).split('-V')[0]}%"])
+                """, [token, token, f"{token.split('-V')[0]}%"])
                 row = cursor.fetchone()
                 if row and row[0]:
                     quote_dict = cls._build_quote_dict_from_db(row[0])
@@ -725,7 +725,7 @@ class WorkforceIntegrationService:
             return {"success": False, "message": "No booking ID provided", "quote": None}
 
         from django.core.cache import cache
-        booking_key = getattr(booking_id, "request_id", None) or getattr(booking_id, "id", None) or str(booking_id)
+        booking_key = getattr(booking_id, "request_id", None) or getattr(booking_id, "id", None) or booking_id
         cache_key = f"wf_quote_{booking_key}"
 
         # Fast path read
@@ -748,11 +748,11 @@ class WorkforceIntegrationService:
                     wf_id = getattr(booking_id, "workforce_job_id", -1) or -1
                 elif isinstance(booking_id, int) or (isinstance(booking_id, str) and booking_id.isdigit()):
                     sr_id = int(booking_id)
-                    req_id = str(booking_id)
+                    req_id = booking_id
                     wf_id = -1
                 else:
                     sr_id = -1
-                    req_id = str(booking_id)
+                    req_id = booking_id
                     wf_id = -1
 
                 if isinstance(wf_id, str):
@@ -842,7 +842,7 @@ class WorkforceIntegrationService:
                                                 """, [
                                                     quote_num,
                                                     f"{quote_num.split('-V')[0]}%",
-                                                    int(booking_id) if str(booking_id).isdigit() else -1,
+                                                    int(booking_id) if booking_id.isdigit() else -1,
                                                     int(quote_json.get("quote_id") or -1) if str(quote_json.get("quote_id") or "").isdigit() else -1
                                                 ])
                                                 row = cursor.fetchone()
@@ -866,7 +866,7 @@ class WorkforceIntegrationService:
             return result
 
     @classmethod
-    def decide_quote(cls, token: str, decision: str, data: dict = None) -> dict:
+    def decide_quote(cls, token: str, decision: str, data: dict | None = None) -> dict:
         """
         Submits customer decision (ACCEPT, REQUEST_CHANGES, DECLINE) to the workforce system.
         Auto-resolves decision_token from database if a quote_number, quote_id, or booking_id was passed.
@@ -892,11 +892,11 @@ class WorkforceIntegrationService:
                       END ASC,
                       updated_at DESC, id DESC LIMIT 1
                 """, [
-                    str(token),
-                    str(token),
-                    f"{str(token).split('-V')[0]}%",
-                    int(token) if str(token).isdigit() else -1,
-                    int(token) if str(token).isdigit() else -1
+                    token,
+                    token,
+                    f"{token.split('-V')[0]}%",
+                    int(token) if token.isdigit() else -1,
+                    int(token) if token.isdigit() else -1
                 ])
                 row = cursor.fetchone()
                 if row:

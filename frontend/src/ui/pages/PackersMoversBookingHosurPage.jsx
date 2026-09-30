@@ -11,9 +11,10 @@ import { routes } from "../routes.js"
 import { CouponField } from "../components/CouponField.jsx"
 import { GTPolicyNote } from "../components/GTPolicyNote.jsx"
 import { GTPaymentMethodPicker } from "../components/GTPaymentMethodPicker.jsx"
+import { PMAddOnPicker } from "../components/PMAddOnPicker.jsx"
 import { settleBookingPayment } from "../../api/gtPaymentService.js"
 import { GstinField, isValidGstin } from "../components/GstinField.jsx"
-import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchPackersMoversQuote, fetchLogisticsSlots, fetchPackersMoversInventory, fetchGTFaqs, fetchLogisticsCities } from "../../api/logisticsService.js"
+import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchPackersMoversQuote, fetchLogisticsSlots, fetchPackersMoversInventory, fetchPackersMoversAddOns, fetchGTFaqs, fetchLogisticsCities } from "../../api/logisticsService.js"
 import { createBooking, cancelBooking, getBookingStatus } from "../../api/bookingService.js"
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
 import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx"
@@ -712,6 +713,26 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
 
   // Load database-backed P&M inventory categories and items
   useEffect(() => {
+    let live = true
+    fetchPackersMoversAddOns(selectedCity || "Hosur")
+      .then((rows) => { if (live) setAddOnsCatalog(Array.isArray(rows) ? rows : []) })
+      .catch(() => live && setAddOnsCatalog([]))
+    return () => { live = false }
+  }, [selectedCity])
+
+  // Client-side display estimate only -- the amount actually charged always comes back from the
+  // server (booking is rejected if the submitted total doesn't match what the server computes).
+  const addOnEstimate = selectedAddOns.reduce((sum, sel) => {
+    const svc = addOnsCatalog.find((c) => c.code === sel.code)
+    if (!svc) return sum
+    const qty = svc.pricing_mode === "FLAT" ? 1 : sel.quantity || 1
+    const price = svc.pricing_mode === "PER_CFT"
+      ? Number(svc.unit_price) * Number(pmServerQuote?.inventory_summary?.effective_cft || pmServerQuote?.inventory_summary?.total_cft || 0)
+      : Number(svc.unit_price) * qty
+    return sum + (Number.isFinite(price) ? price : 0)
+  }, 0)
+
+  useEffect(() => {
     let isMounted = true
     fetchPackersMoversInventory()
       .then(res => {
@@ -849,6 +870,8 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
   const [packingTier, setPackingTier] = useState("standard")
   const [dismantlingRequired, setDismantlingRequired] = useState(true)
   const [unpackingRequired, setUnpackingRequired] = useState(false)
+  const [selectedAddOns, setSelectedAddOns] = useState([])
+  const [addOnsCatalog, setAddOnsCatalog] = useState([])
   // Extra helpers: 0..maxHelpers, where maxHelpers is the admin setting
   // (PackersMoversConfig.max_helpers) returned by the inventory endpoint.
   const [helpersRequested, setHelpersRequested] = useState(0)
@@ -1743,7 +1766,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
         )
         return
       }
-      const fare = quoteTotal || 0
+      const fare = Math.round(((quoteTotal || 0) + addOnEstimate) * 100) / 100
       const quoteId = pmServerQuote?.quote_id || null
 
       let dateString = todayDateString()
@@ -1844,6 +1867,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
           dismantling_required: dismantlingRequired,
           unpacking_required: unpackingRequired,
           helpers_requested: Math.min(Math.max(0, Number(helpersRequested) || 0), maxHelpers),
+          ...(selectedAddOns.length > 0 ? { pm_addons: selectedAddOns } : {}),
           city: selectedCity || "Hosur",
           pickup_floor: pickupFloor,
           pickup_has_lift: pickupHasLift,
@@ -2805,7 +2829,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
         </section>
       )}
 
-      {/* ── Section: How CalServices Packers and Movers Works ── */}
+      {/* ── Section: How SEVO Packers and Movers Works ── */}
       <section className="py-12 max-w-6xl mx-auto px-4 sm:px-6">
         <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight text-center mb-10">
           How Sevo Packers and Movers Works?
@@ -3668,6 +3692,11 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                               </div>
                             </div>
                           )}
+                          <PMAddOnPicker
+                            catalog={addOnsCatalog}
+                            selected={selectedAddOns}
+                            onChange={setSelectedAddOns}
+                          />
                         </div>
                       </div>
 

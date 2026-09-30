@@ -573,8 +573,8 @@ export function AppShell() {
             <SevoLogo size="sm" className="hover:scale-105 transition-transform" />
             <div className="h-6 w-px bg-[var(--sevo-border)] hidden sm:block" />
             <div className="flex flex-col">
-              <span className="font-bold text-[var(--sevo-text-primary)] text-xs tracking-tight truncate max-w-[200px]" title={orgName && orgName !== "Sevo" ? orgName : "Operations Hub"}>
-                {orgName && orgName !== "Sevo" ? orgName : "Operations Hub"}
+              <span className="font-bold text-[var(--sevo-text-primary)] text-xs tracking-tight truncate max-w-[200px]" title={(!orgName || /calservices/i.test(orgName) || orgName.toLowerCase() === "sevo") ? "SEVO" : orgName.replace(/calservices/gi, "SEVO")}>
+                {(!orgName || /calservices/i.test(orgName) || orgName.toLowerCase() === "sevo") ? "SEVO" : orgName.replace(/calservices/gi, "SEVO")}
               </span>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <span className="text-[9px] font-bold text-[var(--sevo-primary)] uppercase tracking-wider leading-none">Admin Portal</span>

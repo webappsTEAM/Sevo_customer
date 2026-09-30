@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Lane, ServiceArea, ServiceTier, GoodsCategory, GoodsItem, PackersMoversConfig, GTFaq, LogisticsSlot, ProhibitedGoodsRule, PackersMoversSurchargeRule
+from .models import Lane, ServiceArea, ServiceTier, GoodsCategory, GoodsItem, PackersMoversConfig, GTFaq, LogisticsSlot, ProhibitedGoodsRule, PackersMoversSurchargeRule, PMAddOnService
 
 
 @admin.register(ServiceTier)
@@ -119,3 +119,10 @@ class PackersMoversSurchargeRuleAdmin(admin.ModelAdmin):
     list_display = ["name", "rule_type", "city", "percent", "flat_amount", "is_active"]
     list_filter = ["rule_type", "is_active", "city"]
     search_fields = ["name"]
+
+
+@admin.register(PMAddOnService)
+class PMAddOnServiceAdmin(admin.ModelAdmin):
+    list_display = ["name", "code", "city", "pricing_mode", "unit_price", "max_quantity", "is_labour_only", "is_active"]
+    list_filter = ["pricing_mode", "is_labour_only", "is_active", "city"]
+    search_fields = ["name", "code"]

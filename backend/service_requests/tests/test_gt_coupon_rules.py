@@ -1,5 +1,6 @@
 """GT coupons: Admin-set coupon rules are enforced at quote-apply time and booking time."""
 import uuid
+from service_requests.booking_window import next_bookable_date
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -101,7 +102,7 @@ class CouponBookingEndToEndTests(TestCase):
                 "service_category": TRUCK, "issue_title": "Mini truck", "description": "sofa and boxes",
                 "address": "Pickup, Hosur", "latitude": self.PICKUP["lat"], "longitude": self.PICKUP["lng"],
                 "drop_address": "Drop, Bengaluru", "drop_latitude": self.DROP["lat"], "drop_longitude": self.DROP["lng"],
-                "preferred_date": str(date.today()), "total_amount": "1.00", "payment_method": "COD",
+                "preferred_date": str(next_bookable_date()), "total_amount": "1.00", "payment_method": "COD",
                 "logistics_tier": self.tier.id, "coupon_code": code,
             }, format="json")
 

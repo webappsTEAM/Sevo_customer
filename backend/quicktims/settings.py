@@ -314,6 +314,9 @@ SIMPLE_JWT = {
 AUTH_COOKIE          = "qt_access"         # access token cookie name
 AUTH_COOKIE_REFRESH  = "qt_refresh"        # refresh token cookie name
 AUTH_COOKIE_SECURE   = not DEBUG           # HTTPS-only in production; False in dev
+# Session and CSRF cookies are HTTPS-only in production, like the auth cookie above.
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 # "Lax" is required for cross-origin dev (frontend:5173 → backend:8000).
 # In production with same domain, change back to "Strict" via env var.
 AUTH_COOKIE_SAMESITE = os.getenv("AUTH_COOKIE_SAMESITE", "Lax")
@@ -490,6 +493,18 @@ RAZORPAYX_ACCOUNT_NUMBER = os.getenv("RAZORPAYX_ACCOUNT_NUMBER", "").strip()
 RAZORPAYX_WEBHOOK_SECRET = os.getenv("RAZORPAYX_WEBHOOK_SECRET", "").strip()
 RAZORPAYX_MOCK_MODE = os.getenv("RAZORPAYX_MOCK_MODE", "0").strip().lower() in ("1", "true", "yes")
 
+# Customer online-payment provider.  `paytm_mock` is an explicit local/test
+# mode; it is never an automatic fallback when a live gateway fails.
+PAYMENT_PROVIDER = (os.getenv("PAYMENT_PROVIDER") or "razorpay").strip().lower()
+PAYTM_MID = os.getenv("PAYTM_MID", "").strip()
+PAYTM_MERCHANT_KEY = os.getenv("PAYTM_MERCHANT_KEY", "").strip()
+PAYTM_WEBSITE = os.getenv("PAYTM_WEBSITE", "WEBSTAGING").strip()
+PAYTM_ENV = os.getenv("PAYTM_ENV", "staging").strip().lower()
+PAYTM_CALLBACK_URL = os.getenv("PAYTM_CALLBACK_URL", "").strip()
+PAYTM_MARKETPLACE_CALLBACK_URL = os.getenv("PAYTM_MARKETPLACE_CALLBACK_URL", "").strip()
+PAYTM_MOCK_ENABLED = (os.getenv("PAYTM_MOCK_ENABLED") or os.getenv("PAYMENT_MOCK_ENABLED") or "0").strip().lower() in ("1", "true", "yes")
+PAYTM_MOCK_SECRET = os.getenv("PAYTM_MOCK_SECRET", "").strip()
+
 # Explicit opt-in only: lets a developer exercise the payment flow end-to-end
 # on a machine with no gateway credentials. Must never be enabled outside
 # local development.
@@ -508,7 +523,15 @@ SEVO_INTEGRATION_SECRET = (
     os.getenv("SEVO_INTEGRATION_SECRET") or WORKFORCE_WEBHOOK_SECRET
 ).strip()
 
-# ── Supabase Storage ─────────────────────────────────────────────────────────
+# ── Public Media Storage ─────────────────────────────────────────────────────
+MEDIA_STORAGE_PROVIDER = os.getenv("MEDIA_STORAGE_PROVIDER", "supabase").strip().lower()
+R2_ENDPOINT_URL = os.getenv("R2_ENDPOINT_URL", "").rstrip("/")
+R2_ACCESS_KEY_ID = os.getenv("R2_ACCESS_KEY_ID", "").strip()
+R2_SECRET_ACCESS_KEY = os.getenv("R2_SECRET_ACCESS_KEY", "").strip()
+R2_PUBLIC_BUCKET = os.getenv("R2_PUBLIC_BUCKET", "").strip()
+R2_PUBLIC_BASE_URL = os.getenv("R2_PUBLIC_BASE_URL", "").rstrip("/")
+
+# Legacy Supabase provider. Keep configured during migration/rollback.
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
 SUPABASE_STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "admin-media").strip()
@@ -552,14 +575,18 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
-CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "False") == "True"
+# Inline (eager) execution only by default for local dev and tests; production runs the
+# sevo-celery worker, so tasks must be queued. Set CELERY_TASK_ALWAYS_EAGER explicitly to override.
+CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "True" if (DEBUG or IS_TESTING) else "False").strip().lower() in ("true", "1", "yes")
 CELERY_BEAT_SCHEDULE = {
     "process-pending-workforce-dispatches": {
         "task": "service_requests.process_pending_workforce_dispatches",
         "schedule": 60.0,
     },
 }
-# Fail fast when the broker / result store is unreachable.
+# Fail fast when the broker / result store is unreachable. Without these, task.delay() inside a booking
+# request blocked ~19 s (kombu publish retries + result-backend reconnects) before the caller's
+# direct-dispatch fallback could run -- a Redis outage turned every booking POST into a 20 s hang.
 CELERY_TASK_PUBLISH_RETRY_POLICY = {"max_retries": 1, "interval_start": 0, "interval_step": 0.2, "interval_max": 0.5}
 CELERY_BROKER_TRANSPORT_OPTIONS = {"socket_connect_timeout": 2, "socket_timeout": 5, "retry_on_timeout": False}
 CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {"retry_policy": {"max_retries": 1, "interval_start": 0, "interval_step": 0.2, "interval_max": 0.5}, "socket_connect_timeout": 2}

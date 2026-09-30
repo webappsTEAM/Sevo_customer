@@ -97,7 +97,8 @@ export function AuthProvider({ children }) {
         }
       } catch (_) { }
       if (me?.company_name) {
-        localStorage.setItem("quicktims.orgName", me.company_name)
+        const cleanName = me.company_name.replace(/calservices/gi, "SEVO")
+        localStorage.setItem("quicktims.orgName", cleanName)
         window.dispatchEvent(new CustomEvent("quicktims:orgName"))
       }
       return u
@@ -132,7 +133,8 @@ export function AuthProvider({ children }) {
             localStorage.setItem("sevo_user", JSON.stringify(res.user))
           } catch (_) { }
           if (res.user.company_name) {
-            localStorage.setItem("quicktims.orgName", res.user.company_name)
+            const cleanName = res.user.company_name.replace(/calservices/gi, "SEVO")
+            localStorage.setItem("quicktims.orgName", cleanName)
             window.dispatchEvent(new CustomEvent("quicktims:orgName"))
           }
           return u
@@ -181,7 +183,8 @@ export function AuthProvider({ children }) {
             localStorage.setItem("sevo_user", JSON.stringify(res.user))
           } catch (_) { }
           if (res.user.company_name) {
-            localStorage.setItem("quicktims.orgName", res.user.company_name)
+            const cleanName = res.user.company_name.replace(/calservices/gi, "SEVO")
+            localStorage.setItem("quicktims.orgName", cleanName)
             window.dispatchEvent(new CustomEvent("quicktims:orgName"))
           }
           return u
@@ -229,9 +232,20 @@ export function AuthProvider({ children }) {
     localStorage.removeItem("qt_access")
     localStorage.removeItem("sevo_user")
     localStorage.removeItem("sevo_customer_phone")
-    // AI Chat Privacy: clear conversation session so the next user
-    // on this device/tab cannot see the previous user's chat history.
+    // Clear all booking, tracking, cart, and AI conversation state so no
+    // customer service details leak to the next user on this browser/session.
     try {
+      sessionStorage.removeItem("calservice_last_booking")
+      sessionStorage.removeItem("calservice_active_tracking_id")
+      sessionStorage.removeItem("active_tracking_token")
+      sessionStorage.removeItem("caltrack_tracking_token")
+      sessionStorage.removeItem("calservice_customer_token")
+      localStorage.removeItem("calservice_last_booking")
+      localStorage.removeItem("calservice_active_tracking_id")
+      localStorage.removeItem("active_tracking_token")
+      localStorage.removeItem("calservice_customer_token")
+      localStorage.removeItem("calservices_customer_cart")
+      sessionStorage.removeItem("calservices_customer_cart")
       sessionStorage.removeItem("calservices_ai_conversation_id")
       sessionStorage.removeItem("calservices_ai_messages")
       sessionStorage.removeItem("calservices_ai_owner_id")
@@ -239,6 +253,7 @@ export function AuthProvider({ children }) {
     setUser(null)
     window.dispatchEvent(new CustomEvent("calservice_auth_changed", { detail: { user: null } }))
     window.dispatchEvent(new Event("calservice_address_changed"))
+    window.dispatchEvent(new Event("calservice_booking_cleared"))
   }, [])
 
   // ── Track previous user ID for customer-switch detection ──────────────────
@@ -247,9 +262,23 @@ export function AuthProvider({ children }) {
     const currentId = user?.id || null
     if (prevUserIdRef.current !== currentId) {
       clearLegacyLocationStorage()
+      try {
+        sessionStorage.removeItem("calservice_last_booking")
+        sessionStorage.removeItem("calservice_active_tracking_id")
+        sessionStorage.removeItem("active_tracking_token")
+        sessionStorage.removeItem("caltrack_tracking_token")
+        sessionStorage.removeItem("calservice_customer_token")
+        localStorage.removeItem("calservice_last_booking")
+        localStorage.removeItem("calservice_active_tracking_id")
+        localStorage.removeItem("active_tracking_token")
+        localStorage.removeItem("calservice_customer_token")
+        localStorage.removeItem("calservices_customer_cart")
+        sessionStorage.removeItem("calservices_customer_cart")
+      } catch (_) {}
       prevUserIdRef.current = currentId
       window.dispatchEvent(new CustomEvent("calservice_auth_changed", { detail: { user } }))
       window.dispatchEvent(new Event("calservice_address_changed"))
+      window.dispatchEvent(new Event("calservice_booking_cleared"))
     }
   }, [user?.id, user])
 

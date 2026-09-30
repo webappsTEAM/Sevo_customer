@@ -87,3 +87,17 @@ class ClaimPolicyTests(TestCase):
         self.assertEqual([r["id"] for r in rows], [b.id]); self.assertEqual(rows[0]["max_payout"], "900.00")
         self._booking(delivered_hours_ago=48)
         self.assertEqual(len(svc.claimable_bookings(self.u)), 1)     # expired one excluded
+
+
+class ClaimNotificationTests(ClaimPolicyTests):
+    def test_customer_is_told_at_each_stage_once(self):
+        from unittest.mock import patch
+        b = self._booking(insured=True)
+        with patch("service_requests.notifications.send_sms_notification") as sms, self.captureOnCommitCallbacks(execute=True):
+            claim = svc.file_insurance_claim(b, self.u, "broken", "100")
+        self.assertEqual(sms.call_count, 1)
+        self.assertEqual(sms.call_args.kwargs["event_key"], f"claim:{claim.pk}:OPEN")
+        with patch("service_requests.notifications.send_sms_notification") as sms, self.captureOnCommitCallbacks(execute=True):
+            svc.resolve_insurance_claim(self.admin, claim.pk, "APPROVED", "80")
+        self.assertEqual(sms.call_args.kwargs["event_key"], f"claim:{claim.pk}:APPROVED")
+        self.assertIn("80", sms.call_args.kwargs["message"])

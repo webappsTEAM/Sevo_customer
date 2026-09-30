@@ -3,7 +3,7 @@ import { useAuth } from "./useAuth.js"
 /**
  * useRole — centralized role helpers for the frontend.
  *
- * Roles that exist in CalServices:
+ * Roles that exist in SEVO:
  *   "admin"    – org owner / manager, full admin catalog & booking access
  *   "manager"  – operational management
  *   "support"  – customer care CSR

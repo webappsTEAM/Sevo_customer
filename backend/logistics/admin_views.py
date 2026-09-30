@@ -44,6 +44,7 @@ from .serializers import (
     ServiceTierPricingSerializer,
     LaneSerializer,
     GTFaqSerializer,
+    PMAddOnServiceSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -195,6 +196,28 @@ class AdminServiceTierDetailView(APIView):
         tier = self._tier(pk)
         if not tier:
             return _fail("Service tier not found.", "TIER_NOT_FOUND", status.HTTP_404_NOT_FOUND)
+        # Light PTL: ptl_eligible is an availability flag that no Package field mirrors, so the
+        # Package save bridge never overwrites it. It is the one field still editable here;
+        # every pricing field stays package-managed.
+        data = request.data if isinstance(request.data, dict) else {}
+        if "ptl_eligible" in data and not (set(data) - {"ptl_eligible", "reason", "expected_updated_at"}):
+            if not _can(request.user, "edit"):
+                return _fail("Permission denied to edit tiers.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+            raw = data.get("ptl_eligible")
+            new = raw if isinstance(raw, bool) else str(raw).strip().lower() in ("true", "1", "yes")
+            if new and tier.get_vehicle_class() in ("two_wheeler", "three_wheeler"):
+                return _fail("Two- and three-wheelers cannot carry Part Truck Load.", "VALIDATION_ERROR",
+                             status.HTTP_400_BAD_REQUEST)
+            if new != tier.ptl_eligible:
+                from service_requests.models import CatalogChangeLog
+                CatalogChangeLog.objects.create(
+                    entity_type=CatalogChangeLog.EntityType.SERVICE_TIER, entity_id=tier.id, field_name="ptl_eligible",
+                    old_value=str(tier.ptl_eligible), new_value=str(new), changed_by=request.user,
+                    reason=str(data.get("reason") or "PTL eligibility changed via Logistics Admin API")[:255],
+                )
+                tier.ptl_eligible = new
+                tier.save(update_fields=["ptl_eligible", "updated_at"])
+            return _ok(ServiceTierPricingSerializer(tier).data)
         return _fail(
             "Goods & Transport pricing is now managed from Catalog > Packages "
             "(open the package and edit its “Goods & Transport Distance "
@@ -1100,6 +1123,25 @@ class AdminLogisticsSlotDetailView(APIView):
         return _ok(AdminLogisticsSlotSerializer(slot).data, message="Slot deactivated successfully.")
 
 
+# Lane.category must be a LogisticsCategory value ("truck", "two_wheeler",
+# "packers_movers"): the fare engine, seed data and PTL look lanes up by
+# those. The admin form used to send the ServiceRequest category names
+# ("goods_transport_truck" -- 21 chars, over the 20-char column on Postgres),
+# so accept those as aliases and refuse anything else.
+_LANE_CATEGORY_ALIASES = {
+    "goods_transport_truck": "truck",
+    "goods_transport_two_wheeler": "two_wheeler",
+    "goods_transport_2w": "two_wheeler",
+}
+
+
+def _normalize_lane_category(raw, default="truck"):
+    from .models import LogisticsCategory
+    val = str(raw or "").strip().lower() or default
+    val = _LANE_CATEGORY_ALIASES.get(val, val)
+    return val if val in LogisticsCategory.values else None
+
+
 class AdminLaneListView(APIView):
     """
     GET  /api/logistics/admin/lanes/  -- list all lanes with filtering
@@ -1114,7 +1156,7 @@ class AdminLaneListView(APIView):
         qs = Lane.objects.all()
         cat = (request.query_params.get("category") or "").strip().lower()
         if cat:
-            qs = qs.filter(category__iexact=cat)
+            qs = qs.filter(category__iexact=_LANE_CATEGORY_ALIASES.get(cat, cat))
 
         city = (request.query_params.get("city") or "").strip().lower()
         if city:
@@ -1143,7 +1185,10 @@ class AdminLaneListView(APIView):
         if not destination_label:
             return _fail("Destination label is required (e.g. 'Bengaluru Hub').", "LABEL_REQUIRED", status.HTTP_400_BAD_REQUEST)
 
-        category = str(data.get("category") or "goods_transport_truck").strip()
+        category = _normalize_lane_category(data.get("category"))
+        if category is None:
+            return _fail("Invalid lane category (use truck, two_wheeler or packers_movers).",
+                         "VALIDATION_ERROR", status.HTTP_400_BAD_REQUEST)
         city = str(data.get("city") or "Hosur").strip()
 
         try:
@@ -1191,6 +1236,18 @@ class AdminLaneListView(APIView):
         except (ValueError, TypeError):
             order = 0
 
+        # Light PTL route rate (optional); a money field, so the same modify_price gate as fare.
+        ptl_rate = None
+        if data.get("ptl_rate_per_kg") not in (None, ""):
+            try:
+                ptl_rate = Decimal(str(data.get("ptl_rate_per_kg")))
+            except (InvalidOperation, TypeError, ValueError):
+                return _fail("Invalid ptl_rate_per_kg.", "VALIDATION_ERROR", status.HTTP_400_BAD_REQUEST)
+            if ptl_rate <= 0:
+                return _fail("ptl_rate_per_kg must be greater than 0, or blank.", "VALIDATION_ERROR", status.HTTP_400_BAD_REQUEST)
+            if not _can(request.user, "modify_price"):
+                return _fail("Setting a lane's PTL rate requires the 'modify_price' permission on the Pricing module.",
+                             "PRICING_FORBIDDEN", status.HTTP_403_FORBIDDEN)
         lane = Lane.objects.create(
             category=category,
             city=city,
@@ -1200,6 +1257,7 @@ class AdminLaneListView(APIView):
             distance_km=distance_km,
             eta_label=str(data.get("eta_label") or "").strip(),
             fare=fare,
+            ptl_rate_per_kg=ptl_rate,
             currency=str(data.get("currency") or "INR").strip(),
             order=order,
             is_active=bool(data.get("is_active", True)),
@@ -1250,6 +1308,12 @@ class AdminLaneDetailView(APIView):
         from service_requests.models import CatalogChangeLog
 
         changes = []
+        if "category" in data:
+            norm = _normalize_lane_category(data.get("category"), default="")
+            if norm is None:
+                return _fail("Invalid lane category (use truck, two_wheeler or packers_movers).",
+                             "VALIDATION_ERROR", status.HTTP_400_BAD_REQUEST)
+            data = {**data, "category": norm}
         for str_field in ("category", "city", "destination_label", "eta_label", "currency"):
             if str_field in data:
                 val = str(data[str_field] or "").strip()
@@ -1263,7 +1327,7 @@ class AdminLaneDetailView(APIView):
                     setattr(lane, str_field, val)
                     changes.append(str_field)
 
-        for dec_field in ("fare", "distance_km", "destination_latitude", "destination_longitude"):
+        for dec_field in ("fare", "distance_km", "destination_latitude", "destination_longitude", "ptl_rate_per_kg"):
             if dec_field in data:
                 raw_val = data[dec_field]
                 old_val = getattr(lane, dec_field)
@@ -1279,7 +1343,10 @@ class AdminLaneDetailView(APIView):
                     # above -- fare is a real money field, the other three
                     # dec_fields (distance_km/lat/lng) are not pricing and
                     # stay on plain "edit".
-                    if dec_field == "fare" and not _can(request.user, "modify_price"):
+                    if dec_field == "ptl_rate_per_kg" and new_val is not None and new_val <= 0:
+                        return _fail("ptl_rate_per_kg must be greater than 0, or blank.",
+                                     "VALIDATION_ERROR", status.HTTP_400_BAD_REQUEST)
+                    if dec_field in ("fare", "ptl_rate_per_kg") and not _can(request.user, "modify_price"):
                         return _fail(
                             "Changing a lane's fare requires the "
                             "'modify_price' permission on the Pricing module.",
@@ -1498,3 +1565,73 @@ class AdminGTFaqDetailView(APIView):
 
 
 
+
+
+class AdminPMAddOnListView(APIView):
+    """
+    GET  /api/logistics/admin/pm-addons/       -- list the P&M add-on catalogue
+    POST /api/logistics/admin/pm-addons/       -- create a new add-on service
+
+    Porter-parity catalogue (rope pulling, appliance install/uninstall, electrician, carpenter,
+    labour-only) that PackersMoversAddOnsView (customer-facing) and pm_addons.price_pm_addons
+    (server-side booking pricing) both read. Nothing here computes a fare for an existing
+    booking -- see PRICE_LOCK_NOTICE.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if not _can(request.user, "view"):
+            return _fail("Permission denied.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+        from .models import PMAddOnService
+        rows = PMAddOnService.objects.all().order_by("name")
+        return _ok(PMAddOnServiceSerializer(rows, many=True).data)
+
+    def post(self, request):
+        if not _can(request.user, "edit"):
+            return _fail("Permission denied.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+        from .models import PMAddOnService
+        code = slugify(str(request.data.get("code") or request.data.get("name") or "").strip())
+        if not code:
+            return _fail("A code or name is required.", "CODE_REQUIRED", status.HTTP_400_BAD_REQUEST)
+        if PMAddOnService.objects.filter(code=code).exists():
+            return _fail(f"An add-on with code '{code}' already exists.", "DUPLICATE_CODE", status.HTTP_400_BAD_REQUEST)
+        payload = dict(request.data)
+        payload["code"] = code
+        ser = PMAddOnServiceSerializer(data=payload)
+        if not ser.is_valid():
+            return _fail("Invalid add-on data.", "VALIDATION_ERROR", status.HTTP_400_BAD_REQUEST, errors=ser.errors)
+        obj = ser.save()
+        return _ok(PMAddOnServiceSerializer(obj).data)
+
+
+class AdminPMAddOnDetailView(APIView):
+    """PATCH/DELETE (soft, via is_active) a single P&M add-on service."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, pk):
+        if not _can(request.user, "edit"):
+            return _fail("Permission denied.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+        from .models import PMAddOnService
+        try:
+            obj = PMAddOnService.objects.get(pk=pk)
+        except PMAddOnService.DoesNotExist:
+            return _fail("Add-on not found.", "NOT_FOUND", status.HTTP_404_NOT_FOUND)
+        data = dict(request.data)
+        data.pop("code", None)  # the code is the stable identifier booking payloads reference; never rewritten in place
+        ser = PMAddOnServiceSerializer(obj, data=data, partial=True)
+        if not ser.is_valid():
+            return _fail("Invalid add-on data.", "VALIDATION_ERROR", status.HTTP_400_BAD_REQUEST, errors=ser.errors)
+        obj = ser.save()
+        return _ok(PMAddOnServiceSerializer(obj).data)
+
+    def delete(self, request, pk):
+        if not _can(request.user, "edit"):
+            return _fail("Permission denied.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+        from .models import PMAddOnService
+        try:
+            obj = PMAddOnService.objects.get(pk=pk)
+        except PMAddOnService.DoesNotExist:
+            return _fail("Add-on not found.", "NOT_FOUND", status.HTTP_404_NOT_FOUND)
+        obj.is_active = False
+        obj.save(update_fields=["is_active", "updated_at"])
+        return _ok(PMAddOnServiceSerializer(obj).data)

@@ -54,6 +54,88 @@ const KINDS = [
     ],
     defaults: { is_enabled: false, advance_percent: "0" },
   },
+  {
+    kind: "extra_charge",
+    title: "Toll & parking pass-through",
+    blurb:
+      "Lets a driver add an actual toll or parking receipt during the trip. The customer pays the receipt amount with the final fare and the driver is reimbursed in full. Off unless enabled here.",
+    fields: [
+      { name: "is_enabled", label: "Accept toll / parking receipts", type: "bool" },
+      { name: "allow_toll", label: "Allow toll", type: "bool", showIf: (f) => f.is_enabled },
+      { name: "allow_parking", label: "Allow parking", type: "bool", showIf: (f) => f.is_enabled },
+      { name: "max_amount_per_item", label: "Largest single receipt (₹, blank = none)", type: "number", nullable: true, showIf: (f) => f.is_enabled },
+      { name: "max_total_per_booking", label: "Cap per booking (₹, blank = none)", type: "number", nullable: true, showIf: (f) => f.is_enabled },
+      { name: "require_receipt_photo", label: "Driver must upload a receipt photo", type: "bool", showIf: (f) => f.is_enabled },
+    ],
+    defaults: { is_enabled: false, allow_toll: true, allow_parking: true, max_amount_per_item: "", max_total_per_booking: "", require_receipt_photo: false },
+  },
+  {
+    kind: "claim",
+    title: "Damage & loss claims",
+    blurb:
+      "Liability included with every completed booking, without paid insurance: the lower of the fare and the cap below. Insured bookings keep their own cap. Off unless enabled here.",
+    fields: [
+      { name: "is_enabled", label: "Cover every booking", type: "bool" },
+      { name: "included_liability_cap", label: "Included liability cap (₹)", type: "number", nullable: true, showIf: (f) => f.is_enabled },
+      { name: "cap_at_fare", label: "Also limit to the booking fare", type: "bool", showIf: (f) => f.is_enabled },
+      { name: "claim_window_hours", label: "Claim within (hours of delivery, blank = no limit)", type: "number", nullable: true, showIf: (f) => f.is_enabled },
+      { name: "require_photo", label: "Require damage photos", type: "bool", showIf: (f) => f.is_enabled },
+    ],
+    defaults: { is_enabled: false, included_liability_cap: "", cap_at_fare: true, claim_window_hours: "", require_photo: false },
+  },
+  {
+    kind: "insurance",
+    title: "Transit insurance (paid add-on)",
+    blurb:
+      "Premium and liability cap for the optional insurance sold with prepaid Mini Truck / Two Wheeler bookings. With nothing configured the built-in defaults apply.",
+    scopes: [{ value: "", label: "All Goods & Transport (platform-wide)" }],
+    fields: [
+      { name: "is_offered", label: "Offer insurance", type: "bool" },
+      { name: "premium_percent", label: "Premium (% of declared value)", type: "number" },
+      { name: "max_liability", label: "Highest declared value / liability (₹)", type: "number" },
+    ],
+    defaults: { is_offered: true, premium_percent: "2", max_liability: "500000" },
+  },
+  {
+    kind: "operations",
+    title: "Quote validity, payment window & high-value threshold",
+    blurb:
+      "How long a fare quote stays valid, how long an unpaid online booking is held, and the declared value that requires a named receiver. Nothing changes for bookings already quoted.",
+    scopes: [{ value: "", label: "All Goods & Transport (platform-wide)" }],
+    fields: [
+      { name: "gt_quote_validity_minutes", label: "Mini Truck / Two Wheeler quote valid (minutes)", type: "number" },
+      { name: "pm_instant_quote_validity_minutes", label: "P&M instant quote valid (minutes)", type: "number" },
+      { name: "pm_estimate_validity_hours", label: "P&M survey estimate valid (hours)", type: "number" },
+      { name: "online_payment_window_minutes", label: "Hold unpaid online booking (minutes)", type: "number" },
+      { name: "high_value_consignment_threshold", label: "Named receiver required from declared value (₹)", type: "number" },
+      { name: "checkpoint_radius_meters", label: "Driver must be within (metres) of pickup / drop", type: "number" },
+      { name: "wallet_topup_enabled", label: "Let customers add money to their wallet", type: "bool" },
+      { name: "wallet_max_topup", label: "Largest single recharge (blank = no limit)", type: "number", nullable: true, showIf: (f) => f.wallet_topup_enabled },
+      { name: "wallet_max_balance", label: "Wallet balance cap (blank = no cap)", type: "number", nullable: true, showIf: (f) => f.wallet_topup_enabled },
+      { name: "allow_wallet_part_payment", label: "Allow wallet + online split payment", type: "bool" },
+      { name: "delivery_otp_required", label: "Require the customer's delivery OTP", type: "bool" },
+      { name: "delivery_otp_ttl_minutes", label: "Delivery OTP valid for (minutes)", type: "number", showIf: (f) => f.delivery_otp_required },
+      { name: "max_otp_attempts", label: "Wrong OTP entries allowed", type: "number", showIf: (f) => f.delivery_otp_required },
+    ],
+    defaults: { gt_quote_validity_minutes: 15, pm_instant_quote_validity_minutes: 30, pm_estimate_validity_hours: 48, online_payment_window_minutes: 30, high_value_consignment_threshold: "25000", checkpoint_radius_meters: 250, delivery_otp_required: true, delivery_otp_ttl_minutes: 30, max_otp_attempts: 5, allow_wallet_part_payment: false, wallet_topup_enabled: false, wallet_max_topup: "", wallet_max_balance: "" },
+  },
+  {
+    kind: "ptl",
+    title: "Part Truck Load (PTL) pricing",
+    blurb:
+      "Advance-booked, per-kg part-load trips on vehicles marked PTL-eligible (4-wheeler and larger) in the vehicle rate card. Slots come from Operating slots with category \"ptl\"; a route's own PTL rate (Lanes) overrides the rate here. The customer loads and unloads. Off unless enabled here.",
+    scopes: [{ value: "", label: "All Goods & Transport (platform-wide)" }],
+    fields: [
+      { name: "is_enabled", label: "Accept Part Truck Load bookings", type: "bool" },
+      { name: "rate_per_kg", label: "Rate per kg (₹)", type: "number", showIf: (f) => f.is_enabled },
+      { name: "minimum_chargeable_weight_kg", label: "Minimum chargeable weight (kg, 0 = none)", type: "number", showIf: (f) => f.is_enabled },
+      { name: "minimum_fare", label: "Minimum freight charge (₹, blank = none)", type: "number", nullable: true, showIf: (f) => f.is_enabled },
+      { name: "min_advance_days", label: "Book at least (days ahead)", type: "number", showIf: (f) => f.is_enabled },
+      { name: "load_assist_enabled", label: "Offer paid Load Assist (driver-assisted loading — execution workflow not built yet)", type: "bool", showIf: (f) => f.is_enabled },
+      { name: "load_assist_fee", label: "Load Assist fee (₹)", type: "number", showIf: (f) => f.is_enabled && f.load_assist_enabled },
+    ],
+    defaults: { is_enabled: false, rate_per_kg: "0", minimum_chargeable_weight_kg: "0", minimum_fare: "", min_advance_days: 1, load_assist_enabled: false, load_assist_fee: "0" },
+  },
 ]
 
 function toForm(kindDef, row) {
@@ -81,7 +163,7 @@ function ScopeEditor({ kindDef, scope, row, onSaved, showToast }) {
   const save = async () => {
     setSaving(true)
     setError("")
-    const payload = { service_category: scope.value }
+    const payload = kindDef.scopes ? {} : { service_category: scope.value }
     for (const f of kindDef.fields) payload[f.name] = form[f.name]
     const res = row
       ? await updateAdminPolicy(kindDef.kind, row.id, payload)
@@ -203,7 +285,7 @@ export function GTPoliciesTab({ showToast }) {
             <p className="text-xs text-slate-500 dark:text-slate-400">{kindDef.blurb}</p>
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
-            {SCOPES.map((scope) => (
+            {(kindDef.scopes || SCOPES).map((scope) => (
               <ScopeEditor
                 key={`${kindDef.kind}:${scope.value}`}
                 kindDef={kindDef}

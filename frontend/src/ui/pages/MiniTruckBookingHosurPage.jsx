@@ -513,6 +513,15 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
   const currentCitySlug = (cityProp || routeCityParam || "hosur").toLowerCase()
   const defaultCityName = currentCitySlug.charAt(0).toUpperCase() + currentCitySlug.slice(1)
   const [currentCityName, setCurrentCityName] = useState(cityNameProp || defaultCityName)
+  // Light PTL entry point: shown only when Admin has enabled Part Truck Load pricing.
+  const [ptlOffered, setPtlOffered] = useState(false)
+  useEffect(() => {
+    let live = true
+    apiRequest(`/logistics/ptl/config/?city=${encodeURIComponent(currentCitySlug)}`)
+      .then((res) => { const c = res?.data || res; if (live) setPtlOffered(Boolean(c?.enabled && (c?.tiers || []).length)) })
+      .catch(() => {})
+    return () => { live = false }
+  }, [currentCitySlug])
 
   useEffect(() => {
     let isMounted = true
@@ -2229,6 +2238,15 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
               <p className="text-xs sm:text-base text-[var(--sevo-text-secondary)] font-medium max-w-xl mx-auto">
                 Reliable doorstep pickup &amp; delivery across {currentCityName} and connected intercity routes.
               </p>
+              {ptlOffered && (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/part-truck-load/${currentCitySlug}`)}
+                  className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border border-[var(--sevo-primary)]/30 text-[var(--sevo-primary)] bg-[var(--sevo-surface)] cursor-pointer"
+                >
+                  <Package size={13} /> Sending part of a load? Book Part Truck Load (per kg, advance booking)
+                </button>
+              )}
             </div>
           </div>
 
@@ -4430,7 +4448,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
           onSelectCategory={setSelectedGoodsCategoryObj}
         />
 
-        {/* ── Looking for partner... Screen (CalServices Green Logistics Branding) ─────────────── */}
+        {/* ── Looking for partner... Screen (SEVO Green Logistics Branding) ─────────────── */}
         {lookingForPartnerOpen && (
           <div
             role="dialog"

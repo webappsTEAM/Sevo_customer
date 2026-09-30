@@ -606,6 +606,25 @@ def _execute_gateway_refund(rr):
         )
         return f"wallet_refund_{tx.id}"
 
+    # A Paytm mock payment can only exist outside the production Paytm
+    # environment. Keep its refund lifecycle testable without ever pretending
+    # to have called a real provider refund API.
+    if payment.gateway == "paytm_mock":
+        from service_requests.paytm_gateway import paytm_mock_enabled
+        if paytm_mock_enabled():
+            return f"paytm_mock_refund_{payment.provider_transaction_id or payment.razorpay_payment_id}"
+        raise ValidationError({
+            "detail": "Paytm mock refunds are disabled in this environment."
+        })
+
+    if payment.gateway == "paytm":
+        # Paytm's refund API must be tested with the merchant's enabled refund
+        # permissions and real transaction lifecycle. Never fall through to
+        # Razorpay for a Paytm payment.
+        raise ValidationError({
+            "detail": "Paytm refunds require merchant-account activation and reconciliation. Process this refund in Paytm until the Paytm refund adapter is enabled."
+        })
+
     gateway_configured = bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
 
     if not gateway_configured:
@@ -872,6 +891,11 @@ def process_referral_completion(booking):
 # INSURANCE CLAIM SERVICE FUNCTIONS (GT-C-03)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _notify_claim_on_commit(claim):
+    from service_requests.notifications import notify_claim_update
+    transaction.on_commit(lambda: notify_claim_update(claim))
+
+
 def file_insurance_claim(booking, customer, description, claimed_amount, attachment_files=None):
     from .claims_policy import claim_error
     if booking.customer_id != customer.id:
@@ -896,6 +920,7 @@ def file_insurance_claim(booking, customer, description, claimed_amount, attachm
         for f in (attachment_files or []):
             att = InsuranceClaimAttachment.objects.create(file=f, original_name=f.name, uploaded_by=customer)
             claim.attachments.add(att)
+        _notify_claim_on_commit(claim)
     return claim
 
 
@@ -955,6 +980,7 @@ def resolve_insurance_claim(admin_user, claim_id, decision, approved_amount=None
     claim.resolved_by = admin_user
     claim.resolved_at = timezone.now()
     claim.save(update_fields=["status", "approved_amount", "resolution_notes", "resolved_by", "resolved_at", "updated_at"])
+    _notify_claim_on_commit(claim)
     return claim
 
 

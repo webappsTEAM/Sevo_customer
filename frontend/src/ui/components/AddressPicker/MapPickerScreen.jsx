@@ -380,6 +380,7 @@ export function MapPickerScreen({
   initialCoords,
   initialLocation = null,
   serviceSlug = "",
+  vehicleClass = "",
   onClose,
   onConfirm,
   onCenterChange,
@@ -484,7 +485,7 @@ export function MapPickerScreen({
   // ── Reverse geocoding of current map center ────────────────────
   const { address, loading: geoLoading, error: geoError } = useReverseGeocode(currentCenter)
 
-  // ── Real-time service-specific zone check on pin movement (Debounced 600ms & Race Condition Protected) ──────
+  // ── Real-time service-specific zone check on pin movement (no calls while the pin is being dragged; one call 200ms after it settles; stale responses ignored) ──────
   const zoneCheckReqIdRef = useRef(0)
 
   useEffect(() => {
@@ -501,7 +502,10 @@ export function MapPickerScreen({
           json: {
             lat: currentCenter.lat,
             lng: currentCenter.lng,
-            service_slug: serviceSlug || ""
+            service_slug: serviceSlug || "",
+            // Zones can restrict which vehicle classes they serve; without this the pin
+            // could read "serviceable" here and then be refused once a vehicle is chosen.
+            ...(vehicleClass ? { vehicle_class: vehicleClass } : {}),
           }
         })
         if (active && currentReqId === zoneCheckReqIdRef.current && res) {
@@ -515,7 +519,7 @@ export function MapPickerScreen({
             checking: false,
           })
         }
-      } catch {
+      } catch (err) {
         if (active && currentReqId === zoneCheckReqIdRef.current) {
           setZoneStatus({
             inZone: null,
@@ -524,7 +528,9 @@ export function MapPickerScreen({
             zoneName: null,
             checking: false,
             checkFailed: true,
-            message: "We couldn't verify service availability for this location. Please move the pin slightly or try again.",
+            message: err?.status === 429
+              ? "Too many location checks just now. Please wait a few seconds, then move the pin slightly to check again."
+              : "We couldn't verify service availability for this location. Please move the pin slightly or try again.",
           })
         }
       }
@@ -534,7 +540,7 @@ export function MapPickerScreen({
       active = false
       clearTimeout(timer)
     }
-  }, [currentCenter.lat, currentCenter.lng, serviceSlug, isDragging])
+  }, [currentCenter.lat, currentCenter.lng, serviceSlug, vehicleClass, isDragging])
 
   // ── "Re-center on me" / Live GPS fetch ─────────────────────────
   const handleRecenter = useCallback(() => {

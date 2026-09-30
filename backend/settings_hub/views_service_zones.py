@@ -28,6 +28,25 @@ from .service_zone_engine import check_booking_eligibility, validate_coordinates
 
 # ── Permission helpers ────────────────────────────────────────────────────────
 
+def _platform_company(request=None):
+    """The operating company for requests with no company of their own (anonymous
+    customers, admins without a membership). Uses the SAME resolver as the booking
+    endpoint (service_requests.views._get_company: DEFAULT_COMPANY_SLUG, then the
+    single-company case), so the map picker, the pin check and the booking gate
+    always read the same zones. Company is ordered by `code`, which is blank on
+    every row, so a bare Company.objects.first() picked an arbitrary company once
+    more than one existed."""
+    try:
+        from service_requests.views import _get_company as _canonical_company
+        company = _canonical_company(request if request is not None else object())
+        if company:
+            return company
+    except Exception:
+        pass
+    from companies.models import Company
+    return Company.objects.order_by("pk").first()
+
+
 class IsAdminOrManager(permissions.BasePermission):
     def has_permission(self, request, view):
         return bool(
@@ -186,8 +205,7 @@ class ServiceZoneListCreateView(APIView):
             m = membership.filter(is_active=True).select_related("company").first()
             if m:
                 return m.company
-        from companies.models import Company
-        return Company.objects.first()
+        return _platform_company(request)
 
     def get(self, request):
         company = self._get_company(request)
@@ -321,8 +339,7 @@ class ServiceZoneDetailView(APIView):
                 mem = m.filter(is_active=True).first()
                 company_id = mem.company_id if mem else None
         if not company_id:
-            from companies.models import Company
-            c = Company.objects.first()
+            c = _platform_company(request)
             company_id = c.id if c else None
 
         try:
@@ -482,7 +499,7 @@ class ServiceZoneCheckView(APIView):
             from .service_zone_engine import check_route_coverage
             from companies.models import Company
 
-            company = data.get("company_id") or Company.objects.only("id").first()
+            company = data.get("company_id") or _platform_company(request)
             ends = {"pickup_lat": lat, "pickup_lng": lng, "drop_lat": lat, "drop_lng": lng}
             route = check_route_coverage(
                 service_slug=service_slug, company=company, vehicle_class=vehicle_class,
@@ -501,7 +518,7 @@ class ServiceZoneCheckView(APIView):
             from .service_zone_engine import check_route_coverage
             from companies.models import Company
 
-            company = data.get("company_id") or Company.objects.only("id").first()
+            company = data.get("company_id") or _platform_company(request)
             route = check_route_coverage(
                 pickup_lat=lat, pickup_lng=lng,
                 drop_lat=raw_drop_lat, drop_lng=raw_drop_lng,
@@ -529,7 +546,7 @@ class ServiceZoneCheckView(APIView):
                 company_id = request.user.company_id
         if not company_id:
             from companies.models import Company
-            first = Company.objects.only("id").first()
+            first = _platform_company(request)
             if first:
                 company_id = first.id
 

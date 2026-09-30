@@ -14,8 +14,12 @@ CLAIMABLE_CATEGORIES = ("goods_transport_truck", "goods_transport_two_wheeler", 
 
 
 def policy_for(booking):
+    return policy_for_category(getattr(booking, "service_category", ""))
+
+
+def policy_for_category(category):
     from ..models import GTClaimPolicy
-    cat = str(getattr(booking, "service_category", "") or "").strip().lower()
+    cat = str(category or "").strip().lower()
     qs = GTClaimPolicy.objects.filter(is_active=True, is_enabled=True)
     return qs.filter(service_category__iexact=cat).first() or qs.filter(service_category="").first()
 

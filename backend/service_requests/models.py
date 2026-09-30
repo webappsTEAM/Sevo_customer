@@ -541,6 +541,22 @@ class ServiceRequest(models.Model):
         null=True, blank=True,
         related_name="service_requests",
     )
+    # Light PTL: same goods_transport_truck category and pipeline (payment, tracking,
+    # cancellation, invoice), marked by booking mode. db_default so rows the Vendor app
+    # inserts through its mirror model (which does not declare these columns) stay valid.
+    class LogisticsBookingMode(models.TextChoices):
+        SPOT = "spot", "Spot"
+        PTL = "ptl", "Part Truck Load"
+
+    logistics_booking_mode = models.CharField(
+        max_length=10, choices=LogisticsBookingMode.choices,
+        default=LogisticsBookingMode.SPOT, db_default=LogisticsBookingMode.SPOT,
+        blank=True, db_index=True,
+    )
+    ptl_declared_weight_kg = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True,
+        help_text="Customer-declared cargo weight for a PTL booking (priced per kg).",
+    )
 
     # Payment workflow
     payment_method = models.CharField(
@@ -1202,6 +1218,12 @@ class Package(models.Model):
         max_length=100, blank=True, default="",
         help_text="Goods & Transport only: display dimensions (e.g. '6ft x 5ft'). Mirrors ServiceTier.dimensions_label -- "
                    "the one ServiceTier display field with no other Package equivalent (capacity is covered by the Tag field).",
+    )
+    gt_max_weight_kg = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Goods & Transport only: maximum cargo weight (kg) this vehicle tier can carry. "
+                   "Mirrors ServiceTier.max_weight_kg -- used for cargo fitment checks, PTL eligibility "
+                   "and dispatch/vehicle-compatibility. Blank leaves the tier's existing capacity untouched.",
     )
     gt_base_fare = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True,
@@ -1868,6 +1890,9 @@ class GTCancellationPolicy(models.Model):
         if not self.is_active or self.fee_mode == self.FeeMode.NONE:
             return Decimal("0")
         if self.applies_only_after_assignment:
+            # ServiceRequest itself carries no assignment timestamp: a driver's acceptance is
+            # recorded on BookingAssignment.accepted_at. (Reading only booking.accepted_at made
+            # "fee once a driver is assigned" permanently inert -- it always resolved to 0.)
             assigned_at = getattr(service_request, "accepted_at", None) or getattr(service_request, "assigned_at", None)
             if not assigned_at:
                 try:
@@ -2615,6 +2640,13 @@ class Payment(models.Model):
     razorpay_payment_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
     razorpay_signature = models.CharField(max_length=255, blank=True, null=True)
 
+    # Provider-neutral identifiers are authoritative for new gateways.  The
+    # Razorpay-named fields remain for historic transactions and a safe staged
+    # migration; new Paytm payments never have to masquerade as Razorpay rows.
+    provider_order_id = models.CharField(max_length=128, blank=True, null=True, db_index=True)
+    provider_transaction_id = models.CharField(max_length=128, blank=True, null=True, db_index=True)
+    provider_signature = models.CharField(max_length=512, blank=True, null=True)
+
     amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     currency = models.CharField(max_length=10, default="INR")
     status = models.CharField(
@@ -2693,6 +2725,7 @@ class WalletTransaction(models.Model):
         BOOKING_DEBIT = "BOOKING_DEBIT", "Applied to Booking Payment"
         ADJUSTMENT    = "ADJUSTMENT",    "Manual Adjustment"
         REVERSAL      = "REVERSAL",      "Reversal"
+        TOPUP         = "TOPUP",         "Wallet Recharge"
 
     wallet = models.ForeignKey(
         CustomerWallet,
@@ -3469,7 +3502,7 @@ class ACInspectionRateItem(models.Model):
 
 class ACInspectionConfiguration(models.Model):
     """
-    Authoritative configuration for AC Inspection & Diagnostic fees.
+    Authoritative configuration for AC Inspection & Diagnostic fees and service details.
     """
     diagnostic_fee = models.DecimalField(
         max_digits=10,
@@ -4294,9 +4327,9 @@ class GTInsurancePolicy(models.Model):
     Set is_offered=False to stop offering insurance without a deploy.
     """
     is_offered = models.BooleanField(default=True)
-    premium_rate = models.DecimalField(
-        max_digits=6, decimal_places=4, default=0.02,
-        help_text="Premium as a fraction of the declared value (0.02 = 2%).",
+    premium_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default=2,
+        help_text="Premium as a percentage of the declared value (2 = 2%).",
     )
     max_liability = models.DecimalField(
         max_digits=12, decimal_places=2, default=500000,
@@ -4310,7 +4343,7 @@ class GTInsurancePolicy(models.Model):
         verbose_name_plural = "GT Insurance Policy"
 
     def __str__(self):
-        return f"GTInsurancePolicy(offered={self.is_offered}, rate={self.premium_rate})"
+        return f"GTInsurancePolicy(offered={self.is_offered}, rate={self.premium_percent}%)"
 
 
 class GTClaimPolicy(models.Model):
@@ -4346,3 +4379,155 @@ class GTClaimPolicy(models.Model):
 
     def __str__(self):
         return f"GTClaimPolicy({self.service_category or 'platform-wide'}, enabled={self.is_enabled})"
+
+
+class GTOperationsConfig(models.Model):
+    """
+    Platform-wide operational limits for Goods & Transport that used to live in settings / code.
+    The defaults equal the previous hard-coded values, so an untouched install behaves exactly as
+    before. Only the latest active row is used.
+    """
+    gt_quote_validity_minutes = models.PositiveIntegerField(
+        default=15, help_text="How long a Mini Truck / Two Wheeler fare quote stays valid.")
+    pm_instant_quote_validity_minutes = models.PositiveIntegerField(
+        default=30, help_text="How long a price-locked Packers & Movers instant quote stays valid.")
+    pm_estimate_validity_hours = models.PositiveIntegerField(
+        default=48, help_text="How long a non-binding Packers & Movers survey estimate stays valid.")
+    online_payment_window_minutes = models.PositiveIntegerField(
+        default=30, help_text="An unpaid online / wallet booking is cancelled after this many minutes.")
+    wallet_topup_enabled = models.BooleanField(
+        default=False, help_text="Let customers add money to their SEVO wallet online.")
+    wallet_max_topup = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True, help_text="Largest single wallet recharge. Blank = no per-recharge limit.")
+    wallet_max_balance = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True, help_text="A recharge may not take the wallet above this balance. Blank = no cap.")
+    allow_wallet_part_payment = models.BooleanField(
+        default=False, help_text="Let a customer whose wallet cannot cover a prepaid booking spend what it holds and pay the rest online (wallet + card split).")
+    high_value_consignment_threshold = models.DecimalField(
+        max_digits=12, decimal_places=2, default=25000,
+        help_text="Declared value at or above which a named receiver is mandatory.")
+    checkpoint_radius_meters = models.PositiveIntegerField(
+        default=250, help_text="How close (metres) a driver must be to the pickup / drop to verify arrival.")
+    delivery_otp_ttl_minutes = models.PositiveIntegerField(
+        default=30, help_text="How long a delivery OTP stays valid before it must be resent.")
+    max_otp_attempts = models.PositiveIntegerField(
+        default=5, help_text="Wrong delivery-OTP entries allowed before the driver is locked out.")
+    delivery_otp_required = models.BooleanField(
+        default=True, help_text="Require the customer's delivery OTP before a trip can be completed.")
+    is_active = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "GT Operations Config"
+        verbose_name_plural = "GT Operations Config"
+
+    def __str__(self):
+        return "GTOperationsConfig"
+
+
+class GTPTLPricingPolicy(models.Model):
+    """
+    Light PTL (Part Truck Load): advance-booked, slot-based, per-kg goods transport on
+    ptl_eligible (4-wheeler+) vehicle tiers. Platform-wide; only the latest active row is used.
+    A route-specific rate can override rate_per_kg through Lane.ptl_rate_per_kg.
+
+    is_enabled defaults to False: with no enabled row every PTL booking/quote is refused, so
+    nothing changes for existing Spot / P&M bookings until ops configures a real rate.
+
+    Loading/unloading is the CUSTOMER's responsibility on PTL. Load Assist is an optional paid
+    add-on that is OFF by default. Only its config + pricing hook exist today: when enabled the
+    fee is priced into the quote and the booking is flagged (fare_breakdown["load_assist"]), but
+    the driver-side assisted-loading workflow is NOT implemented yet -- see
+    service_requests/services/ptl_pricing.py before enabling it.
+    """
+    is_enabled = models.BooleanField(
+        default=False, help_text="Accept Part Truck Load quotes and bookings.")
+    rate_per_kg = models.DecimalField(
+        max_digits=8, decimal_places=2, default=0,
+        validators=[MinValueValidator(Decimal("0.00"))],
+        help_text="Rupees per chargeable kg (GST inclusive at the tier's GST rate).")
+    minimum_chargeable_weight_kg = models.DecimalField(
+        max_digits=8, decimal_places=2, default=0,
+        validators=[MinValueValidator(Decimal("0.00"))],
+        help_text="Declared weight below this is charged as this weight. 0 = no minimum.")
+    minimum_fare = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0.00"))],
+        help_text="Floor on the freight charge. Blank = no floor.")
+    min_advance_days = models.PositiveIntegerField(
+        default=1, help_text="PTL is advance-booked: the pickup date must be at least this many days ahead (1 = no same-day).")
+    load_assist_enabled = models.BooleanField(
+        default=False,
+        help_text="Offer paid driver-assisted loading. Pricing hook only; the driver-side assist workflow is not built yet.")
+    load_assist_fee = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        validators=[MinValueValidator(Decimal("0.00"))],
+        help_text="Flat Load Assist fee per booking, when offered.")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "GT Part Truck Load (PTL) Pricing Policy"
+        verbose_name_plural = "GT Part Truck Load (PTL) Pricing Policy"
+
+    def __str__(self):
+        return f"GTPTLPricingPolicy(enabled={self.is_enabled}, rate={self.rate_per_kg}/kg)"
+
+
+def get_gt_ptl_policy():
+    return GTPTLPricingPolicy.objects.filter(is_active=True).order_by("-updated_at", "-id").first()
+
+
+class WalletTopUp(models.Model):
+    """A customer's online recharge of their SEVO wallet. One row per gateway order; the wallet is
+    credited exactly once, when the order is verified (idempotent on repeat verification)."""
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        PAID = "PAID", "Paid"
+        FAILED = "FAILED", "Failed"
+
+    customer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="wallet_topups")
+    order_id = models.CharField(max_length=100, unique=True)
+    payment_id = models.CharField(max_length=100, blank=True, default="")
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True)
+    gateway = models.CharField(max_length=50, default="razorpay")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "service_requests_wallet_topup"
+        ordering = ["-created_at"]
+
+
+class ConsultationPricingConfig(models.Model):
+    """Database-backed consultation pricing for categories that require a visit."""
+
+    service_category = models.CharField(max_length=100, unique=True, db_index=True)
+    free_radius_km = models.DecimalField(max_digits=6, decimal_places=2, default=15.0)
+    standard_fee = models.DecimalField(max_digits=10, decimal_places=2, default=300.0)
+    is_active = models.BooleanField(default=True)
+    description = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.service_category
+
+
+class VendorWarehouse(models.Model):
+    """A vendor-owned warehouse or dispatch origin used by marketplace operations."""
+
+    vendor = models.ForeignKey("companies.Company", on_delete=models.CASCADE, related_name="warehouses")
+    name = models.CharField(max_length=255, default="Main Warehouse")
+    address = models.TextField(blank=True, default="")
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, default=12.7409)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, default=77.8253)
+    is_primary = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.vendor_id}: {self.name}"

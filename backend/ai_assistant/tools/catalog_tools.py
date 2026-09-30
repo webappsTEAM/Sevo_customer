@@ -39,29 +39,83 @@ class SearchProductsTool(BaseTool):
         import re
         q_lower = q_clean.lower()
 
-        # Handle specific search for AC / HVAC services
-        if q_lower in {"ac", "hvac", "air conditioner", "ac service", "ac repair"} or re.search(r"\bac\b", q_lower):
+        # Specific appliance keyword detection
+        appliance_keywords = {
+            "refrigerator": ["refrigerator", "fridge"],
+            "washing_machine": ["washing machine", "washer"],
+            "tv": ["tv", "television", "display"],
+            "microwave": ["microwave", "oven"],
+        }
+
+        specific_appliance = None
+        for app_type, synonyms in appliance_keywords.items():
+            if any(re.search(r"\b" + re.escape(syn) + r"\b", q_lower) for syn in synonyms):
+                specific_appliance = app_type
+                break
+
+        is_ac_query = bool(re.search(r"\bac\b|\bhvac\b|air\s*condition", q_lower))
+        is_appliance_query = bool(re.search(r"\bappliance\b|\bappliances\b", q_lower)) or bool(specific_appliance)
+
+        if specific_appliance == "refrigerator":
+            search_q = Q(service__slug="refrigerator") | Q(name__icontains="refrigerator")
+        elif specific_appliance == "washing_machine":
+            search_q = Q(service__slug="washing-machine") | Q(name__icontains="washing machine")
+        elif specific_appliance == "tv":
+            search_q = Q(service__slug="tv-display") | Q(name__icontains="tv")
+        elif specific_appliance == "microwave":
+            search_q = Q(service__slug="microwave") | Q(name__icontains="microwave")
+        elif is_ac_query and is_appliance_query:
+            # Query explicitly asking for both AC and general home appliances
+            search_q = (
+                Q(service__category__slug__in=["ac_appliance", "hvac"])
+                | Q(service__category__name__icontains="appliance")
+            )
+        elif is_ac_query:
+            # Match AC services and packages specifically (exclude packers-movers)
             search_q = (
                 Q(name__iregex=r"\bac\b")
-                | Q(service__category__slug__in=["ac_appliance", "hvac"])
-                | Q(service__slug__icontains="ac")
+                | Q(service__name__iregex=r"\bac\b")
+                | Q(service__slug__in=["ac-service", "ac-service-cleaning", "ac-repair", "ac-gas-refill", "ac-installation", "ac-pcb-electrical", "ac-parts-accessories", "hvac"])
+                | Q(service__slug__istartswith="ac-")
                 | Q(description__iregex=r"\bac\b")
+            )
+        elif is_appliance_query:
+            # Generic appliance query without AC: appliances like fridge, washer, microwave, tv
+            search_q = (
+                Q(service__slug__in=["refrigerator", "washing-machine", "tv-display", "microwave"])
+                | Q(name__iregex=r"\b(?:refrigerator|fridge|washing\s*machine|tv|microwave)\b")
+                | Q(service__category__slug="ac_appliance")
             )
         elif len(q_clean) <= 3:
             esc = re.escape(q_clean)
             search_q = (
                 Q(name__iregex=r"\b" + esc + r"\b")
                 | Q(service__name__iregex=r"\b" + esc + r"\b")
+                | Q(service__category__name__iregex=r"\b" + esc + r"\b")
             )
         else:
+            stop_words = {"and", "for", "the", "with", "all", "its", "etc", "list", "price", "rates", "cost", "detail", "detailed", "details", "service", "services"}
+            keywords = [w for w in re.findall(r"\w+", q_lower) if w not in stop_words and len(w) > 2]
             search_q = (
                 Q(name__icontains=q_clean)
                 | Q(description__icontains=q_clean)
                 | Q(tag__icontains=q_clean)
                 | Q(service__name__icontains=q_clean)
+                | Q(service__category__name__icontains=q_clean)
             )
+            # If literal match returns nothing, match meaningful query tokens
+            if keywords and not packages_qs.filter(search_q).exists():
+                kw_q = Q()
+                for kw in keywords:
+                    kw_q |= (
+                        Q(name__icontains=kw)
+                        | Q(service__name__icontains=kw)
+                        | Q(service__category__name__icontains=kw)
+                        | Q(tag__icontains=kw)
+                    )
+                search_q = kw_q
 
-        packages = packages_qs.filter(search_q)[:25]
+        packages = packages_qs.filter(search_q).order_by("service__sort_order", "sort_order", "-popular")[:30]
 
         results = []
         for p in packages:

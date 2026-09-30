@@ -17,7 +17,17 @@ import { HeroServiceVisualization } from "../components/HeroServiceVisualization
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { AllServicesDrawer } from "../components/AllServicesDrawer.jsx"
-import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, MasonPackageModal, BkStyles, CustomerAccountModal, AddAddressSearchModal, CartDrawerModal } from "./BookingPage.jsx"
+import {
+  PackageModal,
+  CustomCleaningPackageModal,
+  KitchenCleaningModal,
+  PaintingPackageModal,
+  MasonPackageModal,
+  BkStyles,
+  CustomerAccountModal,
+  AddAddressSearchModal,
+  CartDrawerModal
+} from "./BookingPage.jsx"
 import { ModernServiceCatalogView } from "../components/ModernServiceCatalogView.jsx"
 import { estimationRepository } from "../../services/estimation/estimationRepository.js"
 import { SelectServiceAddressDrawer } from "../components/AddressPicker/index.js"
@@ -2395,9 +2405,9 @@ export function LandingPage() {
   // controls in place -- a fixed "More" tile (opens the All Services
   // drawer) is always appended after the configured ones.
   const [categoryImageModalIdx, setCategoryImageModalIdx] = useState(null)
-  const homeCategories = Array.isArray(homeConfig.categories) && homeConfig.categories.length > 0
+  const homeCategories = (Array.isArray(homeConfig.categories) && homeConfig.categories.length > 0
     ? homeConfig.categories
-    : DEFAULT_HOME_PAGE_CONFIG.categories
+    : DEFAULT_HOME_PAGE_CONFIG.categories).filter((cat) => cat && cat.enabled !== false)
   const addCategoryTile = useCallback(() => {
     const next = [...homeCategories, {
       id: `cat-${Date.now()}`,
@@ -2528,20 +2538,15 @@ export function LandingPage() {
         setHomeConfig(e.data.config)
       } else if (e.data?.type === "NAVIGATE_PREVIEW_SCREEN") {
         const screen = e.data.screen
-        if (screen === "pillars") {
-          setIsHomeServicesCombinedModalOpen(true)
-          setIsHomePestModalOpen(false)
-        } else if (screen === "homepest" || screen === "subcategories") {
-          setIsHomePestModalOpen(true)
-          setIsHomeServicesCombinedModalOpen(false)
+        const isPrev = searchParams.get("preview") === "true" || window.parent !== window
+        const isEd = searchParams.get("edit") === "true" || homeEditMode
+        const prevParams = isPrev ? `&preview=true${isEd ? "&edit=true" : ""}` : ""
+        if (screen === "pillars" || screen === "homepest" || screen === "subcategories") {
+          navigate(`?category=home_pest_control${prevParams}`)
         } else if (screen === "kitchen") {
-          setIsHomeServicesCombinedModalOpen(false)
-          setIsHomePestModalOpen(false)
-          navigate("?category=kitchen_cleaning")
+          navigate(`?category=kitchen_cleaning${prevParams}`)
         } else if (screen === "home") {
-          setIsHomeServicesCombinedModalOpen(false)
-          setIsHomePestModalOpen(false)
-          navigate("/home?preview=true")
+          navigate(`/home?preview=true${isEd ? "&edit=true" : ""}`)
         }
       }
     }
@@ -2982,6 +2987,9 @@ export function LandingPage() {
 
   useEffect(() => {
     const modalParam = searchParams.get("openModal")
+    const isPrev = searchParams.get("preview") === "true" || window.parent !== window
+    const isEd = searchParams.get("edit") === "true" || homeEditMode
+    const prevParams = isPrev ? `&preview=true${isEd ? "&edit=true" : ""}` : ""
     if (modalParam) {
       setIsAcModalOpen(false)
       setIsHomePestModalOpen(false)
@@ -2990,14 +2998,14 @@ export function LandingPage() {
       if (modalParam === "pillars") {
         navigate("?category=cleaning", { replace: true })
       } else if (modalParam === "homepest" || modalParam === "subcategories") {
-        navigate("?category=pest_control", { replace: true })
+        navigate(`?category=home_pest_control${prevParams}`, { replace: true })
       } else if (modalParam === "ac") {
-        navigate("?category=hvac", { replace: true })
+        navigate(`?category=ac_appliance${prevParams}`, { replace: true })
       } else if (modalParam === "goods" || modalParam === "transport" || modalParam === "logistics") {
         setIsGoodsModalOpen(true)
       }
     }
-  }, [searchParams, navigate])
+  }, [searchParams, navigate, homeEditMode])
   const [foodHealthSub, setFoodHealthSub] = useState(FOOD_HEALTH_SUB)
   const [selectedFoodSubModuleId, setSelectedFoodSubModuleId] = useState(
     () => location.state?.openFoodSubModuleId || (location.state?.openVegetablesModal ? "vegetables" : null)
@@ -3337,8 +3345,8 @@ export function LandingPage() {
       "microwave-repair": ["microwave"],
 
       // Paintings
-      "paintings": ["interior-painting", "exterior-painting", "waterproofing", "wood-metal", "texture-decor"],
-      "painting": ["interior-painting", "exterior-painting", "waterproofing", "wood-metal", "texture-decor"],
+      "paintings": ["exterior-painting", "interior-painting", "waterproofing", "wood-metal", "texture-decor"],
+      "painting": ["exterior-painting", "interior-painting", "waterproofing", "wood-metal", "texture-decor"],
       "interior-painting": ["interior-painting"],
       "exterior-painting": ["exterior-painting"],
       "waterproofing": ["waterproofing"],
@@ -3677,7 +3685,13 @@ export function LandingPage() {
     setIsHomeServicesCombinedModalOpen(false)
     setIsForYouModalOpen(false)
     setIsFoodHealthModalOpen(false)
-    navigate("/home", { replace: true, state: {} })
+    const isPreview = searchParams.get("preview") === "true" || (typeof window !== "undefined" && window.parent !== window)
+    const isEdit = searchParams.get("edit") === "true" || homeEditMode
+    const query = isPreview ? `?preview=true${isEdit ? "&edit=true" : ""}` : ""
+    navigate(`/home${query}`, { replace: true, state: {} })
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: "PREVIEW_ROUTE_CHANGE", pathname: "/home", search: query, screen: "home" }, "*")
+    }
   }
 
   const resolveCartArg = (cartArg) => {
@@ -4443,63 +4457,31 @@ export function LandingPage() {
             </button>
 
             {/* Quick Category Links */}
-            <div className="flex items-center gap-6 text-xs font-bold text-slate-600 dark:text-slate-400 shrink-0">
+            <div className="flex items-center gap-4 sm:gap-6 text-xs font-bold text-slate-600 dark:text-slate-400 shrink-0 overflow-x-auto no-scrollbar">
               <button
                 type="button"
                 onClick={() => {
                   window.scrollTo({ top: 0, behavior: "smooth" })
                   setActiveNav("home")
                 }}
-                className={`transition-colors cursor-pointer ${activeNav === "home" ? "text-[#0B8F7A] font-black" : "hover:text-slate-900 dark:hover:text-white"}`}
+                className={`transition-colors cursor-pointer shrink-0 ${activeNav === "home" ? "text-[#0B8F7A] font-black" : "hover:text-slate-900 dark:hover:text-white"}`}
               >
                 Home
               </button>
-              <button
-                type="button"
-                onClick={() => navigate("?category=cleaning")}
-                className="hover:text-[#0B8F7A] transition-colors cursor-pointer"
-              >
-                Cleaning
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("?category=hvac")}
-                className="hover:text-[#0B8F7A] transition-colors cursor-pointer"
-              >
-                Appliance Repair
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("?category=hvac")}
-                className="hover:text-[#0B8F7A] transition-colors cursor-pointer"
-              >
-                AC Services
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("?category=plumbing")}
-                className="hover:text-[#0B8F7A] transition-colors cursor-pointer"
-              >
-                Plumbing
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("?category=electrical")}
-                className="hover:text-[#0B8F7A] transition-colors cursor-pointer"
-              >
-                Electrical
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("?category=pest_control")}
-                className="hover:text-[#0B8F7A] transition-colors cursor-pointer"
-              >
-                Pest Control
-              </button>
+              {homeCategories.map((cat) => (
+                <button
+                  key={cat.id || cat.name}
+                  type="button"
+                  onClick={() => goToBannerLink(cat.link)}
+                  className="hover:text-[#0B8F7A] transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+                >
+                  {cat.name}
+                </button>
+              ))}
               <button
                 type="button"
                 onClick={() => setIsAllServicesOpen(true)}
-                className="hover:text-[#0B8F7A] transition-colors cursor-pointer flex items-center gap-1"
+                className="hover:text-[#0B8F7A] transition-colors cursor-pointer flex items-center gap-1 shrink-0"
               >
                 <span>More</span>
                 <ChevronDown className="w-3 h-3 text-slate-400" />
@@ -4510,9 +4492,15 @@ export function LandingPage() {
 
         <AllServicesDrawer
           isOpen={isAllServicesOpen}
-          onClose={() => setIsAllServicesOpen(false)}
+          onClose={() => {
+            setIsAllServicesOpen(false)
+            if (window.parent && window.parent !== window) {
+              window.parent.postMessage({ type: "PREVIEW_ROUTE_CHANGE", pathname: location.pathname, search: location.search, screen: "home" }, "*")
+            }
+          }}
           navigate={navigate}
           user={user}
+          categories={homeCategories}
         />
 
         {/* ── Service Area Availability Banner ─────────────────────────────── */}
@@ -4745,7 +4733,7 @@ export function LandingPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-5 lg:grid-cols-10 gap-1.5 sm:gap-3.5">
+          <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2 sm:gap-3.5">
             {[
               ...homeCategories.map((cat, idx) => ({
                 ...cat,
@@ -5392,45 +5380,60 @@ export function LandingPage() {
           </div>
         </section>
 
-        {/* ── 10. Newsletter / Email Subscription Banner (Dark Emerald #004d40) ──── */}
-        <section className="hidden md:block max-w-7xl mx-auto px-4 sm:px-6 py-6">
-          <div className="bg-[#004d40] text-white rounded-3xl p-6 sm:p-8 shadow-lg flex flex-col lg:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-4 text-center lg:text-left">
-              <div className="w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center shrink-0 border border-white/20">
-                <Mail className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h3 className="text-lg sm:text-xl font-black">
-                  Stay Updated with Best Offers!
-                </h3>
-                <p className="text-teal-100 text-xs sm:text-sm mt-0.5 font-medium">
-                  Subscribe to our newsletter
+        {/* ── Vendor Hire Banner ── */}
+        {(homeConfig.vendorBanner?.enabled !== false) && (
+          <section className="max-w-7xl mx-auto px-4 sm:px-6 my-10">
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 border border-indigo-900/60 p-6 sm:p-10 text-white shadow-xl">
+              <div className="relative z-10 max-w-2xl space-y-4">
+                <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-xs font-bold text-indigo-300">
+                  <span>{homeConfig.vendorBanner?.badgeIcon || "🤝"}</span>
+                  <span>{homeConfig.vendorBanner?.badgeText || "We're Looking for Professionals"}</span>
+                </div>
+                <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight leading-tight">
+                  {homeConfig.vendorBanner?.titlePrefix || "We Hire"}{" "}
+                  <span className="text-indigo-400">{homeConfig.vendorBanner?.titleHighlight || "Technicians, Employees"}</span>{" "}
+                  {homeConfig.vendorBanner?.titleSuffix || "& Vendors"}
+                </h2>
+                <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-xl">
+                  {homeConfig.vendorBanner?.subtitle || "Join our team of skilled professionals and be part of a growing service community that works with trust and quality."}
                 </p>
+
+                {/* Features & Benefits */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
+                  {(homeConfig.vendorBanner?.benefits || DEFAULT_HOME_PAGE_CONFIG.vendorBanner.benefits || []).slice(0, 4).map((b, i) => (
+                    <div key={b.id || i} className="flex items-center gap-2 text-xs sm:text-sm text-slate-200">
+                      <span className="text-emerald-400">{b.icon || "✓"}</span>
+                      <span>{b.text}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 pt-3">
+                  <a
+                    href={homeConfig.vendorBanner?.ctaUrl || "https://vendor.sevo.co.in"}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition-all hover:scale-105 active:scale-95 inline-flex items-center gap-2"
+                  >
+                    <span>{homeConfig.vendorBanner?.ctaText || "Join as a Professional"}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </a>
+                  <a
+                    href={homeConfig.vendorBanner?.learnMoreUrl || "https://vendor.sevo.co.in"}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-5 py-2.5 bg-white/10 hover:bg-white/20 text-white font-semibold text-xs sm:text-sm rounded-xl backdrop-blur-sm transition-colors"
+                  >
+                    {homeConfig.vendorBanner?.learnMoreText || "Learn more"}
+                  </a>
+                </div>
               </div>
+
+              {/* Decorative background glow */}
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
             </div>
-
-            <form onSubmit={handleNewsletterSubmit} className="w-full max-w-md flex items-center bg-white rounded-full p-1.5 shadow-inner">
-              <input
-                type="email"
-                required
-                value={newsletterEmail}
-                onChange={(e) => setNewsletterEmail(e.target.value)}
-                placeholder="Enter your email"
-                className="flex-1 bg-transparent px-4 text-xs sm:text-sm text-slate-800 outline-none placeholder:text-slate-400 font-medium"
-              />
-              <button
-                type="submit"
-                className="px-5 py-2 rounded-full bg-[#004d40] hover:bg-[#00382f] text-white text-xs font-black transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
-              >
-                {newsletterSubscribed ? "Subscribed!" : "Subscribe"}
-              </button>
-            </form>
-
-            <span className="text-xs text-teal-100 font-medium max-w-[200px] text-center lg:text-right hidden lg:block">
-              Get exclusive deals &amp; updates straight to your inbox.
-            </span>
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* ── 11. Comprehensive SEVO Footer (6 Columns Matching Spec) ──────────── */}
         <footer id="about-us" className="hidden md:block bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 pt-12 border-t border-slate-200 dark:border-slate-800 scroll-mt-24 pb-16 lg:pb-0 transition-colors duration-200">
@@ -7986,6 +7989,9 @@ export function LandingPage() {
                         setFoodOrderPlaced(false)
                         setVegSearchQuery("")
                         setVegCategoryFilter("All")
+                        if (window.parent && window.parent !== window) {
+                          window.parent.postMessage({ type: "PREVIEW_ROUTE_CHANGE", pathname: location.pathname, search: location.search, screen: "home" }, "*")
+                        }
                       }}
                       className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-600 hover:text-emerald-700 cursor-pointer transition-colors"
                     >
@@ -8192,6 +8198,9 @@ export function LandingPage() {
                             onClick={() => {
                               setSelectedFoodSubModuleId(null)
                               setFoodOrderPlaced(false)
+                              if (window.parent && window.parent !== window) {
+                                window.parent.postMessage({ type: "PREVIEW_ROUTE_CHANGE", pathname: location.pathname, search: location.search, screen: "home" }, "*")
+                              }
                             }}
                             className="px-5 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs sm:text-sm transition-all border border-slate-200 cursor-pointer"
                           >
@@ -8220,6 +8229,9 @@ export function LandingPage() {
                               setFoodCart({})
                               setFoodOrderPlaced(false)
                               setSelectedFoodSubModuleId(null)
+                              if (window.parent && window.parent !== window) {
+                                window.parent.postMessage({ type: "PREVIEW_ROUTE_CHANGE", pathname: location.pathname, search: location.search, screen: "home" }, "*")
+                              }
                             }}
                             className="px-6 py-2.5 rounded-xl bg-emerald-600 text-white font-extrabold text-xs sm:text-sm hover:bg-emerald-700 cursor-pointer shadow-md transition-all"
                           >
@@ -9085,10 +9097,10 @@ export function LandingPage() {
                         </div>
                       </div>
                     ))
-                  : (catalogCategories.length > 0 ? catalogCategories : CATEGORIES).map((catItem, pIdx) => {
+                  : (homeCategories.length > 0 ? homeCategories : (catalogCategories.length > 0 ? catalogCategories : CATEGORIES)).map((catItem, pIdx) => {
                   const defaultCat = CATEGORIES[pIdx] || {}
-                  const label = catItem.label || defaultCat.label || ""
-                  const photo = catItem.photo || catItem.image || defaultCat.photo
+                  const label = catItem.name || catItem.label || defaultCat.label || ""
+                  const photo = catItem.image || catItem.photo || defaultCat.photo
                   const Icon = defaultCat.icon || Wrench
                   const serviceCategoryId = catItem.serviceCategoryId || defaultCat.serviceCategoryId
                   const isAvailable = isServiceAvailableInZone(label)
@@ -9103,7 +9115,9 @@ export function LandingPage() {
                         }
                         setIsHomeServicesCombinedModalOpen(false)
                         document.body.style.overflow = "unset"
-                        if (label.includes("Vegetable") || label.includes("Grocery") || label.includes("Groceries")) {
+                        if (catItem.link) {
+                          goToBannerLink(catItem.link)
+                        } else if (label.includes("Vegetable") || label.includes("Grocery") || label.includes("Groceries")) {
                           navigate(routes.vegetables)
                         } else if (label.includes("Goods") || label.includes("Transport")) {
                           setIsGoodsModalOpen(true)

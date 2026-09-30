@@ -295,7 +295,7 @@ export function AdminRecipesPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Primary Vegetable (Calservices Catalog) *</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Primary Vegetable (SEVO Catalog) *</label>
                 <select
                   value={editing.package || ""}
                   onChange={e => setEditing(prev => ({ ...prev, package: e.target.value }))}

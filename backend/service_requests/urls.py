@@ -13,6 +13,8 @@ from .views import (
     CustomerBookingCancelView,
     CustomerBookingCancellationPreviewView,
     CustomerBookingTripStopsView,
+    CustomerBookingDropChangeView,
+    CustomerBookingPTLRequoteView,
     CustomerBookingMessagesView,
     CustomerBookingSeriesListCreateView,
     CustomerBookingSeriesStatusView,
@@ -127,7 +129,10 @@ from .views import (
 from .payment_views import (
     PaymentInitiateView,
     PaymentVerifyView,
+    PaytmCallbackView,
     PaymentWalletPayView,
+    WalletTopUpInitiateView,
+    WalletTopUpVerifyView,
     PaymentConfigView,
     AdminPaymentUpdateView,
     InvoiceDownloadView,
@@ -228,6 +233,10 @@ urlpatterns = [
     path("booking/<str:identifier>/",         CustomerBookingDetailView.as_view(),       name="sr-booking-detail-identifier"),
     path("booking/<int:pk>/stops/",         CustomerBookingTripStopsView.as_view(), name="sr-booking-stops"),
     path("booking/<str:identifier>/stops/", CustomerBookingTripStopsView.as_view(), name="sr-booking-stops-identifier"),
+    path("booking/<int:pk>/change-drop/",         CustomerBookingDropChangeView.as_view(), name="sr-booking-change-drop"),
+    path("booking/<str:identifier>/change-drop/", CustomerBookingDropChangeView.as_view(), name="sr-booking-change-drop-identifier"),
+    path("booking/<int:pk>/ptl-requote/",         CustomerBookingPTLRequoteView.as_view(), name="sr-booking-ptl-requote"),
+    path("booking/<str:identifier>/ptl-requote/", CustomerBookingPTLRequoteView.as_view(), name="sr-booking-ptl-requote-identifier"),
     path("booking/<int:pk>/messages/",         CustomerBookingMessagesView.as_view(), name="sr-booking-messages"),
     path("booking/<str:identifier>/messages/", CustomerBookingMessagesView.as_view(), name="sr-booking-messages-identifier"),
     path("booking-series/", CustomerBookingSeriesListCreateView.as_view(), name="sr-booking-series"),
@@ -241,7 +250,10 @@ urlpatterns = [
     # ── Payment ───────────────────────────────────────────────────────────────
     path("payment/initiate/",                PaymentInitiateView.as_view(),  name="payment-initiate"),
     path("payment/verify/",                  PaymentVerifyView.as_view(),    name="payment-verify"),
+    path("payment/paytm/callback/",          PaytmCallbackView.as_view(),    name="payment-paytm-callback"),
     path("payment/config/",                  PaymentConfigView.as_view(),     name="payment-config"),
+    path("wallet/topup/",                    WalletTopUpInitiateView.as_view(), name="wallet-topup"),
+    path("wallet/topup/verify/",             WalletTopUpVerifyView.as_view(), name="wallet-topup-verify"),
     path("payment/wallet-pay/",              PaymentWalletPayView.as_view(),  name="payment-wallet-pay"),
 
     # ── Admin — Service Requests ──────────────────────────────────────────────

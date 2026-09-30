@@ -1,7 +1,7 @@
 from django.contrib import admin
 from service_requests.models import (
     Service, Package, AddOn, CatalogCategory, ServiceRequest,
-    GTCancellationPolicy, GTWaitingChargePolicy, GTExtraChargePolicy, GTInsurancePolicy, GTClaimPolicy, GTAdvancePaymentPolicy,
+    GTCancellationPolicy, GTWaitingChargePolicy, GTExtraChargePolicy, GTInsurancePolicy, GTClaimPolicy, GTOperationsConfig, GTAdvancePaymentPolicy,
 )
 
 
@@ -80,10 +80,36 @@ class GTExtraChargePolicyAdmin(admin.ModelAdmin):
 
 @admin.register(GTInsurancePolicy)
 class GTInsurancePolicyAdmin(admin.ModelAdmin):
-    list_display = ('is_offered', 'premium_rate', 'max_liability', 'is_active', 'updated_at')
+    list_display = ('is_offered', 'premium_percent', 'max_liability', 'is_active', 'updated_at')
 
 
 @admin.register(GTClaimPolicy)
 class GTClaimPolicyAdmin(admin.ModelAdmin):
     list_display = ('service_category', 'is_enabled', 'included_liability_cap', 'cap_at_fare', 'claim_window_hours', 'require_photo', 'is_active')
     list_filter = ('is_enabled', 'is_active')
+
+
+@admin.register(GTOperationsConfig)
+class GTOperationsConfigAdmin(admin.ModelAdmin):
+    list_display = ('gt_quote_validity_minutes', 'pm_instant_quote_validity_minutes', 'pm_estimate_validity_hours',
+                    'online_payment_window_minutes', 'high_value_consignment_threshold', 'checkpoint_radius_meters', 'delivery_otp_ttl_minutes', 'max_otp_attempts', 'delivery_otp_required', 'allow_wallet_part_payment', 'wallet_topup_enabled', 'wallet_max_topup', 'wallet_max_balance', 'is_active', 'updated_at')
+
+
+from service_requests.models import GTPTLPricingPolicy  # noqa: E402
+
+
+@admin.register(GTPTLPricingPolicy)
+class GTPTLPricingPolicyAdmin(admin.ModelAdmin):
+    list_display = ('is_enabled', 'rate_per_kg', 'minimum_chargeable_weight_kg', 'minimum_fare',
+                    'min_advance_days', 'load_assist_enabled', 'load_assist_fee', 'is_active', 'updated_at')
+
+
+from service_requests.models import WalletTopUp  # noqa: E402
+
+
+@admin.register(WalletTopUp)
+class WalletTopUpAdmin(admin.ModelAdmin):
+    list_display = ('order_id', 'customer', 'amount', 'status', 'gateway', 'created_at')
+    list_filter = ('status', 'gateway')
+    search_fields = ('order_id', 'payment_id', 'customer__email', 'customer__phone')
+    readonly_fields = ('order_id', 'payment_id', 'customer', 'amount', 'gateway', 'created_at', 'updated_at')

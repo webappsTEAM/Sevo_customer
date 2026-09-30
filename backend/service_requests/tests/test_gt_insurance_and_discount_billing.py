@@ -1,5 +1,6 @@
 """Transit insurance is billed (prepaid only) and a coupon/premium survive fare reconciliation."""
 import uuid
+from service_requests.booking_window import next_bookable_date
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -23,7 +24,7 @@ class InsuranceBillingTests(TestCase):
             "service_category": "goods_transport_truck", "issue_title": "Mini truck", "description": "sofa and boxes",
             "address": "Pickup Point, Hosur", "latitude": PICKUP["lat"], "longitude": PICKUP["lng"],
             "drop_address": "Drop Point, Bengaluru", "drop_latitude": DROP["lat"], "drop_longitude": DROP["lng"],
-            "preferred_date": str(timezone.localdate()), "total_amount": "1.00",
+            "preferred_date": str(next_bookable_date()), "total_amount": "1.00",
             "payment_method": "ONLINE", "logistics_tier": self.tier.id,
         }
         body.update(over)
@@ -86,7 +87,7 @@ class InsurancePolicyOverrideTests(TestCase):
         from service_requests.services.insurance import insurance_terms
         with override_settings(INSURANCE_RATE="0.02", INSURANCE_MAX_LIABILITY="500000"):
             self.assertEqual(insurance_terms("10000"), (Decimal("200.00"), Decimal("10000.00")))
-            p = GTInsurancePolicy.objects.create(premium_rate=Decimal("0.0100"), max_liability=Decimal("8000"))
+            p = GTInsurancePolicy.objects.create(premium_percent=Decimal("1"), max_liability=Decimal("8000"))
             self.assertEqual(insurance_terms("10000"), (Decimal("100.00"), Decimal("8000.00")))
             p.is_offered = False; p.save()
             self.assertEqual(insurance_terms("10000"), (None, None))

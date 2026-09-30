@@ -31,7 +31,11 @@ from .models import (
 # accountable receiver on a logistics booking. Env-overridable like the
 # other threshold constants in this codebase.
 from django.conf import settings as _dj_settings
-HIGH_VALUE_CONSIGNMENT_THRESHOLD = int(getattr(_dj_settings, "HIGH_VALUE_CONSIGNMENT_THRESHOLD", 25000))
+def _high_value_threshold():
+    """Admin-editable (GTOperationsConfig); falls back to 25000."""
+    from .services.gt_operations import ops
+    from decimal import Decimal
+    return Decimal(str(ops("high_value_consignment_threshold")))
 
 
 class CatalogServiceSerializer(serializers.ModelSerializer):
@@ -276,16 +280,23 @@ class PackageSerializer(serializers.ModelSerializer):
         return self.get_stock_status(obj).get("max_quantity", 99)
 
     def get_variants(self, obj):
-        # PublicPackageListView supplies this filtered relation as
-        # ``public_variants``.  Preserve the fallback for every other
-        # PackageSerializer caller while avoiding one variants query per
-        # package on the customer homepage.
-        variants_qs = getattr(obj, "public_variants", None)
-        if variants_qs is None:
-            variants_qs = obj.variants.filter(
-                is_active=True,
-                status="APPROVED",
-            ).order_by("sort_order", "pack_value", "id")
+        variants_qs = obj.variants.filter(is_active=True, status="APPROVED").order_by("sort_order", "pack_value", "id")
+        return [{
+            "id": v.id,
+            "name": v.display_name,
+            "pack_value": str(v.pack_value),
+            "unit": v.unit,
+            "unit_basis": v.unit_basis,
+            "base_price": str(v.base_price),
+            "mrp": str(v.mrp) if v.mrp else None,
+            "sku": v.sku,
+            "is_default": v.is_default,
+            "is_active": v.is_active,
+            "sort_order": v.sort_order,
+        } for v in variants_qs]
+
+    def get_variants(self, obj):
+        variants_qs = obj.variants.filter(is_active=True, status="APPROVED").order_by("sort_order", "pack_value", "id")
         return [{
             "id": v.id,
             "name": v.display_name,
@@ -416,6 +427,8 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             # for why this is here at all (out-of-band DB drift, same as
             # customer_gstin's crash class).
             "eway_bill_number",
+            # Light PTL: booking mode marker + declared cargo weight (per-kg pricing).
+            "logistics_booking_mode", "ptl_declared_weight_kg",
         )
         extra_kwargs = {
             "issue_title":         {"required": False, "allow_blank": True},
@@ -450,6 +463,8 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             "insurance_opted_in":    {"required": False},
             "customer_gstin":        {"required": False, "allow_blank": True},
             "eway_bill_number":      {"required": False, "allow_blank": True},
+            "logistics_booking_mode": {"required": False, "allow_blank": True},
+            "ptl_declared_weight_kg": {"required": False, "allow_null": True},
         }
 
     def validate_customer_gstin(self, value):
@@ -567,6 +582,31 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
         if slot_error:
             raise serializers.ValidationError({"preferred_date": slot_error})
 
+        # Light PTL: advance-only, admin-slot-only, 4W+ ptl_eligible tier, declared weight.
+        # Pricing itself (per kg, tamper check) happens in resolve_logistics_fare_v2.
+        mode = (attrs.get("logistics_booking_mode") or "spot").strip().lower() or "spot"
+        attrs["logistics_booking_mode"] = mode
+        if mode == "ptl":
+            from .services.ptl_pricing import PTLError, PTL_SERVICE_CATEGORY, assert_tier_ptl_eligible, validate_ptl_slot
+            if attrs.get("service_category") != PTL_SERVICE_CATEGORY:
+                raise serializers.ValidationError({"logistics_booking_mode": "Part Truck Load is booked as a truck trip."})
+            if not attrs.get("ptl_declared_weight_kg"):
+                raise serializers.ValidationError({"ptl_declared_weight_kg": "Enter the cargo weight in kg."})
+            tier = attrs.get("logistics_tier")
+            try:
+                assert_tier_ptl_eligible(tier)
+                validate_ptl_slot(
+                    preferred_date=attrs.get("preferred_date"),
+                    preferred_time=attrs.get("preferred_time"),
+                    city=getattr(tier, "city", ""),
+                )
+            except PTLError as e:
+                raise serializers.ValidationError({"logistics_booking_mode": str(e), "code": e.code})
+        elif mode != "spot":
+            raise serializers.ValidationError({"logistics_booking_mode": "Unknown booking mode."})
+        else:
+            attrs["ptl_declared_weight_kg"] = None
+
         # Fixes GT-B-04: nothing captured what's actually being moved for a
         # Goods & Transport booking -- `description` already exists as a
         # generic free-text field on ServiceRequest and was optional for
@@ -611,7 +651,7 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
         # explicit relationship to the customer, so there's at least a named,
         # accountable person the driver is handing high-value goods to.
         declared_value = attrs.get("declared_value")
-        if category in LOGISTICS_CATEGORIES and declared_value is not None and declared_value >= HIGH_VALUE_CONSIGNMENT_THRESHOLD:
+        if category in LOGISTICS_CATEGORIES and declared_value is not None and declared_value >= _high_value_threshold():
             missing = []
             if not (attrs.get("drop_contact_name") or "").strip():
                 missing.append("drop_contact_name")
@@ -622,7 +662,7 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             if missing:
                 raise serializers.ValidationError({
                     "declared_value": (
-                        f"Consignments declared at ₹{HIGH_VALUE_CONSIGNMENT_THRESHOLD:,.0f} or more require a named "
+                        f"Consignments declared at ₹{_high_value_threshold():,.0f} or more require a named "
                         f"receiver: {', '.join(missing)}."
                     )
                 })
@@ -932,8 +972,8 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             return None
         try:
             import re
-            from django.db import connection
-            with connection.cursor() as cursor:
+            from django.db import connection, transaction
+            with transaction.atomic(), connection.cursor() as cursor:
                 cursor.execute(
                     "SELECT message FROM workforce_notification "
                     "WHERE related_object_id = %s "
@@ -1034,8 +1074,8 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             return None
         try:
             import re
-            from django.db import connection
-            with connection.cursor() as cursor:
+            from django.db import connection, transaction
+            with transaction.atomic(), connection.cursor() as cursor:
                 cursor.execute(
                     "SELECT message FROM workforce_notification "
                     "WHERE related_object_id = %s "
@@ -1170,9 +1210,9 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         if ids:
             try:
                 import re
-                from django.db import connection
+                from django.db import connection, transaction
                 placeholders = ",".join(["%s"] * len(ids))
-                with connection.cursor() as cursor:
+                with transaction.atomic(), connection.cursor() as cursor:
                     cursor.execute(
                         "SELECT related_object_id, message FROM workforce_notification "
                         "WHERE related_object_id IN (%s) "
@@ -1344,6 +1384,9 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
             # actually headed (drop_address/lat/lng) -- all present on the
             # model, none previously serialized here.
             "logistics_leg_history", "dispatch_attempts",
+            # Support/Admin intervention needs to see a driver-reported problem and the toll/parking
+            # receipts the driver logged, not just the customer.
+            "delivery_exception", "extra_charges",
             "drop_address", "drop_latitude", "drop_longitude",
             # P&M audit fix: these sibling fields were added in the same
             # GT-A-03/GT-C-03/GT-D-03 pass as drop_address/lat/lng above
@@ -1370,8 +1413,8 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
             return None
         try:
             import re
-            from django.db import connection
-            with connection.cursor() as cursor:
+            from django.db import connection, transaction
+            with transaction.atomic(), connection.cursor() as cursor:
                 cursor.execute(
                     "SELECT message FROM workforce_notification "
                     "WHERE related_object_id = %s "

@@ -57,9 +57,52 @@ def build_policy_terms(category):
             "free_minutes_per_stop": wp.free_minutes_per_stop, "rate_per_minute": str(wp.rate_per_minute),
             "max_charge_per_booking": None if wp.max_charge_per_booking is None else str(wp.max_charge_per_booking),
         }
+    extra = None
+    from service_requests.models import get_gt_extra_charge_policy
+    ep = get_gt_extra_charge_policy(category)
+    if ep is not None:
+        kinds = " and ".join(k for k, ok in (("toll", ep.allow_toll), ("parking", ep.allow_parking)) if ok)
+        text = f"Any {kinds} your driver pays is added to your final fare at the receipt amount"
+        if ep.max_total_per_booking is not None:
+            text += f" (up to {_rupees(ep.max_total_per_booking)} per booking)"
+        terms.append(text + ".")
+        extra = {"allow_toll": ep.allow_toll, "allow_parking": ep.allow_parking,
+                 "max_total_per_booking": None if ep.max_total_per_booking is None else str(ep.max_total_per_booking)}
+    claims = None
+    from service_requests.services.claims_policy import policy_for_category
+    cl = policy_for_category(category)
+    if cl is not None and cl.included_liability_cap is not None:
+        text = f"Goods damaged or lost in transit are covered up to {_rupees(cl.included_liability_cap)}"
+        text += " or the fare, whichever is lower" if cl.cap_at_fare else ""
+        if cl.claim_window_hours:
+            text += f". File a claim within {cl.claim_window_hours} hours of delivery"
+        if cl.require_photo:
+            text += " with photos of the damage"
+        terms.append(text + ".")
+        claims = {"included_liability_cap": str(cl.included_liability_cap), "cap_at_fare": cl.cap_at_fare,
+                  "claim_window_hours": cl.claim_window_hours, "require_photo": cl.require_photo}
+    else:
+        # No included transit liability configured: say so plainly instead of staying silent
+        # (Porter's own FAQ is explicit that goods are not insured by default).
+        try:
+            from service_requests.services.insurance import insurance_offered
+            _ins = category in DISTANCE_PRICED_CATEGORIES and insurance_offered()
+        except Exception:
+            _ins = False
+        text = ("Goods are not insured by default; our liability for loss or damage is limited as set out in "
+                "the Terms of Service.")
+        if _ins:
+            text += " Add transit insurance at booking to cover the declared value of your goods."
+        terms.append(text)
     if category in DISTANCE_PRICED_CATEGORIES:
         terms.append("The final fare is confirmed after delivery, from the distance driven and stops actually made.")
-    return terms, cancellation, waiting
+        terms.append("You can change the drop location during the trip from the tracking page; the fare is "
+                     "recalculated at your booked per-km rate.")
+    # GST e-way bill (statutory, CGST Rule 138): goods moving between states above Rs. 50,000 in
+    # value need one. Hosur-Bengaluru and other lanes cross a state border, so say it up front.
+    terms.append("For goods worth more than Rs. 50,000 moving between states, keep a valid GST e-way bill "
+                 "and hand it to the driver at pickup.")
+    return terms, cancellation, waiting, extra, claims
 
 
 class PublicGTPolicyView(APIView):
@@ -73,10 +116,11 @@ class PublicGTPolicyView(APIView):
                 {"success": False, "error_code": "INVALID_CATEGORY", "message": "Unknown service category."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        terms, cancellation, waiting = build_policy_terms(category)
+        terms, cancellation, waiting, extra, claims = build_policy_terms(category)
         return Response({
             "success": True,
-            "data": {"service_category": category, "terms": terms, "cancellation": cancellation, "waiting": waiting},
+            "data": {"service_category": category, "terms": terms, "cancellation": cancellation, "waiting": waiting,
+                     "extra_charges": extra, "claims": claims},
         })
 
 

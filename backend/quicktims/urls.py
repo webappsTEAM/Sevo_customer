@@ -38,6 +38,50 @@ def health_check(request):
     return JsonResponse(payload, status=200 if db_ok else 503)
 
 
+def serve_media_resilient(request, path):
+    """
+    Resilient media file handler for /media/<path>:
+    1. Checks MEDIA_ROOT / path
+    2. Checks ASSET IMAGES / path or ASSET IMAGES / filename (matching .png, .jpg, .webp, .svg)
+    3. Serves clean asset placeholder or hero fallback without 404 errors.
+    """
+    from pathlib import Path
+    clean_path = path.lstrip("/").replace("\\", "/")
+
+    media_root = Path(settings.MEDIA_ROOT)
+    local_target = media_root / clean_path
+    if local_target.is_file():
+        return serve(request, clean_path, document_root=str(media_root))
+
+    asset_root = Path(settings.BASE_DIR / "ASSET IMAGES")
+    asset_target = asset_root / clean_path
+    if asset_target.is_file():
+        return serve(request, clean_path, document_root=str(asset_root))
+
+    filename = Path(clean_path).name
+    stem = Path(clean_path).stem
+    for candidate in [
+        asset_root / filename,
+        asset_root / f"{stem}.png",
+        asset_root / f"{stem}.jpg",
+        asset_root / f"{stem}.webp",
+        asset_root / f"{stem}.svg",
+    ]:
+        if candidate.is_file():
+            return serve(request, candidate.name, document_root=str(asset_root))
+
+    for fallback_file in ["generic_image_placeholder.svg", "hero_illustration.jpg"]:
+        fallback_target = asset_root / fallback_file
+        if fallback_target.is_file():
+            return serve(request, fallback_file, document_root=str(asset_root))
+
+    from django.http import HttpResponse
+    return HttpResponse(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="#f1f5f9"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#94a3b8" font-family="sans-serif" font-size="14">SEVO Image</text></svg>',
+        content_type="image/svg+xml"
+    )
+
+
 urlpatterns = [
     path("health/", health_check, name="health-check"),
     path("api/health/", health_check, name="api-health-check"),
@@ -60,7 +104,5 @@ urlpatterns = [
     path("api/ai/", include("ai_assistant.urls")),
     path("api/", include("service_requests.urls")),
     re_path(r"^assets/(?P<path>.*)$", serve, {"document_root": str(settings.BASE_DIR / "ASSET IMAGES")}),
+    re_path(r"^media/(?P<path>.*)$", serve_media_resilient),
 ]
-
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

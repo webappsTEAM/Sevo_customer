@@ -185,6 +185,51 @@ class UnpaidExpiryTests(TestCase):
             self.assertEqual(sr.status, want, sr.pk)
 
 
+class UnpaidExpiryLifecycleTests(TestCase):
+    def _stale(self, minutes_old):
+        from datetime import timedelta
+        u = _user()
+        sr = ServiceRequest.objects.create(
+            customer=u, customer_name="Ravi Kumar", phone=u.phone, email=u.email, service_category="goods_transport_truck",
+            issue_title="m", address="Hosur", preferred_date=timezone.localdate(), total_amount=Decimal("500"),
+            payment_method="ONLINE", status=S.WAITING_FOR_PAYMENT, payment_status=PS.PROCESSING)
+        ServiceRequest.objects.filter(pk=sr.pk).update(created_at=timezone.now() - timedelta(minutes=minutes_old))
+        return sr
+
+    def test_admin_hold_duration_changes_expiry_and_sweep_is_idempotent(self):
+        from service_requests.models import GTOperationsConfig
+        from service_requests.tasks import expire_unpaid_online_bookings_task
+        sr = self._stale(45)
+        GTOperationsConfig.objects.all().delete()
+        GTOperationsConfig.objects.create(online_payment_window_minutes=60)
+        self.assertEqual(expire_unpaid_online_bookings_task(), 0)
+        sr.refresh_from_db()
+        self.assertEqual(sr.status, S.WAITING_FOR_PAYMENT)
+        GTOperationsConfig.objects.update(online_payment_window_minutes=30)
+        from unittest.mock import patch
+        with patch("service_requests.notifications.send_sms_notification") as sms:
+            self.assertEqual(expire_unpaid_online_bookings_task(), 1)
+            self.assertEqual(expire_unpaid_online_bookings_task(), 0)
+        self.assertEqual(sms.call_count, 1)
+        self.assertIn("payment-expired", sms.call_args.kwargs["event_key"])
+        sr.refresh_from_db()
+        self.assertEqual(sr.status, S.CANCELLED)
+        self.assertEqual(sr.payment_status, PS.CANCELLED)
+
+    def test_sweep_is_registered_as_periodic_task_once_and_keeps_admin_edits(self):
+        from django_celery_beat.models import PeriodicTask
+        from service_requests.apps import GT_PERIODIC_TASKS, register_gt_periodic_tasks
+        name, task, _ = GT_PERIODIC_TASKS[0]
+        register_gt_periodic_tasks()
+        register_gt_periodic_tasks()
+        rows = PeriodicTask.objects.filter(name=name)
+        self.assertEqual(rows.count(), 1)
+        self.assertEqual(rows[0].task, task)
+        rows.update(enabled=False)
+        register_gt_periodic_tasks()
+        self.assertFalse(PeriodicTask.objects.get(name=name).enabled)
+
+
 @override_settings(PAYMENT_SANDBOX_MODE=True, RAZORPAY_KEY_ID="", RAZORPAY_KEY_SECRET="")
 class PrepaidEndToEndTests(TestCase):
     """Real endpoints + webhook: book ONLINE, pay from the wallet, deliver, pay the balance."""
@@ -242,3 +287,114 @@ class PrepaidEndToEndTests(TestCase):
         self.booking.refresh_from_db()
         self.assertEqual(self.booking.status, status_before)                     # untouched by the balance payment
         self.assertEqual(sum(p.amount for p in Payment.objects.filter(service_request=self.booking, status=PS.PAID)), Decimal("584.00"))
+
+
+@override_settings(PAYMENT_SANDBOX_MODE=True, RAZORPAY_KEY_ID="", RAZORPAY_KEY_SECRET="")
+class WalletPartPaymentTests(PrepaidGTTests):
+    """Admin switch -> wallet + online split; expiry returns the wallet part."""
+
+    def _enable(self, on=True):
+        from service_requests.models import GTOperationsConfig
+        GTOperationsConfig.objects.all().delete()
+        GTOperationsConfig.objects.create(allow_wallet_part_payment=on)
+
+    def _pay(self, **extra):
+        return self.c.post("/api/payment/wallet-pay/", {"booking_id": self.sr.id, **extra}, format="json")
+
+    def test_off_by_default_even_if_client_asks(self):
+        self._fund("200")
+        r = self._pay(allow_partial=True)
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(self._balance(), Decimal("200"))
+
+    def test_split_spends_wallet_then_gateway_pays_only_the_rest_and_dispatches(self):
+        self._enable()
+        self._fund("200")
+        r = self._pay(allow_partial=True)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.data["data"]["remaining_due"], 400.0)
+        self.assertEqual(self._balance(), Decimal("0"))
+        self.sr.refresh_from_db()
+        self.assertEqual(self.sr.status, S.WAITING_FOR_PAYMENT)      # not confirmed yet
+        self.dispatch.delay.assert_not_called()
+        o = self.c.post("/api/payment/initiate/", {"booking_id": self.sr.id}, format="json").data["data"]
+        self.assertEqual(o["amount"], 400.0)                          # only the remainder is charged
+        with self.captureOnCommitCallbacks(execute=True):
+            v = self.c.post("/api/payment/verify/", {"booking_id": self.sr.id, "order_id": o["order_id"]}, format="json")
+        self.sr.refresh_from_db()
+        self.assertEqual(self.sr.status, S.CONFIRMED, v.content)
+
+    def test_expiry_returns_the_wallet_part_once(self):
+        from datetime import timedelta
+        from service_requests.services.payment_expiry import expire_unpaid_online_bookings
+        self._enable()
+        self._fund("200")
+        self._pay(allow_partial=True)
+        ServiceRequest.objects.filter(pk=self.sr.pk).update(created_at=timezone.now() - timedelta(minutes=90))
+        self.assertEqual(expire_unpaid_online_bookings(), 1)
+        self.assertEqual(self._balance(), Decimal("200"))
+        expire_unpaid_online_bookings()
+        self.assertEqual(self._balance(), Decimal("200"))
+
+    def test_config_reports_the_admin_switch(self):
+        self._enable(False)
+        self.assertFalse(self.c.get("/api/payment/config/").data["data"]["wallet_part_payment"])
+        self._enable(True)
+        self.assertTrue(self.c.get("/api/payment/config/").data["data"]["wallet_part_payment"])
+
+
+@override_settings(PAYMENT_SANDBOX_MODE=True, RAZORPAY_KEY_ID="", RAZORPAY_KEY_SECRET="")
+class WalletTopUpTests(TestCase):
+    def setUp(self):
+        self.user = _user()
+        self.c = APIClient()
+        self.c.force_authenticate(self.user)
+
+    def _cfg(self, **kw):
+        from service_requests.models import GTOperationsConfig
+        GTOperationsConfig.objects.all().delete()
+        GTOperationsConfig.objects.create(**kw)
+
+    def _topup(self, amount):
+        r = self.c.post("/api/wallet/topup/", {"amount": amount}, format="json")
+        if r.status_code != 200:
+            return r, None
+        v = self.c.post("/api/wallet/topup/verify/", {"order_id": r.data["data"]["order_id"]}, format="json")
+        return r, v
+
+    def _bal(self):
+        w = CustomerWallet.objects.filter(user=self.user).first()
+        return w.balance if w else Decimal("0")
+
+    def test_disabled_by_default(self):
+        r, _ = self._topup("500")
+        self.assertEqual(r.status_code, 403)
+        self.assertEqual(self._bal(), Decimal("0"))
+
+    def test_credit_once_and_verify_is_idempotent(self):
+        self._cfg(wallet_topup_enabled=True)
+        r, v = self._topup("500")
+        self.assertEqual(v.status_code, 200, v.content)
+        again = self.c.post("/api/wallet/topup/verify/", {"order_id": r.data["data"]["order_id"]}, format="json")
+        self.assertEqual(again.status_code, 200)
+        self.assertEqual(self._bal(), Decimal("500"))
+
+    def test_admin_limits_are_enforced(self):
+        self._cfg(wallet_topup_enabled=True, wallet_max_topup=Decimal("1000"), wallet_max_balance=Decimal("1500"))
+        self.assertEqual(self._topup("1200")[0].status_code, 400)     # over per-recharge limit
+        self.assertEqual(self._topup("1000")[1].status_code, 200)
+        self.assertEqual(self._topup("600")[0].status_code, 400)      # 1000 + 600 > cap 1500
+        self.assertEqual(self._topup("500")[1].status_code, 200)
+        self.assertEqual(self._bal(), Decimal("1500"))
+
+    def test_another_users_order_cannot_be_verified(self):
+        self._cfg(wallet_topup_enabled=True)
+        r = self.c.post("/api/wallet/topup/", {"amount": "100"}, format="json")
+        other = APIClient(); other.force_authenticate(_user())
+        v = other.post("/api/wallet/topup/verify/", {"order_id": r.data["data"]["order_id"]}, format="json")
+        self.assertEqual(v.status_code, 404)
+
+    def test_wallet_endpoint_shows_the_admin_terms(self):
+        self._cfg(wallet_topup_enabled=True, wallet_max_topup=Decimal("2000"))
+        t = self.c.get("/api/wallet/").data["data"]["topup"]
+        self.assertEqual((t["enabled"], t["max_topup"], t["max_balance"]), (True, "2000.00", None))
