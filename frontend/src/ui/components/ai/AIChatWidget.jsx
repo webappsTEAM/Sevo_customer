@@ -77,12 +77,15 @@ const formatChatTime = (dateVal) => {
   return `${hours}:${minutes} ${ampm}`
 }
 
-const DEFAULT_WELCOME_MESSAGE = {
-  id: "welcome",
-  sender: "assistant",
-  content: "Hi! 👋 How can I help you with your services or bookings today?",
-  sources: [],
-  created_at: new Date().toISOString(),
+const getWelcomeMessage = (displayName) => {
+  const namePart = displayName && displayName !== "there" ? ` ${displayName}` : ""
+  return {
+    id: "welcome",
+    sender: "assistant",
+    content: `Hi${namePart}! 👋 How can I help you with your services or bookings today?`,
+    sources: [],
+    created_at: new Date().toISOString(),
+  }
 }
 
 const STARTER_PROMPTS = [
@@ -310,24 +313,6 @@ export function AIChatWidget() {
     return null
   }
 
-  const [conversationId, setConversationId] = useState(() => readStoredConvId(currentOwnerId))
-
-  const [messages, setMessages] = useState(
-    () => readStoredMessages(currentOwnerId) ?? [DEFAULT_WELCOME_MESSAGE]
-  )
-
-  const [selectedImageFile, setSelectedImageFile] = useState(null)
-  const [imagePreviewUrl, setImagePreviewUrl] = useState(null)
-  const [imageError, setImageError] = useState(null)
-  const fileInputRef = useRef(null)
-
-  const isHandedOff = Boolean(messages.some((m) => m.handed_off))
-  const latestAssistantMsg = [...messages].reverse().find((m) => m.sender === "assistant")
-  const currentExpects = isHandedOff ? "text" : (latestAssistantMsg?.expects || "text")
-
-  const messagesEndRef = useRef(null)
-  const inputRef = useRef(null)
-
   const customerDisplayName = (() => {
     if (!user) return null
     const name = (user.firstName || user.first_name || user.fullName || user.full_name || "").trim()
@@ -342,6 +327,39 @@ export function AIChatWidget() {
     }
     return name || user.username || "there"
   })()
+
+  const [conversationId, setConversationId] = useState(() => readStoredConvId(currentOwnerId))
+
+  const [messages, setMessages] = useState(
+    () => readStoredMessages(currentOwnerId) ?? [getWelcomeMessage(customerDisplayName)]
+  )
+
+  // Update welcome greeting if user auth loads asynchronously
+  useEffect(() => {
+    if (customerDisplayName && customerDisplayName !== "there") {
+      setMessages((prev) => {
+        if (prev.length === 1 && prev[0].id?.startsWith("welcome")) {
+          const fresh = getWelcomeMessage(customerDisplayName)
+          if (prev[0].content !== fresh.content) {
+            return [fresh]
+          }
+        }
+        return prev
+      })
+    }
+  }, [customerDisplayName])
+
+  const [selectedImageFile, setSelectedImageFile] = useState(null)
+  const [imagePreviewUrl, setImagePreviewUrl] = useState(null)
+  const [imageError, setImageError] = useState(null)
+  const fileInputRef = useRef(null)
+
+  const isHandedOff = Boolean(messages.some((m) => m.handed_off))
+  const latestAssistantMsg = [...messages].reverse().find((m) => m.sender === "assistant")
+  const currentExpects = isHandedOff ? "text" : (latestAssistantMsg?.expects || "text")
+
+  const messagesEndRef = useRef(null)
+  const inputRef = useRef(null)
 
   // Save conversationId in sessionStorage — always stamp the owner ID alongside
   useEffect(() => {
@@ -715,15 +733,7 @@ export function AIChatWidget() {
     handleClearSelectedImage()
     setConversationId(null)
     clearAIChatStorage()
-    setMessages([
-      {
-        id: `welcome_${Date.now()}`,
-        sender: "assistant",
-        content: "Started a new conversation! How can I help you today?",
-        sources: [],
-        created_at: new Date().toISOString(),
-      },
-    ])
+    setMessages([getWelcomeMessage(customerDisplayName)])
     setShowHistoryView(false)
   }
 
@@ -738,15 +748,7 @@ export function AIChatWidget() {
     }
     setConversationId(null)
     clearAIChatStorage()
-    setMessages([
-      {
-        id: `welcome_${Date.now()}`,
-        sender: "assistant",
-        content: "Chat history cleared! How can I help you today?",
-        sources: [],
-        created_at: new Date().toISOString(),
-      },
-    ])
+    setMessages([getWelcomeMessage(customerDisplayName)])
     setConversationsList((prev) => prev.filter((c) => c.id !== conversationId))
   }
 

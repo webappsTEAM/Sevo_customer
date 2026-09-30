@@ -152,6 +152,18 @@ class BusinessRulesTests(TestCase):
         res = provider.generate([{"role": "user", "content": "Bye"}], [], "", {})
         self.assertEqual(res.content, "Goodbye! Have a great day!")
 
+        # Greeting with name introduction
+        res = provider.generate([{"role": "user", "content": "Hi ,I am namrutha"}], [], "", {})
+        self.assertIn("Hello Namrutha!", res.content)
+        self.assertIn("Welcome to SEVO", res.content)
+        self.assertNotIn("According to SEVO policies", res.content)
+        self.assertNotIn("Villa Deep Cleaning", res.content)
+
+        # Generic greeting
+        res = provider.generate([{"role": "user", "content": "Hello"}], [], "", {})
+        self.assertIn("Welcome to SEVO", res.content)
+        self.assertIn("How can I assist you", res.content)
+
     def test_delayed_order_lists_orders_and_asks_which_order(self):
         """When user asks why order is delayed, bot lists orders and asks 'Which order are you referring to?'."""
         from ai_assistant.llm.mock_provider import MockDeterministicProvider
@@ -175,5 +187,56 @@ class BusinessRulesTests(TestCase):
         self.assertIn("Order #5937", res2.content)
         self.assertIn("Order #5938", res2.content)
         self.assertIn("Which order are you referring to?", res2.content)
+
+    def test_gemini_provider_multi_key_fallback(self):
+        """GeminiProvider rotates to next API key when first key returns 401/403 or 429."""
+        from ai_assistant.llm.gemini_provider import GeminiProvider
+        from unittest.mock import patch, MagicMock
+
+        provider = GeminiProvider(api_key=["bad_key_11111111", "good_key_22222222"])
+        self.assertEqual(len(provider.api_keys), 2)
+
+        def mock_post(url, json=None, timeout=None):
+            resp = MagicMock()
+            if "bad_key_11111111" in url:
+                resp.status_code = 429
+                resp.text = '{"error": {"code": 429, "message": "Resource Exhausted"}}'
+            elif "good_key_22222222" in url:
+                resp.status_code = 200
+                resp.json.return_value = {
+                    "candidates": [{
+                        "content": {"parts": [{"text": "Response from second key"}]}
+                    }]
+                }
+            return resp
+
+        with patch("requests.post", side_effect=mock_post):
+            res = provider.generate([{"role": "user", "content": "Hello"}], [], "", {})
+            self.assertEqual(res.content, "Response from second key")
+            self.assertIn("key: ...222222", res.provider_name)
+
+    def test_get_llm_provider_collects_multiple_keys(self):
+        """get_llm_provider detects comma-separated and numbered environment variables."""
+        from ai_assistant.llm import get_llm_provider
+        from ai_assistant.llm.gemini_provider import GeminiProvider
+        import os
+
+        env_backup = dict(os.environ)
+        try:
+            for k in list(os.environ.keys()):
+                if k.startswith("GEMINI_API_KEY"):
+                    del os.environ[k]
+            os.environ["GEMINI_API_KEY"] = "key_alpha_12345678, key_beta_87654321"
+            os.environ["GEMINI_API_KEY_2"] = "key_gamma_11223344"
+            provider = get_llm_provider()
+            self.assertIsInstance(provider, GeminiProvider)
+            self.assertEqual(len(provider.api_keys), 3)
+            self.assertIn("key_alpha_12345678", provider.api_keys)
+            self.assertIn("key_beta_87654321", provider.api_keys)
+            self.assertIn("key_gamma_11223344", provider.api_keys)
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
+
 
 

@@ -248,17 +248,65 @@ class MockDeterministicProvider(BaseLLMProvider):
         # Handle catalog search
         if "packages" in data:
             pkgs = data.get("packages", [])
+            query_str = (data.get("query") or "").strip()
+            q_low = query_str.lower()
+
+            if any(k in q_low for k in ["ac and appliance", "ac & appliance", "appliance and ac", "appliance & ac"]):
+                topic = "AC & Appliance Repair"
+            elif any(k in q_low for k in ["ac", "air condition", "hvac"]):
+                topic = "AC Service & Repair"
+            elif any(k in q_low for k in ["refrigerator", "fridge"]):
+                topic = "Refrigerator Service & Repair"
+            elif "washing machine" in q_low:
+                topic = "Washing Machine Service"
+            elif any(k in q_low for k in ["cleaning", "pest"]):
+                topic = "Cleaning & Pest Control"
+            elif "plumb" in q_low:
+                topic = "Plumbing Services"
+            elif "electric" in q_low:
+                topic = "Electrical Services"
+            elif "carpenter" in q_low or "carpentry" in q_low:
+                topic = "Carpentry Services"
+            elif "paint" in q_low or "waterproof" in q_low:
+                topic = "Painting & Waterproofing"
+            elif any(k in q_low for k in ["packers", "movers", "shifting"]):
+                topic = "Packers & Movers"
+            elif any(k in q_low for k in ["vegetable", "grocer"]):
+                topic = "Farm-Fresh Vegetables & Groceries"
+            else:
+                cleaned = re.sub(
+                    r"\b(?:i\s+want|list\s+of|the\s+list\s+of|details?\s+of|give\s+me|show\s+me|can\s+you\s+show|price\s+etc|its?\s+price|price|rates?|cost|packages?|services?)\b",
+                    "",
+                    q_low,
+                    flags=re.IGNORECASE,
+                ).strip()
+                topic = cleaned.title() if cleaned else "SEVO"
+
             if not pkgs:
                 return LLMResponse(
-                    content=f"No matching service packages found for '{data.get('query')}'. You can try searching for 'AC service', 'cleaning', or 'plumbing'.",
+                    content=f"No matching service packages found for '{topic}'. You can try searching for 'AC service', 'cleaning', 'plumbing', or 'vegetables'.",
                     tool_calls=[],
                 )
-            lines = [f"Here are available {data.get('query', '')} packages:"]
-            for p in pkgs[:4]:
-                dur = f" ({p['duration']})" if p.get("duration") else ""
-                lines.append(f"• **{p['name']}**: ₹{p['price']}{dur}")
-            lines.append("\nWould you like help booking any of these?")
-            return LLMResponse(content="\n".join(lines), tool_calls=[])
+
+            # Group packages by service category
+            from collections import OrderedDict
+            by_service = OrderedDict()
+            for p in pkgs:
+                svc = p.get("service") or topic
+                if svc not in by_service:
+                    by_service[svc] = []
+                by_service[svc].append(p)
+
+            lines = [f"Here are the available **{topic}** services and packages on SEVO:\n"]
+            for svc_name, items in list(by_service.items())[:5]:
+                lines.append(f"**{svc_name}**:")
+                for p in items[:3]:
+                    dur = f" ({p['duration']})" if p.get("duration") else ""
+                    lines.append(f"• **{p['name']}**: ₹{p['price']}{dur}")
+                lines.append("")
+
+            lines.append("Would you like help booking any of these services?")
+            return LLMResponse(content="\n".join(lines).strip(), tool_calls=[])
 
         # Handle customer profile
         if "profile" in data:
@@ -323,7 +371,7 @@ class MockDeterministicProvider(BaseLLMProvider):
         # Generic RAG context presentation
         clean_context = rag_context.replace("--- VERIFIED KNOWLEDGE BASE CONTEXT ---", "").replace("--- END KNOWLEDGE CONTEXT ---", "").strip()
         return LLMResponse(
-            content=f"According to SEVO policies:\n\n{clean_context[:600]}",
+            content=clean_context[:600],
             tool_calls=[],
         )
 
@@ -365,5 +413,24 @@ class MockDeterministicProvider(BaseLLMProvider):
         # 7. I already told you this!
         if any(p in q for p in ["i already told you this", "i already told you", "i already said that", "i already mentioned"]):
             return "I’m sorry about that. Let me check it again."
+
+        # 8. Greetings & Name introductions
+        is_greeting = bool(re.search(r"\b(?:hi|hello|hey|greetings|namaste|good\s+(?:morning|afternoon|evening|day))\b", q))
+        name_match = re.search(r"\b(?:i am|i'm|im|my name is)\s+([a-zA-Z]{2,30})\b", query, re.IGNORECASE)
+        invalid_names = {"interested", "looking", "asking", "here", "waiting", "facing", "trying", "ordering", "booking", "calling", "having", "getting", "sorry", "ready", "new", "useless"}
+        name = name_match.group(1).strip().capitalize() if name_match and name_match.group(1).lower() not in invalid_names else None
+
+        if is_greeting or name:
+            # Check if user also asked a specific service question in the same message (e.g. "hi, how much is ac repair?")
+            service_keywords = [
+                "book", "order", "service", "ac", "repair", "plumb", "clean",
+                "vegetable", "refund", "track", "cancel", "cost", "price",
+                "package", "rate", "delivery", "technician", "vendor", "partner", "how"
+            ]
+            has_service_query = any(k in q for k in service_keywords)
+            if not has_service_query:
+                if name:
+                    return f"Hello {name}! Welcome to SEVO. How can I assist you with our services, bookings, or orders today?"
+                return "Hello! Welcome to SEVO. How can I assist you today with our doorstep services, repairs, or bookings?"
 
         return None

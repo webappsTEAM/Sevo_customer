@@ -1,7 +1,11 @@
 import os
+import re
 import json
 import uuid
+import logging
 from typing import Dict, Any, List, cast
+
+logger = logging.getLogger(__name__)
 from rest_framework import status, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -217,9 +221,13 @@ class AIChatView(APIView):
             conversation.save()
             return self._handle_support_flow(conversation, user_message, request, context, is_initial=True)
 
-        # 4. Retrieve RAG Knowledge from Approved allowlist (skip for direct booking/order lookups)
+        # 4. Retrieve RAG Knowledge from Approved allowlist (skip for direct booking/order lookups and pure greetings)
         is_order_query = any(w in user_message.lower() for w in ["my booking", "my order", "active booking", "where is", "track", "status of", "check my"])
-        rag_chunks = [] if is_order_query else KnowledgeRetriever.retrieve(user_message, top_k=3)
+        is_greeting_only = bool(re.search(r"^(?:hi|hello|hey|good\s+(?:morning|afternoon|evening|day)|greetings|namaste)\b", user_message.strip(), re.IGNORECASE)) and not any(
+            k in user_message.lower() for k in ["book", "order", "service", "ac", "repair", "plumb", "clean", "vegetable", "refund", "track", "cancel", "cost", "price", "package", "rate", "delivery", "technician", "how"]
+        )
+        is_skip_rag = is_order_query or is_greeting_only
+        rag_chunks = [] if is_skip_rag else KnowledgeRetriever.retrieve(user_message, top_k=3)
         rag_context = KnowledgeRetriever.format_context(rag_chunks) if rag_chunks else ""
         context["rag_context"] = rag_context
 
@@ -381,15 +389,184 @@ class AIChatView(APIView):
             details={"tools_invoked": [et["tool"] for et in executed_tools], "rag_chunks_count": len(rag_chunks)},
         )
 
+        # Output detailed status to terminal console running runserver
+        provider_name = getattr(llm_resp, "provider_name", None) or provider.__class__.__name__
+        rag_summary = f"{len(rag_chunks)} chunk(s)" + (f" -> {[c['title'][:35] for c in rag_chunks]}" if rag_chunks else " (Skipped / None)")
+        tools_summary = [et["tool"] for et in executed_tools] if executed_tools else "None"
+
+        safe_q = str(user_message).encode("ascii", errors="replace").decode("ascii")
+        safe_p = str(provider_name).encode("ascii", errors="replace").decode("ascii")
+        safe_r = str(rag_summary).encode("ascii", errors="replace").decode("ascii")
+        safe_t = str(tools_summary).encode("ascii", errors="replace").decode("ascii")
+        safe_ans = str(safe_response[:120]).replace("\u20b9", "Rs.").encode("ascii", errors="replace").decode("ascii")
+
+        print("\n" + "=" * 64, flush=True)
+        print("[AI CHATBOT REQUEST HANDLED]", flush=True)
+        print(f"  [CUSTOMER QUERY] : {safe_q}", flush=True)
+        print(f"  [HANDLED BY]     : {safe_p}", flush=True)
+        print(f"  [RAG CONTEXT]    : {safe_r}", flush=True)
+        print(f"  [TOOLS USED]     : {safe_t}", flush=True)
+        print(f"  [ANSWER PREVIEW] : {safe_ans}...", flush=True)
+        print("=" * 64 + "\n", flush=True)
+
         return Response({
             "success": True,
             "data": {
                 "conversation_id": str(conversation.id),
                 "message": safe_response,
                 "agent": agent_type,
+                "provider": provider_name,
                 "sources": [rc["title"] for rc in rag_chunks] if not executed_tools else [],
                 "expects": "text",
                 "options": options,
+                "handed_off": False,
+                "created_at": asst_msg.created_at.isoformat(),
+            },
+        }, status=status.HTTP_200_OK)
+
+    def _build_order_support_response(self, conversation, order_info, meta, context):
+        order_id = str(order_info.get("booking_id") or order_info.get("request_id") or order_info.get("id"))
+        title = order_info.get("title") or order_info.get("category") or order_info.get("issue_title") or f"Order #{order_id}"
+        status_str = order_info.get("status_display") or order_info.get("status") or "Confirmed"
+        status_norm = str(status_str).strip().lower()
+
+        category_str = str(order_info.get("category") or order_info.get("service_category") or title or "").lower()
+        is_physical_goods = any(k in category_str for k in ["vegetable", "produce", "grocery", "groceries", "fruits", "goods_transport", "daily_essentials"])
+
+        meta["active_order_id"] = order_id
+        support_data = meta.get("support_data", {})
+        support_data["order_id"] = order_id
+        support_data["order_title"] = title
+        support_data["status"] = status_str
+        support_data["is_goods"] = is_physical_goods
+        support_data["payment_method"] = order_info.get("payment_method") or "Original payment source"
+        support_data["payment_status"] = order_info.get("payment_status") or "Confirmed"
+
+        # Case A: Order is CANCELLED
+        if status_norm in ("cancelled", "canceled"):
+            meta["support_step"] = "CANCELLED_ORDER_OPTIONS"
+            meta["support_data"] = support_data
+            conversation.metadata = meta
+            conversation.save()
+
+            reply_text = (
+                f"I've selected your order **{title}** (#{order_id}). Current status: **Cancelled**.\n\n"
+                "Since this booking is already cancelled, **returns and replacements do not apply**.\n\n"
+                "• **Refund Information**: If you paid online via UPI/Card/NetBanking, refunds are automatically credited back to your original source account within 5–7 business days.\n"
+                "• **Cash on Delivery**: No payment was collected.\n\n"
+                "How would you like me to help?"
+            )
+            options = [
+                {"label": "Check refund status", "value": "REFUND_STATUS"},
+                {"label": "Talk to support agent", "value": "TALK_TO_AGENT"},
+                {"label": "Book again", "value": "BOOK_AGAIN"},
+            ]
+            asst_msg = ChatMessage.objects.create(
+                conversation=conversation,
+                sender=SenderType.ASSISTANT,
+                content=reply_text,
+                metadata={"expects": "choice", "options": options},
+            )
+            return Response({
+                "success": True,
+                "data": {
+                    "conversation_id": str(conversation.id),
+                    "message": reply_text,
+                    "agent": conversation.agent_type,
+                    "expects": "choice",
+                    "options": options,
+                    "handed_off": False,
+                    "created_at": asst_msg.created_at.isoformat(),
+                },
+            }, status=status.HTTP_200_OK)
+
+        # Case B: Order is ACTIVE / IN PROGRESS
+        if status_norm in ("pending", "confirmed", "assigned", "on the way", "on_the_way", "in progress", "in_progress", "started"):
+            meta["support_step"] = "ACTIVE_ORDER_OPTIONS"
+            meta["support_data"] = support_data
+            conversation.metadata = meta
+            conversation.save()
+
+            reply_text = (
+                f"I've selected your order **{title}** (#{order_id}). Current status: **{status_str}**.\n\n"
+                "This booking is currently active and in progress. Returns and quality complaints only apply after completion.\n\n"
+                "Would you like to cancel this booking, reschedule your appointment slot, or track your technician?"
+            )
+            options = [
+                {"label": "Cancel this booking", "value": "CANCEL_BOOKING"},
+                {"label": "Reschedule appointment", "value": "RESCHEDULE_SLOT"},
+                {"label": "Track technician / status", "value": "TRACK_STATUS"},
+                {"label": "Talk to support agent", "value": "TALK_TO_AGENT"},
+            ]
+            asst_msg = ChatMessage.objects.create(
+                conversation=conversation,
+                sender=SenderType.ASSISTANT,
+                content=reply_text,
+                metadata={"expects": "choice", "options": options},
+            )
+            return Response({
+                "success": True,
+                "data": {
+                    "conversation_id": str(conversation.id),
+                    "message": reply_text,
+                    "agent": conversation.agent_type,
+                    "expects": "choice",
+                    "options": options,
+                    "handed_off": False,
+                    "created_at": asst_msg.created_at.isoformat(),
+                },
+            }, status=status.HTTP_200_OK)
+
+        # Case C: Order is COMPLETED / DELIVERED
+        meta["support_step"] = "CAPTURE_REASON"
+        meta["support_data"] = support_data
+        conversation.metadata = meta
+        conversation.save()
+
+        if is_physical_goods:
+            reply_text = (
+                f"Selected order **#{order_id}** ({title}). Current status: **{status_str}**.\n\n"
+                "Please select the reason for your return, refund, or replacement:"
+            )
+            reason_options = [
+                {"label": "Damaged", "value": "Damaged"},
+                {"label": "Quality issue", "value": "Quality issue"},
+                {"label": "Wrong item", "value": "Wrong item"},
+                {"label": "Missing item", "value": "Missing item"},
+                {"label": "Not as described", "value": "Not as described"},
+                {"label": "Other", "value": "Other"},
+            ]
+        else:
+            # Doorstep home services (Cleaning, AC, Plumbing, Painting, Repair)
+            reply_text = (
+                f"Selected order **#{order_id}** ({title}). Current status: **{status_str}**.\n\n"
+                "*(Note: Doorstep home services are not eligible for physical returns. We provide a **Free Rework / Re-service** guarantee and refund support for service issues.)*\n\n"
+                "Please select the issue with your service:"
+            )
+            reason_options = [
+                {"label": "Quality issue", "value": "Quality issue"},
+                {"label": "Incomplete service", "value": "Incomplete service"},
+                {"label": "Technician did not show up", "value": "Technician did not show up"},
+                {"label": "Damaged", "value": "Damaged"},
+                {"label": "Missing item", "value": "Missing item"},
+                {"label": "Billing issue", "value": "Billing issue"},
+                {"label": "Other", "value": "Other"},
+            ]
+
+        asst_msg = ChatMessage.objects.create(
+            conversation=conversation,
+            sender=SenderType.ASSISTANT,
+            content=reply_text,
+            metadata={"expects": "choice", "options": reason_options},
+        )
+        return Response({
+            "success": True,
+            "data": {
+                "conversation_id": str(conversation.id),
+                "message": reply_text,
+                "agent": conversation.agent_type,
+                "expects": "choice",
+                "options": reason_options,
                 "handed_off": False,
                 "created_at": asst_msg.created_at.isoformat(),
             },
@@ -451,47 +628,12 @@ class AIChatView(APIView):
                     }, status=status.HTTP_200_OK)
 
                 if len(bookings) == 1:
-                    # One order -> auto-select
+                    # One order -> auto-select and evaluate status & category
                     b = bookings[0]
                     order_id = str(b.get("booking_id") or b.get("request_id"))
                     detail_res = default_tool_registry.execute("get_order_details", {"order_id": order_id}, context)
                     order_info = detail_res.get("order") or b
-                    title = order_info.get("title") or order_info.get("category") or f"Order #{order_id}"
-                    status_str = order_info.get("status_display") or order_info.get("status") or "Confirmed"
-
-                    meta["active_order_id"] = order_id
-                    meta["support_step"] = "CAPTURE_REASON"
-                    meta["support_data"] = {
-                        "order_id": order_id,
-                        "order_title": title,
-                        "status": status_str,
-                    }
-                    conversation.metadata = meta
-                    conversation.save()
-
-                    reply_text = (
-                        f"I've selected your order **{title}** (#{order_id}). "
-                        f"Current status: **{status_str}**.\n\n"
-                        "Please select the reason for your return, refund, or replacement:"
-                    )
-                    asst_msg = ChatMessage.objects.create(
-                        conversation=conversation,
-                        sender=SenderType.ASSISTANT,
-                        content=reply_text,
-                        metadata={"expects": "choice", "options": reason_options},
-                    )
-                    return Response({
-                        "success": True,
-                        "data": {
-                            "conversation_id": str(conversation.id),
-                            "message": reply_text,
-                            "agent": conversation.agent_type,
-                            "expects": "choice",
-                            "options": reason_options,
-                            "handed_off": False,
-                            "created_at": asst_msg.created_at.isoformat(),
-                        },
-                    }, status=status.HTTP_200_OK)
+                    return self._build_order_support_response(conversation, order_info, meta, context)
 
                 # Several orders -> present as choices
                 meta["support_step"] = "SELECT_ORDER"
@@ -561,30 +703,33 @@ class AIChatView(APIView):
                     }, status=status.HTTP_200_OK)
 
                 order_info = detail_res["order"]
-                order_id = str(order_info.get("booking_id") or order_info.get("request_id") or selected_val)
-                title = order_info.get("title") or order_info.get("category") or f"Order #{order_id}"
-                status_str = order_info.get("status_display") or order_info.get("status") or "Confirmed"
+                return self._build_order_support_response(conversation, order_info, meta, context)
 
-                meta["active_order_id"] = order_id
-                meta["support_step"] = "CAPTURE_REASON"
-                meta["support_data"] = {
-                    "order_id": order_id,
-                    "order_title": title,
-                    "status": status_str,
-                }
-                conversation.metadata = meta
-                conversation.save()
+        # Case 2a: CANCELLED_ORDER_OPTIONS
+        elif step == "CANCELLED_ORDER_OPTIONS":
+            action = user_message.strip().upper()
+            order_id = support_data.get("order_id", "")
+            title = support_data.get("order_title", "Order")
+            payment_status = support_data.get("payment_status", "Refund initiated")
+            payment_method = support_data.get("payment_method", "Original payment source")
 
+            if "REFUND" in action:
                 reply_text = (
-                    f"Selected order **#{order_id}** ({title}). "
-                    f"Current status: **{status_str}**.\n\n"
-                    "Please select the reason for your return, refund, or replacement:"
+                    f"**Refund Status for Cancelled Order #{order_id} ({title}):**\n\n"
+                    f"• **Status**: {payment_status}\n"
+                    f"• **Payment Method**: {payment_method}\n"
+                    f"• **Timeline**: 5–7 business days to your original bank/UPI account.\n\n"
+                    "If 7 business days have passed and you have not received your credit, would you like me to connect you with our support team to trace the banking reference (UTR)?"
                 )
+                opts = [
+                    {"label": "Talk to support agent", "value": "TALK_TO_AGENT"},
+                    {"label": "I will wait 5-7 days", "value": "WAIT_DAYS"},
+                ]
                 asst_msg = ChatMessage.objects.create(
                     conversation=conversation,
                     sender=SenderType.ASSISTANT,
                     content=reply_text,
-                    metadata={"expects": "choice", "options": reason_options},
+                    metadata={"expects": "choice", "options": opts},
                 )
                 return Response({
                     "success": True,
@@ -593,8 +738,198 @@ class AIChatView(APIView):
                         "message": reply_text,
                         "agent": conversation.agent_type,
                         "expects": "choice",
-                        "options": reason_options,
+                        "options": opts,
                         "handed_off": False,
+                        "created_at": asst_msg.created_at.isoformat(),
+                    },
+                }, status=status.HTTP_200_OK)
+
+            elif "AGENT" in action or "TALK" in action or "SUPPORT" in action:
+                meta["handed_to_human"] = True
+                meta["support_step"] = "HANDOFF"
+                conversation.metadata = meta
+                conversation.save()
+                reply_text = (
+                    f"I have transferred your request regarding Cancelled Order #{order_id} to our support desk. "
+                    "A support representative will assist you with your refund in this chat shortly."
+                )
+                asst_msg = ChatMessage.objects.create(
+                    conversation=conversation,
+                    sender=SenderType.ASSISTANT,
+                    content=reply_text,
+                    metadata={"handed_off": True, "expects": "text", "options": []},
+                )
+                return Response({
+                    "success": True,
+                    "data": {
+                        "conversation_id": str(conversation.id),
+                        "message": reply_text,
+                        "agent": conversation.agent_type,
+                        "expects": "text",
+                        "options": [],
+                        "handed_off": True,
+                        "created_at": asst_msg.created_at.isoformat(),
+                    },
+                }, status=status.HTTP_200_OK)
+
+            elif "BOOK" in action:
+                meta["flow"] = None
+                conversation.metadata = meta
+                conversation.save()
+                reply_text = f"You can book **{title}** again at your convenience through our [Service Catalog](/booking)!"
+                asst_msg = ChatMessage.objects.create(
+                    conversation=conversation,
+                    sender=SenderType.ASSISTANT,
+                    content=reply_text,
+                )
+                return Response({
+                    "success": True,
+                    "data": {
+                        "conversation_id": str(conversation.id),
+                        "message": reply_text,
+                        "agent": conversation.agent_type,
+                        "expects": "text",
+                        "options": [],
+                        "handed_off": False,
+                        "created_at": asst_msg.created_at.isoformat(),
+                    },
+                }, status=status.HTTP_200_OK)
+            else:
+                meta["flow"] = None
+                conversation.metadata = meta
+                conversation.save()
+                reply_text = "Understood. Please let me know if you need assistance with any other SEVO services or orders!"
+                asst_msg = ChatMessage.objects.create(
+                    conversation=conversation,
+                    sender=SenderType.ASSISTANT,
+                    content=reply_text,
+                )
+                return Response({
+                    "success": True,
+                    "data": {
+                        "conversation_id": str(conversation.id),
+                        "message": reply_text,
+                        "agent": conversation.agent_type,
+                        "expects": "text",
+                        "options": [],
+                        "handed_off": False,
+                        "created_at": asst_msg.created_at.isoformat(),
+                    },
+                }, status=status.HTTP_200_OK)
+
+        # Case 2b: ACTIVE_ORDER_OPTIONS
+        elif step == "ACTIVE_ORDER_OPTIONS":
+            action = user_message.strip().upper()
+            order_id = support_data.get("order_id", "")
+            title = support_data.get("order_title", "Order")
+
+            if "CANCEL" in action:
+                meta["handed_to_human"] = True
+                meta["support_step"] = "HANDOFF"
+                conversation.metadata = meta
+                conversation.save()
+                reply_text = (
+                    f"I have notified our support desk that you wish to cancel Order #{order_id} ({title}). "
+                    "Under SEVO policy, cancellations up to 2 hours before the scheduled time slot are eligible for a 100% refund. "
+                    "An agent will confirm your cancellation shortly."
+                )
+                asst_msg = ChatMessage.objects.create(
+                    conversation=conversation,
+                    sender=SenderType.ASSISTANT,
+                    content=reply_text,
+                    metadata={"handed_off": True, "expects": "text", "options": []},
+                )
+                return Response({
+                    "success": True,
+                    "data": {
+                        "conversation_id": str(conversation.id),
+                        "message": reply_text,
+                        "agent": conversation.agent_type,
+                        "expects": "text",
+                        "options": [],
+                        "handed_off": True,
+                        "created_at": asst_msg.created_at.isoformat(),
+                    },
+                }, status=status.HTTP_200_OK)
+
+            elif "RESCHEDULE" in action:
+                meta["handed_to_human"] = True
+                meta["support_step"] = "HANDOFF"
+                conversation.metadata = meta
+                conversation.save()
+                reply_text = (
+                    f"I have shared your rescheduling request for Order #{order_id} with our dispatch desk. "
+                    "An agent will connect with you to confirm your new preferred date and time slot."
+                )
+                asst_msg = ChatMessage.objects.create(
+                    conversation=conversation,
+                    sender=SenderType.ASSISTANT,
+                    content=reply_text,
+                    metadata={"handed_off": True, "expects": "text", "options": []},
+                )
+                return Response({
+                    "success": True,
+                    "data": {
+                        "conversation_id": str(conversation.id),
+                        "message": reply_text,
+                        "agent": conversation.agent_type,
+                        "expects": "text",
+                        "options": [],
+                        "handed_off": True,
+                        "created_at": asst_msg.created_at.isoformat(),
+                    },
+                }, status=status.HTTP_200_OK)
+
+            elif "TRACK" in action:
+                track_res = default_tool_registry.execute("get_delivery_status", {"order_id": order_id}, context)
+                st = track_res.get("status_display") or track_res.get("status") or "Active"
+                tech = track_res.get("technician_name") or "Assigning professional"
+                eta = track_res.get("eta") or "As per scheduled slot"
+                reply_text = (
+                    f"**Live Status for Order #{order_id}:**\n"
+                    f"• Status: {st}\n"
+                    f"• Technician: {tech}\n"
+                    f"• ETA: {eta}"
+                )
+                asst_msg = ChatMessage.objects.create(
+                    conversation=conversation,
+                    sender=SenderType.ASSISTANT,
+                    content=reply_text,
+                )
+                return Response({
+                    "success": True,
+                    "data": {
+                        "conversation_id": str(conversation.id),
+                        "message": reply_text,
+                        "agent": conversation.agent_type,
+                        "expects": "text",
+                        "options": [],
+                        "handed_off": False,
+                        "created_at": asst_msg.created_at.isoformat(),
+                    },
+                }, status=status.HTTP_200_OK)
+
+            else:
+                meta["handed_to_human"] = True
+                meta["support_step"] = "HANDOFF"
+                conversation.metadata = meta
+                conversation.save()
+                reply_text = f"Connecting you with our support team regarding your active booking #{order_id}..."
+                asst_msg = ChatMessage.objects.create(
+                    conversation=conversation,
+                    sender=SenderType.ASSISTANT,
+                    content=reply_text,
+                    metadata={"handed_off": True, "expects": "text", "options": []},
+                )
+                return Response({
+                    "success": True,
+                    "data": {
+                        "conversation_id": str(conversation.id),
+                        "message": reply_text,
+                        "agent": conversation.agent_type,
+                        "expects": "text",
+                        "options": [],
+                        "handed_off": True,
                         "created_at": asst_msg.created_at.isoformat(),
                     },
                 }, status=status.HTTP_200_OK)
@@ -608,12 +943,17 @@ class AIChatView(APIView):
             conversation.metadata = meta
             conversation.save()
 
+            is_goods = support_data.get("is_goods", False)
             is_missing = "missing" in captured_reason.lower()
-            if is_missing:
+
+            if not is_goods:
+                reply_text = "Please upload a photo of the service issue if available, or tap **Skip** to continue directly."
+                opts = [{"label": "Skip", "value": "SKIP"}]
+            elif is_missing:
                 reply_text = "Please upload a photo of the received package or delivery if available, or tap **Skip** if you do not have a photo."
                 opts = [{"label": "Skip", "value": "SKIP"}]
             else:
-                reply_text = "Please upload a photo showing the issue with your item or service."
+                reply_text = "Please upload a photo showing the issue with your item."
                 opts = []
 
             asst_msg = ChatMessage.objects.create(
