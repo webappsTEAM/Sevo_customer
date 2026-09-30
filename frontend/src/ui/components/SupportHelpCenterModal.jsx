@@ -87,7 +87,7 @@ export function SupportHelpCenterModal({ isOpen, onClose }) {
             </div>
           </div>
 
-          {/* 2. Drive with CalServices */}
+          {/* 2. Drive with SEVO */}
           <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/70 hover:border-emerald-300 transition-colors">
             <div className="flex items-center gap-2.5 mb-2 text-slate-900 font-bold">
               <div className="w-7 h-7 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">

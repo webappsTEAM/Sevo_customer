@@ -2,6 +2,7 @@ import io
 import os
 import shutil
 from pathlib import Path
+from unittest.mock import Mock, patch
 from PIL import Image, ImageDraw
 
 from django.test import TestCase, override_settings
@@ -192,6 +193,107 @@ class SupabaseStorageServiceTestCase(TestCase):
             storage_url = SupabaseStorageService.get_public_url("catalog/packages/abc123.webp")
         self.assertIn("admin-media", storage_url)
         self.assertTrue(storage_url.endswith("catalog/packages/abc123.webp"))
+
+    def test_r2_public_url_resolution(self):
+        with patch.dict(
+            os.environ,
+            {
+                "MEDIA_STORAGE_PROVIDER": "r2",
+                "R2_PUBLIC_BASE_URL": "https://media.sevo.co.in",
+            },
+        ):
+            storage_url = SupabaseStorageService.get_public_url(
+                "catalog/packages/abc123.webp"
+            )
+
+        self.assertEqual(
+            storage_url,
+            "https://media.sevo.co.in/catalog/packages/abc123.webp",
+        )
+
+    def test_r2_upload_uses_scoped_bucket_and_canonical_url(self):
+        fake_client = Mock()
+        r2_env = {
+            "MEDIA_STORAGE_PROVIDER": "r2",
+            "R2_ENDPOINT_URL": "https://account-id.r2.cloudflarestorage.com",
+            "R2_ACCESS_KEY_ID": "test-access-key",
+            "R2_SECRET_ACCESS_KEY": "test-secret-key",
+            "R2_PUBLIC_BUCKET": "sevo-public-media-prod",
+            "R2_PUBLIC_BASE_URL": "https://media.sevo.co.in",
+            "ENABLE_LOCAL_STORAGE_FALLBACK": "0",
+        }
+        with patch.dict(os.environ, r2_env), patch.object(
+            SupabaseStorageService, "_get_r2_client", return_value=fake_client
+        ):
+            success, public_url, error = SupabaseStorageService.upload_file(
+                b"webp-bytes",
+                "catalog/packages/abc123.webp",
+                content_type="image/webp",
+            )
+
+        self.assertTrue(success)
+        self.assertIsNone(error)
+        self.assertEqual(
+            public_url,
+            "https://media.sevo.co.in/catalog/packages/abc123.webp",
+        )
+        fake_client.put_object.assert_called_once_with(
+            Bucket="sevo-public-media-prod",
+            Key="catalog/packages/abc123.webp",
+            Body=b"webp-bytes",
+            ContentType="image/webp",
+            CacheControl="public, max-age=31536000, immutable",
+        )
+
+    def test_r2_delete_extracts_object_key_from_public_url(self):
+        fake_client = Mock()
+        r2_env = {
+            "MEDIA_STORAGE_PROVIDER": "r2",
+            "R2_ENDPOINT_URL": "https://account-id.r2.cloudflarestorage.com",
+            "R2_ACCESS_KEY_ID": "test-access-key",
+            "R2_SECRET_ACCESS_KEY": "test-secret-key",
+            "R2_PUBLIC_BUCKET": "sevo-public-media-prod",
+            "R2_PUBLIC_BASE_URL": "https://media.sevo.co.in",
+            "ENABLE_LOCAL_STORAGE_FALLBACK": "0",
+        }
+        with patch.dict(os.environ, r2_env), patch.object(
+            SupabaseStorageService, "_get_r2_client", return_value=fake_client
+        ):
+            deleted = SupabaseStorageService.delete_file(
+                "https://media.sevo.co.in/catalog/packages/abc123.webp"
+            )
+
+        self.assertTrue(deleted)
+        fake_client.delete_object.assert_called_once_with(
+            Bucket="sevo-public-media-prod",
+            Key="catalog/packages/abc123.webp",
+        )
+
+    def test_r2_missing_credentials_fail_closed_without_local_fallback(self):
+        with patch.dict(
+            os.environ,
+            {
+                "MEDIA_STORAGE_PROVIDER": "r2",
+                "R2_ENDPOINT_URL": "",
+                "R2_ACCESS_KEY_ID": "",
+                "R2_SECRET_ACCESS_KEY": "",
+                "R2_PUBLIC_BUCKET": "sevo-public-media-prod",
+                "R2_PUBLIC_BASE_URL": "https://media.sevo.co.in",
+                "ENABLE_LOCAL_STORAGE_FALLBACK": "0",
+            },
+        ):
+            success, public_url, error = SupabaseStorageService.upload_file(
+                b"webp-bytes", "catalog/packages/abc123.webp"
+            )
+
+        self.assertFalse(success)
+        self.assertEqual(public_url, "")
+        self.assertEqual(error, "Cloudflare R2 credentials are missing or invalid.")
+        self.assertFalse(
+            SupabaseStorageService.delete_file(
+                "https://media.sevo.co.in/catalog/packages/abc123.webp"
+            )
+        )
 
 
 class ImageUploadEndpointTestCase(TestCase):

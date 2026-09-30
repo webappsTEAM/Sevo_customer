@@ -62,23 +62,15 @@ MAX_VIDEO_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
 
 def _extract_image_paths(config_data):
     """
-    Recursively scans config data to collect all Supabase Storage paths (homepage/...)
-    stored as relative paths or full canonical Supabase URLs.
+    Recursively scans config data to collect managed storage paths
+    (homepage/...) stored as relative paths or canonical provider URLs.
     """
-    supabase_url, _, bucket, _ = SupabaseStorageService._get_config()
-    prefix = f"{supabase_url}/storage/v1/object/public/{bucket}/" if supabase_url else ""
     paths = set()
 
     def _extract_val(v):
         if not isinstance(v, str):
             return
-        trimmed = v.strip()
-        if prefix and trimmed.startswith(prefix):
-            paths.add(trimmed[len(prefix):])
-            return
-        clean = trimmed.lstrip("/")
-        if clean.startswith("media/"):
-            clean = clean[len("media/"):]
+        clean = SupabaseStorageService.extract_managed_path(v)
         if clean.startswith("homepage/"):
             paths.add(clean)
 

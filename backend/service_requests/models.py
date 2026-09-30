@@ -2598,6 +2598,13 @@ class Payment(models.Model):
     razorpay_payment_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
     razorpay_signature = models.CharField(max_length=255, blank=True, null=True)
 
+    # Provider-neutral identifiers are authoritative for new gateways.  The
+    # Razorpay-named fields remain for historic transactions and a safe staged
+    # migration; new Paytm payments never have to masquerade as Razorpay rows.
+    provider_order_id = models.CharField(max_length=128, blank=True, null=True, db_index=True)
+    provider_transaction_id = models.CharField(max_length=128, blank=True, null=True, db_index=True)
+    provider_signature = models.CharField(max_length=512, blank=True, null=True)
+
     amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     currency = models.CharField(max_length=10, default="INR")
     status = models.CharField(

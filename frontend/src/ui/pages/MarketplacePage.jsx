@@ -812,7 +812,9 @@ export function MarketplacePage() {
       return
     }
 
-    // Option B: UPI (Razorpay) Flow
+    // Option B: online payment. The backend returns the configured provider;
+    // the browser must still submit its server-issued completion payload for
+    // authoritative verification before an order is created.
     try {
       // Step 1: Initiate Payment Intent on backend
       const intentRes = await initiateMarketplacePayment({
@@ -832,12 +834,18 @@ export function MarketplacePage() {
 
       const intentData = intentRes.data
 
-      // If sandbox fallback mode is active (no keys configured on backend and in debug mode)
-      if (intentData.sandbox_fallback) {
+      if (intentData.provider === "paytm_mock") {
+        const approved = window.confirm(
+          "Paytm MOCK payment\n\nThis is a local/test payment only. No money will be collected. Continue to place the order?"
+        )
+        if (!approved) {
+          setCheckoutLoading(false)
+          return
+        }
         const verifyRes = await verifyMarketplacePayment({
-          razorpay_order_id: intentData.razorpay_order_id,
-          razorpay_payment_id: `pay_mock_${Date.now()}`,
-          razorpay_signature: "sandbox_mock_signature",
+          order_id: intentData.order_id,
+          transaction_id: intentData.transaction_id,
+          signature: intentData.signature,
         })
         if (verifyRes?.success && verifyRes?.data) {
           setActiveOrder(verifyRes.data)
@@ -848,6 +856,12 @@ export function MarketplacePage() {
         } else {
           setCheckoutError(verifyRes?.message || "Order verification failed.")
         }
+        setCheckoutLoading(false)
+        return
+      }
+
+      if (intentData.provider === "paytm") {
+        setCheckoutError("Paytm merchant checkout will be enabled once the merchant account and CheckoutJS configuration are supplied.")
         setCheckoutLoading(false)
         return
       }
@@ -867,7 +881,7 @@ export function MarketplacePage() {
         currency: intentData.currency || "INR",
         name: intentData.name || "Sevo Mart",
         description: intentData.description || "Sevo Grocery Marketplace Order",
-        order_id: intentData.razorpay_order_id,
+        order_id: intentData.order_id || intentData.razorpay_order_id,
         prefill: intentData.prefill || {
           name: user?.name || "",
           email: user?.email || "",
@@ -894,9 +908,9 @@ export function MarketplacePage() {
           try {
             // Step 3: Authoritative HMAC signature verification on backend
             const verifyRes = await verifyMarketplacePayment({
-              razorpay_order_id: paymentResponse.razorpay_order_id,
-              razorpay_payment_id: paymentResponse.razorpay_payment_id,
-              razorpay_signature: paymentResponse.razorpay_signature,
+              order_id: paymentResponse.razorpay_order_id,
+              transaction_id: paymentResponse.razorpay_payment_id,
+              signature: paymentResponse.razorpay_signature,
             })
 
             if (verifyRes?.success && verifyRes?.data) {

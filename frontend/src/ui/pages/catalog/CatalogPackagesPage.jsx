@@ -5764,7 +5764,7 @@ export function CatalogPackagesPage() {
                     </div>
                   </div>
 
-                  {/* 5. Calservices Freshness & Quality Promise Cards (Checklist format) */}
+                  {/* 5. SEVO Freshness & Quality Promise Cards (Checklist format) */}
                   <div className="space-y-2 pt-1">
                     <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 block">
                       Trust &amp; Freshness Promise Cards (Checklist)

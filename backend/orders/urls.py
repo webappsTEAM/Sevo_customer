@@ -9,6 +9,7 @@ from .marketplace_views import (
     MarketplaceInitiatePaymentView,
     MarketplaceVerifyPaymentView,
     MarketplaceRazorpayWebhookView,
+    MarketplacePaytmCallbackView,
 )
 
 urlpatterns = [
@@ -16,6 +17,7 @@ urlpatterns = [
     path("marketplace/checkout/initiate-payment/", MarketplaceInitiatePaymentView.as_view(), name="marketplace-checkout-initiate-payment"),
     path("marketplace/checkout/verify-payment/", MarketplaceVerifyPaymentView.as_view(), name="marketplace-checkout-verify-payment"),
     path("marketplace/razorpay-webhook/", MarketplaceRazorpayWebhookView.as_view(), name="marketplace-razorpay-webhook"),
+    path("marketplace/paytm/callback/", MarketplacePaytmCallbackView.as_view(), name="marketplace-paytm-callback"),
     path("marketplace/checkout/", MarketplaceCheckoutView.as_view(), name="marketplace-checkout"),
     path("marketplace/<str:order_number>/cancel/", MarketplaceOrderCancelView.as_view(), name="marketplace-order-cancel"),
     path("marketplace/<str:order_number>/", MarketplaceOrderDetailView.as_view(), name="marketplace-order-detail"),

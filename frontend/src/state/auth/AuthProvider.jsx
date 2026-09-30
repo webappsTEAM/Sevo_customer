@@ -97,7 +97,8 @@ export function AuthProvider({ children }) {
         }
       } catch (_) { }
       if (me?.company_name) {
-        localStorage.setItem("quicktims.orgName", me.company_name)
+        const cleanName = me.company_name.replace(/calservices/gi, "SEVO")
+        localStorage.setItem("quicktims.orgName", cleanName)
         window.dispatchEvent(new CustomEvent("quicktims:orgName"))
       }
       return u
@@ -132,7 +133,8 @@ export function AuthProvider({ children }) {
             localStorage.setItem("sevo_user", JSON.stringify(res.user))
           } catch (_) { }
           if (res.user.company_name) {
-            localStorage.setItem("quicktims.orgName", res.user.company_name)
+            const cleanName = res.user.company_name.replace(/calservices/gi, "SEVO")
+            localStorage.setItem("quicktims.orgName", cleanName)
             window.dispatchEvent(new CustomEvent("quicktims:orgName"))
           }
           return u
@@ -181,7 +183,8 @@ export function AuthProvider({ children }) {
             localStorage.setItem("sevo_user", JSON.stringify(res.user))
           } catch (_) { }
           if (res.user.company_name) {
-            localStorage.setItem("quicktims.orgName", res.user.company_name)
+            const cleanName = res.user.company_name.replace(/calservices/gi, "SEVO")
+            localStorage.setItem("quicktims.orgName", cleanName)
             window.dispatchEvent(new CustomEvent("quicktims:orgName"))
           }
           return u

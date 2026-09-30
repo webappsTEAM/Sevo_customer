@@ -48,6 +48,7 @@ import { EditModeToggleBar, SaveNoticeToast, EditableText, EditableImage } from 
 import { useEditMode } from "../../state/editMode/useEditMode.js"
 import { useMultiServiceCart } from "../../state/multiServiceCart/useMultiServiceCart.js"
 import { createTrackingWebSocket } from "../../api/websocketService.js"
+import { settleBookingPayment } from "../../api/gtPaymentService.js"
 import SavedAddressesPage from "./SavedAddressesPage.jsx"
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
@@ -2340,12 +2341,24 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
   }
 
   const handleOnlinePayment = async () => {
-    // This screen is unreachable while online payment is disabled above. It
-    // fails closed rather than simulating a result: nothing here has taken a
-    // payment, so it must never report one as taken. See the note on
-    // isOnlinePaymentAvailable for what a real implementation does.
-    setPayPhase('failed')
-    setPayError('Online payment is not available yet. Please choose Cash on Service.')
+    // This legacy sheet is reused by the tracking screen for an existing
+    // unpaid booking. It must never invent a result: use the same canonical
+    // server-issued provider payment flow as new bookings. When no booking
+    // exists yet, stay fail-closed because there is nothing to charge.
+    if (!bookingId) {
+      setPayPhase('failed')
+      setPayError('Create the booking first, then complete its secure payment.')
+      return
+    }
+    setPayPhase('processing')
+    const result = await settleBookingPayment({ bookingId, method: 'online' })
+    if (!result?.ok) {
+      setPayPhase('failed')
+      setPayError(result?.message || 'Payment was not completed. Please try again.')
+      return
+    }
+    setPayPhase('success')
+    setTimeout(() => onConfirm('online'), 700)
   }
 
   const options = [
@@ -8594,7 +8607,7 @@ case "My Invoices": {
             a: "Once approved by our support team, refunds are initiated immediately to your original payment method (UPI / Cards / Net Banking). Funds typically reflect in your account within 2 to 4 business days depending on your bank."
           },
           {
-            q: "Are CalServices technicians verified and trained?",
+            q: "Are SEVO technicians verified and trained?",
             a: "Yes! 100% of our technicians undergo rigorous background verification, police verification, skill assessment, and standard operating training before being assigned to customer jobs."
           }
         ]
@@ -8723,7 +8736,7 @@ case "My Invoices": {
                           }}>
                             {/* Persona & Username badge */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase', color: '#94a3b8', marginBottom: 4, padding: '0 4px' }}>
-                              <span>{msg.sender_username || (isCust ? (user?.username || 'CUSTOMER') : 'CALSERVICES AGENT')}</span>
+                              <span>{msg.sender_username || (isCust ? (user?.username || 'CUSTOMER') : 'SEVO AGENT')}</span>
                               <span>•</span>
                               <span>{isCust ? 'CUSTOMER' : (msg.sender_persona === 'employee' ? 'SUPPORT AGENT' : 'CARE AGENT')}</span>
                             </div>
@@ -13735,7 +13748,34 @@ export function BookingPage() {
         }
 
         if (serviceOutcome?.success) {
-          const savedData = { ...serviceOutcome.data, paymentMethod: backendPaymentMethod, total_amount: calculatedGrandTotal }
+          // The unified route still creates the service booking before an
+          // online payment.  It must use the same server-verified provider
+          // flow as the normal service route; otherwise a combined grocery
+          // checkout could present an unpaid service as confirmed.
+          let verifiedPayment = null
+          if (backendPaymentMethod === "ONLINE") {
+            verifiedPayment = await settleBookingPayment({
+              bookingId: serviceOutcome.data?.id,
+              trackingToken: serviceOutcome.data?.tracking_token || serviceOutcome.data?.trackingToken || "",
+              method: "online",
+              prefill: { name: customerName, email: customerEmail, phone: customerPhone },
+            })
+            if (!verifiedPayment?.ok) {
+              setError(
+                `${verifiedPayment?.message || "Payment was not completed."} ` +
+                `Your service booking ${serviceOutcome.data?.request_id || ""} remains unpaid; complete payment from My Bookings.`
+              )
+              setLoading(false)
+              return
+            }
+          }
+
+          const savedData = {
+            ...serviceOutcome.data,
+            paymentMethod: backendPaymentMethod,
+            payment_status: verifiedPayment ? "paid" : (serviceOutcome.data?.payment_status || "pending"),
+            total_amount: calculatedGrandTotal,
+          }
           setSuccessData(savedData)
           const bookingTrackingId = String(serviceOutcome.data?.request_id || serviceOutcome.data?.id || "")
           try {
@@ -13768,14 +13808,31 @@ export function BookingPage() {
     try {
       const res = await apiRequest("/booking/", { method: "POST", body: data })
       if (res?.success) {
-        // A client cannot verify its own payment. The order id here was
-        // invented in the browser, so the server rejects it -- and a booking
-        // that looked "paid online" was in fact unpaid. Payment is confirmed
-        // only by /payment/verify/ with a gateway-issued order id, payment id
-        // and signature, which nothing in this app produces yet.
+        // A booking is intentionally created before online collection so the
+        // backend, not the browser, owns its total and payment intent.  The
+        // payment service returns success only after /payment/verify/ has
+        // persisted a verified provider result.
+        let verifiedPayment = null
+        if (backendPaymentMethod === "ONLINE") {
+          verifiedPayment = await settleBookingPayment({
+            bookingId: res.data?.id,
+            trackingToken: res.data?.tracking_token || res.data?.trackingToken || "",
+            method: "online",
+            prefill: { name: customerName, email: customerEmail, phone: customerPhone },
+          })
+          if (!verifiedPayment?.ok) {
+            setError(
+              `${verifiedPayment?.message || "Payment was not completed."} ` +
+              `Your booking ${res.data?.request_id || ""} remains unpaid; complete payment from My Bookings.`
+            )
+            setLoading(false)
+            return
+          }
+        }
         const savedData = {
           ...res.data,
           paymentMethod: backendPaymentMethod,
+          payment_status: verifiedPayment ? "paid" : (res.data?.payment_status || "pending"),
           total_amount: calculatedGrandTotal,
           item_total: itemTotal,
           gst_amount: totalGst,

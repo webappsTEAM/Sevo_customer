@@ -62,5 +62,39 @@ urlpatterns = [
     re_path(r"^assets/(?P<path>.*)$", serve, {"document_root": str(settings.BASE_DIR / "ASSET IMAGES")}),
 ]
 
+def serve_media_with_remote_fallback(request, path, document_root=None):
+    """
+    In development, if an uploaded media file is referenced in the remote DB
+    but is not yet present in the local media directory, automatically fetch
+    and cache it from upstream production (https://sevo.co.in/media/) so that
+    catalog cards and banners render seamlessly without 404s.
+    """
+    from pathlib import Path
+    import urllib.request
+    import logging
+
+    logger = logging.getLogger(__name__)
+    doc_root = Path(document_root or settings.MEDIA_ROOT)
+    full_path = doc_root / path
+
+    if not full_path.is_file():
+        remote_url = f"https://sevo.co.in/media/{path.replace('\\', '/')}"
+        try:
+            req = urllib.request.Request(remote_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                if resp.status == 200:
+                    data = resp.read()
+                    full_path.parent.mkdir(parents=True, exist_ok=True)
+                    with open(full_path, "wb") as f:
+                        f.write(data)
+                    logger.info("Successfully fetched upstream media: %s", path)
+        except Exception as exc:
+            logger.debug("Failed upstream media fallback for %s: %s", path, exc)
+
+    return serve(request, path, document_root=document_root)
+
+
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += [
+        re_path(r"^media/(?P<path>.*)$", serve_media_with_remote_fallback, {"document_root": settings.MEDIA_ROOT}),
+    ]

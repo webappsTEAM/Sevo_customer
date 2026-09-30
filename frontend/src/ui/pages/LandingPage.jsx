@@ -2395,9 +2395,9 @@ export function LandingPage() {
   // controls in place -- a fixed "More" tile (opens the All Services
   // drawer) is always appended after the configured ones.
   const [categoryImageModalIdx, setCategoryImageModalIdx] = useState(null)
-  const homeCategories = Array.isArray(homeConfig.categories) && homeConfig.categories.length > 0
+  const homeCategories = (Array.isArray(homeConfig.categories) && homeConfig.categories.length > 0
     ? homeConfig.categories
-    : DEFAULT_HOME_PAGE_CONFIG.categories
+    : DEFAULT_HOME_PAGE_CONFIG.categories).filter((cat) => cat && cat.enabled !== false)
   const addCategoryTile = useCallback(() => {
     const next = [...homeCategories, {
       id: `cat-${Date.now()}`,
@@ -4443,63 +4443,31 @@ export function LandingPage() {
             </button>
 
             {/* Quick Category Links */}
-            <div className="flex items-center gap-6 text-xs font-bold text-slate-600 dark:text-slate-400 shrink-0">
+            <div className="flex items-center gap-4 sm:gap-6 text-xs font-bold text-slate-600 dark:text-slate-400 shrink-0 overflow-x-auto no-scrollbar">
               <button
                 type="button"
                 onClick={() => {
                   window.scrollTo({ top: 0, behavior: "smooth" })
                   setActiveNav("home")
                 }}
-                className={`transition-colors cursor-pointer ${activeNav === "home" ? "text-[#0B8F7A] font-black" : "hover:text-slate-900 dark:hover:text-white"}`}
+                className={`transition-colors cursor-pointer shrink-0 ${activeNav === "home" ? "text-[#0B8F7A] font-black" : "hover:text-slate-900 dark:hover:text-white"}`}
               >
                 Home
               </button>
-              <button
-                type="button"
-                onClick={() => navigate("?category=cleaning")}
-                className="hover:text-[#0B8F7A] transition-colors cursor-pointer"
-              >
-                Cleaning
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("?category=hvac")}
-                className="hover:text-[#0B8F7A] transition-colors cursor-pointer"
-              >
-                Appliance Repair
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("?category=hvac")}
-                className="hover:text-[#0B8F7A] transition-colors cursor-pointer"
-              >
-                AC Services
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("?category=plumbing")}
-                className="hover:text-[#0B8F7A] transition-colors cursor-pointer"
-              >
-                Plumbing
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("?category=electrical")}
-                className="hover:text-[#0B8F7A] transition-colors cursor-pointer"
-              >
-                Electrical
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("?category=pest_control")}
-                className="hover:text-[#0B8F7A] transition-colors cursor-pointer"
-              >
-                Pest Control
-              </button>
+              {homeCategories.map((cat) => (
+                <button
+                  key={cat.id || cat.name}
+                  type="button"
+                  onClick={() => goToBannerLink(cat.link)}
+                  className="hover:text-[#0B8F7A] transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+                >
+                  {cat.name}
+                </button>
+              ))}
               <button
                 type="button"
                 onClick={() => setIsAllServicesOpen(true)}
-                className="hover:text-[#0B8F7A] transition-colors cursor-pointer flex items-center gap-1"
+                className="hover:text-[#0B8F7A] transition-colors cursor-pointer flex items-center gap-1 shrink-0"
               >
                 <span>More</span>
                 <ChevronDown className="w-3 h-3 text-slate-400" />
@@ -4513,6 +4481,7 @@ export function LandingPage() {
           onClose={() => setIsAllServicesOpen(false)}
           navigate={navigate}
           user={user}
+          categories={homeCategories}
         />
 
         {/* ── Service Area Availability Banner ─────────────────────────────── */}
@@ -4745,7 +4714,7 @@ export function LandingPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-5 lg:grid-cols-10 gap-1.5 sm:gap-3.5">
+          <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2 sm:gap-3.5">
             {[
               ...homeCategories.map((cat, idx) => ({
                 ...cat,
@@ -9085,10 +9054,10 @@ export function LandingPage() {
                         </div>
                       </div>
                     ))
-                  : (catalogCategories.length > 0 ? catalogCategories : CATEGORIES).map((catItem, pIdx) => {
+                  : (homeCategories.length > 0 ? homeCategories : (catalogCategories.length > 0 ? catalogCategories : CATEGORIES)).map((catItem, pIdx) => {
                   const defaultCat = CATEGORIES[pIdx] || {}
-                  const label = catItem.label || defaultCat.label || ""
-                  const photo = catItem.photo || catItem.image || defaultCat.photo
+                  const label = catItem.name || catItem.label || defaultCat.label || ""
+                  const photo = catItem.image || catItem.photo || defaultCat.photo
                   const Icon = defaultCat.icon || Wrench
                   const serviceCategoryId = catItem.serviceCategoryId || defaultCat.serviceCategoryId
                   const isAvailable = isServiceAvailableInZone(label)
@@ -9103,7 +9072,9 @@ export function LandingPage() {
                         }
                         setIsHomeServicesCombinedModalOpen(false)
                         document.body.style.overflow = "unset"
-                        if (label.includes("Vegetable") || label.includes("Grocery") || label.includes("Groceries")) {
+                        if (catItem.link) {
+                          goToBannerLink(catItem.link)
+                        } else if (label.includes("Vegetable") || label.includes("Grocery") || label.includes("Groceries")) {
                           navigate(routes.vegetables)
                         } else if (label.includes("Goods") || label.includes("Transport")) {
                           setIsGoodsModalOpen(true)

@@ -4430,7 +4430,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
           onSelectCategory={setSelectedGoodsCategoryObj}
         />
 
-        {/* ── Looking for partner... Screen (CalServices Green Logistics Branding) ─────────────── */}
+        {/* ── Looking for partner... Screen (SEVO Green Logistics Branding) ─────────────── */}
         {lookingForPartnerOpen && (
           <div
             role="dialog"
