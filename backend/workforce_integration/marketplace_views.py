@@ -66,6 +66,44 @@ def _sanitize_category_node(node):
     return sanitized
 
 
+def _resolve_vendor_media_url(url_str):
+    if not url_str or not isinstance(url_str, str):
+        return ""
+    val = url_str.strip()
+    if not val:
+        return ""
+    if val.startswith("http://") or val.startswith("https://") or val.startswith("data:"):
+        return val
+    vendor_base = MarketplaceIntegrationClient._get_base_url()
+    vendor_host = re.sub(r"/api/.*$", "", vendor_base).rstrip("/")
+    clean_path = val.lstrip("/")
+    return f"{vendor_host}/{clean_path}"
+
+
+def _sanitize_product_images_data(prod):
+    if not isinstance(prod, dict):
+        return prod
+    sanitized = dict(prod)
+    if sanitized.get("primary_image"):
+        sanitized["primary_image"] = _resolve_vendor_media_url(sanitized["primary_image"])
+    if isinstance(sanitized.get("images"), list):
+        sanitized["images"] = [_resolve_vendor_media_url(img) for img in sanitized["images"] if img]
+    if isinstance(sanitized.get("variants"), list):
+        new_variants = []
+        for v in sanitized["variants"]:
+            if isinstance(v, dict):
+                v_copy = dict(v)
+                if v_copy.get("primary_image"):
+                    v_copy["primary_image"] = _resolve_vendor_media_url(v_copy["primary_image"])
+                if isinstance(v_copy.get("images"), list):
+                    v_copy["images"] = [_resolve_vendor_media_url(img) for img in v_copy["images"] if img]
+                new_variants.append(v_copy)
+            else:
+                new_variants.append(v)
+        sanitized["variants"] = new_variants
+    return sanitized
+
+
 class MarketplaceProductListView(APIView):
     """
     GET /api/marketplace/products/
@@ -115,7 +153,12 @@ class MarketplaceProductListView(APIView):
         )
 
         if result.get("success"):
-            return Response(result["data"], status=status.HTTP_200_OK)
+            data = result["data"]
+            if isinstance(data, dict) and isinstance(data.get("results"), list):
+                data["results"] = [_sanitize_product_images_data(p) for p in data["results"]]
+            elif isinstance(data, list):
+                data = [_sanitize_product_images_data(p) for p in data]
+            return Response(data, status=status.HTTP_200_OK)
 
         if result.get("status_code") == 404 and (result.get("code") == "CATEGORY_NOT_FOUND" or "Category" in result.get("message", "")):
             return Response(
@@ -136,7 +179,8 @@ class MarketplaceProductDetailView(APIView):
     def get(self, request, pk):
         result = MarketplaceIntegrationClient.fetch_product_detail(product_id=pk)
         if result.get("success"):
-            return Response(result["data"], status=status.HTTP_200_OK)
+            data = _sanitize_product_images_data(result["data"])
+            return Response(data, status=status.HTTP_200_OK)
         if result.get("status_code") == 404:
             return _error("Product not found or unavailable.", status.HTTP_404_NOT_FOUND)
         return _error(result.get("message", "Failed to fetch product detail."), status.HTTP_502_BAD_GATEWAY)

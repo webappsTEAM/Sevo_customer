@@ -47,7 +47,19 @@ export function resolveImageUrl(path, fallback = "") {
     return trimmed;
   }
 
-  // 2. Vite dev server / bundled assets / mockups / media
+  // 2. Vendor seller products media paths (hosted on vendor backend)
+  if (
+    trimmed.startsWith("/media/seller_products/") ||
+    trimmed.startsWith("media/seller_products/") ||
+    trimmed.startsWith("/media/products/") ||
+    trimmed.startsWith("media/products/")
+  ) {
+    const vendorApiUrl = (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_VENDOR_API_URL) || "http://127.0.0.1:8001"
+    const cleanPath = trimmed.replace(/^\/+/, "")
+    return `${vendorApiUrl.replace(/\/+$/, "")}/${cleanPath}`
+  }
+
+  // 3. Vite dev server / bundled assets / mockups / local media
   if (
     trimmed.startsWith("/src/") ||
     trimmed.startsWith("src/") ||
