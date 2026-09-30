@@ -105,7 +105,7 @@ class InputGuard:
                     is_safe=False,
                     is_blocked=True,
                     reason=f"Prompt injection pattern detected: {pattern}",
-                    response_override="I cannot fulfill this request. I am a helpful assistant for CalServices and must adhere to our security policies.",
+                    response_override="I cannot fulfill this request. I am a helpful assistant for SEVO and must adhere to our security policies.",
                     category="injection",
                 )
 
@@ -189,7 +189,7 @@ class InputGuard:
                             "Once booked, you can track your assigned technician live right here in the app!"
                         ),
                         "assign": (
-                            "Technician and workforce dispatch is handled automatically by the CalServices operations system."
+                            "Technician and workforce dispatch is handled automatically by the SEVO operations system."
                         ),
                         "approve_reject": (
                             "To approve or reject an inspection quotation, please open your quotation link directly in the app."
@@ -204,7 +204,7 @@ class InputGuard:
                     response_msg = guidance_map.get(
                         action_type,
                         "I am currently in read-only assistance mode and cannot perform modifications or transactions. "
-                        "Please use the CalServices mobile or web application to complete this action."
+                        "Please use the SEVO mobile or web application to complete this action."
                     )
                     return InputGuardResult(
                         is_safe=True,

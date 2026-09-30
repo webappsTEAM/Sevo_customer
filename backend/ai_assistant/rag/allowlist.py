@@ -56,7 +56,7 @@ class KnowledgeAllowlist:
                 "source_category": "policy",
                 "title": "Cancellation, Refund & Rework Guarantee Policy",
                 "content": (
-                    "CalServices / Sevo Cancellation & Refund Policy:\n"
+                    "SEVO Cancellation & Refund Policy:\n"
                     "1. Rules by Lifecycle Stage:\n"
                     "   • Stage A (CONFIRMED / ASSIGNED): 100% Free cancellation before technician acceptance.\n"
                     "   • Stage B (ACCEPTED / ON THE WAY): If cancelled while technician is travelling, a nominal "
@@ -77,7 +77,7 @@ class KnowledgeAllowlist:
                 "source_category": "policy",
                 "title": "Doorstep Service Delivery & Live Tracking Policy",
                 "content": (
-                    "CalServices / Sevo Service Delivery & Tracking Policy:\n"
+                    "SEVO Service Delivery & Tracking Policy:\n"
                     "1. On-Site Doorstep Model: Sevo provides professional on-site doorstep home and transport services. "
                     "We do not ship physical parcels; services are performed at your designated location by verified professionals.\n"
                     "2. The 6-Stage Delivery Lifecycle:\n"
@@ -99,7 +99,7 @@ class KnowledgeAllowlist:
                 "source_category": "policy",
                 "title": "Pricing, GST & Payment Policy",
                 "content": (
-                    "CalServices / Sevo Pricing & Payment Structure:\n"
+                    "SEVO Pricing & Payment Structure:\n"
                     "1. Transparent Pricing: Order total = Item/Package Price + GST (18% on service labor) + Platform Fee (₹29) - Coupon Discount + Optional Tip.\n"
                     "2. Platform Fee: A flat ₹29 fee applies per non-consultation booking to support verified partner onboarding, live tracking infrastructure, and doorstep insurance.\n"
                     "3. Scope Extensions: If additional work or spare parts are needed on-site, the technician creates a digital Work Extension Request. "
@@ -115,7 +115,7 @@ class KnowledgeAllowlist:
                 "source_category": "policy",
                 "title": "Terms of Service, Company Info & Privacy Policy",
                 "content": (
-                    "CalServices / Sevo Corporate Identity, Terms & Privacy:\n"
+                    "SEVO Corporate Identity, Terms & Privacy:\n"
                     "1. Corporate Identity: Brand 'Sevo' is operated by CALDIM ENGINEERING PRIVATE LIMITED.\n"
                     "   • CIN: U72900KA2026PTC123456 | GSTIN: 33AAGCC4916J1ZP\n"
                     "   • Registered Office: Minmac Center #118, First Floor, Arcot Road, Valasaravakkam, Chennai - 600087, Tamil Nadu, India.\n"
@@ -213,13 +213,13 @@ class KnowledgeAllowlist:
             {
                 "source_id": "vendor_guide:onboarding",
                 "source_category": "vendor_guide",
-                "title": "Becoming a CalServices Partner / Professional",
+                "title": "Becoming a SEVO Partner / Professional",
                 "content": (
-                    "How to Join CalServices as a Technician or Vendor Partner:\n"
+                    "How to Join SEVO as a Technician or Vendor Partner:\n"
                     "1. Requirements: Must have valid government photo ID (Aadhaar / PAN), relevant trade skill experience "
                     "(e.g. Electrical, Plumbing, HVAC, Carpentry, Masonry, Driving), and own basic tools.\n"
                     "2. Benefits: Flexible working hours, stable local demand, weekly direct bank payouts, and transparent commission structure.\n"
-                    "3. How to Apply: Visit the CalServices Partner Portal at https://calservices-vendor.vercel.app to register.\n"
+                    "3. How to Apply: Visit the SEVO Partner Portal at https://calservices-vendor.vercel.app to register.\n"
                     "4. Verification Process: After submitting your application and trade credentials online, our team will schedule "
                     "a background verification and trade skill audit before activating your partner account."
                 ),
