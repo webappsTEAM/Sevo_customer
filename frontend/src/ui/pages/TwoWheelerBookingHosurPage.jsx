@@ -3313,7 +3313,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
         onSelectCategory={setSelectedGoodsCategoryObj}
       />
 
-      {/* ── Looking for partner... Screen (CalServices Green Logistics Branding) ─────────────── */}
+      {/* ── Looking for partner... Screen (SEVO Green Logistics Branding) ─────────────── */}
       {lookingForPartnerOpen && (
         <div
           role="dialog"

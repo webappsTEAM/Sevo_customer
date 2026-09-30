@@ -136,7 +136,7 @@ export function NotificationCenter() {
     setLoading(true)
     setError("")
     try {
-      // Core CalServices notifications: Pending complaints and new service requests
+      // Core SEVO notifications: Pending complaints and new service requests
       let srRes = null
       let careRes = null
       const isAdminUser = user.role === 'admin' || user.role === 'manager' || user.role === 'super_admin' || user.is_staff || user.is_superuser

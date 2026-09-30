@@ -14,7 +14,7 @@ import { VegetableProductCard } from "./VegetableProductCard.jsx"
  * VegetableProductDetailPage
  * Full-page Product Detail View (matching Blinkit / modern quick-commerce product layout):
  * 1. Breadcrumbs & Top Navigation
- * 2. Product Hero (Large Image gallery, Name, Unit Selector, Price, Add to Cart, "Why shop from Calservices?")
+ * 2. Product Hero (Large Image gallery, Name, Unit Selector, Price, Add to Cart, "Why shop from SEVO?")
  * 3. Product Details (Health Benefits, Quality guarantee, Freshness info)
  * 4. Similar Products / You May Also Like carousel/grid
  * 5. What Can You Make? Recipes Section for this vegetable (Recipe cards + inline full recipe drawer/modal view)
@@ -293,7 +293,7 @@ export function VegetableProductDetailPage({
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-10">
-        {/* ── Top Product Section (Calservices Farm-Direct Signature) ── */}
+        {/* ── Top Product Section (SEVO Farm-Direct Signature) ── */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-start">
           
           {/* Left Column: Product Studio Showcase */}
@@ -574,7 +574,7 @@ export function VegetableProductDetailPage({
               </div>
             </div>
 
-            {/* Calservices Freshness & Quality Promise */}
+            {/* SEVO Freshness & Quality Promise */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {(vegetable.customization?.promise_farm !== false) && (
                 <div className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs flex items-center gap-3">

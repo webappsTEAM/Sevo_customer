@@ -2829,7 +2829,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
         </section>
       )}
 
-      {/* ── Section: How CalServices Packers and Movers Works ── */}
+      {/* ── Section: How SEVO Packers and Movers Works ── */}
       <section className="py-12 max-w-6xl mx-auto px-4 sm:px-6">
         <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight text-center mb-10">
           How Sevo Packers and Movers Works?

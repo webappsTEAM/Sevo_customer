@@ -129,7 +129,10 @@ from .views import (
 from .payment_views import (
     PaymentInitiateView,
     PaymentVerifyView,
-    PaymentWalletPayView, WalletTopUpInitiateView, WalletTopUpVerifyView,
+    PaytmCallbackView,
+    PaymentWalletPayView,
+    WalletTopUpInitiateView,
+    WalletTopUpVerifyView,
     PaymentConfigView,
     AdminPaymentUpdateView,
     InvoiceDownloadView,
@@ -247,6 +250,7 @@ urlpatterns = [
     # ── Payment ───────────────────────────────────────────────────────────────
     path("payment/initiate/",                PaymentInitiateView.as_view(),  name="payment-initiate"),
     path("payment/verify/",                  PaymentVerifyView.as_view(),    name="payment-verify"),
+    path("payment/paytm/callback/",          PaytmCallbackView.as_view(),    name="payment-paytm-callback"),
     path("payment/config/",                  PaymentConfigView.as_view(),     name="payment-config"),
     path("wallet/topup/",                    WalletTopUpInitiateView.as_view(), name="wallet-topup"),
     path("wallet/topup/verify/",             WalletTopUpVerifyView.as_view(), name="wallet-topup-verify"),

@@ -13,7 +13,7 @@ import uuid
 from decimal import Decimal
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.utils import timezone
 from django.http import HttpResponse
 from rest_framework import permissions, status
@@ -26,6 +26,14 @@ from accounts.permissions import is_admin_role
 from .models import Payment, ServiceRequest
 from .serializers import ServiceRequestDetailSerializer
 from .state_machine import apply_transition
+from .paytm_gateway import (
+    configured_provider,
+    create_live_transaction,
+    create_mock_transaction,
+    paytm_mock_enabled,
+    verify_live_transaction,
+    verify_mock_transaction,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -162,23 +170,54 @@ class PaymentInitiateView(APIView):
         if due_error:
             return _error(due_error)
 
-        gateway_configured = bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
+        provider = configured_provider()
+        razorpay_configured = bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
+        paytm_configured = bool(settings.PAYTM_MID and settings.PAYTM_MERCHANT_KEY)
 
-        if gateway_configured:
+        if provider == "razorpay" and razorpay_configured:
             order_id, gateway_error = self._create_razorpay_order(sr, amount_due)
             if gateway_error:
                 return _error(gateway_error, 502)
-        else:
+            gateway = "razorpay"
+            provider_payload = {}
+        elif provider == "paytm_mock" and paytm_mock_enabled():
+            order_id = f"PAYTM_MOCK_ORDER_{uuid.uuid4().hex[:20].upper()}"
+            gateway = "paytm_mock"
+            provider_payload = create_mock_transaction(order_id, amount_due)
+        elif provider == "paytm" and paytm_configured:
+            order_id = f"SEVO{sr.id}{uuid.uuid4().hex[:12].upper()}"
+            gateway = "paytm"
+            callback_url = settings.PAYTM_CALLBACK_URL or request.build_absolute_uri("/api/payment/paytm/callback/")
+            try:
+                provider_payload = create_live_transaction(
+                    order_id,
+                    amount_due,
+                    {"id": sr.customer_id, "phone": sr.phone, "email": sr.email},
+                    callback_url,
+                )
+            except Exception as exc:
+                logger.warning("Paytm transaction initiation failed for booking %s: %s", sr.id, exc)
+                return _error("Could not start Paytm payment. Please try again.", 502)
+        elif provider == "razorpay" and settings.PAYMENT_SANDBOX_MODE:
+            # Legacy local Razorpay sandbox remains explicit, but does not
+            # pretend to be Paytm.  New mock testing should use paytm_mock.
             order_id = f"order_sandbox_{uuid.uuid4().hex[:16]}"
+            gateway = "sandbox"
+            provider_payload = {"provider": "sandbox", "mock": True}
+        elif not provider:
+            return _error("Online payment provider is invalid.", 503)
+        else:
+            return _error("Online payment is not configured.", 503)
 
-        Payment.objects.create(
+        payment = Payment.objects.create(
             customer=sr.customer,
             service_request=sr,
             razorpay_order_id=order_id,
+            provider_order_id=order_id,
             amount=amount_due,
             currency="INR",
             status=ServiceRequest.PaymentStatus.PENDING,
-            gateway="razorpay" if gateway_configured else "sandbox",
+            gateway=gateway,
         )
 
         return _success(
@@ -193,8 +232,11 @@ class PaymentInitiateView(APIView):
                 "customer_email": sr.email or "",
                 "customer_phone": sr.phone or "",
                 "description": f"Payment for {sr.issue_title}",
-                "key_id": settings.RAZORPAY_KEY_ID if gateway_configured else "",
-                "sandbox": not gateway_configured,
+                "key_id": settings.RAZORPAY_KEY_ID if gateway == "razorpay" else "",
+                "provider": gateway,
+                "sandbox": gateway in {"sandbox", "paytm_mock"},
+                "payment_id": payment.id,
+                **provider_payload,
             },
             message="Payment order created.",
         )
@@ -341,8 +383,8 @@ class PaymentVerifyView(APIView):
         if not _verify_booking_ownership(request, sr):
             return _error("You are not authorized to verify payment for this booking.", 403)
 
-        payment = Payment.objects.filter(
-            service_request=sr, razorpay_order_id=order_id
+        payment = Payment.objects.filter(service_request=sr).filter(
+            Q(provider_order_id=order_id) | Q(razorpay_order_id=order_id)
         ).order_by("-created_at").first()
         if not payment:
             logger.warning(f"Payment verify attempted for booking {sr.id} with unknown order_id={order_id!r}.")
@@ -361,9 +403,27 @@ class PaymentVerifyView(APIView):
                 message="Payment already confirmed.",
             )
 
-        gateway_configured = bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
-
-        if gateway_configured:
+        if payment.gateway == "paytm_mock":
+            if not verify_mock_transaction(order_id, payment_id, signature, payment.amount):
+                payment.status = ServiceRequest.PaymentStatus.FAILED
+                payment.error_code = "paytm_mock_signature_mismatch"
+                payment.save(update_fields=["status", "error_code", "updated_at"])
+                return _error("Mock Paytm payment verification failed.", 400)
+        elif payment.gateway == "paytm":
+            try:
+                verified = verify_live_transaction(order_id, payment.amount)
+            except ValueError as exc:
+                payment.status = ServiceRequest.PaymentStatus.FAILED
+                payment.error_code = "paytm_not_confirmed"
+                payment.error_description = str(exc)
+                payment.save(update_fields=["status", "error_code", "error_description", "updated_at"])
+                return _error("Paytm has not confirmed this payment yet.", 400)
+            except Exception as exc:
+                logger.warning("Paytm status lookup failed for booking %s: %s", sr.id, exc)
+                return _error("Could not verify Paytm payment. Please try again.", 502)
+            payment_id = verified["transaction_id"]
+            signature = verified["signature"]
+        elif payment.gateway == "razorpay":
             if not (payment_id and signature):
                 return _error("payment_id and signature are required.")
             expected_signature = hmac.new(
@@ -377,7 +437,7 @@ class PaymentVerifyView(APIView):
                 payment.save(update_fields=["status", "error_code", "updated_at"])
                 logger.warning(f"Payment signature mismatch for booking {sr.id}, order {order_id}.")
                 return _error("Payment verification failed.", 400)
-        elif not settings.PAYMENT_SANDBOX_MODE:
+        elif payment.gateway != "sandbox" or not settings.PAYMENT_SANDBOX_MODE:
             return _error(
                 "Online payment is not available right now. Please choose cash on service or contact support.",
                 503,
@@ -387,8 +447,10 @@ class PaymentVerifyView(APIView):
 
         payment.razorpay_payment_id = payment_id or f"SANDBOX_{uuid.uuid4().hex[:12].upper()}"
         payment.razorpay_signature = signature or ""
+        payment.provider_transaction_id = payment.razorpay_payment_id
+        payment.provider_signature = payment.razorpay_signature
         payment.status = ServiceRequest.PaymentStatus.PAID
-        payment.save(update_fields=["razorpay_payment_id", "razorpay_signature", "status", "updated_at"])
+        payment.save(update_fields=["razorpay_payment_id", "razorpay_signature", "provider_transaction_id", "provider_signature", "status", "updated_at"])
 
         return self._finalize(request, sr, payment)
 
@@ -527,13 +589,71 @@ class PaymentConfigView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
-        gateway = bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
+        provider = configured_provider()
+        razorpay = provider == "razorpay" and bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
+        paytm = provider == "paytm" and bool(settings.PAYTM_MID and settings.PAYTM_MERCHANT_KEY)
+        paytm_mock = provider == "paytm_mock" and paytm_mock_enabled()
         return _success(data={
-            "online_available": gateway or bool(getattr(settings, "PAYMENT_SANDBOX_MODE", False)),
-            "sandbox": (not gateway) and bool(getattr(settings, "PAYMENT_SANDBOX_MODE", False)),
-            "key_id": settings.RAZORPAY_KEY_ID if gateway else "",
+            "online_available": razorpay or paytm or paytm_mock or (
+                provider == "razorpay" and bool(getattr(settings, "PAYMENT_SANDBOX_MODE", False))
+            ),
+            "sandbox": paytm_mock or (provider == "razorpay" and not razorpay and bool(getattr(settings, "PAYMENT_SANDBOX_MODE", False))),
+            "provider": provider,
+            "key_id": settings.RAZORPAY_KEY_ID if razorpay else "",
+            "paytm_mid": settings.PAYTM_MID if paytm else "",
             "wallet_part_payment": _wallet_part_payment_enabled(),
         })
+
+
+class PaytmCallbackView(APIView):
+    """Receive Paytm's return POST and verify it with Paytm server-to-server.
+
+    The callback body is deliberately not treated as proof of payment. It
+    supplies only the order reference; the status/amount/transaction ID are
+    fetched again from Paytm before the booking can transition or dispatch.
+    This is not used by the local Paytm mock flow.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        order_id = str(request.data.get("ORDERID") or request.data.get("orderId") or "").strip()
+        if not order_id:
+            return _error("Paytm callback did not contain an order ID.")
+
+        try:
+            with transaction.atomic():
+                payment = Payment.objects.select_for_update().select_related("service_request").filter(
+                    gateway="paytm", provider_order_id=order_id
+                ).first()
+                if not payment:
+                    return _error("Unknown Paytm payment order.", 404)
+                if payment.status == ServiceRequest.PaymentStatus.PAID:
+                    return _success(message="Payment already confirmed.")
+
+                try:
+                    verified = verify_live_transaction(order_id, payment.amount)
+                except ValueError:
+                    # A cancel/failure callback is not a payment failure
+                    # signal by itself; the customer may retry an unexpired
+                    # Paytm transaction. Keep the intent pending.
+                    return _error("Paytm has not confirmed this payment yet.", 400)
+                except Exception as exc:
+                    logger.warning("Paytm callback status lookup failed for order %s: %s", order_id, exc)
+                    return _error("Could not verify Paytm payment. Please try again.", 502)
+
+                payment.razorpay_payment_id = verified["transaction_id"]
+                payment.razorpay_signature = verified["signature"]
+                payment.provider_transaction_id = verified["transaction_id"]
+                payment.provider_signature = verified["signature"]
+                payment.status = ServiceRequest.PaymentStatus.PAID
+                payment.save(update_fields=[
+                    "razorpay_payment_id", "razorpay_signature", "provider_transaction_id",
+                    "provider_signature", "status", "updated_at",
+                ])
+                return PaymentVerifyView()._finalize(request, payment.service_request, payment)
+        except Exception:
+            logger.exception("Unhandled Paytm callback failure for order %s", order_id)
+            return _error("Could not complete Paytm payment.", 502)
 
 
 class PaymentWalletPayView(APIView):

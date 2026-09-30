@@ -606,6 +606,25 @@ def _execute_gateway_refund(rr):
         )
         return f"wallet_refund_{tx.id}"
 
+    # A Paytm mock payment can only exist outside the production Paytm
+    # environment. Keep its refund lifecycle testable without ever pretending
+    # to have called a real provider refund API.
+    if payment.gateway == "paytm_mock":
+        from service_requests.paytm_gateway import paytm_mock_enabled
+        if paytm_mock_enabled():
+            return f"paytm_mock_refund_{payment.provider_transaction_id or payment.razorpay_payment_id}"
+        raise ValidationError({
+            "detail": "Paytm mock refunds are disabled in this environment."
+        })
+
+    if payment.gateway == "paytm":
+        # Paytm's refund API must be tested with the merchant's enabled refund
+        # permissions and real transaction lifecycle. Never fall through to
+        # Razorpay for a Paytm payment.
+        raise ValidationError({
+            "detail": "Paytm refunds require merchant-account activation and reconciliation. Process this refund in Paytm until the Paytm refund adapter is enabled."
+        })
+
     gateway_configured = bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
 
     if not gateway_configured:
