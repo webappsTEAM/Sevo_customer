@@ -1,5 +1,14 @@
 from django.contrib import admin
-from .models import City, ServiceZone, ServiceZoneService, NotificationPreference, TeamInvite
+from .models import City, ServiceZone, ServiceZoneService, NotificationPreference, TeamInvite, PricingConfig
+
+
+@admin.register(PricingConfig)
+class PricingConfigAdmin(admin.ModelAdmin):
+    list_display = [
+        "key", "platform_fee", "gst_percent", "delivery_fee",
+        "free_delivery_threshold", "handling_fee", "updated_at", "updated_by",
+    ]
+    readonly_fields = ["updated_at"]
 
 
 @admin.register(City)

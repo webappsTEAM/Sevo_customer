@@ -7,6 +7,7 @@ Handles OTP generation, hashing, rate limiting, verification, and customer profi
 
 import hashlib
 import hmac
+import logging
 import os
 import random
 import re
@@ -26,6 +27,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .models import OTPRequest, OTPChannel
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 # ── Domain Exceptions ─────────────────────────────────────────────────────────
@@ -153,13 +155,43 @@ def _hash_otp(identifier: str, otp_code: str) -> str:
 
 
 def _send_email_otp(email: str, otp_code: str):
-    send_mail(
-        subject="Your Sevo login OTP",
-        message=f"Your Sevo login OTP is: {otp_code}. Valid for 5 minutes.",
-        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
-        recipient_list=[email],
-        fail_silently=True,
-    )
+    # Fixed 2026-10-01 per explicit report ("the email verification OTP has
+    # not getting [received]"): this used to call send_mail(...,
+    # fail_silently=True). Django's fail_silently=True doesn't just skip a
+    # *missing* email config -- it swallows every exception from the actual
+    # SMTP conversation too: a bad/revoked Gmail app password, Gmail's daily
+    # send-quota limit, a TLS/network hiccup to smtp.gmail.com, all of it.
+    # request_otp() above always returned {"success": True, ...} regardless,
+    # so the API, the app, and the Django server logs all looked completely
+    # normal while the OTP silently never left the server. There was no way
+    # for anyone -- customer or developer -- to tell a real delivery failure
+    # apart from "check your spam folder". fail_silently=False + an explicit
+    # try/except now surfaces the real SMTP error in the server logs (via
+    # logger.exception) the next time this fails, instead of hiding it.
+    #
+    # Still deliberately NOT re-raised: a flaky mail provider shouldn't 500
+    # the whole OTP request when AUTO_GENERATE_OTP (or DEBUG) already hands
+    # the real code back in the response as a fallback -- see request_otp's
+    # response_data["dev_otp"] below. Once the logged error pins down the
+    # actual SMTP problem, that's the real fix; this change only makes the
+    # problem visible instead of fixing data loss in the dark.
+    try:
+        send_mail(
+            subject="Your Sevo login OTP",
+            message=f"Your Sevo login OTP is: {otp_code}. Valid for 5 minutes.",
+            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+            recipient_list=[email],
+            fail_silently=False,
+        )
+    except Exception:
+        logger.exception(
+            "Failed to send OTP email to %s via %s (EMAIL_HOST_USER=%s) -- "
+            "customer did not receive their OTP. See the exception above "
+            "for the real SMTP failure reason.",
+            email,
+            getattr(settings, "EMAIL_HOST", "?"),
+            getattr(settings, "EMAIL_HOST_USER", "?"),
+        )
 
 
 def _get_tokens_for_user(user: User) -> dict:

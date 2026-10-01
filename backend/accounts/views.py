@@ -210,13 +210,31 @@ class LoginView(TokenObtainPairView):
 
 class RefreshView(APIView):
     """
-    Rotate the access token using the httpOnly refresh cookie.
-    No body needed — the browser sends the cookie automatically.
+    Rotate the access token using a refresh token.
+
+    Reads the refresh token from the httpOnly cookie first — unchanged
+    behavior for the web client, which sends one automatically and never
+    needs a body. Falls back to a `refresh` field in the JSON request body
+    when no cookie is present, for API/mobile clients (Bearer-token auth,
+    no cookie jar).
+
+    Fixed 2026-10-01 (production resolution — Authentication scope): this
+    previously read ONLY request.COOKIES and returned ONLY
+    {"success": True} with the new access token set as a cookie. A mobile
+    client sends its refresh token in the request body (it has no cookie
+    to send) and has no cookie jar to read a Set-Cookie response back from
+    — so every mobile refresh attempt failed structurally, regardless of
+    whether the stored refresh token was still perfectly valid. The new
+    access token is now ALSO returned in the JSON body (in addition to,
+    not instead of, the existing cookie for the web client) so a
+    Bearer-token client can actually receive and use it.
     """
     permission_classes = [permissions.AllowAny]
 
     def post(self, request, *args, **kwargs):
         refresh_token = request.COOKIES.get(settings.AUTH_COOKIE_REFRESH)
+        if not refresh_token:
+            refresh_token = request.data.get("refresh")
         if not refresh_token:
             return Response(
                 {"success": False, "message": "No refresh token — please log in again."},
@@ -226,7 +244,10 @@ class RefreshView(APIView):
             from rest_framework_simplejwt.tokens import RefreshToken
             token = RefreshToken(refresh_token)
             access_token = token.access_token
-            response = Response({"success": True})
+            response = Response({
+                "success": True,
+                "access": str(access_token),
+            })
             _set_auth_cookies(response, access_token)   # only rotate access cookie
             return response
         except Exception:

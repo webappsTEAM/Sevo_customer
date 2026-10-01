@@ -35,12 +35,17 @@ from .views_service_zones import (
     CityListView,
 )
 from .views_legal import PublicLegalConfigAPIView
+from .views_pricing import PricingConfigAPIView
 from service_requests.payment_views import InvoiceDownloadView
 
 urlpatterns = [
     # Legal & Public Policy Config
     path("legal/", PublicLegalConfigAPIView.as_view(), name="settings-public-legal"),
     path("ac-inspection/config/", ACInspectionConfigAPIView.as_view(), name="settings-ac-inspection-config"),
+
+    # Pricing Config (platform fee, GST, delivery fee, handling fee, etc.)
+    # — public GET for the mobile app, admin/manager/finance PUT.
+    path("pricing/", PricingConfigAPIView.as_view(), name="settings-pricing-config"),
 
     # Homepage Config & Storage APIs
     path("homepage/", HomePageConfigAPIView.as_view(), name="settings-homepage-config"),
