@@ -186,7 +186,15 @@ export function AddressDetailsForm({ addressData, onBack, onSubmit, onClose }) {
     try {
       let saved = null
       try {
-        if (addressData?.id && !String(addressData.id).startsWith("local_") && !String(addressData.id).startsWith("search-")) {
+        // Only call PATCH if the ID is a real integer DB key (not a temporary loc_/local_/addr_/search- string)
+      const _rawId = addressData?.id
+      const _isRealDbId = _rawId !== null && _rawId !== undefined &&
+        Number.isFinite(Number(_rawId)) && Number(_rawId) > 0 &&
+        !String(_rawId).startsWith("loc_") &&
+        !String(_rawId).startsWith("local_") &&
+        !String(_rawId).startsWith("addr_") &&
+        !String(_rawId).startsWith("search-")
+      if (_isRealDbId) {
           const res = await apiUpdateSavedAddress(addressData.id, payload)
           saved = res?.data ?? res
         } else {

@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { useAuth } from "../../state/auth/useAuth.js"
@@ -150,6 +150,7 @@ export function LoginPage() {
   const { login, verify2FA, loginWithGoogle, register } = useAuth()
   const navigate = useNavigate()
 
+
   const [mode, setMode] = useState("signin")
   const [username, setUsername] = useState(() => localStorage.getItem("sevo_remember_username") || "")
   const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem("sevo_remember_username"))
@@ -199,6 +200,16 @@ export function LoginPage() {
     }
     return routes.dashboard
   }
+
+  // Redirect already-authenticated users away from /login
+  const { user: authUser } = useAuth()
+  useEffect(() => {
+    if (authUser) {
+      navigate(postLoginRoute(authUser), { replace: true })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authUser])
+
 
   const handleQuickLogin = async (usr, pwd) => {
     setUsername(usr)
