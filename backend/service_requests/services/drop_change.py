@@ -48,6 +48,11 @@ from .fare_reconciliation import _dec, _payable_after_adjustments
 
 logger = logging.getLogger(__name__)
 
+# Once the driver has reached the drop (unloading/delivered) the route is fixed: moving the
+# drop then would re-price a trip whose goods are already at the old drop (a shorter "new"
+# drop would even lower the fare after the long leg was driven).
+DROP_REACHED_LEGS = frozenset({"ARRIVED_DROP", "UNLOADING", "DELIVERED", "COMPLETED"})
+
 # Statuses in which the trip is over (or never going to happen): no re-route.
 CLOSED_STATUSES = {
     "proof_submitted", "completed", "awaiting_verification", "verified",
@@ -112,6 +117,11 @@ def _compute(booking, new_lat, new_lng):
         )
     if (booking.status or "").lower() in CLOSED_STATUSES:
         raise DropChangeError("TRIP_CLOSED", "This trip is no longer active; its drop location cannot be changed.")
+    if str(getattr(booking, "logistics_leg", "") or "").upper() in DROP_REACHED_LEGS:
+        raise DropChangeError(
+            "DROP_ALREADY_REACHED",
+            "The driver has already reached the drop location, so the destination can no longer be changed.",
+        )
     if booking.trip_stops.exists():
         raise DropChangeError(
             "MULTI_STOP_BOOKING",

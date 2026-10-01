@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react"
+import React, { useState, useMemo, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Calendar, Clock, X, Check, AlertCircle, RefreshCw, Sparkles, ShieldCheck } from "lucide-react"
 import { apiRequest } from "../../api/client.js"

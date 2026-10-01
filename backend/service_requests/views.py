@@ -41,7 +41,7 @@ from .models import (
     TripStop,
     ACInspectionRateCategory, ACInspectionRateItem, ACInspectionConfiguration,
 )
-from .models import is_mason_category
+from .models import is_mason_category, _generate_secure_start_otp
 from .serializers import (
     AdminChangePrioritySerializer,
     FeedbackTokenSummarySerializer,
@@ -600,6 +600,14 @@ class BookingCreateView(APIView):
                 booking_mode=serializer.validated_data.get("logistics_booking_mode"),
                 declared_weight_kg=serializer.validated_data.get("ptl_declared_weight_kg"),
                 load_assist=request.data.get("ptl_load_assist"),
+                request_cargo={
+                    "cargo_items": request.data.get("cargo_items") or request.data.get("items"),
+                    "goods_category_id": request.data.get("goods_category_id"),
+                    "goods_category": request.data.get("goods_category"),
+                    "goods_type": request.data.get("goods_type"),
+                    "declared_weight_kg": request.data.get("declared_weight_kg"),
+                    "declared_cft": request.data.get("declared_cft"),
+                },
             )
         except UnresolvedLogisticsFareError as err:
             # Fixes GT-B-01: a logistics booking with neither a resolvable
@@ -1998,6 +2006,36 @@ _DELIVERY_OTP_VISIBLE_LEGS = {
 }
 
 
+def _latest_payment_confirmation_otp(sr):
+    """The cash-payment confirmation OTP the vendor app issued for this booking, or None.
+
+    Read-only lookup of the PAYMENT_CONFIRMATION_OTP notification the vendor writes. A raw
+    SAVEPOINT here raised "SAVEPOINT can only be used in transaction blocks" on PostgreSQL
+    (ATOMIC_REQUESTS is off), which the surrounding except swallowed, so the customer never
+    saw the code the driver asks for. transaction.atomic() is a real transaction on its own
+    and a savepoint when nested, so it is safe either way.
+    """
+    try:
+        import re
+        from django.db import connection, transaction
+        with atomic_transaction(), connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT message FROM workforce_notification "
+                "WHERE related_object_id IN (%s, %s) "
+                "AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
+                "ORDER BY created_at DESC LIMIT 1;",
+                [str(sr.id), str(sr.request_id or "")],
+            )
+            row = cursor.fetchone()
+            if row and row[0]:
+                m = re.search(r'OTP\s+([0-9]{6})', row[0])
+                if m:
+                    return m.group(1)
+    except Exception:
+        pass
+    return None
+
+
 def _latest_delivery_otp(sr):
     """
     The delivery OTP the vendor app issued for this booking, or None.
@@ -2013,8 +2051,10 @@ def _latest_delivery_otp(sr):
         return None
     try:
         import re
-        from django.db import connection
-        with connection.cursor() as cursor:
+        from django.db import connection, transaction
+        # Savepoint: on PostgreSQL a failing raw query (vendor-owned mirror table missing or
+        # not readable) would otherwise abort the WHOLE surrounding transaction.
+        with atomic_transaction(), connection.cursor() as cursor:
             cursor.execute(
                 "SELECT message FROM workforce_notification "
                 "WHERE related_object_id IN (%s, %s) "
@@ -2075,6 +2115,8 @@ def _build_tracking_payload(sr, has_full_access, include_delivery_otp=False, inc
     dest_lat = float(target_sr.latitude) if target_sr.latitude is not None else (float(sr.latitude) if sr.latitude is not None else None)
     dest_lng = float(target_sr.longitude) if target_sr.longitude is not None else (float(sr.longitude) if sr.longitude is not None else None)
     dest_address = target_sr.address or sr.address or ""
+    dest_stop_seq = None
+    dest_stop_type = ""
 
     # GT-D-02: sr.latitude/sr.longitude are the PICKUP point (see the
     # field comment above sr.address). Bookings that used TripStop
@@ -2185,7 +2227,7 @@ def _build_tracking_payload(sr, has_full_access, include_delivery_otp=False, inc
         or (sr.technician_name and sr.status in POST_ACCEPT_STATUSES)
     )
     is_accepted = technician_accepted
-    tracking_available = bool(effective_status in ["accepted", "on_the_way", "en_route", "arrived", "in_progress", "proof_submitted", "cash_pending", "waiting_for_payment"])
+    tracking_available = effective_status in ["accepted", "on_the_way", "en_route", "arrived", "in_progress", "proof_submitted", "cash_pending", "waiting_for_payment"]
     is_terminal = effective_status in ["completed", "closed", "cancelled", "rejected", "feedback_pending", "feedback_received"]
 
     vendor_data = None
@@ -2382,63 +2424,37 @@ def _build_tracking_payload(sr, has_full_access, include_delivery_otp=False, inc
         sr.start_otp if (is_accepted and sr.status not in ["cancelled", "rejected"]) else None
     )
 
-    # Retrieve Cash Payment Confirmation OTP if one was generated for this booking or any related stage
+    # Cash Payment Confirmation OTP the vendor app issued for this booking (see
+    # _latest_payment_confirmation_otp: it must work in autocommit, i.e. on PostgreSQL).
     payment_confirmation_otp = None
+    all_payment_notifs = []
     if sr.status not in ["cancelled", "rejected"]:
         try:
-            import re
             from django.db import connection
-            # SAVEPOINT guards against missing table (e.g. test env) without
-            # aborting the outer PostgreSQL transaction.
-            with connection.cursor() as cursor:
-                cursor.execute("SAVEPOINT _otp_lookup_1")
-                try:
-                    cursor.execute(
-                        "SELECT message FROM workforce_notification "
-                        "WHERE related_object_id IN (%s, %s) "
-                        "AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
-                        "ORDER BY created_at DESC LIMIT 1;",
-                        [str(sr.id), str(sr.request_id or "")],
-                    )
-                    row = cursor.fetchone()
-                    if row and row[0]:
-                        m = re.search(r'OTP\s+([0-9]{6})', row[0])
-                        if m:
-                            payment_confirmation_otp = m.group(1)
-                    cursor.execute("RELEASE SAVEPOINT _otp_lookup_1")
-                except Exception:
-                    cursor.execute("ROLLBACK TO SAVEPOINT _otp_lookup_1")
+            all_sr_ids = [str(x) for x in [target_sr.id, target_sr.request_id, sr.id, sr.request_id] if x]
+            if getattr(sr, "parent_request", None):
+                all_sr_ids.extend([str(sr.parent_request.id), str(sr.parent_request.request_id)])
+            if getattr(target_sr, "parent_request", None):
+                all_sr_ids.extend([str(target_sr.parent_request.id), str(target_sr.parent_request.request_id)])
+            with atomic_transaction(), connection.cursor() as cursor:
+                placeholders = ", ".join(["%s"] * len(all_sr_ids))
+                cursor.execute(
+                    f"SELECT message, created_at FROM workforce_notification "
+                    f"WHERE related_object_id IN ({placeholders}) "
+                    f"AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
+                    f"ORDER BY created_at DESC;",
+                    all_sr_ids,
+                )
+                all_payment_notifs = cursor.fetchall()
+                if all_payment_notifs and all_payment_notifs[0][0]:
+                    import re
+                    m = re.search(r'OTP\s+([0-9]{6})', all_payment_notifs[0][0])
+                    if m:
+                        payment_confirmation_otp = m.group(1)
         except Exception:
             pass
-
-    payment_confirmation_otp = None
-    if sr.payment_status in ("cash_pending", "cash_collected", "pending"):
-        try:
-            import re
-            from django.db import connection
-            # Use a SAVEPOINT so that a DB error (e.g. missing table in test
-            # environments) does not abort the outer PostgreSQL transaction and
-            # poison every subsequent query in this request.
-            with connection.cursor() as cursor:
-                cursor.execute("SAVEPOINT _otp_lookup")
-                try:
-                    cursor.execute(
-                        "SELECT message FROM workforce_notification "
-                        "WHERE related_object_id = %s "
-                        "AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
-                        "ORDER BY created_at DESC LIMIT 1;",
-                        [str(sr.id)],
-                    )
-                    row = cursor.fetchone()
-                    if row and row[0]:
-                        m = re.search(r'OTP\s+([0-9]{6})', row[0])
-                        if m:
-                            payment_confirmation_otp = m.group(1)
-                    cursor.execute("RELEASE SAVEPOINT _otp_lookup")
-                except Exception:
-                    cursor.execute("ROLLBACK TO SAVEPOINT _otp_lookup")
-        except Exception:
-            pass
+    if not payment_confirmation_otp and sr.status not in ["cancelled", "rejected"] and sr.payment_status in ("cash_pending", "cash_collected", "pending"):
+        payment_confirmation_otp = _latest_payment_confirmation_otp(sr)
 
     # Goods & Transport / Packers & Movers delivery OTP. The vendor app
     # issues it when the driver's GPS is verified at the drop and records it as
@@ -4424,7 +4440,14 @@ class CustomerInsuranceClaimListCreateView(APIView):
                 claimed_amount=claimed_amount, attachment_files=attachment_files,
             )
         except Exception as e:
-            return _standard_response(success=False, error={"code": "CLAIM_FAILED", "message": str(e)}, status_code=400)
+            # DRF ValidationError.__str__ is a dict repr ({'detail': [ErrorDetail(...)]}); show the sentence.
+            _d = getattr(e, "detail", None)
+            if isinstance(_d, dict) and _d.get("detail") is not None:
+                _d = _d["detail"]
+            if isinstance(_d, (list, tuple)) and _d:
+                _d = _d[0]
+            _msg = str(_d) if _d else str(e)
+            return _standard_response(success=False, error={"code": "CLAIM_FAILED", "message": _msg}, status_code=400)
 
         return _standard_response(success=True, data=InsuranceClaimSerializer(claim).data, status_code=201)
 
@@ -5996,7 +6019,7 @@ class CustomerQuotePDFView(APIView):
                 if len(parts) > 1 and parts[1].isdigit():
                     v_target = int(parts[1])
 
-            with connection.cursor() as cursor:
+            with atomic_transaction(), connection.cursor() as cursor:
                 # Try finding quote_id directly or by job/token/versioned quote_number
                 if v_target is not None:
                     sql = """
@@ -6055,7 +6078,7 @@ class CustomerQuotePDFView(APIView):
                 }
                 try:
                     from django.db import connection
-                    with connection.cursor() as cursor:
+                    with atomic_transaction(), connection.cursor() as cursor:
                         cursor.execute("""
                             SELECT id FROM workforce_quote 
                             WHERE job_id = %s OR quote_number = %s 

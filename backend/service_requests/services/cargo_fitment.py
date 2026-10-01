@@ -13,7 +13,7 @@ Guarantees:
 """
 
 import logging
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Dict, Any, List, Optional, Tuple
 from django.db.models import Q
 
@@ -44,6 +44,7 @@ def resolve_cargo_payload(
     declared_weight_kg: Optional[Any] = None,
     strict: bool = False,
     city: Optional[str] = None,
+    declared_cft: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """
     Resolves client cargo inputs into authoritative server-side cargo attributes.
@@ -119,6 +120,15 @@ def resolve_cargo_payload(
         if not city and "city" in cargo_items:
             city = cargo_items["city"]
         cargo_items = cargo_items.get("items") or cargo_items.get("cargo_items") or []
+
+    # GT_CARGO_ITEMS_TYPE: a non-list value (e.g. the string "chairs") used to be silently treated as "no
+    # cargo declared" and the booking went through; reject it instead of dropping what the customer sent.
+    if cargo_items and not isinstance(cargo_items, list):
+        validation_errors.append({
+            "error": "Invalid cargo format: cargo_items must be a list of item objects.",
+            "code": "INVALID_CARGO_ENTRY",
+            "entry": str(cargo_items)[:80],
+        })
 
     # 2. Bulk load cargo items to prevent N+1 queries
     if cargo_items and isinstance(cargo_items, list):
@@ -341,6 +351,11 @@ def resolve_cargo_payload(
     if declared_weight_kg is not None:
         try:
             parsed_declared_weight = Decimal(str(declared_weight_kg))
+            # NaN / +-Infinity / out-of-range exponents parse as Decimals but crash
+            # money arithmetic later (unhandled 500 on public endpoints).
+            if not parsed_declared_weight.is_finite():
+                raise ValueError("non-finite declared weight")
+            _money(parsed_declared_weight)  # raises if not representable
             if parsed_declared_weight < Decimal("0.00"):
                 validation_errors.append({
                     "error": f"Declared weight cannot be negative (received {declared_weight_kg}).",
@@ -350,9 +365,32 @@ def resolve_cargo_payload(
                 if parsed_declared_weight > final_weight_kg:
                     final_weight_kg = parsed_declared_weight
         except Exception:
+            parsed_declared_weight = None  # never echo a non-representable value back
             validation_errors.append({
                 "error": f"Invalid declared weight format '{declared_weight_kg}'.",
                 "code": "INVALID_DECLARED_WEIGHT",
+            })
+
+    # 4b. Declared volume (cubic feet) -- the customer's own estimate for goods that are not in the catalog
+    # (unlisted/mixed/approximate cargo). Like declared weight it can only RAISE the evaluated volume,
+    # never lower what the catalog items already account for. A low weight must not hide a bulky load.
+    if declared_cft is not None and str(declared_cft).strip() != "":
+        try:
+            _dc = Decimal(str(declared_cft))
+            if not _dc.is_finite():
+                raise ValueError
+            _money(_dc)
+            if _dc < Decimal("0.00"):
+                validation_errors.append({
+                    "error": f"Declared volume cannot be negative (received {declared_cft}).",
+                    "code": "INVALID_DECLARED_VOLUME",
+                })
+            elif _dc > total_cft:
+                total_cft = _dc
+        except (InvalidOperation, ValueError, ArithmeticError):
+            validation_errors.append({
+                "error": f"Invalid declared volume format '{declared_cft}'.",
+                "code": "INVALID_DECLARED_VOLUME",
             })
 
     # 5. Two-Wheeler Compatibility Check

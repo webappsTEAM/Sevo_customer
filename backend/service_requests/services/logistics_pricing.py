@@ -163,6 +163,15 @@ def assert_catalog_matches_category(service_category, *, tier=None, lane=None):
             raise LogisticsCatalogMismatchError(
                 f"The selected {label} is no longer available."
             )
+        # Round 13: optional effective-date window (ServiceTier.effective_from/
+        # effective_to). Lane and any object without is_effective() are exempt
+        # (getattr default True), so this only ever restricts a tier that an
+        # admin actually scheduled.
+        is_effective = getattr(obj, "is_effective", None)
+        if callable(is_effective) and not is_effective():
+            raise LogisticsCatalogMismatchError(
+                f"The selected {label} is not currently available (outside its effective dates)."
+            )
 
 _PAISE = Decimal("0.01")
 
@@ -326,6 +335,8 @@ def quote_logistics_fare(
     cargo_summary=None,
     waypoints=None,
     loading_help=True,
+    service_category=None,
+    customer_gstin=None,
 ):
     """
     Compute a real, itemised, distance-based fare for one goods-transport
@@ -438,6 +449,33 @@ def quote_logistics_fare(
             total = minimum_fare
             minimum_applied = True
 
+    # Round 13 (Final Configurability Pass): GST/RCM configuration branch.
+    # Resolved only when a caller supplies service_category (every current
+    # caller may now do so; callers that don't are completely unaffected --
+    # resolve_tax_treatment(None, ...) is defined to return the exact
+    # no-RCM, gst_enabled=True default, so this is purely additive).
+    from .gst_policy import resolve_tax_treatment
+
+    _tax = resolve_tax_treatment(service_category, customer_gstin)
+    gst_rate_str = _gst_rate_str(tier) if _tax["gst_enabled"] else None
+    gst_included_amt = _gst_included(total, tier) if _tax["gst_enabled"] else Decimal("0.00")
+    rcm_applicable = bool(_tax["rcm_applicable"]) and gst_included_amt > 0
+    rcm_statement = _tax["rcm_statement"] if rcm_applicable else ""
+    taxable_value = total
+    if rcm_applicable:
+        # RCM: the supplier does not charge GST -- the recipient
+        # self-assesses and pays it directly to the tax authority. The
+        # previously GST-inclusive `total` therefore has its GST component
+        # removed from what the customer is actually charged; the invoice
+        # states the RCM statement in place of a charged GST line. This is
+        # the standard, universally-true RCM treatment (not a Porter value),
+        # and is only reached when an Admin has explicitly turned rcm_enabled
+        # on for this scope -- see GTTaxPolicy.
+        total = _money(total - gst_included_amt)
+        taxable_value = total
+        gst_included_amt = Decimal("0.00")
+        gst_rate_str = None
+
     source = route.get("source")
     is_authoritative = (source == "google_maps")
     is_estimate = not is_authoritative
@@ -546,8 +584,11 @@ def quote_logistics_fare(
         free_km=free_km,
         # GST INCLUDED in `total` (admin-configured per tier, blank/0 = none). Snapshotted like
         # the other rates so a later admin change never alters an existing booking's invoice.
-        gst_rate=_gst_rate_str(tier),
-        gst_included=_gst_included(total, tier),
+        gst_rate=gst_rate_str,
+        gst_included=gst_included_amt,
+        rcm_applicable=rcm_applicable,
+        rcm_statement=rcm_statement,
+        taxable_value=taxable_value,
         distance_source=source,
         is_authoritative=is_authoritative,
         is_estimate=is_estimate,
@@ -754,6 +795,7 @@ def resolve_logistics_fare_v2(
     booking_mode=None,
     declared_weight_kg=None,
     load_assist=None,
+    request_cargo=None,
 ):
     """
     GT-B-01. Returns (fare, breakdown_or_None).
@@ -826,6 +868,26 @@ def resolve_logistics_fare_v2(
             if raw_items or goods_type:
                 target_city = getattr(logistics_tier, "city", None)
                 cargo_summary = resolve_cargo_payload(cargo_items=raw_items, goods_category_slug=goods_type, city=target_city)
+
+        # E2E-QA 2026-10-01: cargo sent as top-level booking fields (not wrapped in cart_data) was
+        # never validated, so an over-capacity load, an unknown category or unknown items booked fine
+        # while the quote endpoint rejected the same input. Resolve it with the same resolver.
+        if cargo_summary is None and request_cargo:
+            _rc_items = request_cargo.get("cargo_items") or request_cargo.get("items") or None
+            _rc_cat = request_cargo.get("goods_category_id") or request_cargo.get("goods_category") or request_cargo.get("goods_type")
+            _rc_wt = request_cargo.get("declared_weight_kg")
+            _rc_cft = request_cargo.get("declared_cft")
+            if _rc_items or _rc_cat or _rc_wt is not None or _rc_cft:
+                from .cargo_fitment import resolve_cargo_payload
+                _cid = int(_rc_cat) if isinstance(_rc_cat, int) and not isinstance(_rc_cat, bool) else (int(_rc_cat) if isinstance(_rc_cat, str) and _rc_cat.isascii() and _rc_cat.isdigit() and len(_rc_cat) <= 18 else None)
+                cargo_summary = resolve_cargo_payload(
+                    cargo_items=_rc_items,
+                    goods_category_id=_cid,
+                    goods_category_slug=(str(_rc_cat) if _cid is None and _rc_cat else None),
+                    declared_weight_kg=_rc_wt,
+                    declared_cft=_rc_cft,
+                    city=getattr(logistics_tier, "city", None),
+                )
 
         if submitted_expires_at:
             try:
@@ -972,6 +1034,13 @@ def resolve_logistics_fare_v2(
         if cargo_summary and cargo_summary.get("has_prohibited", False):
             raise UnresolvedLogisticsFareError(cargo_summary.get("prohibited_reason") or "Prohibited cargo cannot be transported.")
 
+        # Server-side fitment gate (same rule the quote endpoint applies): the booked vehicle must be able to carry the cargo.
+        if cargo_summary and logistics_tier is not None:
+            from .cargo_fitment import evaluate_vehicle_fitment
+            _is_fit, _fit_reason = evaluate_vehicle_fitment(logistics_tier, cargo_summary)
+            if not _is_fit:
+                raise UnresolvedLogisticsFareError(f"CARGO_DOES_NOT_FIT: {_fit_reason}")
+
         if submitted_quote_id and cached_quote:
             # Verified quote price lock: use the authoritative locked quote snapshot
             if cached_quote.get("breakdown") and isinstance(cached_quote["breakdown"], dict):
@@ -1014,6 +1083,7 @@ def resolve_logistics_fare_v2(
             stop_count=stop_count,
             cargo_summary=cargo_summary,
             waypoints=extracted_waypoints,
+            service_category=service_category,
         )
         if breakdown is not None:
             if not breakdown.get("is_cargo_fit", True):

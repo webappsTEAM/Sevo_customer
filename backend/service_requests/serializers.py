@@ -422,13 +422,14 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             "insurance_opted_in",
             # Optional customer GSTIN for the invoice (format-validated below).
             "customer_gstin",
-            # Optional E-Way Bill number for GT/logistics bookings that need
-            # one for GST compliance -- see the field's comment in models.py
-            # for why this is here at all (out-of-band DB drift, same as
-            # customer_gstin's crash class).
-            "eway_bill_number",
             # Light PTL: booking mode marker + declared cargo weight (per-kg pricing).
             "logistics_booking_mode", "ptl_declared_weight_kg",
+            # Gap 1: optional e-way-bill reference the customer can attach at booking time
+            # (or later, before dispatch, via the same detail endpoint an admin uses).
+            # SEVO records/attaches only -- no generation, no government API. See the
+            # field's comment in models.py for why eway_bill_number exists at all
+            # (out-of-band DB drift, same as customer_gstin's crash class).
+            "eway_bill_number", "eway_bill_document",
         )
         extra_kwargs = {
             "issue_title":         {"required": False, "allow_blank": True},
@@ -462,9 +463,10 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             "consignee_relationship": {"required": False, "allow_blank": True},
             "insurance_opted_in":    {"required": False},
             "customer_gstin":        {"required": False, "allow_blank": True},
-            "eway_bill_number":      {"required": False, "allow_blank": True},
             "logistics_booking_mode": {"required": False, "allow_blank": True},
             "ptl_declared_weight_kg": {"required": False, "allow_null": True},
+            "eway_bill_number":   {"required": False, "allow_blank": True},
+            "eway_bill_document": {"required": False, "allow_null": True},
         }
 
     def validate_customer_gstin(self, value):
@@ -581,6 +583,14 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
         )
         if slot_error:
             raise serializers.ValidationError({"preferred_date": slot_error})
+        if (attrs.get("logistics_booking_mode") or "spot") != "ptl":
+            from .booking_window import slot_capacity_error
+            _cap_err = slot_capacity_error(
+                attrs.get("service_category"), attrs.get("preferred_date"), attrs.get("preferred_time"),
+                city=attrs.get("city") or "",
+            )
+            if _cap_err:
+                raise serializers.ValidationError({"preferred_time": _cap_err, "code": "SLOT_FULL"})
 
         # Light PTL: advance-only, admin-slot-only, 4W+ ptl_eligible tier, declared weight.
         # Pricing itself (per kg, tamper check) happens in resolve_logistics_fare_v2.
@@ -963,6 +973,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             return ServiceRequestListSerializer(children, many=True, context=self.context).data
         return []
 
+
     def get_payment_confirmation_otp(self, obj):
         # N+1 fix: only query workforce_notification for COD-specific OTP states.
         # "pending" is the default online-payment status and never has a
@@ -972,8 +983,8 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             return None
         try:
             import re
-            from django.db import connection, transaction
-            with transaction.atomic(), connection.cursor() as cursor:
+            from django.db import connection
+            with connection.cursor() as cursor:
                 cursor.execute(
                     "SELECT message FROM workforce_notification "
                     "WHERE related_object_id = %s "
@@ -1074,8 +1085,8 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             return None
         try:
             import re
-            from django.db import connection, transaction
-            with transaction.atomic(), connection.cursor() as cursor:
+            from django.db import connection
+            with connection.cursor() as cursor:
                 cursor.execute(
                     "SELECT message FROM workforce_notification "
                     "WHERE related_object_id = %s "
@@ -1210,9 +1221,9 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         if ids:
             try:
                 import re
-                from django.db import connection, transaction
+                from django.db import connection
                 placeholders = ",".join(["%s"] * len(ids))
-                with transaction.atomic(), connection.cursor() as cursor:
+                with connection.cursor() as cursor:
                     cursor.execute(
                         "SELECT related_object_id, message FROM workforce_notification "
                         "WHERE related_object_id IN (%s) "
@@ -1338,6 +1349,7 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
     feedback_token         = serializers.SerializerMethodField()
     feedback               = ServiceFeedbackNestedSerializer(read_only=True, allow_null=True)
     start_otp              = serializers.SerializerMethodField()
+    eway_bill_warning      = serializers.SerializerMethodField()
     payment_confirmation_otp = serializers.SerializerMethodField()
     active_extension       = serializers.SerializerMethodField()
     extension_amount       = serializers.SerializerMethodField()
@@ -1400,6 +1412,9 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
             "drop_contact_name", "drop_contact_phone", "drop_contact_email",
             "declared_value", "consignee_relationship",
             "insurance_opted_in", "insurance_premium", "insurance_liability_cap", "customer_gstin",
+            # Gap 1: e-way-bill record/attach fields + a non-blocking warning, visible to
+            # both the customer (their own booking) and Admin (booking detail view).
+            "eway_bill_number", "eway_bill_document", "eway_bill_warning",
             "start_otp", "payment_confirmation_otp", "active_extension", "latest_reschedule", "allowed_transitions", "available_actions",
             "has_feedback", "feedback_token", "feedback",
             "job_type", "request_kind", "catalog_service_id", "quote_number", "parent_request", "estimation", "customer_inspection",
@@ -1407,14 +1422,18 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
             "is_search_expired", "cancellation_reason", "cancellation_note", "cancelled_at",
         )
 
+    def get_eway_bill_warning(self, obj):
+        from .services.eway_bill import eway_bill_warning
+        return eway_bill_warning(obj)
+
     def get_payment_confirmation_otp(self, obj):
         # N+1 fix: only query for COD OTP states, not the default online-payment "pending".
         if getattr(obj, "payment_status", None) not in ("cash_pending", "cash_collected"):
             return None
         try:
             import re
-            from django.db import connection, transaction
-            with transaction.atomic(), connection.cursor() as cursor:
+            from django.db import connection
+            with connection.cursor() as cursor:
                 cursor.execute(
                     "SELECT message FROM workforce_notification "
                     "WHERE related_object_id = %s "

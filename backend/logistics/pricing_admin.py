@@ -67,6 +67,9 @@ DESCRIPTIVE_FIELDS = (
     "description",
     "order",
     "ptl_eligible",
+    # Round 13 (Final Configurability Pass): optional effective-date window.
+    "effective_from",
+    "effective_to",
 ) + CAPACITY_FIELDS
 
 INTEGER_FIELDS = ("max_additional_stops",)

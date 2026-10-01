@@ -16,6 +16,11 @@ from service_requests.services.claims_policy import claim_cap
 
 class ClaimPolicyTests(TestCase):
     def setUp(self):
+        # Round 8: a platform-wide default GTClaimPolicy is now seeded by migration
+        # 0117 (Porter-documented caps). These tests exercise the mechanism itself
+        # with hand-picked cap/window values, so they clear the seeded defaults first
+        # -- the seeded defaults themselves are covered by test_gt_claim_policy_defaults.py.
+        GTClaimPolicy.objects.all().delete()
         U = get_user_model()
         self.u = U.objects.create_user(username=f"c_{uuid.uuid4().hex[:6]}", email=f"{uuid.uuid4().hex[:6]}@e.com",
                                        password="pw12345678", phone=f"97{uuid.uuid4().int % 100000000:08d}", role="customer")

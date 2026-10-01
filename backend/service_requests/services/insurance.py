@@ -5,6 +5,13 @@ the customer is shown exactly what will be billed.
 
 Rate and ceiling come from the Admin GTInsurancePolicy when one exists, else the Django settings (INSURANCE_RATE, INSURANCE_MAX_LIABILITY). Porter
 publishes neither, so there is no built-in claim of parity here; they are business inputs.
+
+SEVO-ONLY FEATURE: Porter offers no goods-in-transit insurance product whatsoever (its
+terms tell customers to self-insure), so this module has no Porter feature to achieve
+parity with -- it is a SEVO value-add layered on top of the Porter-parity claim policy
+(GTClaimPolicy / get_gt_claim_policy), not a replacement for it. Both can be configured
+at once: GTClaimPolicy is the baseline included liability every booking gets; this module
+prices an optional higher cap the customer pays extra for.
 """
 from decimal import Decimal
 

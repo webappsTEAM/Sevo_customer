@@ -413,3 +413,114 @@ class PTLAdminPolicyApiTests(TestCase):
         self.assertEqual(r.status_code, 200, r.content)
         t.refresh_from_db()
         self.assertTrue(t.ptl_eligible)
+
+
+class PTLClaimPolicySeedMigrationTests(TestCase):
+    """Verifies migration 0119's fill-missing-only seed, on the DB as the migration left it
+    (no setUp clearing here, unlike PTLPorterGapsRound11Tests below)."""
+
+    def test_seeded_migration_row_is_ptl_scoped_1000_cap_72h_window(self):
+        from service_requests.models import GTClaimPolicy
+        pol = GTClaimPolicy.objects.filter(applies_to_ptl=True, service_category=TRUCK).first()
+        self.assertIsNotNone(pol, "Round 11 fill-missing-only seed migration should have created this row")
+        self.assertEqual(pol.included_liability_cap, Decimal("1000.00"))
+        self.assertEqual(pol.claim_window_hours, 72)
+        self.assertTrue(pol.cap_at_fare)
+
+
+class PTLPorterGapsRound11Tests(TestCase):
+    """Round 11: PTL cumulative weight cap, PTL-scoped claim cap/window, optional
+    declared-value risk charge (porter.in/part-load-service, fetched 2026-09-29)."""
+
+    def setUp(self):
+        # Migration 0119 seeds a platform-wide, PTL-scoped GTClaimPolicy default (Rs 1,000 /
+        # 72h). Clear it here so these tests can independently exercise both the "no PTL-scoped
+        # row exists" fallback case and their own explicitly-constructed rows, without the
+        # seeded default silently winning either comparison (same convention as
+        # test_admin_gt_policies.py / test_public_gt_policies.py's setUp()).
+        from service_requests.models import GTClaimPolicy
+        GTClaimPolicy.objects.filter(applies_to_ptl=True).delete()
+
+    def test_cumulative_weight_cap_defaults_to_3000kg(self):
+        pol = _policy()
+        self.assertEqual(pol.ptl_cumulative_weight_cap_kg, Decimal("3000.00"))
+
+    def test_weight_over_cumulative_cap_is_rejected_even_within_tier_capacity(self):
+        _policy(ptl_cumulative_weight_cap_kg=Decimal("3000.00"))
+        # A big tier whose own capacity is well above the PTL cumulative cap.
+        t = _tier(max_kg="5000")
+        with self.assertRaises(PTLError) as ctx:
+            _quote(t, weight="3500")
+        self.assertEqual(ctx.exception.code, "PTL_WEIGHT_OVER_CUMULATIVE_CAP")
+
+    def test_weight_at_or_under_cumulative_cap_is_accepted(self):
+        _policy(ptl_cumulative_weight_cap_kg=Decimal("3000.00"))
+        t = _tier(max_kg="5000")
+        q = _quote(t, weight="3000")
+        self.assertEqual(q["declared_weight_kg"], Decimal("3000.00"))
+
+    def test_blank_cumulative_cap_means_no_cap(self):
+        _policy(ptl_cumulative_weight_cap_kg=None)
+        t = _tier(max_kg="5000")
+        q = _quote(t, weight="4999")
+        self.assertEqual(q["declared_weight_kg"], Decimal("4999.00"))
+
+    def test_ptl_claim_policy_scoped_separately_from_spot_truck(self):
+        from service_requests.models import GTClaimPolicy
+        from service_requests.services.claims_policy import policy_for_category
+
+        GTClaimPolicy.objects.create(
+            service_category=TRUCK, applies_to_ptl=False, is_enabled=True,
+            included_liability_cap=Decimal("5000.00"), cap_at_fare=True,
+            claim_window_hours=24, is_active=True,
+        )
+        GTClaimPolicy.objects.create(
+            service_category=TRUCK, applies_to_ptl=True, is_enabled=True,
+            included_liability_cap=Decimal("1000.00"), cap_at_fare=True,
+            claim_window_hours=72, is_active=True,
+        )
+        spot_pol = policy_for_category(TRUCK, is_ptl=False)
+        ptl_pol = policy_for_category(TRUCK, is_ptl=True)
+        self.assertEqual(spot_pol.included_liability_cap, Decimal("5000.00"))
+        self.assertEqual(spot_pol.claim_window_hours, 24)
+        self.assertEqual(ptl_pol.included_liability_cap, Decimal("1000.00"))
+        self.assertEqual(ptl_pol.claim_window_hours, 72)
+
+    def test_ptl_claim_policy_falls_back_to_generic_truck_row_when_no_ptl_row_exists(self):
+        from service_requests.models import GTClaimPolicy
+        from service_requests.services.claims_policy import policy_for_category
+
+        GTClaimPolicy.objects.create(
+            service_category=TRUCK, applies_to_ptl=False, is_enabled=True,
+            included_liability_cap=Decimal("5000.00"), cap_at_fare=True,
+            claim_window_hours=24, is_active=True,
+        )
+        pol = policy_for_category(TRUCK, is_ptl=True)
+        self.assertEqual(pol.included_liability_cap, Decimal("5000.00"))
+
+    def test_declared_value_risk_charge_off_by_default_without_opt_in(self):
+        _policy()
+        t = _tier()
+        q = _quote(t, weight="300", declared_value="10000")  # no risk_accepted
+        self.assertEqual(q["ptl_risk_charge"], Decimal("0.00"))
+        self.assertEqual(q["total"], q["freight_charge"])
+
+    def test_declared_value_risk_charge_applies_only_when_opted_in(self):
+        _policy(ptl_declared_value_risk_rate_percent=Decimal("2.00"))
+        t = _tier()
+        q = _quote(t, weight="300", declared_value="10000", risk_accepted=True)
+        self.assertEqual(q["ptl_risk_charge"], Decimal("200.00"))  # 2% of 10,000
+        self.assertEqual(q["total"], q["freight_charge"] + Decimal("200.00"))
+        self.assertEqual(q["ptl_declared_value"], "10000.00")
+
+    def test_risk_charge_disabled_when_admin_sets_rate_to_zero(self):
+        _policy(ptl_declared_value_risk_rate_percent=Decimal("0.00"))
+        t = _tier()
+        q = _quote(t, weight="300", declared_value="10000", risk_accepted=True)
+        self.assertEqual(q["ptl_risk_charge"], Decimal("0.00"))
+
+    def test_risk_charge_not_applied_without_a_declared_value(self):
+        _policy(ptl_declared_value_risk_rate_percent=Decimal("2.00"))
+        t = _tier()
+        q = _quote(t, weight="300", risk_accepted=True)
+        self.assertEqual(q["ptl_risk_charge"], Decimal("0.00"))

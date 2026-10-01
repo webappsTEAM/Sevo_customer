@@ -22,6 +22,22 @@ from rest_framework.views import APIView
 
 from utils.responses import success_response
 
+
+def _db_id_or_none(value):
+    """Positive database id from an int or an ASCII-digit string, else None.
+
+    str.isdigit() is True for e.g. '\u00b2' and int() then raises; a 5000-digit
+    string also raises. Both used to surface as HTTP 500 on public endpoints.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if 0 < value < 2**63 else None
+    if isinstance(value, str) and value.isascii() and value.isdigit() and len(value) <= 18:
+        n = int(value)
+        return n if n > 0 else None
+    return None
+
 from .models import GTFaq, Lane, ServiceArea, ServiceTier
 from .serializers import (
     GTFaqSerializer,
@@ -404,13 +420,14 @@ class LogisticsQuoteView(APIView):
         cargo_items = data.get("cargo_items") or data.get("items")
         goods_category = data.get("goods_category_id") or data.get("goods_category") or data.get("goods_type")
         declared_weight = data.get("declared_weight_kg") or data.get("weight_kg")
+        declared_cft = data.get("declared_cft")
         cargo_summary = None
 
-        if cargo_items or goods_category or declared_weight is not None:
+        if cargo_items or goods_category or declared_weight is not None or declared_cft:
             from service_requests.services.cargo_fitment import (
                 resolve_cargo_payload, evaluate_vehicle_fitment, recommend_vehicles_for_cargo
             )
-            category_id = int(goods_category) if isinstance(goods_category, int) or (isinstance(goods_category, str) and goods_category.isdigit()) else None
+            category_id = _db_id_or_none(goods_category)
             category_slug = str(goods_category) if category_id is None and goods_category else None
 
             cargo_summary = resolve_cargo_payload(
@@ -418,6 +435,7 @@ class LogisticsQuoteView(APIView):
                 goods_category_id=category_id,
                 goods_category_slug=category_slug,
                 declared_weight_kg=declared_weight,
+                declared_cft=declared_cft,
                 city=tier.city,
             )
 
@@ -474,6 +492,11 @@ class LogisticsQuoteView(APIView):
                 cargo_summary=cargo_summary,
                 waypoints=waypoints,
                 loading_help=loading_help,
+                # Round 13: GST/RCM configuration branch (off unless an
+                # Admin has configured a GTTaxPolicy with rcm_enabled=True
+                # for this category -- see gst_policy.resolve_tax_treatment).
+                service_category=category,
+                customer_gstin=data.get("customer_gstin"),
             )
         except TooManyStopsError as exc:
             return Response(
@@ -566,8 +589,8 @@ class GoodsItemListView(APIView):
         qs = GoodsItem.objects.filter(is_active=True)
         cat = request.query_params.get("category")
         if cat:
-            if cat.isdigit():
-                qs = qs.filter(category_id=int(cat))
+            if _db_id_or_none(cat) is not None:
+                qs = qs.filter(category_id=_db_id_or_none(cat))
             else:
                 qs = qs.filter(category__slug__iexact=cat)
         qs = qs.order_by("category", "order", "name")
@@ -592,9 +615,10 @@ class CargoFitmentEvaluationView(APIView):
         cargo_items = data.get("cargo_items") or data.get("items") or []
         goods_category = data.get("goods_category_id") or data.get("goods_category") or data.get("goods_type")
         declared_weight = data.get("declared_weight_kg") or data.get("weight_kg")
+        declared_cft = data.get("declared_cft")
         city = str(data.get("city") or "Hosur").strip()
 
-        category_id = int(goods_category) if isinstance(goods_category, int) or (isinstance(goods_category, str) and goods_category.isdigit()) else None
+        category_id = _db_id_or_none(goods_category)
         category_slug = str(goods_category) if category_id is None and goods_category else None
 
         cargo_summary = resolve_cargo_payload(
@@ -602,6 +626,7 @@ class CargoFitmentEvaluationView(APIView):
             goods_category_id=category_id,
             goods_category_slug=category_slug,
             declared_weight_kg=declared_weight,
+            declared_cft=declared_cft,
             city=city,
         )
 
@@ -1036,7 +1061,7 @@ class LogisticsSlotAvailabilityView(APIView):
                         booked_count = ServiceRequest.objects.filter(
                         preferred_date=target_date,
                         preferred_time=slot_label,
-                        status__in=["new_request", "assigned", "accepted", "in_progress", "scheduled"]
+                        status__in=["new_request", "assigned", "accepted", "in_progress", "scheduled", "confirmed", "unassigned"]
                         ).count()
                     if booked_count >= cap:
                         err = f"Slot is fully booked ({booked_count}/{cap} bookings filled)."

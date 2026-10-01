@@ -170,7 +170,8 @@ def _signature(parts):
 
 
 def compute_ptl_quote(*, tier, lane=None, declared_weight_kg, pickup_lat, pickup_lng,
-                      drop_lat, drop_lng, load_assist=False, expires_at=None, quote_id=None):
+                      drop_lat, drop_lng, load_assist=False, expires_at=None, quote_id=None,
+                      declared_value=None, risk_accepted=False):
     """Server-authoritative PTL quote. Pass expires_at/quote_id to re-derive an issued quote
     (verification); omit them to issue a fresh one."""
     policy = get_policy()
@@ -180,6 +181,11 @@ def compute_ptl_quote(*, tier, lane=None, declared_weight_kg, pickup_lat, pickup
     if weight > capacity:
         raise PTLError("PTL_WEIGHT_OVER_CAPACITY",
                        f"Declared weight ({weight} kg) exceeds {tier.name}'s capacity ({_money(capacity)} kg).")
+    cumulative_cap = policy.ptl_cumulative_weight_cap_kg
+    if cumulative_cap is not None and weight > _money(cumulative_cap):
+        raise PTLError("PTL_WEIGHT_OVER_CUMULATIVE_CAP",
+                       f"Declared weight ({weight} kg) exceeds the Part Truck Load consignment "
+                       f"limit of {_money(cumulative_cap)} kg.")
     if None in (pickup_lat, pickup_lng, drop_lat, drop_lng):
         raise PTLError("PTL_ROUTE_REQUIRED", "Pickup and drop locations are required.")
     if _straight_km(pickup_lat, pickup_lng, drop_lat, drop_lng) <= 0.05:
@@ -197,7 +203,20 @@ def compute_ptl_quote(*, tier, lane=None, declared_weight_kg, pickup_lat, pickup
     if min_fare is not None and freight < min_fare:
         freight, minimum_fare_applied = min_fare, True
     assist_fee = _money(policy.load_assist_fee or 0) if load_assist else Decimal("0.00")
-    total = _money(freight + assist_fee)
+    # Optional Porter-style "accepted risk" declared-value charge (porter.in/part-load-service):
+    # never automatic -- only applied when the customer declared a positive consignment value AND
+    # explicitly opted into the risk charge, and only when Admin has left the rate above 0.
+    risk_rate = _money(policy.ptl_declared_value_risk_rate_percent or 0)
+    declared_value_dec = None
+    risk_charge = Decimal("0.00")
+    if risk_accepted and declared_value not in (None, ""):
+        try:
+            declared_value_dec = _money(Decimal(str(declared_value)))
+        except (InvalidOperation, TypeError, ValueError):
+            raise PTLError("PTL_DECLARED_VALUE_INVALID", "Enter a valid declared consignment value.")
+        if declared_value_dec > 0 and risk_rate > 0:
+            risk_charge = _money(declared_value_dec * risk_rate / Decimal("100"))
+    total = _money(freight + assist_fee + risk_charge)
 
     now = timezone.now()
     if expires_at is None:
@@ -208,6 +227,7 @@ def compute_ptl_quote(*, tier, lane=None, declared_weight_kg, pickup_lat, pickup
         quote_id, expires_at, tier.id, getattr(lane, "id", None), weight, bool(load_assist),
         _r5(pickup_lat), _r5(pickup_lng), _r5(drop_lat), _r5(drop_lng),
         rate, min_weight, min_fare, assist_fee, capacity, _gst_rate_str(tier), total,
+        cumulative_cap, bool(risk_accepted), declared_value_dec, risk_rate, risk_charge,
     ])
     return LogisticsFareBreakdown(
         pricing_basis=PTL_PRICING_BASIS,
@@ -241,6 +261,11 @@ def compute_ptl_quote(*, tier, lane=None, declared_weight_kg, pickup_lat, pickup
         load_assist_fee=assist_fee,
         # Load Assist execution (driver side) is not implemented -- see module docstring.
         load_assist_execution="not_implemented" if load_assist else None,
+        ptl_declared_value=str(declared_value_dec) if declared_value_dec is not None else None,
+        ptl_risk_accepted=bool(risk_accepted),
+        ptl_declared_value_risk_rate_percent=str(risk_rate),
+        ptl_risk_charge=risk_charge,
+        ptl_cumulative_weight_cap_kg=str(cumulative_cap) if cumulative_cap is not None else None,
         total=total,
         gst_rate=_gst_rate_str(tier),
         gst_included=_gst_included(total, tier),
@@ -251,7 +276,8 @@ def compute_ptl_quote(*, tier, lane=None, declared_weight_kg, pickup_lat, pickup
 
 
 def verify_ptl_quote(*, tier, lane, declared_weight_kg, pickup_lat, pickup_lng, drop_lat, drop_lng,
-                     load_assist, quote_id, quote_hash, expires_at, submitted_amount):
+                     load_assist, quote_id, quote_hash, expires_at, submitted_amount,
+                     declared_value=None, risk_accepted=False):
     """Recompute the quote from current config and check the submitted one against it.
     Returns the authoritative breakdown. With no quote_id the booking is priced fresh, but the
     submitted total must still equal the server total."""
@@ -270,6 +296,7 @@ def verify_ptl_quote(*, tier, lane, declared_weight_kg, pickup_lat, pickup_lng, 
         tier=tier, lane=lane, declared_weight_kg=declared_weight_kg,
         pickup_lat=pickup_lat, pickup_lng=pickup_lng, drop_lat=drop_lat, drop_lng=drop_lng,
         load_assist=load_assist, expires_at=expires_at if quote_id else None, quote_id=quote_id or None,
+        declared_value=declared_value, risk_accepted=risk_accepted,
     )
     if quote_id and not constant_time_compare(str(quote_hash), breakdown["quote_hash"]):
         raise PTLError("PTL_QUOTE_MISMATCH",
@@ -299,6 +326,8 @@ def ptl_inputs_from_cart(cart_data):
         "expires_at": src.get("expires_at"),
         "declared_weight_kg": src.get("declared_weight_kg"),
         "load_assist": src.get("load_assist"),
+        "declared_value": src.get("declared_value") or src.get("ptl_declared_value"),
+        "risk_accepted": src.get("risk_accepted") or src.get("ptl_risk_accepted"),
     }
 
 
@@ -324,6 +353,7 @@ def resolve_ptl_fare(*, service_category, logistics_tier, logistics_lane, submit
         pickup_lat=pickup_lat, pickup_lng=pickup_lng, drop_lat=drop_lat, drop_lng=drop_lng,
         load_assist=assist, quote_id=c["quote_id"], quote_hash=c["quote_hash"],
         expires_at=c["expires_at"], submitted_amount=submitted_amount,
+        declared_value=c["declared_value"], risk_accepted=_truthy(c["risk_accepted"]),
     )
     return breakdown["total"], breakdown
 
@@ -409,6 +439,7 @@ def preview_ptl_revision(booking, *, declared_weight_kg=None, drop_lat=None, dro
         tier=booking.logistics_tier, lane=booking.logistics_lane, declared_weight_kg=weight,
         pickup_lat=booking.latitude, pickup_lng=booking.longitude, drop_lat=d_lat, drop_lng=d_lng,
         load_assist=bool(old.get("load_assist")),
+        declared_value=old.get("ptl_declared_value"), risk_accepted=bool(old.get("ptl_risk_accepted")),
     )
     from .fare_reconciliation import _payable_after_adjustments
     payable, discount = _payable_after_adjustments(booking, quote["total"])
@@ -441,6 +472,7 @@ def apply_ptl_revision(booking, user, *, declared_weight_kg=None, drop_lat=None,
             pickup_lat=booking.latitude, pickup_lng=booking.longitude, drop_lat=d_lat, drop_lng=d_lng,
             load_assist=bool(old.get("load_assist")), quote_id=quote_id, quote_hash=quote_hash,
             expires_at=expires_at, submitted_amount=submitted_amount,
+            declared_value=old.get("ptl_declared_value"), risk_accepted=bool(old.get("ptl_risk_accepted")),
         )
         prev_drop = (booking.drop_latitude, booking.drop_longitude)
         if (d_lat, d_lng) != prev_drop:

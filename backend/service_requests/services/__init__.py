@@ -906,9 +906,17 @@ def file_insurance_claim(booking, customer, description, claimed_amount, attachm
     if _why:
         raise ValidationError({"detail": _why})
 
-    claimed_amount = Decimal(str(claimed_amount))
+    try:
+        claimed_amount = Decimal(str(claimed_amount).strip())
+    except (InvalidOperation, ValueError, TypeError):
+        raise ValidationError({"detail": "Enter a valid claim amount."})
+    if not claimed_amount.is_finite():
+        raise ValidationError({"detail": "Enter a valid claim amount."})
     if claimed_amount <= 0:
         raise ValidationError({"detail": "Claimed amount must be greater than zero."})
+    _f = InsuranceClaim._meta.get_field("claimed_amount")
+    if claimed_amount >= Decimal(10) ** (_f.max_digits - _f.decimal_places):
+        raise ValidationError({"detail": "Claimed amount is too large."})
 
     with transaction.atomic():
         claim = InsuranceClaim.objects.create(

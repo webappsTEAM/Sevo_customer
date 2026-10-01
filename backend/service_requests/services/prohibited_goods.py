@@ -38,7 +38,7 @@ PROHIBITED_CATEGORIES = {
     "EXPLOSIVES_AND_PYROTECHNICS": {
         "label": "Explosives & Pyrotechnics",
         "patterns": [
-            r"\b(dynamite|gunpowder|blasting cap|detonator|fireworks|firecracker|crackers|pyrotechnic|pyrotechnics|rDX|tNT)\b",
+            r"\b(dynamite|gunpowder|blasting caps?|detonators?|fireworks?|fire\s?crackers?|crackers?|pyrotechnics?|rDX|tNT)\b",
         ],
         "message": "Transportation of fireworks, crackers, dynamite, or commercial pyrotechnics is strictly prohibited.",
     },

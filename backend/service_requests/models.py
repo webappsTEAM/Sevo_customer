@@ -376,25 +376,27 @@ class ServiceRequest(models.Model):
     # invoice (Porter's customer terms: registered customers intimate it at
     # booking). Optional; validated for format only -- never used to change a fare.
     customer_gstin = models.CharField(max_length=15, blank=True, default="")
-    # Added 2026-09-30: the live database already has this column (a NOT
-    # NULL "eway_bill_number" on this table, confirmed by the same class of
-    # crash customer_gstin had -- "Failed to persist route trip stops: null
-    # value in column \"eway_bill_number\" ... violates not-null
-    # constraint", surfacing even for a plain grocery/vegetable order with
-    # no logistics leg at all), but no Django model field or migration for
-    # it existed anywhere in this repo (checked service_requests and every
-    # migration through 0101; also checked the separate VEN/CalTrack vendor
-    # codebase, which is its own Django project on its own database, so it
-    # can't be the source of this column either -- this is CUS-only drift).
-    # Registering it here -- see the accompanying migration, which only
-    # updates Django's migration state (SeparateDatabaseAndState) rather
-    # than re-adding a column that's already physically there -- means
-    # Django's ORM always supplies a real string on every ServiceRequest
-    # creation from now on, the same fix that resolved the customer_gstin
-    # crash.
-    eway_bill_number = models.CharField(max_length=20, blank=True, default="")
+    # Added 2026-09-30: the live database already had a NOT NULL
+    # "eway_bill_number" column (same drift class as customer_gstin's crash)
+    # before any Django model field or migration for it existed -- migration
+    # 0102 registered that state only (SeparateDatabaseAndState). Migration
+    # 0116 then properly re-adds the field at its real max_length=50 (see
+    # the field below); the max_length=20 placeholder that used to live here
+    # was dead code superseded by that field and has been removed.
     insurance_premium = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     insurance_liability_cap = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    # Gap 1 (Round 8 verification vs Porter public GT docs): Porter's own
+    # customer terms put e-way-bill responsibility on the CONSIGNOR under
+    # Indian GST law (movement above the statutory value/distance
+    # threshold) -- Porter publishes no e-way-bill *product* feature of its
+    # own, just that TOS statement. So this is a record/attach field, not a
+    # generation or government-API integration: the customer (or Admin)
+    # attaches the e-way-bill number/document they already generated
+    # elsewhere. See GTOperationsConfig.eway_bill_required_above for the
+    # admin-configurable "warn if missing above this declared value"
+    # threshold used at booking/dispatch time.
+    eway_bill_number = models.CharField(max_length=50, blank=True, default="")
+    eway_bill_document = models.FileField(upload_to="service_requests/eway_bills/", null=True, blank=True)
     # GT-B-03: logistics-only sub-phase, independent of Status -- see the
     # LogisticsLeg docstring above. History is append-only, one entry per
     # set_logistics_leg() call: {"leg": ..., "at": iso8601, "by": user_id}.
@@ -1450,6 +1452,11 @@ class CatalogChangeLog(models.Model):
         # the `logistics` app, which is precisely the case a soft reference
         # handles and a ForeignKey would not.
         SERVICE_TIER = "SERVICE_TIER", "Goods & Transport Tier"
+        # GT tax/RCM policy (Round 13, Final Configurability Pass). Same
+        # reasoning as SERVICE_TIER above: this soft reference already spans
+        # unrelated tables, so GTTaxPolicy (below) reuses it rather than a
+        # bespoke audit model.
+        TAX_POLICY = "TAX_POLICY", "GT Tax / RCM Policy"
 
     class Action(models.TextChoices):
         CREATE        = "CREATE",        "Created"
@@ -4325,6 +4332,12 @@ class GTInsurancePolicy(models.Model):
     Admin override for transit-insurance terms. With no active row the INSURANCE_RATE /
     INSURANCE_MAX_LIABILITY settings apply exactly as before; an active row replaces them.
     Set is_offered=False to stop offering insurance without a deploy.
+
+    Gap 5 (Round 8 verification): Porter offers NO goods-in-transit insurance product at
+    all -- it is explicitly out of scope for Porter, and Porter's own terms tell customers
+    to self-insure. This model is a SEVO-ONLY optional value-add with no Porter equivalent
+    to match. Do not read a future gap report's "insurance doesn't match Porter" as a real
+    finding -- there is nothing on Porter's side to match against.
     """
     is_offered = models.BooleanField(default=True)
     premium_percent = models.DecimalField(
@@ -4357,6 +4370,15 @@ class GTClaimPolicy(models.Model):
         max_length=100, blank=True, default="",
         help_text="Blank applies to all GT bookings; a category value overrides it.",
     )
+    applies_to_ptl = models.BooleanField(
+        default=False,
+        help_text=(
+            "Scope this policy to Part Truck Load bookings specifically. PTL bookings share "
+            "service_category='goods_transport_truck' with ordinary Spot truck bookings, so this "
+            "flag is the only way to give PTL its own claim cap/window distinct from Spot truck "
+            "(Porter-documented PTL cap ~Rs 1,000 / 72h window vs Rs 5,000 / 24h for Spot truck). "
+            "A row with this on is only ever matched for a booking whose logistics_booking_mode "
+            "is 'ptl'; non-PTL bookings always skip it."))
     is_enabled = models.BooleanField(default=False)
     included_liability_cap = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True,
@@ -4414,6 +4436,16 @@ class GTOperationsConfig(models.Model):
         default=5, help_text="Wrong delivery-OTP entries allowed before the driver is locked out.")
     delivery_otp_required = models.BooleanField(
         default=True, help_text="Require the customer's delivery OTP before a trip can be completed.")
+    # Gap 1: Porter has no e-way-bill product of its own -- Indian GST law puts the
+    # e-way-bill obligation on the consignor above this declared-value threshold, and
+    # Porter's TOS just says so. SEVO WARNS (never hard-blocks, matching Porter's own
+    # lack of enforcement) if eway_bill_number/document are missing above this value.
+    # SEVO business default: Rs 50,000 (the commonly cited intra-state e-way-bill
+    # threshold under Indian GST rules) -- not a Porter-documented number, admin-editable.
+    eway_bill_required_above = models.DecimalField(
+        max_digits=12, decimal_places=2, default=50000,
+        help_text="Declared value at/above which a missing e-way-bill number/document "
+                   "triggers a warning at booking/dispatch (never a hard block).")
     is_active = models.BooleanField(default=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -4463,6 +4495,23 @@ class GTPTLPricingPolicy(models.Model):
         max_digits=10, decimal_places=2, default=0,
         validators=[MinValueValidator(Decimal("0.00"))],
         help_text="Flat Load Assist fee per booking, when offered.")
+    ptl_cumulative_weight_cap_kg = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True, default=Decimal("3000.00"),
+        validators=[MinValueValidator(Decimal("0.01"))],
+        help_text=(
+            "Porter-documented (porter.in/part-load-service): a Part Truck Load consignment's "
+            "declared weight may not exceed this, independent of the vehicle tier's own capacity. "
+            "Default 3000 kg is Porter's published figure; read here as a per-consignment cap "
+            "(Porter's wording does not distinguish per-consignment vs cumulative-across-bookings; "
+            "per-consignment is the safer, more literal reading -- see ptl_pricing.py). Blank = no cap."))
+    ptl_declared_value_risk_rate_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal("2.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+        help_text=(
+            "Porter-documented (porter.in/part-load-service): optional 'accepted risk' declared-value "
+            "charge, as a percent of the declared consignment value. Only applied when the customer "
+            "declares a value AND opts into the risk charge for this PTL booking -- never automatic. "
+            "Set to 0 to disable the option entirely."))
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -4477,6 +4526,165 @@ class GTPTLPricingPolicy(models.Model):
 
 def get_gt_ptl_policy():
     return GTPTLPricingPolicy.objects.filter(is_active=True).order_by("-updated_at", "-id").first()
+
+
+class GTTaxPolicy(models.Model):
+    """
+    GST / RCM (Reverse Charge Mechanism) configuration for Goods & Transport,
+    added in Round 13 (Final Configurability Pass) to close the RCM gap
+    Round 11/12 documented as a genuine, deferred architectural item.
+
+    Scope of what this model IS:
+      - A configuration surface. Every field is Admin/DB-editable and every
+        default is the safe, do-nothing default (RCM off), so registering
+        this model changes no existing booking's behavior until an Admin
+        makes an explicit decision.
+      - The GST *rate itself* is NOT duplicated here -- it already exists,
+        Admin-configurable, per vehicle tier / package (ServiceTier.gst_rate
+        / Package.gt_gst_rate, verified working end-to-end including on
+        invoices in test_gt_gst_configurable.py). This model only adds the
+        RCM branch on top of that existing, working GST-rate mechanism.
+      - A "specified person" classification kept DELIBERATELY simple, per
+        the round's brief: whether RCM applies is Admin-configured as "RCM
+        applies when the customer has supplied a GSTIN" -- not an invented
+        legal classification of business types. Determining the *complete*
+        legal test for who counts as a "specified person" recipient under
+        Indian GST law for a Goods Transport Agency is exactly the kind of
+        tax-compliance decision this model is built to hold, once decided,
+        without ever having tried to guess it here.
+
+    Scope of what this model is NOT:
+      - It does NOT split CGST/SGST vs IGST by place of supply. That is a
+        materially larger, separate undertaking (which state each party is
+        registered/located in, intra-state vs inter-state rules) and is
+        left as a documented external/legal decision -- see
+        rcm_statement's help_text and the Round 13 report section for this.
+      - It does NOT decide which GT service categories are or are not
+        actually subject to RCM under real Indian tax law. That is exactly
+        rcm_enabled: an Admin opt-in, defaulted off, per scope.
+
+    Resolution mirrors GTClaimPolicy / GTCancellationPolicy: an
+    Admin-scoped row for this service_category wins if present and
+    currently effective; otherwise the platform-wide (blank service_category)
+    row; otherwise no policy at all (today's flat-GST, no-RCM behavior).
+    """
+    service_category = models.CharField(
+        max_length=100, blank=True, default="",
+        help_text=(
+            "Blank applies platform-wide to all GT bookings (goods_transport, "
+            "goods_transport_truck, goods_transport_two_wheeler, packers_movers, etc). "
+            "Set a specific category to scope this policy -- e.g. by service, package "
+            "or vehicle/service mode, since SEVO's service_category values already "
+            "distinguish those (truck vs two-wheeler vs packers & movers)."
+        ),
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Inactive rows are never resolved, same convention as every other GT policy model.",
+    )
+    gst_enabled = models.BooleanField(
+        default=True,
+        help_text=(
+            "Master GST switch for bookings this policy scopes. True (default) keeps "
+            "today's behavior: GST is shown per whatever rate is configured on the "
+            "vehicle tier/package (blank/0 there already means 'no GST'). Set False "
+            "here to force-suppress the GST line for this scope regardless of the "
+            "tier/package rate -- e.g. while a GST-registration decision is pending."
+        ),
+    )
+    rcm_enabled = models.BooleanField(
+        default=False,
+        help_text=(
+            "Reverse Charge Mechanism opt-in for this scope. Off by default -- the safe, "
+            "do-nothing setting. An Admin who has confirmed (outside this system) that "
+            "RCM genuinely applies to this GT service turns this on; nothing in SEVO "
+            "decides that for them."
+        ),
+    )
+    rcm_applies_when_gstin_registered = models.BooleanField(
+        default=True,
+        help_text=(
+            "The simple, configuration-only 'specified person' classification the round's "
+            "brief calls for: when RCM is enabled for this scope, an order is treated as "
+            "RCM-applicable if the customer has supplied a GSTIN (ServiceRequest.customer_gstin "
+            "is non-blank). This is NOT a complete legal classification of which recipient "
+            "categories actually qualify as a 'specified person' under GST law -- it is the "
+            "safely-representable-as-configuration proxy the brief asked for. A more precise "
+            "classification (by recipient business type) remains an external/legal decision; "
+            "if SEVO ever needs one, it is a new field on top of this, not a replacement of it."
+        ),
+    )
+    rcm_statement = models.TextField(
+        default=(
+            "Tax payable on reverse charge basis. GST on this consignment is not charged "
+            "by the supplier and is to be self-assessed and paid by the recipient under "
+            "the applicable reverse charge provisions."
+        ),
+        help_text=(
+            "Exact wording printed on an invoice when RCM applies to that booking, in place "
+            "of a charged GST line. This is the standard, universally-true statement GST law "
+            "requires on an RCM invoice, not a Porter-specific or invented value -- Admin-editable "
+            "so Finance/Legal can adjust the exact wording without a code change."
+        ),
+    )
+    # CGST/SGST vs IGST place-of-supply splitting is intentionally NOT modeled
+    # here -- see the class docstring and the Round 13 report. This field
+    # exists only so that decision, once made, has an obvious place to attach
+    # a reason/reference without another migration.
+    place_of_supply_note = models.TextField(
+        blank=True, default="",
+        help_text=(
+            "Not used by any calculation. Free-text space to record a future CGST/SGST vs "
+            "IGST place-of-supply decision once Legal/Finance makes one -- deliberately NOT "
+            "wired to any logic this round; see Round 13 report."
+        ),
+    )
+    effective_from = models.DateField(
+        null=True, blank=True,
+        help_text="This policy applies only to bookings quoted on/after this date. Blank = no start restriction.",
+    )
+    effective_to = models.DateField(
+        null=True, blank=True,
+        help_text="This policy applies only to bookings quoted on/before this date (inclusive). Blank = no end restriction.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "GT Tax / RCM Policy"
+        verbose_name_plural = "GT Tax / RCM Policies"
+        ordering = ["-updated_at", "-id"]
+
+    def __str__(self):
+        return f"GTTaxPolicy({self.service_category or 'platform-wide'}, rcm={self.rcm_enabled})"
+
+    def is_effective(self, as_of=None):
+        import datetime as _dt
+        today = as_of or _dt.date.today()
+        if self.effective_from and today < self.effective_from:
+            return False
+        if self.effective_to and today > self.effective_to:
+            return False
+        return True
+
+
+def get_active_gt_tax_policy(service_category, as_of=None):
+    """
+    Resolve the GTTaxPolicy that applies to `service_category` right now (or
+    at `as_of`): the most-recently-updated active, currently-effective row
+    scoped to that exact category, falling back to the platform-wide
+    (blank service_category) row, or None if neither exists -- meaning
+    today's unmodified, no-RCM, tier/package-rate-driven GST behavior.
+    """
+    qs = GTTaxPolicy.objects.filter(is_active=True)
+    candidates = [p for p in qs if p.is_effective(as_of)]
+    for p in candidates:
+        if p.service_category == (service_category or ""):
+            return p
+    for p in candidates:
+        if not p.service_category:
+            return p
+    return None
 
 
 class WalletTopUp(models.Model):

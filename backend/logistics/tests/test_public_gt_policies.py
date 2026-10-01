@@ -2,12 +2,20 @@ from decimal import Decimal
 
 from rest_framework.test import APITestCase
 
-from service_requests.models import GTCancellationPolicy, GTWaitingChargePolicy
+from service_requests.models import GTCancellationPolicy, GTClaimPolicy, GTWaitingChargePolicy
 
 URL = "/api/logistics/policies/"
 
 
 class PublicGTPolicyTests(APITestCase):
+    def setUp(self):
+        # Round 9 (migration 0117) seeded Porter-documented default cancellation/claim
+        # policy rows so real GT bookings always have a live policy. These tests probe
+        # the "nothing configured" and "exactly what I created" cases explicitly, so
+        # clear the seeded defaults here -- only this TestCase's own transaction is affected.
+        GTCancellationPolicy.objects.all().delete()
+        GTClaimPolicy.objects.all().delete()
+
     def get(self, cat="goods_transport_truck"):
         r = self.client.get(URL, {"service_category": cat})
         return r, (r.json().get("data") or {})
