@@ -649,6 +649,7 @@ export function App() {
               <Route path={routes.settings_developer} element={<SettingsPage section="developer" />} />
               <Route path={routes.settings_billing} element={<SettingsPage section="billing" />} />
               <Route path={routes.settings_invoices} element={<SettingsPage section="invoices" />} />
+              <Route path={routes.settings_pricing} element={<SettingsPage section="pricing" />} />
             </Route>
           </Route>
 

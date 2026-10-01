@@ -20,6 +20,7 @@ export const routes = {
   settings_integrations: "/settings/integrations",
   settings_developer: "/settings/developer",
   settings_billing: "/settings/billing",
+  settings_pricing: "/settings/pricing",
   settings_data: "/settings/data",
   onboarding: "/onboarding",
   accept_invite: "/accept-invite",
