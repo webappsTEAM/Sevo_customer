@@ -2,6 +2,9 @@ from .settings import *
 
 ALLOWED_HOSTS = ["*"]
 
+# Ensure internal HTTP test client avoids unwanted 301 redirects
+SECURE_SSL_REDIRECT = False
+
 # Override database to SQLite to run tests completely isolated and fast without PostgreSQL dependency
 DATABASES = {
     "default": {
