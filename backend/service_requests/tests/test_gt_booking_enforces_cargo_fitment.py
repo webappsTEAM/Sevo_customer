@@ -64,7 +64,17 @@ class BookingEnforcesCargoFitmentTests(TestCase):
 
     def test_booking_without_cargo_is_unchanged(self):
         fare, _ = self._book()
-        self.assertEqual(fare, Decimal("190.00"))
+        # This tier is distance-priced, so its authoritative fare is not its
+        # marketing starting price. An empty cargo payload must preserve the
+        # exact same quote produced when cargo is omitted altogether.
+        expected_fare, _ = resolve_logistics_fare_v2(
+            service_category="goods_transport_truck",
+            logistics_tier=self.tier,
+            logistics_lane=None,
+            submitted_amount=Decimal("190"),
+            **P,
+        )
+        self.assertEqual(fare, expected_fare)
 
 
 class UnlistedGoodsDeclaredVolumeTests(BookingEnforcesCargoFitmentTests):
