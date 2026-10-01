@@ -420,9 +420,10 @@ class LogisticsQuoteView(APIView):
         cargo_items = data.get("cargo_items") or data.get("items")
         goods_category = data.get("goods_category_id") or data.get("goods_category") or data.get("goods_type")
         declared_weight = data.get("declared_weight_kg") or data.get("weight_kg")
+        declared_cft = data.get("declared_cft")
         cargo_summary = None
 
-        if cargo_items or goods_category or declared_weight is not None:
+        if cargo_items or goods_category or declared_weight is not None or declared_cft:
             from service_requests.services.cargo_fitment import (
                 resolve_cargo_payload, evaluate_vehicle_fitment, recommend_vehicles_for_cargo
             )
@@ -434,6 +435,7 @@ class LogisticsQuoteView(APIView):
                 goods_category_id=category_id,
                 goods_category_slug=category_slug,
                 declared_weight_kg=declared_weight,
+                declared_cft=declared_cft,
                 city=tier.city,
             )
 
@@ -613,6 +615,7 @@ class CargoFitmentEvaluationView(APIView):
         cargo_items = data.get("cargo_items") or data.get("items") or []
         goods_category = data.get("goods_category_id") or data.get("goods_category") or data.get("goods_type")
         declared_weight = data.get("declared_weight_kg") or data.get("weight_kg")
+        declared_cft = data.get("declared_cft")
         city = str(data.get("city") or "Hosur").strip()
 
         category_id = _db_id_or_none(goods_category)
@@ -623,6 +626,7 @@ class CargoFitmentEvaluationView(APIView):
             goods_category_id=category_id,
             goods_category_slug=category_slug,
             declared_weight_kg=declared_weight,
+            declared_cft=declared_cft,
             city=city,
         )
 
@@ -1057,7 +1061,7 @@ class LogisticsSlotAvailabilityView(APIView):
                         booked_count = ServiceRequest.objects.filter(
                         preferred_date=target_date,
                         preferred_time=slot_label,
-                        status__in=["new_request", "assigned", "accepted", "in_progress", "scheduled"]
+                        status__in=["new_request", "assigned", "accepted", "in_progress", "scheduled", "confirmed", "unassigned"]
                         ).count()
                     if booked_count >= cap:
                         err = f"Slot is fully booked ({booked_count}/{cap} bookings filled)."

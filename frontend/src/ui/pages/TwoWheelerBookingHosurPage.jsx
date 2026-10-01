@@ -858,7 +858,9 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
           const twCats = categories.filter((c) => c.allows_two_wheeler && !c.is_prohibited)
           setDynamicCategories(twCats)
           if (twCats.length > 0) {
-            setSelectedGoodsType((prev) => (prev && twCats.some(c => c.name === prev)) ? prev : twCats[0].name)
+            // E2E QA 2026-10-01: prefer a neutral 'General' category as the default. Preselecting the first category
+            // (Furnitures) recorded a goods type the customer never chose on bookings with no declared cargo.
+            setSelectedGoodsType((prev) => (prev && twCats.some(c => c.name === prev)) ? prev : (twCats.find(c => /^general/i.test(c.name || "")) || twCats[0]).name)
           }
         } else {
           setCatalogError("Goods catalog temporarily unavailable. Please retry.")

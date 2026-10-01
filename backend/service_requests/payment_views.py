@@ -170,6 +170,38 @@ class PaymentInitiateView(APIView):
         if due_error:
             return _error(due_error)
 
+        # E2E QA 2026-10-01: every initiate call minted a NEW gateway order, and every order could be paid and
+        # verified. A customer whose first payment screen timed out and who retried therefore ended up with
+        # two live orders and could be charged twice for one booking. For Goods & Transport (never for other
+        # services) an open order for the same amount is handed back instead of creating another one.
+        if (sr.service_category or "").strip().lower() in _LOGISTICS_CATEGORIES:
+            _open = Payment.objects.filter(
+                service_request=sr, status=ServiceRequest.PaymentStatus.PENDING, amount=amount_due,
+                gateway__in=("razorpay", "sandbox"),
+                created_at__gte=timezone.now() - __import__("datetime").timedelta(minutes=30),
+            ).order_by("-created_at").first()
+            if _open is not None and _open.provider_order_id:
+                return _success(
+                    data={
+                        "order_id": _open.provider_order_id,
+                        "amount": float(amount_due),
+                        "booking_total": float(sr.total_amount),
+                        "currency": "INR",
+                        "booking_id": sr.id,
+                        "request_id": sr.request_id,
+                        "customer_name": sr.customer_name,
+                        "customer_email": sr.email or "",
+                        "customer_phone": sr.phone or "",
+                        "description": f"Payment for {sr.issue_title}",
+                        "key_id": settings.RAZORPAY_KEY_ID if _open.gateway == "razorpay" else "",
+                        "provider": _open.gateway,
+                        "sandbox": _open.gateway == "sandbox",
+                        "payment_id": _open.id,
+                        **({"provider": "sandbox", "mock": True} if _open.gateway == "sandbox" else {}),
+                    },
+                    message="Payment order already open.",
+                )
+
         provider = configured_provider()
         razorpay_configured = bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
         paytm_configured = bool(settings.PAYTM_MID and settings.PAYTM_MERCHANT_KEY)
@@ -456,6 +488,7 @@ class PaymentVerifyView(APIView):
 
     def _finalize(self, request, sr, payment):
         """Everything that follows a payment being recorded PAID (shared with wallet payment)."""
+        _prev_txn = sr.transaction_id
         sr.transaction_id = payment.razorpay_payment_id
         sr.payment_gateway = payment.gateway
         if not sr.invoice_id:
@@ -463,6 +496,71 @@ class PaymentVerifyView(APIView):
 
         # A logistics trip that is already past payment (a balance paid after the final fare
         # rose) only records the money: it must never re-run the booking confirmation/dispatch.
+        if (sr.service_category or "").strip().lower() in _LOGISTICS_CATEGORIES and \
+                sr.status != ServiceRequest.Status.WAITING_FOR_PAYMENT and \
+                sr.payment_status == ServiceRequest.PaymentStatus.PAID and not _has_balance_due(sr) and \
+                _prev_txn and _prev_txn != payment.razorpay_payment_id:
+            # The booking was already fully paid by another order: this money is an extra charge.
+            # Keep the original transaction on the booking and flag this payment for refund.
+            payment.error_code = "duplicate_payment_refund_required"
+            payment.error_description = (
+                f"Booking {sr.request_id} was already paid by {_prev_txn}; "
+                f"{payment.razorpay_payment_id} is a duplicate and needs a refund."
+            )
+            payment.save(update_fields=["error_code", "error_description", "updated_at"])
+            logger.error("[DUPLICATE_PAYMENT] %s", payment.error_description)
+            return _success(
+                data={
+                    "request_id":     sr.request_id,
+                    "booking_status": sr.status,
+                    "payment_status": sr.payment_status,
+                    "transaction_id": _prev_txn,
+                    "invoice_id":     sr.invoice_id,
+                    "duplicate_payment": True,
+                },
+                message="This booking was already paid. Your extra payment has been recorded and flagged for refund.",
+            )
+
+        # Money arrived for a booking that was cancelled (or rejected) while the customer was at the
+        # gateway. The gateway already took it, so record it truthfully, keep the booking cancelled
+        # (never re-confirm/dispatch), and queue a refund -- otherwise the customer is charged for a
+        # booking that no longer exists and nothing tracks it.
+        if sr.status in (ServiceRequest.Status.CANCELLED, ServiceRequest.Status.REJECTED):
+            sr.payment_status = ServiceRequest.PaymentStatus.PAID
+            sr.save(update_fields=["transaction_id", "payment_gateway", "invoice_id", "payment_status", "updated_at"])
+            payment.error_code = "payment_after_cancellation_refund_required"
+            payment.error_description = (
+                f"Booking {sr.request_id} was cancelled before payment {payment.razorpay_payment_id} "
+                f"arrived; the amount needs a refund."
+            )
+            payment.save(update_fields=["error_code", "error_description", "updated_at"])
+            logger.error("[PAYMENT_AFTER_CANCELLATION] %s", payment.error_description)
+            try:
+                from .models import RefundRequest, RefundStatus, RefundReason, RefundType
+                from . import services as sr_services
+                already = RefundRequest.objects.filter(booking=sr, status__in=[
+                    RefundStatus.PENDING, RefundStatus.INFO_REQUESTED, RefundStatus.APPROVED_FULL,
+                    RefundStatus.APPROVED_PARTIAL, RefundStatus.SENT_TO_FINANCE]).exists()
+                if not already:
+                    sr_services.create_refund_request(
+                        booking=sr, customer=sr.customer, amount=payment.amount, reason=RefundReason.OTHER,
+                        additional_notes=f"Auto-created: payment {payment.razorpay_payment_id} arrived after the booking was cancelled.",
+                        refund_type=RefundType.FULL,
+                    )
+            except Exception:
+                logger.exception("Could not queue refund for payment-after-cancellation on booking %s", sr.id)
+            return _success(
+                data={
+                    "request_id":     sr.request_id,
+                    "booking_status": sr.status,
+                    "payment_status": sr.payment_status,
+                    "transaction_id": sr.transaction_id,
+                    "invoice_id":     sr.invoice_id,
+                    "refund_required": True,
+                },
+                message="This booking was cancelled before your payment arrived. A refund has been requested.",
+            )
+
         if (sr.service_category or "").strip().lower() in _LOGISTICS_CATEGORIES and \
                 sr.status != ServiceRequest.Status.WAITING_FOR_PAYMENT:
             sr.payment_status = ServiceRequest.PaymentStatus.PAID
@@ -1168,6 +1266,12 @@ class InvoiceDownloadView(APIView):
         _fb = getattr(sr, "fare_breakdown", None)
         if isinstance(_fb, dict) and _fb.get("pricing_basis") == "ptl_per_kg":
             gt_snapshot = _fb
+        # E2E QA 2026-10-01: a GT booking made without cart_data (e.g. straight API client) has no
+        # logistics_snapshot in the cart, so the invoice fell back to one opaque line with no GST. The
+        # booking's own locked quote (fare_breakdown) is the same source of truth, so use it.
+        elif (gt_snapshot is None and isinstance(_fb, dict) and _fb.get("quote_id") and _fb.get("total") is not None
+              and sr.service_category in ("goods_transport_truck", "goods_transport_two_wheeler")):
+            gt_snapshot = _fb
         if gt_snapshot:
             # Goods transport: itemise the locked quote instead of one opaque
             # "Service" line. Rows come only from the stored snapshot, so the
@@ -1249,7 +1353,24 @@ class InvoiceDownloadView(APIView):
                 _disc = _D(str(sr.discount_amount or 0)) if getattr(sr, "coupon_id", None) else _D("0")
                 from .services.extra_charges import applied_entries
                 _extras = [(f"{e['label']} (receipt)", _D(str(e["amount"]))) for e in applied_entries(sr)]
-                other = total_q - _prem + _disc - sum((a for _, a in _extras), _D("0")) - sum((a for _, a in rows), _D("0"))
+                # GT_INVOICE_RECON_ADJUSTMENTS: itemise the delivery-time reconciliation (waiting time,
+                # extra stops, approved extra work, distance variance) under its own label instead of
+                # letting it fall into the "surge / minimum fare" residual. Toll/parking are already
+                # shown as receipts above.
+                _recon_rows = []
+                try:
+                    _rec = getattr(sr, "fare_reconciliation", None)
+                    for _a in (getattr(_rec, "adjustments", None) or []):
+                        if not isinstance(_a, dict) or _a.get("code") == "TOLL_PARKING":
+                            continue
+                        _amt_adj = _D(str(_a.get("amount") or "0"))
+                        if _amt_adj != 0:
+                            _recon_rows.append((str(_a.get("label") or _a.get("code") or "Adjustment"), _amt_adj))
+                except Exception:
+                    _recon_rows = []
+                other = (total_q - _prem + _disc - sum((a for _, a in _extras), _D("0"))
+                         - sum((a for _, a in rows), _D("0")) - sum((a for _, a in _recon_rows), _D("0")))
+                rows.extend(_recon_rows)
                 if abs(other) >= _D("0.01"):
                     rows.append(("Surge / minimum fare adjustment", other))
                 rows.extend(_extras)

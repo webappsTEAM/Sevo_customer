@@ -795,6 +795,7 @@ def resolve_logistics_fare_v2(
     booking_mode=None,
     declared_weight_kg=None,
     load_assist=None,
+    request_cargo=None,
 ):
     """
     GT-B-01. Returns (fare, breakdown_or_None).
@@ -867,6 +868,26 @@ def resolve_logistics_fare_v2(
             if raw_items or goods_type:
                 target_city = getattr(logistics_tier, "city", None)
                 cargo_summary = resolve_cargo_payload(cargo_items=raw_items, goods_category_slug=goods_type, city=target_city)
+
+        # E2E-QA 2026-10-01: cargo sent as top-level booking fields (not wrapped in cart_data) was
+        # never validated, so an over-capacity load, an unknown category or unknown items booked fine
+        # while the quote endpoint rejected the same input. Resolve it with the same resolver.
+        if cargo_summary is None and request_cargo:
+            _rc_items = request_cargo.get("cargo_items") or request_cargo.get("items") or None
+            _rc_cat = request_cargo.get("goods_category_id") or request_cargo.get("goods_category") or request_cargo.get("goods_type")
+            _rc_wt = request_cargo.get("declared_weight_kg")
+            _rc_cft = request_cargo.get("declared_cft")
+            if _rc_items or _rc_cat or _rc_wt is not None or _rc_cft:
+                from .cargo_fitment import resolve_cargo_payload
+                _cid = int(_rc_cat) if isinstance(_rc_cat, int) and not isinstance(_rc_cat, bool) else (int(_rc_cat) if isinstance(_rc_cat, str) and _rc_cat.isascii() and _rc_cat.isdigit() and len(_rc_cat) <= 18 else None)
+                cargo_summary = resolve_cargo_payload(
+                    cargo_items=_rc_items,
+                    goods_category_id=_cid,
+                    goods_category_slug=(str(_rc_cat) if _cid is None and _rc_cat else None),
+                    declared_weight_kg=_rc_wt,
+                    declared_cft=_rc_cft,
+                    city=getattr(logistics_tier, "city", None),
+                )
 
         if submitted_expires_at:
             try:
@@ -1012,6 +1033,13 @@ def resolve_logistics_fare_v2(
 
         if cargo_summary and cargo_summary.get("has_prohibited", False):
             raise UnresolvedLogisticsFareError(cargo_summary.get("prohibited_reason") or "Prohibited cargo cannot be transported.")
+
+        # Server-side fitment gate (same rule the quote endpoint applies): the booked vehicle must be able to carry the cargo.
+        if cargo_summary and logistics_tier is not None:
+            from .cargo_fitment import evaluate_vehicle_fitment
+            _is_fit, _fit_reason = evaluate_vehicle_fitment(logistics_tier, cargo_summary)
+            if not _is_fit:
+                raise UnresolvedLogisticsFareError(f"CARGO_DOES_NOT_FIT: {_fit_reason}")
 
         if submitted_quote_id and cached_quote:
             # Verified quote price lock: use the authoritative locked quote snapshot

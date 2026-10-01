@@ -119,6 +119,25 @@ class DropChangeServiceTests(TestCase):
                 change_drop_location(self.sr, self.cust, drop_address="N", drop_lat=12.9, drop_lng=77.9)
             self.assertEqual(cm.exception.code, "TRIP_CLOSED")
 
+    def test_drop_cannot_change_once_driver_reached_the_drop(self):
+        # Found in E2E QA: change-drop was accepted while the driver was UNLOADING (fare 190 -> 345).
+        for leg in ("ARRIVED_DROP", "UNLOADING", "DELIVERED"):
+            self.sr.logistics_leg = leg
+            self.sr.save()
+            with self.assertRaises(DropChangeError) as cm:
+                change_drop_location(self.sr, self.cust, drop_address="N", drop_lat=12.9, drop_lng=77.9)
+            self.assertEqual(cm.exception.code, "DROP_ALREADY_REACHED")
+            self.sr.refresh_from_db()
+            self.assertEqual(self.sr.drop_address, "Old drop, Hosur")
+
+    @mock.patch(ROUTE, _leg(14.0))
+    def test_drop_can_still_change_while_en_route_to_drop(self):
+        for leg in ("EN_ROUTE_PICKUP", "LOADING", "EN_ROUTE_DROP"):
+            self.sr.logistics_leg = leg
+            self.sr.save()
+            out = change_drop_location(self.sr, self.cust, drop_address="N", drop_lat=12.9, drop_lng=77.9)
+            self.assertEqual(out["drop_address"], "N")
+
     def test_non_gt_category_rejected(self):
         self.sr.service_category = "packers_movers"
         self.sr.save()

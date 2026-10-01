@@ -1168,7 +1168,9 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
           const truckCats = categories.filter((c) => !c.is_prohibited)
           setDynamicCategories(truckCats)
           if (truckCats.length > 0) {
-            setSelectedGoodsType((prev) => (prev && truckCats.some(c => c.name === prev)) ? prev : truckCats[0].name)
+            // E2E QA 2026-10-01: prefer a neutral 'General' category as the default. Preselecting the first category
+            // (Furnitures) recorded a goods type the customer never chose on bookings with no declared cargo.
+            setSelectedGoodsType((prev) => (prev && truckCats.some(c => c.name === prev)) ? prev : (truckCats.find(c => /^general/i.test(c.name || "")) || truckCats[0]).name)
           }
         } else {
           setCatalogError("Goods catalog temporarily unavailable. Please retry.")
@@ -1372,16 +1374,20 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
       async (position) => {
         const { latitude, longitude } = position.coords
         // Real GPS fix -- exact, no geocoding round-trip needed.
-        setPickupCoords({ lat: latitude, lng: longitude })
         try {
           const formatted = await getAddress(latitude, longitude)
-          setPickup(formatted || `Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`)
+          const pickupText = formatted || `Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`
+          setPickup(pickupText)
+          // coords are only honoured when forAddress matches the pickup text (usableCoords)
+          setPickupCoords({ lat: latitude, lng: longitude, forAddress: pickupText })
           setPickupError("")
           setLocationStatus("Detected")
           setTimeout(() => setLocationStatus(""), 2500)
         } catch (err) {
           console.warn("Reverse geocoding error:", err)
-          setPickup(`Current Location (${currentCityName || "Hosur"} - ${latitude.toFixed(4)}, ${longitude.toFixed(4)})`)
+          const pickupText = `Current Location (${currentCityName || "Hosur"} - ${latitude.toFixed(4)}, ${longitude.toFixed(4)})`
+          setPickup(pickupText)
+          setPickupCoords({ lat: latitude, lng: longitude, forAddress: pickupText })
           setPickupError("")
           setLocationStatus("Detected")
           setTimeout(() => setLocationStatus(""), 2500)

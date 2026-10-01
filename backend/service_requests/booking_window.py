@@ -125,6 +125,50 @@ def cutoff_label(service_category=None):
     return f"{display}:00 {suffix}"
 
 
+# GT_SLOT_CAPACITY_ENFORCED: LogisticsSlotAvailabilityView hides a full slot, but nothing refused the
+# booking itself, so the slot capacity an admin configured was advisory only (a direct API call, a stale
+# page or two customers at once could overfill it). Same count the availability view uses, per category.
+_SLOT_CATEGORY_KEYS = {
+    "goods_transport_truck": ("truck",), "goods_transport": ("truck",),
+    "goods_transport_two_wheeler": ("two_wheeler",), "packers_movers": ("packers_movers",),
+}
+
+
+def slot_capacity_error(service_category, preferred_date, preferred_time, city="", exclude_booking_id=None):
+    """Error string when the admin-configured slot is already full, else None. Applies only when
+    preferred_time is an active LogisticsSlot label for that category/city and has a capacity > 0."""
+    cat = (service_category or "").strip().lower()
+    keys = _SLOT_CATEGORY_KEYS.get(cat)
+    label = str(preferred_time or "").strip()
+    if not keys or not label or preferred_date is None:
+        return None
+    try:
+        from django.db.models import Q
+        from logistics.models import LogisticsSlot
+        from service_requests.models import ServiceRequest
+        city = str(city or "").strip()
+        slots = LogisticsSlot.objects.filter(is_active=True, slot_label__iexact=label).filter(
+            Q(category="") | Q(category__in=keys))
+        if city:
+            slots = slots.filter(Q(city="") | Q(city__iexact=city))
+        cap = max((s.capacity or 0 for s in slots), default=0)
+        if cap <= 0:
+            return None
+        qs = ServiceRequest.objects.filter(
+            service_category__in=[c for c, k in _SLOT_CATEGORY_KEYS.items() if k == keys],
+            preferred_date=preferred_date, preferred_time__iexact=label,
+            status__in=["new_request", "assigned", "accepted", "in_progress", "scheduled", "confirmed", "unassigned"],
+        )
+        if exclude_booking_id:
+            qs = qs.exclude(pk=exclude_booking_id)
+        booked = qs.count()
+        if booked >= cap:
+            return f"That time slot is fully booked ({booked}/{cap}). Please choose another slot."
+    except Exception:
+        return None
+    return None
+
+
 def validate_booking_slot(preferred_date, preferred_time=None, now=None, service_category=None, service=None):
     """
     Validate a requested date/slot against the booking window and service time slot engine.

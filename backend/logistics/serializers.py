@@ -118,6 +118,21 @@ class ServiceTierPricingSerializer(serializers.ModelSerializer):
                             "is_distance_priced", "is_dispatchable",
                             "dispatchability_warning", "includes_configured", "updated_at"]
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # One authority, stated plainly: customer pricing is calculated from
+        # the package-managed rate card (base_fare + loading, x surge, floored
+        # at minimum_fare). `starting_price` here is that CALCULATED floor --
+        # the same number the customer card shows. The mirrored column on the
+        # row (which can drift) is exposed separately as `starting_price_stored`
+        # so nobody mistakes it for what customers are charged.
+        data["starting_price_stored"] = data.get("starting_price")
+        if instance.category in (LogisticsCategory.TRUCK, LogisticsCategory.TWO_WHEELER):
+            from service_requests.services.logistics_pricing import tier_display_starting_fare
+            data["starting_price"] = str(tier_display_starting_fare(instance))
+        data["pricing_authority"] = "package"   # edit via Catalog > Packages
+        return data
+
     def get_is_distance_priced(self, obj):
         """
         Whether this tier actually uses the distance formula.
