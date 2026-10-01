@@ -9,19 +9,22 @@ STOPWORDS = {
     "how", "can", "could", "should", "would", "do", "does", "did", "have", "has",
     "i", "me", "my", "we", "you", "your", "they", "them", "their", "it", "its",
     "and", "or", "but", "so", "if", "included", "including", "please", "tell",
-    "want", "know", "there", "this", "that", "any", "some"
+    "want", "know", "there", "this", "that", "any", "some",
+    "hi", "hello", "hey", "am", "im", "i'm", "name", "myself", "good",
+    "morning", "afternoon", "evening", "who", "whom", "whose"
 }
 
 
 class KnowledgeRetriever:
     """
-    Hybrid retriever combining text matching and vector cosine similarity
+    Pure semantic embedding retriever using vector cosine similarity
     over verified KnowledgeChunk records.
-    Uses Google's semantic embeddings + content-bearing token matching for accurate ranking.
+    Uses Google's 768-dimensional semantic embeddings (gemini-embedding-001)
+    to match meaning rather than keywords or substring matches.
     """
 
     @classmethod
-    def retrieve(cls, query: str, top_k: int = 3, min_score: float = 0.45) -> List[Dict[str, Any]]:
+    def retrieve(cls, query: str, top_k: int = 3, min_score: float = 0.12) -> List[Dict[str, Any]]:
         clean_q = (query or "").strip()
         if not clean_q:
             return []
@@ -33,34 +36,13 @@ class KnowledgeRetriever:
         if not chunks.exists():
             return []
 
-        # Extract content-bearing tokens, removing generic stopwords
-        all_tokens = re.findall(r"\b[a-z0-9_]{2,}\b", clean_q.lower())
-        informative_tokens = [t for t in all_tokens if t not in STOPWORDS]
-
         scored_results = []
 
         for chunk in chunks:
-            # Vector cosine similarity
+            # Pure semantic vector cosine similarity
             vec_sim = Embedder.cosine_similarity(query_vec, chunk.embedding or [])
 
-            # Text keyword match score with title boosting
-            content_lower = chunk.content.lower()
-            title_lower = chunk.title.lower()
-
-            if informative_tokens:
-                title_hits = sum(1 for t in informative_tokens if t in title_lower)
-                content_hits = sum(1 for t in informative_tokens if t in content_lower)
-                raw_text_score = (2.5 * title_hits + 1.0 * content_hits) / max(1.0, 2.5 * len(informative_tokens))
-                text_score = min(1.0, raw_text_score)
-                composite_score = 0.4 * text_score + 0.6 * vec_sim
-            else:
-                text_score = 0.0
-                composite_score = vec_sim
-
-            # Filter out weak matches: must meet composite threshold and demonstrate genuine relevance
-            is_relevant = (composite_score >= min_score and (vec_sim >= 0.56 or text_score >= 0.35))
-
-            if is_relevant:
+            if vec_sim >= min_score:
                 scored_results.append({
                     "chunk_id": chunk.id,
                     "source_id": chunk.source_id,
@@ -68,12 +50,11 @@ class KnowledgeRetriever:
                     "title": chunk.title,
                     "content": chunk.content,
                     "metadata": chunk.metadata,
-                    "score": round(composite_score, 3),
+                    "score": round(vec_sim, 3),
                     "vec_sim": round(vec_sim, 3),
-                    "text_score": round(text_score, 3),
                 })
 
-        # Sort descending by composite score
+        # Sort descending by semantic similarity score
         scored_results.sort(key=lambda x: x["score"], reverse=True)
         return scored_results[:top_k]
 

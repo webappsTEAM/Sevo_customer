@@ -1,0 +1,3 @@
+3) Next, full testing of all types of testing and all scenarios of testing are needed 
+
+For example, I am a user. I am using this app to pin the pickup location, which is outside, but the pin happening at the time of booking shows the pickup location is not in the service coverage area. Likewise, it needs to think from all angles, etc.

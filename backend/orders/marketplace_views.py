@@ -17,6 +17,7 @@ from decimal import Decimal
 from datetime import timedelta
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -30,6 +31,14 @@ except ImportError:
 from accounts.permissions import IsCustomer
 from carts.models import Cart, CartType, CartStatus
 from workforce_integration.marketplace_client import MarketplaceIntegrationClient
+from service_requests.paytm_gateway import (
+    configured_provider,
+    create_live_transaction,
+    create_mock_transaction,
+    paytm_mock_enabled,
+    verify_live_transaction,
+    verify_mock_transaction,
+)
 
 from .models import (
     MarketplaceOrder,
@@ -128,7 +137,7 @@ def _finalize_marketplace_orders(
         if cart is None or not cart.items.exists():
             # Check if order was already finalized for this cart
             if payment_intent:
-                txn_id = payment_transaction_id or payment_intent.razorpay_payment_id
+                txn_id = payment_transaction_id or payment_intent.provider_transaction_id or payment_intent.razorpay_payment_id
                 if txn_id:
                     existing_orders = list(MarketplaceOrder.objects.filter(
                         customer=customer,
@@ -403,7 +412,8 @@ def _finalize_marketplace_orders(
             payment_intent.status = MarketplacePaymentIntent.Status.PAID
             if payment_transaction_id:
                 payment_intent.razorpay_payment_id = payment_transaction_id
-            payment_intent.save(update_fields=["status", "razorpay_payment_id", "updated_at"])
+                payment_intent.provider_transaction_id = payment_transaction_id
+            payment_intent.save(update_fields=["status", "razorpay_payment_id", "provider_transaction_id", "updated_at"])
 
     primary_order = created_orders[0] if created_orders else None
     serialized_orders = [MarketplaceOrderSerializer(o).data for o in created_orders]
@@ -430,11 +440,11 @@ def _finalize_marketplace_orders(
 class MarketplaceInitiatePaymentView(APIView):
     """
     POST /api/orders/marketplace/checkout/initiate-payment/
-    Step 1 of 2-step Razorpay checkout:
+    Step 1 of the provider-neutral marketplace checkout:
     1. Validates checkout form data (address, name, contact)
     2. Loads customer active marketplace cart and computes authoritative server-side subtotal
     3. Validates cart with vendor backend (pre-payment stock & price check)
-    4. Creates Razorpay Order via Razorpay SDK (paise)
+    4. Creates a Razorpay or Paytm transaction using the configured provider
     5. Saves MarketplacePaymentIntent row in status CREATED
     6. Returns Razorpay order details and prefill data for frontend Checkout widget
     """
@@ -481,19 +491,13 @@ class MarketplaceInitiatePaymentView(APIView):
             return _error(err_msg, status.HTTP_400_BAD_REQUEST, errors=err_list)
 
         idempotency_key = f"intent_{cart.id}_{cart.updated_at.isoformat()}"
-        key_id = getattr(settings, "RAZORPAY_KEY_ID", "").strip()
-        key_secret = getattr(settings, "RAZORPAY_KEY_SECRET", "").strip()
-
-        # Strict sandbox vs production guard:
-        # Mock payment fallback is permitted ONLY if PAYMENT_SANDBOX_MODE is True AND DEBUG is True
-        # In production (DEBUG=False or PAYMENT_SANDBOX_MODE=False), mock payments are strictly forbidden.
-        is_sandbox_fallback = getattr(settings, "PAYMENT_SANDBOX_MODE", False) and getattr(settings, "DEBUG", False) and not (key_id and key_secret)
-
         paise = int(round(float(total_amount) * 100))
-        razorpay_order_id = ""
+        provider = configured_provider()
+        key_id = getattr(settings, "RAZORPAY_KEY_ID", "").strip()
+        provider_order_id = ""
+        provider_payload = {}
 
-        client = _get_razorpay_client()
-        if client:
+        if provider == "razorpay" and (client := _get_razorpay_client()):
             try:
                 rp_order = client.order.create({
                     "amount": paise,
@@ -505,20 +509,38 @@ class MarketplaceInitiatePaymentView(APIView):
                         "store": "Sevo Mart",
                     },
                 })
-                razorpay_order_id = rp_order.get("id")
+                provider_order_id = rp_order.get("id")
             except Exception as e:
                 logger.error("Razorpay order creation failed: %s", e)
-                return _error(f"Payment gateway error: {str(e)}", status.HTTP_502_BAD_GATEWAY)
-        elif is_sandbox_fallback:
-            razorpay_order_id = f"order_mock_{uuid.uuid4().hex[:14]}"
+                return _error("Could not start payment. Please try again.", status.HTTP_502_BAD_GATEWAY)
+        elif provider == "paytm_mock" and paytm_mock_enabled():
+            provider_order_id = f"PAYTM_MOCK_MART_{uuid.uuid4().hex[:20].upper()}"
+            provider_payload = create_mock_transaction(provider_order_id, total_amount)
+        elif provider == "paytm":
+            provider_order_id = f"SEVOMART{cart.id}{uuid.uuid4().hex[:12].upper()}"
+            callback_url = settings.PAYTM_MARKETPLACE_CALLBACK_URL or request.build_absolute_uri("/api/orders/marketplace/paytm/callback/")
+            try:
+                provider_payload = create_live_transaction(
+                    provider_order_id,
+                    total_amount,
+                    {"id": request.user.id, "phone": getattr(request.user, "phone", ""), "email": request.user.email},
+                    callback_url,
+                )
+            except Exception as exc:
+                logger.warning("Paytm marketplace initiation failed for cart %s: %s", cart.id, exc)
+                return _error("Could not start Paytm payment. Please try again.", status.HTTP_502_BAD_GATEWAY)
         else:
-            logger.error("Razorpay payment gateway is not configured.")
-            return _error("Razorpay payment gateway is not configured.", status.HTTP_503_SERVICE_UNAVAILABLE)
+            return _error("Online payment is not configured.", status.HTTP_503_SERVICE_UNAVAILABLE)
 
         intent = MarketplacePaymentIntent.objects.create(
             customer=request.user,
             cart=cart,
-            razorpay_order_id=razorpay_order_id,
+            # Keep the legacy non-null Razorpay column populated for existing
+            # data/constraints. New code only uses provider_* fields for the
+            # operational contract.
+            razorpay_order_id=provider_order_id,
+            provider=provider,
+            provider_order_id=provider_order_id,
             amount=total_amount,
             currency="INR",
             status=MarketplacePaymentIntent.Status.CREATED,
@@ -531,29 +553,32 @@ class MarketplaceInitiatePaymentView(APIView):
         customer_phone = str(valid_data.get("customer_phone") or getattr(request.user, "phone", "") or "")
 
         return _success({
-            "razorpay_order_id": razorpay_order_id,
+            "order_id": provider_order_id,
+            "razorpay_order_id": provider_order_id if provider == "razorpay" else "",
             "intent_id": intent.id,
             "amount": str(total_amount),
             "amount_paise": paise,
             "currency": "INR",
-            "key_id": key_id,
+            "key_id": key_id if provider == "razorpay" else "",
             "name": "Sevo Mart",
             "description": "Sevo Grocery Marketplace Order",
-            "sandbox_fallback": is_sandbox_fallback,
+            "provider": provider,
+            "mock": provider == "paytm_mock",
             "prefill": {
                 "name": customer_name,
                 "email": customer_email,
                 "contact": customer_phone,
             },
+            **provider_payload,
         }, message="Payment intent created.")
 
 
 class MarketplaceVerifyPaymentView(APIView):
     """
     POST /api/orders/marketplace/checkout/verify-payment/
-    Step 2 of 2-step Razorpay checkout:
-    1. Takes razorpay_order_id, razorpay_payment_id, razorpay_signature
-    2. Authoritatively verifies HMAC SHA256 signature using razorpay SDK
+    Step 2 of provider-neutral marketplace checkout:
+    1. Takes the provider order/transaction/signature returned by the gateway
+    2. Verifies the gateway response server-side
     3. Marks MarketplacePaymentIntent as PAID
     4. Runs _finalize_marketplace_orders to create MarketplaceOrders and dispatch vendor intake
     5. On signature failure, marks intent as FAILED and leaves customer cart intact
@@ -561,16 +586,15 @@ class MarketplaceVerifyPaymentView(APIView):
     permission_classes = [IsCustomer]
 
     def post(self, request):
-        razorpay_order_id = request.data.get("razorpay_order_id", "").strip()
-        razorpay_payment_id = request.data.get("razorpay_payment_id", "").strip()
-        razorpay_signature = request.data.get("razorpay_signature", "").strip()
+        provider_order_id = str(request.data.get("order_id") or request.data.get("razorpay_order_id") or "").strip()
+        provider_transaction_id = str(request.data.get("transaction_id") or request.data.get("razorpay_payment_id") or "").strip()
+        provider_signature = str(request.data.get("signature") or request.data.get("razorpay_signature") or "").strip()
 
-        if not razorpay_order_id:
-            return _error("razorpay_order_id is required.", status.HTTP_400_BAD_REQUEST)
+        if not provider_order_id:
+            return _error("order_id is required.", status.HTTP_400_BAD_REQUEST)
 
-        intent = MarketplacePaymentIntent.objects.filter(
-            razorpay_order_id=razorpay_order_id,
-            customer=request.user,
+        intent = MarketplacePaymentIntent.objects.filter(customer=request.user).filter(
+            Q(provider_order_id=provider_order_id) | Q(razorpay_order_id=provider_order_id)
         ).first()
 
         if not intent:
@@ -580,7 +604,7 @@ class MarketplaceVerifyPaymentView(APIView):
         if intent.status == MarketplacePaymentIntent.Status.PAID:
             existing_orders = list(MarketplaceOrder.objects.filter(
                 customer=request.user,
-                payment_transaction_id=intent.razorpay_payment_id,
+                payment_transaction_id=intent.provider_transaction_id or intent.razorpay_payment_id,
             ).exclude(status=MarketplaceOrder.Status.CANCELLED))
             if existing_orders:
                 primary = existing_orders[0]
@@ -590,48 +614,59 @@ class MarketplaceVerifyPaymentView(APIView):
                 resp_data["delivery_count"] = len(set(o.delivery_group_id for o in existing_orders if o.delivery_group_id)) or 1
                 return _success(resp_data, message="Order already placed.", status_code=status.HTTP_200_OK)
 
-        is_mock_order = razorpay_order_id.startswith("order_mock_")
-        client = _get_razorpay_client()
-
-        # Verify HMAC Signature with Razorpay
-        if client and not is_mock_order:
-            if not razorpay_payment_id or not razorpay_signature:
+        # Verify with the provider bound to this intent. Do not accept a
+        # frontend-selected provider or downgrade a live order to mock mode.
+        if intent.provider == "paytm_mock":
+            if not verify_mock_transaction(provider_order_id, provider_transaction_id, provider_signature, intent.amount):
+                intent.status = MarketplacePaymentIntent.Status.FAILED
+                intent.save(update_fields=["status", "updated_at"])
+                return _error("Mock Paytm payment verification failed.", status.HTTP_400_BAD_REQUEST)
+        elif intent.provider == "paytm":
+            try:
+                verified = verify_live_transaction(provider_order_id, intent.amount)
+            except ValueError:
+                return _error("Paytm has not confirmed this payment yet.", status.HTTP_400_BAD_REQUEST)
+            except Exception as exc:
+                logger.warning("Paytm marketplace verification failed for intent %s: %s", intent.id, exc)
+                return _error("Could not verify Paytm payment. Please try again.", status.HTTP_502_BAD_GATEWAY)
+            provider_transaction_id = verified["transaction_id"]
+            provider_signature = verified["signature"]
+        elif intent.provider == "razorpay":
+            client = _get_razorpay_client()
+            if not client:
+                return _error("Razorpay verification credentials are missing.", status.HTTP_503_SERVICE_UNAVAILABLE)
+            if not provider_transaction_id or not provider_signature:
                 return _error("Payment ID and signature are required for verification.", status.HTTP_400_BAD_REQUEST)
             try:
                 client.utility.verify_payment_signature({
-                    "razorpay_order_id": razorpay_order_id,
-                    "razorpay_payment_id": razorpay_payment_id,
-                    "razorpay_signature": razorpay_signature,
+                    "razorpay_order_id": provider_order_id,
+                    "razorpay_payment_id": provider_transaction_id,
+                    "razorpay_signature": provider_signature,
                 })
             except Exception as e:
                 logger.warning("Razorpay signature verification failed for intent %s: %s", intent.id, e)
                 intent.status = MarketplacePaymentIntent.Status.FAILED
                 intent.save(update_fields=["status", "updated_at"])
                 return _error("Payment signature verification failed. Please try again.", status.HTTP_400_BAD_REQUEST)
-        elif is_mock_order and getattr(settings, "PAYMENT_SANDBOX_MODE", False) and getattr(settings, "DEBUG", False):
-            # Sandbox fallback verification in debug mode
-            if not razorpay_payment_id:
-                razorpay_payment_id = f"pay_mock_{uuid.uuid4().hex[:14]}"
         else:
-            if is_mock_order:
-                intent.status = MarketplacePaymentIntent.Status.FAILED
-                intent.save(update_fields=["status", "updated_at"])
-                return _error("Mock payment orders are not permitted in production.", status.HTTP_400_BAD_REQUEST)
-            return _error("Razorpay verification credentials missing.", status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return _error("This payment provider is invalid.", status.HTTP_409_CONFLICT)
 
         # Update intent details
-        intent.razorpay_payment_id = razorpay_payment_id
-        intent.razorpay_signature = razorpay_signature
-        intent.save(update_fields=["razorpay_payment_id", "razorpay_signature", "updated_at"])
+        intent.provider_transaction_id = provider_transaction_id
+        intent.provider_signature = provider_signature
+        # Preserve legacy reporting values during the phased migration.
+        intent.razorpay_payment_id = provider_transaction_id
+        intent.razorpay_signature = provider_signature
+        intent.save(update_fields=["provider_transaction_id", "provider_signature", "razorpay_payment_id", "razorpay_signature", "updated_at"])
 
         # Finalize orders
         return _finalize_marketplace_orders(
             customer=request.user,
             cart=intent.cart,
             checkout_payload=intent.checkout_payload,
-            payment_method="UPI",
+            payment_method="PAYTM" if intent.provider.startswith("paytm") else "UPI",
             payment_status="PAID",
-            payment_transaction_id=razorpay_payment_id,
+            payment_transaction_id=provider_transaction_id,
             idempotency_key=intent.idempotency_key,
             payment_intent=intent,
         )
@@ -676,7 +711,7 @@ class MarketplaceRazorpayWebhookView(APIView):
             razorpay_payment_id = payment_entity.get("id") or ""
 
             if razorpay_order_id:
-                intent = MarketplacePaymentIntent.objects.filter(razorpay_order_id=razorpay_order_id).first()
+                intent = MarketplacePaymentIntent.objects.filter(provider="razorpay", razorpay_order_id=razorpay_order_id).first()
                 if intent and intent.status != MarketplacePaymentIntent.Status.PAID:
                     logger.info("Finalizing order via Razorpay webhook for intent %s", intent.id)
                     intent.razorpay_payment_id = razorpay_payment_id or intent.razorpay_payment_id
@@ -694,6 +729,62 @@ class MarketplaceRazorpayWebhookView(APIView):
                     )
 
         return Response({"status": "ok"}, status=status.HTTP_200_OK)
+
+
+class MarketplacePaytmCallbackView(APIView):
+    """Paytm return endpoint for Marketplace payment intents.
+
+    Only the server-to-server Paytm status response is authoritative. The
+    callback data is never used to choose an amount, customer, or payment
+    result, so a forged browser POST cannot create a marketplace order.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        order_id = str(request.data.get("ORDERID") or request.data.get("orderId") or "").strip()
+        if not order_id:
+            return _error("Paytm callback did not contain an order ID.", status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with transaction.atomic():
+                intent = MarketplacePaymentIntent.objects.select_for_update().select_related("customer", "cart").filter(
+                    provider="paytm", provider_order_id=order_id
+                ).first()
+                if not intent:
+                    return _error("Unknown Paytm marketplace order.", status.HTTP_404_NOT_FOUND)
+                if intent.status == MarketplacePaymentIntent.Status.PAID:
+                    return _success(message="Marketplace payment already confirmed.")
+
+                try:
+                    verified = verify_live_transaction(order_id, intent.amount)
+                except ValueError:
+                    return _error("Paytm has not confirmed this payment yet.", status.HTTP_400_BAD_REQUEST)
+                except Exception as exc:
+                    logger.warning("Paytm marketplace callback lookup failed for order %s: %s", order_id, exc)
+                    return _error("Could not verify Paytm payment. Please try again.", status.HTTP_502_BAD_GATEWAY)
+
+                intent.provider_transaction_id = verified["transaction_id"]
+                intent.provider_signature = verified["signature"]
+                intent.razorpay_payment_id = verified["transaction_id"]
+                intent.razorpay_signature = verified["signature"]
+                intent.save(update_fields=[
+                    "provider_transaction_id", "provider_signature", "razorpay_payment_id",
+                    "razorpay_signature", "updated_at",
+                ])
+
+                return _finalize_marketplace_orders(
+                    customer=intent.customer,
+                    cart=intent.cart,
+                    checkout_payload=intent.checkout_payload,
+                    payment_method="PAYTM",
+                    payment_status="PAID",
+                    payment_transaction_id=verified["transaction_id"],
+                    idempotency_key=intent.idempotency_key,
+                    payment_intent=intent,
+                )
+        except Exception:
+            logger.exception("Unhandled Paytm marketplace callback failure for order %s", order_id)
+            return _error("Could not complete Paytm marketplace payment.", status.HTTP_502_BAD_GATEWAY)
 
 
 class MarketplaceCheckoutView(APIView):

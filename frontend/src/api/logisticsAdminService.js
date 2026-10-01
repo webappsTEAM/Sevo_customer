@@ -521,3 +521,40 @@ export async function deactivateAdminPolicy(kind, id) {
     return { ok: false, error: asError(err) }
   }
 }
+
+// ── GT lists with no other Admin screen: prohibited goods, P&M add-ons, P&M surcharges, cities ──
+// `base` is one of GT_ADMIN_LISTS[*].base. Nothing here prices anything; rows are validated by the
+// server with the model's own rules. DELETE deactivates (rows are kept).
+export const GT_ADMIN_LISTS = {
+  prohibited: "/logistics/admin/lists/prohibited-rules/",
+  addons: "/logistics/admin/pm-addons/",
+  surcharges: "/logistics/admin/lists/pm-surcharges/",
+  cities: "/logistics/admin/lists/cities/",
+}
+
+export async function fetchAdminListRows(base) {
+  try {
+    const res = await apiRequest(base)
+    return { ok: true, rows: Array.isArray(res?.data) ? res.data : [] }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function saveAdminListRow(base, id, payload) {
+  try {
+    const res = await apiRequest(id ? `${base}${id}/` : base, { method: id ? "PATCH" : "POST", json: payload })
+    return { ok: true, row: res?.data }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function deactivateAdminListRow(base, id) {
+  try {
+    const res = await apiRequest(`${base}${id}/`, { method: "DELETE" })
+    return { ok: true, row: res?.data }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}

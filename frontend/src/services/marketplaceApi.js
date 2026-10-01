@@ -139,7 +139,7 @@ export function loadRazorpayScript() {
 }
 
 /**
- * Initiate Razorpay Payment intent for Marketplace Checkout (Step 1).
+ * Initiate the configured server-side payment provider for Marketplace Checkout.
  */
 export async function initiateMarketplacePayment({
   delivery_address,
@@ -165,19 +165,21 @@ export async function initiateMarketplacePayment({
 }
 
 /**
- * Verify Razorpay Payment signature and finalize Marketplace orders (Step 2).
+ * Verify the provider completion payload and finalize Marketplace orders.
+ * The server selects and validates the provider; this function never decides
+ * whether a payment is successful.
  */
 export async function verifyMarketplacePayment({
-  razorpay_order_id,
-  razorpay_payment_id,
-  razorpay_signature,
+  order_id,
+  transaction_id,
+  signature,
 }) {
   return await apiRequest("/orders/marketplace/checkout/verify-payment/", {
     method: "POST",
     json: {
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature,
+      order_id,
+      transaction_id,
+      signature,
     },
   })
 }

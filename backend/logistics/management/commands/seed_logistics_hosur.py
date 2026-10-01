@@ -234,6 +234,41 @@ GT_FAQS = [
 ]
 
 
+# Slot grids (module-level so restore_gt_admin_config can reuse them per category).
+TRUCK_2W_SLOTS = [
+    ("Morning", "06:00 AM - 07:00 AM", datetime.time(6, 0), datetime.time(7, 0), 1),
+    ("Morning", "07:00 AM - 08:00 AM", datetime.time(7, 0), datetime.time(8, 0), 2),
+    ("Morning", "08:00 AM - 09:00 AM", datetime.time(8, 0), datetime.time(9, 0), 3),
+    ("Morning", "09:00 AM - 10:00 AM", datetime.time(9, 0), datetime.time(10, 0), 4),
+    ("Morning", "10:00 AM - 11:00 AM", datetime.time(10, 0), datetime.time(11, 0), 5),
+    ("Morning", "11:00 AM - 12:00 PM", datetime.time(11, 0), datetime.time(12, 0), 6),
+    ("Afternoon", "12:00 PM - 01:00 PM", datetime.time(12, 0), datetime.time(13, 0), 7),
+    ("Afternoon", "01:00 PM - 02:00 PM", datetime.time(13, 0), datetime.time(14, 0), 8),
+    ("Afternoon", "02:00 PM - 03:00 PM", datetime.time(14, 0), datetime.time(15, 0), 9),
+    ("Afternoon", "03:00 PM - 04:00 PM", datetime.time(15, 0), datetime.time(16, 0), 10),
+    ("Afternoon", "04:00 PM - 05:00 PM", datetime.time(16, 0), datetime.time(17, 0), 11),
+    ("Evening", "05:00 PM - 06:00 PM", datetime.time(17, 0), datetime.time(18, 0), 12),
+    ("Evening", "06:00 PM - 07:00 PM", datetime.time(18, 0), datetime.time(19, 0), 13),
+    ("Evening", "07:00 PM - 08:00 PM", datetime.time(19, 0), datetime.time(20, 0), 14),
+    ("Evening", "08:00 PM - 09:00 PM", datetime.time(20, 0), datetime.time(21, 0), 15),
+    ("Evening", "09:00 PM - 10:00 PM", datetime.time(21, 0), datetime.time(22, 0), 16),
+]
+PM_SLOTS = [
+    ("Morning", "07:00 AM - 08:00 AM", datetime.time(7, 0), datetime.time(8, 0), 1),
+    ("Morning", "08:00 AM - 09:00 AM", datetime.time(8, 0), datetime.time(9, 0), 2),
+    ("Morning", "09:00 AM - 10:00 AM", datetime.time(9, 0), datetime.time(10, 0), 3),
+    ("Morning", "10:00 AM - 11:00 AM", datetime.time(10, 0), datetime.time(11, 0), 4),
+    ("Morning", "11:00 AM - 12:00 PM", datetime.time(11, 0), datetime.time(12, 0), 5),
+    ("Afternoon", "12:00 PM - 01:00 PM", datetime.time(12, 0), datetime.time(13, 0), 6),
+    ("Afternoon", "01:00 PM - 02:00 PM", datetime.time(13, 0), datetime.time(14, 0), 7),
+    ("Afternoon", "02:00 PM - 03:00 PM", datetime.time(14, 0), datetime.time(15, 0), 8),
+    ("Afternoon", "03:00 PM - 04:00 PM", datetime.time(15, 0), datetime.time(16, 0), 9),
+    ("Evening", "04:00 PM - 05:00 PM", datetime.time(16, 0), datetime.time(17, 0), 10),
+    ("Evening", "05:00 PM - 06:00 PM", datetime.time(17, 0), datetime.time(18, 0), 11),
+    ("Evening", "06:00 PM - 07:00 PM", datetime.time(18, 0), datetime.time(19, 0), 12),
+]
+
+
 class Command(BaseCommand):
     help = "Seed logistics catalog (ServiceTier, Lane, ServiceArea) with Hosur data from the design PDFs."
 
@@ -383,38 +418,8 @@ class Command(BaseCommand):
 
     def _seed_slots(self):
         count = 0
-        truck_2w_slots = [
-            ("Morning", "06:00 AM - 07:00 AM", datetime.time(6, 0), datetime.time(7, 0), 1),
-            ("Morning", "07:00 AM - 08:00 AM", datetime.time(7, 0), datetime.time(8, 0), 2),
-            ("Morning", "08:00 AM - 09:00 AM", datetime.time(8, 0), datetime.time(9, 0), 3),
-            ("Morning", "09:00 AM - 10:00 AM", datetime.time(9, 0), datetime.time(10, 0), 4),
-            ("Morning", "10:00 AM - 11:00 AM", datetime.time(10, 0), datetime.time(11, 0), 5),
-            ("Morning", "11:00 AM - 12:00 PM", datetime.time(11, 0), datetime.time(12, 0), 6),
-            ("Afternoon", "12:00 PM - 01:00 PM", datetime.time(12, 0), datetime.time(13, 0), 7),
-            ("Afternoon", "01:00 PM - 02:00 PM", datetime.time(13, 0), datetime.time(14, 0), 8),
-            ("Afternoon", "02:00 PM - 03:00 PM", datetime.time(14, 0), datetime.time(15, 0), 9),
-            ("Afternoon", "03:00 PM - 04:00 PM", datetime.time(15, 0), datetime.time(16, 0), 10),
-            ("Afternoon", "04:00 PM - 05:00 PM", datetime.time(16, 0), datetime.time(17, 0), 11),
-            ("Evening", "05:00 PM - 06:00 PM", datetime.time(17, 0), datetime.time(18, 0), 12),
-            ("Evening", "06:00 PM - 07:00 PM", datetime.time(18, 0), datetime.time(19, 0), 13),
-            ("Evening", "07:00 PM - 08:00 PM", datetime.time(19, 0), datetime.time(20, 0), 14),
-            ("Evening", "08:00 PM - 09:00 PM", datetime.time(20, 0), datetime.time(21, 0), 15),
-            ("Evening", "09:00 PM - 10:00 PM", datetime.time(21, 0), datetime.time(22, 0), 16),
-        ]
-        pm_slots = [
-            ("Morning", "07:00 AM - 08:00 AM", datetime.time(7, 0), datetime.time(8, 0), 1),
-            ("Morning", "08:00 AM - 09:00 AM", datetime.time(8, 0), datetime.time(9, 0), 2),
-            ("Morning", "09:00 AM - 10:00 AM", datetime.time(9, 0), datetime.time(10, 0), 3),
-            ("Morning", "10:00 AM - 11:00 AM", datetime.time(10, 0), datetime.time(11, 0), 4),
-            ("Morning", "11:00 AM - 12:00 PM", datetime.time(11, 0), datetime.time(12, 0), 5),
-            ("Afternoon", "12:00 PM - 01:00 PM", datetime.time(12, 0), datetime.time(13, 0), 6),
-            ("Afternoon", "01:00 PM - 02:00 PM", datetime.time(13, 0), datetime.time(14, 0), 7),
-            ("Afternoon", "02:00 PM - 03:00 PM", datetime.time(14, 0), datetime.time(15, 0), 8),
-            ("Afternoon", "03:00 PM - 04:00 PM", datetime.time(15, 0), datetime.time(16, 0), 9),
-            ("Evening", "04:00 PM - 05:00 PM", datetime.time(16, 0), datetime.time(17, 0), 10),
-            ("Evening", "05:00 PM - 06:00 PM", datetime.time(17, 0), datetime.time(18, 0), 11),
-            ("Evening", "06:00 PM - 07:00 PM", datetime.time(18, 0), datetime.time(19, 0), 12),
-        ]
+        truck_2w_slots = TRUCK_2W_SLOTS
+        pm_slots = PM_SLOTS
 
         for cat in [LogisticsCategory.TRUCK, LogisticsCategory.TWO_WHEELER]:
             for grp, lbl, st, et, ord_val in truck_2w_slots:

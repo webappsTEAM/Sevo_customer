@@ -439,6 +439,9 @@ class GTBookingIdempotencyTests(TestCase):
         cache.clear()
         self.factory = APIRequestFactory()
 
+    # The booking view now records dispatch through the outbox (commit 8c3a6dcd); the save() here
+    # returns a plain test double, so the DB-backed outbox is stubbed as well.
+    @patch("service_requests.services.workforce_dispatch_outbox.queue_workforce_dispatch")
     @patch("workforce_integration.services.WorkforceIntegrationService.dispatch_job")
     @patch("service_requests.notifications.send_booking_confirmation")
     @patch("django.contrib.auth.get_user_model")
@@ -446,7 +449,7 @@ class GTBookingIdempotencyTests(TestCase):
     @patch("settings_hub.service_zone_engine.check_booking_eligibility")
     @patch("service_requests.views.resolve_logistics_fare_v2")
     @patch("service_requests.serializers.ServiceRequestPublicCreateSerializer.save")
-    def test_idempotency_retry_returns_same_booking_without_duplicate(self, mock_save, mock_resolve_fare, mock_check_eligibility, mock_get_co, mock_get_user_model, mock_send_sms, mock_dispatch):
+    def test_idempotency_retry_returns_same_booking_without_duplicate(self, mock_save, mock_resolve_fare, mock_check_eligibility, mock_get_co, mock_get_user_model, mock_send_sms, mock_dispatch, _mock_outbox):
         from service_requests.views import BookingCreateView
 
         mock_user = MagicMock(id=10, email="suresh@test.com", phone="9876543210")
@@ -525,6 +528,9 @@ class GTBookingIdempotencyTests(TestCase):
         # Save MUST NOT have been called again (strictly 1 booking created!)
         self.assertEqual(mock_save.call_count, 1)
 
+    # The booking view now records dispatch through the outbox (commit 8c3a6dcd); the save() here
+    # returns a plain test double, so the DB-backed outbox is stubbed as well.
+    @patch("service_requests.services.workforce_dispatch_outbox.queue_workforce_dispatch")
     @patch("workforce_integration.services.WorkforceIntegrationService.dispatch_job")
     @patch("service_requests.notifications.send_booking_confirmation")
     @patch("django.contrib.auth.get_user_model")
@@ -532,7 +538,7 @@ class GTBookingIdempotencyTests(TestCase):
     @patch("settings_hub.service_zone_engine.check_booking_eligibility")
     @patch("service_requests.views.resolve_logistics_fare_v2")
     @patch("service_requests.serializers.ServiceRequestPublicCreateSerializer.save")
-    def test_distinct_idempotency_keys_create_separate_bookings(self, mock_save, mock_resolve_fare, mock_check_eligibility, mock_get_co, mock_get_user_model, mock_send_sms, mock_dispatch):
+    def test_distinct_idempotency_keys_create_separate_bookings(self, mock_save, mock_resolve_fare, mock_check_eligibility, mock_get_co, mock_get_user_model, mock_send_sms, mock_dispatch, _mock_outbox):
         from service_requests.views import BookingCreateView
 
         mock_user = MagicMock(id=10, email="suresh@test.com", phone="9876543210")

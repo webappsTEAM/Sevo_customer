@@ -3,6 +3,38 @@
 from django.db import migrations, models
 
 
+def _ensure_columns(apps, schema_editor):
+    """Add package_display/package_id/package_version only where 0088 (or legacy schema) did not."""
+    conn = schema_editor.connection
+    Model = apps.get_model("service_requests", "ServiceRequest")
+    table = Model._meta.db_table
+    with conn.cursor() as cur:
+        existing = {c.name for c in conn.introspection.get_table_description(cur, table)}
+    wanted = {
+        "package_display": models.JSONField(blank=True, default=dict),
+        "package_id": models.CharField(blank=True, default="", max_length=100),
+        "package_version": models.CharField(blank=True, default="1.0", max_length=50),
+    }
+    for name, field in wanted.items():
+        field.set_attributes_from_name(name)
+        if name not in existing:
+            schema_editor.add_field(Model, field)
+        elif name == "package_display" and conn.vendor == "postgresql":
+            # 0088 created it as varchar; the model is a JSONField.
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT data_type FROM information_schema.columns "
+                    "WHERE table_name = %s AND column_name = 'package_display'", [table])
+                row = cur.fetchone()
+                if row and row[0] != "jsonb":
+                    cur.execute(f"ALTER TABLE {table} ALTER COLUMN package_display DROP DEFAULT")
+                    cur.execute(
+                        f"ALTER TABLE {table} ALTER COLUMN package_display TYPE jsonb USING "
+                        "CASE WHEN package_display IS NULL OR package_display = '' THEN '{}'::jsonb "
+                        "ELSE to_jsonb(package_display) END")
+                    cur.execute(f"ALTER TABLE {table} ALTER COLUMN package_display SET DEFAULT '{{}}'::jsonb")
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -10,20 +42,28 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
-            model_name="servicerequest",
-            name="package_display",
-            field=models.JSONField(blank=True, default=dict),
-        ),
-        migrations.AddField(
-            model_name="servicerequest",
-            name="package_id",
-            field=models.CharField(blank=True, default="", max_length=100),
-        ),
-        migrations.AddField(
-            model_name="servicerequest",
-            name="package_version",
-            field=models.CharField(blank=True, default="1.0", max_length=50),
+        # 0088 already provisions these physical columns on fresh databases (and production already had
+        # them), so a plain AddField fails on PostgreSQL ("column ... already exists"). Keep the model
+        # state change, but make the database side idempotent and type-correct.
+        migrations.SeparateDatabaseAndState(
+            state_operations=[
+            migrations.AddField(
+                model_name="servicerequest",
+                name="package_display",
+                field=models.JSONField(blank=True, default=dict),
+            ),
+            migrations.AddField(
+                model_name="servicerequest",
+                name="package_id",
+                field=models.CharField(blank=True, default="", max_length=100),
+            ),
+            migrations.AddField(
+                model_name="servicerequest",
+                name="package_version",
+                field=models.CharField(blank=True, default="1.0", max_length=50),
+            ),
+            ],
+            database_operations=[migrations.RunPython(_ensure_columns, migrations.RunPython.noop)],
         ),
         migrations.AlterField(
             model_name="gtcancellationpolicy",

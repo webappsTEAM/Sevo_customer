@@ -58,18 +58,9 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
   // tile (opens the All Services drawer) is always appended after these
   // by the homepage itself -- it isn't part of this editable list.
   categories: [
-    { id: "cat-1", name: "AC Service", image: "/assets/icon_3d_ac.jpg", link: "?category=ac_appliance&subtab=ac-service-cleaning", enabled: true },
-    { id: "cat-2", name: "Cleaning", image: "/assets/icon_3d_cleaning.jpg", link: "?category=home_pest_control&subtab=full-house-cleaning", enabled: true },
-    { id: "cat-3", name: "Kitchen Cleaning", image: "/mockups/kitchen_tiles_slabs_clean.png", link: "?category=home_pest_control&subtab=kitchen-cleaning", enabled: true },
-    { id: "cat-4", name: "Bathroom Cleaning", image: "/mockups/bathroom_cleaning.png", link: "?category=home_pest_control&subtab=bathroom-cleaning", enabled: true },
-    { id: "cat-5", name: "Appliance Repair", image: "/assets/icon_3d_appliance.jpg", link: "?category=ac_appliance&subtab=fridge", enabled: true },
-    { id: "cat-6", name: "Pest Control", image: "/assets/icon_3d_pest.png", link: "?category=home_pest_control&subtab=termite-control", enabled: true },
-    { id: "cat-7", name: "Sofa Cleaning", image: "/mockups/sofa_cleaning.png", link: "?category=home_pest_control&subtab=sofa-cleaning", enabled: true },
-    { id: "cat-8", name: "Painting", image: "/mockups/category_home_repair_3d.jpg", link: "?category=paintings&subtab=interior-painting", enabled: true },
-    { id: "cat-9", name: "Mason", image: "/mockups/service_building.png", link: "?category=mason", enabled: true },
-    { id: "cat-10", name: "Groceries & Veggies", image: "/assets/cat_food_health.jpg", link: "/vegetables", enabled: true },
-    { id: "cat-11", name: "Goods & Transport", image: "/assets/cat_goods_transport.jpg", link: "?category=goods_transports", enabled: true },
-    { id: "cat-12", name: "Groceries", image: "/mockups/groceries_realistic.png", link: "/marketplace", enabled: true }
+    { id: "cat-10", name: "Vegetables", image: "/mockups/vegetables_realistic.png", link: "/vegetables", enabled: true },
+    { id: "cat-11", name: "Goods & Transport", image: "/assets/cat_goods_transport.jpg", link: "?openModal=goods", enabled: true },
+    { id: "cat-12", name: "Groceries", image: "/assets/cat_food_health.jpg", link: "/marketplace", enabled: true }
   ],
   pillarModal: {
     badge: "⚡Core Specialized Pillars",
@@ -107,9 +98,9 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
     titleSuffix: "& Vendors",
     subtitle: "Join our team of skilled professionals and be part of a growing service community that works with trust and quality.",
     ctaText: "Join as a Professional",
-    ctaUrl: "https://calservices-vendor.vercel.app",
+    ctaUrl: "https://vendor.sevo.co.in",
     learnMoreText: "Learn more",
-    learnMoreUrl: "https://calservices-vendor.vercel.app",
+    learnMoreUrl: "https://vendor.sevo.co.in",
     image: "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?w=320&h=420&q=90&fit=crop&crop=top",
     features: [
       { id: "vf-1", icon: "📅", label: "Flexible Timings" },
@@ -360,7 +351,7 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
   }
 }
 
-export const STORAGE_KEY = "calservices_homepage_config_v1"
+export const STORAGE_KEY = "calservices_homepage_config_v2"
 
 export function getHomePageConfig() {
   try {
@@ -521,38 +512,24 @@ export function mergeWithDefaultConfig(parsed) {
   }
 
   const defaultCategories = DEFAULT_HOME_PAGE_CONFIG.categories
-  const rawCategories = Array.isArray(parsed.categories) && parsed.categories.length > 0
+  const hasUserCategories = Array.isArray(parsed.categories)
+  const rawCategories = hasUserCategories
     ? parsed.categories
     : defaultCategories
 
-  const mergedCategories = rawCategories.map((cat, idx) => {
-    const name = cat.name || cat.title || defaultCategories[idx]?.name || `Service ${idx + 1}`
-    const image = getCategorySafeImage(cat, idx)
-    return {
-      ...cat,
-      name,
-      title: cat.title || name,
-      image,
-      link: sanitizeCategoryLink(cat.link)
-    }
-  })
-
-  // A published config (saved earlier, e.g. via the Home Page Customizer)
-  // fully replaces the code defaults above -- so a category tile added to
-  // DEFAULT_HOME_PAGE_CONFIG after that config was last saved would never
-  // reach real users even though it's live in code. Backfill any default
-  // tile whose id isn't already present in the saved list (by id, falling
-  // back to link so a renamed default doesn't duplicate), appended at the
-  // end so existing admin ordering/edits are untouched.
-  const existingCategoryKeys = new Set(
-    mergedCategories.flatMap((cat) => [cat.id, cat.link].filter(Boolean))
-  )
-  const backfilledCategories = defaultCategories.filter(
-    (defCat) => defCat.enabled !== false && !existingCategoryKeys.has(defCat.id) && !existingCategoryKeys.has(defCat.link)
-  )
-  if (backfilledCategories.length > 0) {
-    mergedCategories.push(...backfilledCategories)
-  }
+  const mergedCategories = rawCategories
+    .filter((cat) => cat && cat.enabled !== false)
+    .map((cat, idx) => {
+      const name = cat.name || cat.title || defaultCategories[idx]?.name || `Service ${idx + 1}`
+      const image = getCategorySafeImage(cat, idx)
+      return {
+        ...cat,
+        name,
+        title: cat.title || name,
+        image,
+        link: sanitizeCategoryLink(cat.link)
+      }
+    })
 
   const defaultOffers = DEFAULT_HOME_PAGE_CONFIG.offers
   const rawOffers = parsed.offers || {}

@@ -330,6 +330,7 @@ export function GTSlotsTab({ showToast }) {
                   <option value="packers_movers">Packers &amp; Movers</option>
                   <option value="goods_transport_truck">Mini Truck</option>
                   <option value="goods_transport_two_wheeler">2-Wheeler</option>
+                  <option value="ptl">Part Truck Load (PTL)</option>
                 </select>
               </div>
             </div>

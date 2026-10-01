@@ -27,6 +27,11 @@ class MockDeterministicProvider(BaseLLMProvider):
         query_clean = user_msg.strip()
         rag_context = context.get("rag_context", "")
 
+        # Check for conversational etiquette / personality rules & human customer-service replies
+        conv_reply = self._detect_conversational_response(query_clean, context)
+        if conv_reply:
+            return LLMResponse(content=conv_reply, tool_calls=[])
+
         # Check if previous turn executed a tool
         last_turn = messages[-1] if messages else {}
         if last_turn.get("role") == "tool":
@@ -47,7 +52,7 @@ class MockDeterministicProvider(BaseLLMProvider):
         # Fallback conversational response
         return LLMResponse(
             content=(
-                "I can only assist with questions related to Sevo services, bookings, and our platform. "
+                "I can only assist with questions related to SEVO services, bookings, and our platform. "
                 "Please let me know if you need help with any home services, repairs, cleaning, or deliveries!"
             ),
             tool_calls=[],
@@ -58,7 +63,19 @@ class MockDeterministicProvider(BaseLLMProvider):
         is_auth = bool(user and getattr(user, "is_authenticated", False))
         q = query.lower()
 
-        # 1. Booking / Order tracking
+        # 1. Booking / Order tracking or selection by number
+        order_num_match = re.search(r"\b(?:track|tracking|status|where is|order|booking|request|details of)?\s*#?([0-9]{3,8})\b", q)
+        if order_num_match and is_auth:
+            target_id = order_num_match.group(1).strip()
+            return [{
+                "id": "call_order_1",
+                "function": {
+                    "name": "get_order_details",
+                    "arguments": {"order_id": target_id},
+                },
+            }]
+
+        # 2. Tracking with non-numeric target or ID
         track_match = re.search(r"\b(?:track|tracking|status|where is)\b.*?(?:booking|order|service)?\s*#?([A-Za-z0-9-]+)", q)
         if track_match and is_auth:
             target_id = track_match.group(1).strip()
@@ -71,22 +88,15 @@ class MockDeterministicProvider(BaseLLMProvider):
                     },
                 }]
 
-        # 2. Specific Order Details
-        order_match = re.search(r"\b(?:booking|order|request|details of)\b.*?#?([A-Za-z0-9-]+)", q)
-        if order_match and is_auth:
-            target_id = order_match.group(1).strip()
-            # If target looks like an ID or digits
-            if target_id.isdigit() or "-" in target_id:
-                return [{
-                    "id": "call_order_1",
-                    "function": {
-                        "name": "get_order_details",
-                        "arguments": {"order_id": target_id},
-                    },
-                }]
-
-        # 3. List Customer Bookings
-        if any(kw in q for kw in ["my bookings", "my orders", "recent bookings", "active bookings", "show bookings", "list bookings"]) and is_auth:
+        # 3. Delayed delivery or order listing inquiries without ID
+        is_order_inquiry = any(kw in q for kw in [
+            "my bookings", "my orders", "recent bookings", "active bookings",
+            "show bookings", "list bookings", "why is my order still not delivered",
+            "order still not delivered", "still not delivered", "why is my delivery late",
+            "late delivery", "where is my order", "track my order", "check my order",
+            "status of my order", "order status"
+        ])
+        if is_order_inquiry and is_auth:
             status_filter = "active" if "active" in q else None
             return [{
                 "id": "call_list_orders_1",
@@ -136,32 +146,60 @@ class MockDeterministicProvider(BaseLLMProvider):
         # Handle customer orders list
         if "bookings" in data:
             bookings = data.get("bookings", [])
+            q_lower = (user_query or "").lower()
+            is_delivery_or_status = any(kw in q_lower for kw in [
+                "why is my order still not delivered",
+                "order still not delivered",
+                "still not delivered",
+                "why is my delivery late",
+                "late delivery",
+                "delayed",
+                "where is my order",
+                "where is",
+                "track my order",
+                "check my order",
+                "status of my order",
+                "my orders",
+                "my bookings",
+                "active bookings",
+                "show bookings",
+                "list bookings",
+            ])
+
             if not bookings:
+                if is_delivery_or_status:
+                    return LLMResponse(
+                        content=(
+                            "I’m sorry for the delay. Let me check your order status.\n\n"
+                            "I couldn't find any active orders under your account. Could you please share your Order ID so I can check for you?"
+                        ),
+                        tool_calls=[],
+                    )
                 return LLMResponse(
                     content="You do not have any active bookings at the moment. How can I help you book a service today?",
                     tool_calls=[],
                 )
 
-            # Focus exclusively on current active booking
-            active_list = [b for b in bookings if str(b.get("status", "")).lower() not in {"completed", "closed", "cancelled", "rejected"}]
-            target = active_list[0] if active_list else bookings[0]
+            # Build list of orders
+            order_lines = []
+            for b in bookings[:5]:
+                bid = b.get("booking_id") or b.get("id")
+                title = b.get("issue_title") or b.get("service_category") or "Order"
+                status_txt = b.get("status_display") or b.get("status") or "Active"
+                order_lines.append(f"• **Order #{bid}**: {title} (Status: **{status_txt}**)")
 
-            status_txt = target.get("status_display") or target.get("status") or "Confirmed"
-            tech_name = target.get("technician_name")
-            title = target.get("issue_title") or target.get("service_category") or "Service"
-            bid = target.get("booking_id")
-            slot = f"{target.get('preferred_date')} ({target.get('preferred_time')})"
+            orders_list_str = "\n".join(order_lines)
+            intro = (
+                "I’m sorry for the delay. Let me check your order status.\n\nHere are your orders:"
+                if any(w in q_lower for w in ["delay", "still not", "not delivered", "late"])
+                else "Here are your current orders:"
+            )
 
-            if tech_name:
-                msg = (
-                    f"**{tech_name}** has been assigned for your **{title}** (Booking #{bid}) "
-                    f"and will reach you for your {slot} slot. Current status: **{status_txt}**."
-                )
-            else:
-                msg = (
-                    f"We are currently assigning a technician for your **{title}** (Booking #{bid}). "
-                    f"Preferred slot: {slot}. We will update you with live tracking as soon as they are on the way."
-                )
+            msg = (
+                f"{intro}\n\n"
+                f"{orders_list_str}\n\n"
+                f"Which order are you referring to?"
+            )
             return LLMResponse(content=msg, tool_calls=[])
 
         # Handle specific order detail
@@ -210,17 +248,65 @@ class MockDeterministicProvider(BaseLLMProvider):
         # Handle catalog search
         if "packages" in data:
             pkgs = data.get("packages", [])
+            query_str = (data.get("query") or "").strip()
+            q_low = query_str.lower()
+
+            if any(k in q_low for k in ["ac and appliance", "ac & appliance", "appliance and ac", "appliance & ac"]):
+                topic = "AC & Appliance Repair"
+            elif any(k in q_low for k in ["ac", "air condition", "hvac"]):
+                topic = "AC Service & Repair"
+            elif any(k in q_low for k in ["refrigerator", "fridge"]):
+                topic = "Refrigerator Service & Repair"
+            elif "washing machine" in q_low:
+                topic = "Washing Machine Service"
+            elif any(k in q_low for k in ["cleaning", "pest"]):
+                topic = "Cleaning & Pest Control"
+            elif "plumb" in q_low:
+                topic = "Plumbing Services"
+            elif "electric" in q_low:
+                topic = "Electrical Services"
+            elif "carpenter" in q_low or "carpentry" in q_low:
+                topic = "Carpentry Services"
+            elif "paint" in q_low or "waterproof" in q_low:
+                topic = "Painting & Waterproofing"
+            elif any(k in q_low for k in ["packers", "movers", "shifting"]):
+                topic = "Packers & Movers"
+            elif any(k in q_low for k in ["vegetable", "grocer"]):
+                topic = "Farm-Fresh Vegetables & Groceries"
+            else:
+                cleaned = re.sub(
+                    r"\b(?:i\s+want|list\s+of|the\s+list\s+of|details?\s+of|give\s+me|show\s+me|can\s+you\s+show|price\s+etc|its?\s+price|price|rates?|cost|packages?|services?)\b",
+                    "",
+                    q_low,
+                    flags=re.IGNORECASE,
+                ).strip()
+                topic = cleaned.title() if cleaned else "SEVO"
+
             if not pkgs:
                 return LLMResponse(
-                    content=f"No matching service packages found for '{data.get('query')}'. You can try searching for 'AC service', 'cleaning', or 'plumbing'.",
+                    content=f"No matching service packages found for '{topic}'. You can try searching for 'AC service', 'cleaning', 'plumbing', or 'vegetables'.",
                     tool_calls=[],
                 )
-            lines = [f"Here are available {data.get('query', '')} packages:"]
-            for p in pkgs[:4]:
-                dur = f" ({p['duration']})" if p.get("duration") else ""
-                lines.append(f"• **{p['name']}**: ₹{p['price']}{dur}")
-            lines.append("\nWould you like help booking any of these?")
-            return LLMResponse(content="\n".join(lines), tool_calls=[])
+
+            # Group packages by service category
+            from collections import OrderedDict
+            by_service = OrderedDict()
+            for p in pkgs:
+                svc = p.get("service") or topic
+                if svc not in by_service:
+                    by_service[svc] = []
+                by_service[svc].append(p)
+
+            lines = [f"Here are the available **{topic}** services and packages on SEVO:\n"]
+            for svc_name, items in list(by_service.items())[:5]:
+                lines.append(f"**{svc_name}**:")
+                for p in items[:3]:
+                    dur = f" ({p['duration']})" if p.get("duration") else ""
+                    lines.append(f"• **{p['name']}**: ₹{p['price']}{dur}")
+                lines.append("")
+
+            lines.append("Would you like help booking any of these services?")
+            return LLMResponse(content="\n".join(lines).strip(), tool_calls=[])
 
         # Handle customer profile
         if "profile" in data:
@@ -262,28 +348,16 @@ class MockDeterministicProvider(BaseLLMProvider):
         if "vendor" in q_lower or "partner" in q_lower or "join" in q_lower:
             return LLMResponse(
                 content=(
-                    "You can join CalServices as a verified service partner! Apply directly through our partner portal: https://calservices-vendor.vercel.app."
+                    "You can join SEVO as a verified service partner! Apply directly through our partner portal: https://calservices-vendor.vercel.app."
                 ),
                 tool_calls=[],
             )
 
         # How to book
-        if any(w in q_lower for w in ["how to book", "how do i book", "how can i book", "steps to book", "book a service"]):
-            return LLMResponse(
-                content=(
-                    "Booking is quick and simple:\n"
-                    "1. Select your service package from the catalog.\n"
-                    "2. Pick your preferred date and time slot.\n"
-                    "3. Enter your address and confirm your booking.\n\n"
-                    "A verified technician will be assigned with live tracking and ETA!"
-                ),
-                tool_calls=[],
-            )
-
         if any(w in q_lower for w in ["how to book", "how do i book", "how can i book", "guide me to book", "steps to book", "book a service", "book services", "how does booking work"]):
             return LLMResponse(
                 content=(
-                    "**How to Book a Doorstep Service on CalServices (Sevo):**\n\n"
+                    "**How to Book a Doorstep Service on SEVO:**\n\n"
                     "1. **Explore the Catalog**: Browse service categories from our [Service Catalog](/booking) (Cleaning, HVAC/AC Repair, Plumbing, Painting, Masonry, Logistics).\n"
                     "2. **Select Service & Package**: Choose your required package and review transparent pricing (all in INR ₹ with GST breakdown).\n"
                     "3. **Choose Date & Slot**: Pick your convenient appointment date and preferred time slot.\n"
@@ -297,6 +371,66 @@ class MockDeterministicProvider(BaseLLMProvider):
         # Generic RAG context presentation
         clean_context = rag_context.replace("--- VERIFIED KNOWLEDGE BASE CONTEXT ---", "").replace("--- END KNOWLEDGE CONTEXT ---", "").strip()
         return LLMResponse(
-            content=f"According to CalServices policies:\n\n{clean_context[:600]}",
+            content=clean_context[:600],
             tool_calls=[],
         )
+
+    def _detect_conversational_response(self, query: str, context: Optional[Dict[str, Any]] = None) -> Optional[str]:
+        q = (query or "").strip().lower()
+        user = context.get("user") if context else None
+        is_auth = bool(user and getattr(user, "is_authenticated", False))
+
+        # 1. Gratitude & Closing
+        if re.search(r"^(?:thanks|thank you|thx|tq)\b", q):
+            return "You’re very welcome!"
+        if re.search(r"^(?:bye|goodbye|see you|have a good day)\b", q):
+            return "Goodbye! Have a great day!"
+
+        # 2. Angry / Bad service complaints
+        if any(p in q for p in ["service is very bad", "service is bad", "terrible service", "pathetic service", "worst service", "horrible service", "bad service"]):
+            return "I’m sorry about this. We apologize for the inconvenience. Let me help you with this."
+
+        # 3. Delayed delivery or orders:
+        # Authenticated users proceed to tool calling to fetch and list their real orders.
+        # Unauthenticated guests are asked to log in or share their Order ID.
+        if any(p in q for p in ["why is my order still not delivered", "order still not delivered", "still not delivered", "why is my delivery late", "late delivery"]):
+            if not is_auth:
+                return "I’m sorry for the delay. Let me check your order status.\n\nPlease log in or share your Order ID so I can look up your order for you."
+            return None
+
+        # 4. Frustration / useless
+        if any(p in q for p in ["this is useless", "useless app", "useless service", "waste of time"]):
+            return "I’m sorry this has been frustrating. Let me see how I can help."
+
+        # 5. Company mistake
+        if any(p in q for p in ["you people made a mistake", "you made a mistake", "your mistake", "mistake by you"]):
+            return "We’re sorry about the mistake. Let me help you resolve it."
+
+        # 6. Are you even helping me?
+        if any(p in q for p in ["are you even helping me", "are you helping me", "can you even help", "are you listening"]):
+            return "Yes, I’m here to help. Please tell me what happened."
+
+        # 7. I already told you this!
+        if any(p in q for p in ["i already told you this", "i already told you", "i already said that", "i already mentioned"]):
+            return "I’m sorry about that. Let me check it again."
+
+        # 8. Greetings & Name introductions
+        is_greeting = bool(re.search(r"\b(?:hi|hello|hey|greetings|namaste|good\s+(?:morning|afternoon|evening|day))\b", q))
+        name_match = re.search(r"\b(?:i am|i'm|im|my name is)\s+([a-zA-Z]{2,30})\b", query, re.IGNORECASE)
+        invalid_names = {"interested", "looking", "asking", "here", "waiting", "facing", "trying", "ordering", "booking", "calling", "having", "getting", "sorry", "ready", "new", "useless"}
+        name = name_match.group(1).strip().capitalize() if name_match and name_match.group(1).lower() not in invalid_names else None
+
+        if is_greeting or name:
+            # Check if user also asked a specific service question in the same message (e.g. "hi, how much is ac repair?")
+            service_keywords = [
+                "book", "order", "service", "ac", "repair", "plumb", "clean",
+                "vegetable", "refund", "track", "cancel", "cost", "price",
+                "package", "rate", "delivery", "technician", "vendor", "partner", "how"
+            ]
+            has_service_query = any(k in q for k in service_keywords)
+            if not has_service_query:
+                if name:
+                    return f"Hello {name}! Welcome to SEVO. How can I assist you with our services, bookings, or orders today?"
+                return "Hello! Welcome to SEVO. How can I assist you today with our doorstep services, repairs, or bookings?"
+
+        return None

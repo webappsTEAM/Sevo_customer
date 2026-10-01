@@ -12,11 +12,16 @@ class PublicGTPolicyTests(APITestCase):
         r = self.client.get(URL, {"service_category": cat})
         return r, (r.json().get("data") or {})
 
-    def test_nothing_configured_shows_only_final_fare_note(self):
+    def test_nothing_configured_shows_liability_final_fare_and_drop_change_notes(self):
         r, d = self.get()
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(len(d["terms"]), 1)
-        self.assertIn("final fare", d["terms"][0])
+        self.assertEqual(len(d["terms"]), 4)
+        self.assertIn("e-way bill", d["terms"][-1])   # statutory inter-state notice (Round 6)
+        # No included liability configured -> say so plainly rather than stay silent.
+        self.assertIn("not insured by default", d["terms"][0])
+        self.assertIn("Terms of Service", d["terms"][0])
+        self.assertIn("final fare", d["terms"][1])
+        self.assertIn("change the drop location during the trip", d["terms"][2])
         self.assertIsNone(d["cancellation"])
         self.assertIsNone(d["waiting"])
 
@@ -49,4 +54,8 @@ class PublicGTPolicyTests(APITestCase):
 
     def test_packers_movers_has_no_final_fare_note(self):
         _, d = self.get("packers_movers")
-        self.assertEqual(d["terms"], [])
+        self.assertEqual(len(d["terms"]), 2)
+        self.assertIn("e-way bill", d["terms"][-1])
+        self.assertIn("not insured by default", d["terms"][0])
+        self.assertNotIn("insurance at booking", d["terms"][0])  # P&M is not sold transit insurance
+        self.assertFalse(any("final fare" in t or "drop location" in t for t in d["terms"]))

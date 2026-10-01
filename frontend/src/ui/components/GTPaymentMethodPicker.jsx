@@ -18,12 +18,13 @@ export function GTPaymentMethodPicker({ value, onChange, total }) {
   }, [])
 
   const walletEnough = wallet != null && total != null && Number(total) > 0 && wallet >= Number(total)
+  const canSplit = !!cfg.wallet_part_payment && !!cfg.online_available && wallet != null && wallet > 0
   const options = [
     { id: "cod", label: "Cash on delivery", hint: "Pay the driver at the end of the trip", enabled: true },
     { id: "online", label: "Pay online", hint: "UPI, cards, netbanking", enabled: !!cfg.online_available },
     ...(wallet != null && wallet > 0
       ? [{ id: "wallet", label: `SEVO wallet (₹${wallet.toLocaleString("en-IN")})`,
-           hint: walletEnough ? "Pay the full fare from your wallet" : "Balance is lower than the fare", enabled: walletEnough }]
+           hint: walletEnough ? "Pay the full fare from your wallet" : canSplit ? "Use your wallet, pay the rest online" : "Balance is lower than the fare", enabled: walletEnough || canSplit }]
       : []),
   ].filter((o) => o.enabled || o.id === "wallet")
 

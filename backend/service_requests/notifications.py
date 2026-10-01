@@ -1751,3 +1751,32 @@ def notify_delivery_exception(service_request) -> None:
             )
         except Exception as sms_err:
             logger.warning("[GTException] SMS failed for %s: %s", service_request.request_id, sms_err)
+
+
+_CLAIM_SMS = {
+    "OPEN": "your damage/loss claim has been received and is under review",
+    "APPROVED": "your claim was approved for INR {amount}. Payout follows to your SEVO wallet",
+    "REJECTED": "your claim was reviewed and could not be approved. Contact support for details",
+    "PAID": "your claim payout of INR {amount} has been credited to your SEVO wallet",
+}
+
+
+def notify_claim_update(claim) -> None:
+    """Tell the customer where their damage/loss claim stands. One SMS per (claim, status): the event
+    key makes retries and duplicate calls idempotent."""
+    template = _CLAIM_SMS.get(claim.status)
+    booking = claim.booking
+    phone = (getattr(booking, "phone", "") or "").strip()
+    if not template or not phone:
+        return
+    body = template.format(amount=claim.approved_amount if claim.approved_amount is not None else claim.claimed_amount)
+    try:
+        send_sms_notification(
+            mobile_number=phone,
+            message=f"SEVO: Booking {booking.request_id}: {body}. Claim #{claim.pk}.",
+            event_key=f"claim:{claim.pk}:{claim.status}",
+            service_request=booking,
+            preference_field="booking_confirmations",
+        )
+    except Exception as exc:
+        logger.warning("[Claim] SMS failed for claim %s: %s", claim.pk, exc)
