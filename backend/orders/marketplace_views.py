@@ -288,10 +288,13 @@ def _finalize_marketplace_orders(
                         "basket_id": ci.basket_id,
                         "quantity": ci.quantity,
                         "unit_price": str(ci.unit_price_snapshot),
+                        "customization": ci.customization or {},
+                        "slot_selections": (ci.customization or {}).get("slot_selections") if isinstance(ci.customization, dict) else None,
                     } if ci.basket_id else {
                         "product_id": ci.seller_product_id,
                         "quantity": ci.quantity,
                         "unit_price": str(ci.unit_price_snapshot),
+                        "customization": ci.customization or {},
                     }
                     for ci in s_items
                 ]
@@ -536,10 +539,13 @@ class MarketplaceInitiatePaymentView(APIView):
                 "basket_id": ci.basket_id,
                 "requested_quantity": ci.quantity,
                 "expected_unit_price": str(ci.unit_price_snapshot),
+                "customization": ci.customization or {},
+                "slot_selections": (ci.customization or {}).get("slot_selections") if isinstance(ci.customization, dict) else None,
             } if ci.basket_id else {
                 "product_id": ci.seller_product_id,
                 "requested_quantity": ci.quantity,
                 "expected_unit_price": str(ci.unit_price_snapshot),
+                "customization": ci.customization or {},
             }
             for ci in cart_items
         ]

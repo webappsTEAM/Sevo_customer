@@ -410,6 +410,7 @@ export function MarketplacePage() {
   const [basketsLoading, setBasketsLoading] = useState(true)
   const [basketDetailModal, setBasketDetailModal] = useState(null)
   const [basketDetailLoading, setBasketDetailLoading] = useState(false)
+  const [selectedBasketSlotOptions, setSelectedBasketSlotOptions] = useState({})
 
   // Product Catalog & Category State
   const [products, setProducts] = useState([])
@@ -976,18 +977,44 @@ export function MarketplacePage() {
     }
   }
 
+  // Helper to extract default selections from a basket
+  const initBasketSlotSelections = (b) => {
+    const initial = {}
+    if (Array.isArray(b?.slots) && b.slots.length > 0) {
+      b.slots.forEach((slot) => {
+        const defaultOpt = slot.options?.find((o) => o.is_default) || slot.options?.[0]
+        if (defaultOpt) {
+          initial[slot.id] = defaultOpt.id
+        }
+      })
+    }
+    return initial
+  }
+
   // Handle Add Basket To Cart
-  const handleAddBasketToCart = async (basket, clearExisting = false) => {
+  const handleAddBasketToCart = async (basket, clearExisting = false, customOptions = null) => {
     if (!user) {
       // Store pending basket, reuse modal flow
-      setPendingAddToCart({ basket, isBasket: true })
+      setPendingAddToCart({ basket, isBasket: true, customOptions })
       setShowCustomerEntryModal(true)
       return
     }
+    const customization = customOptions ? {
+      slot_selections: customOptions.slot_selections || [],
+      live_mrp: customOptions.live_mrp,
+    } : (basket.customization || {})
+
     const cartItems = Array.isArray(cart?.items) ? cart.items : []
-    const existingItem = cartItems.find((i) => i.basket_id === basket.id)
+    const existingItem = cartItems.find((i) => {
+      if (i.basket_id !== basket.id) return false
+      if (!customOptions && (!i.customization || !i.customization.slot_selections)) return true
+      const existingSelections = i.customization?.slot_selections || []
+      const targetSelections = customOptions?.slot_selections || []
+      return JSON.stringify(existingSelections) === JSON.stringify(targetSelections)
+    })
+
     if (existingItem && !clearExisting) {
-      // Already in cart — just increment
+      // Already in cart - just increment
       try {
         await updateMarketplaceCartItem(existingItem.id, { quantity: existingItem.quantity + 1 })
         await reloadCart()
@@ -1003,6 +1030,7 @@ export function MarketplacePage() {
         basket_id: basket.id,
         quantity: 1,
         clear_cart: clearExisting,
+        customization,
       })
       if (res?.success) {
         await reloadCart()
@@ -1014,6 +1042,7 @@ export function MarketplacePage() {
           pendingBasket: basket,
           pendingProduct: null,
           pendingQty: 1,
+          pendingCustomOptions: customOptions,
         })
       } else {
         showToast(res?.message || "Could not add bundle to cart.", "error")
@@ -1026,6 +1055,7 @@ export function MarketplacePage() {
           pendingBasket: basket,
           pendingProduct: null,
           pendingQty: 1,
+          pendingCustomOptions: customOptions,
         })
       } else {
         showToast(err?.body?.message || "Failed to add bundle to cart.", "error")
@@ -1038,18 +1068,19 @@ export function MarketplacePage() {
   // Handle Open Basket Detail Modal
   const handleOpenBasketDetail = async (basket) => {
     setBasketDetailModal(basket)
-    if (!basket.items || basket.items.length === 0) {
-      setBasketDetailLoading(true)
-      try {
-        const res = await fetchMarketplaceBasketDetail(basket.id)
-        if (res?.id || res?.data?.id) {
-          setBasketDetailModal(res?.data || res)
-        }
-      } catch (err) {
-        console.error("Failed to load basket detail:", err)
-      } finally {
-        setBasketDetailLoading(false)
+    setSelectedBasketSlotOptions(initBasketSlotSelections(basket))
+    setBasketDetailLoading(true)
+    try {
+      const res = await fetchMarketplaceBasketDetail(basket.id)
+      const detailed = res?.data || res
+      if (detailed?.id) {
+        setBasketDetailModal(detailed)
+        setSelectedBasketSlotOptions(initBasketSlotSelections(detailed))
       }
+    } catch (err) {
+      console.error("Failed to load basket detail:", err)
+    } finally {
+      setBasketDetailLoading(false)
     }
   }
 
@@ -1061,10 +1092,16 @@ export function MarketplacePage() {
     try {
       if (pendingBasket) {
         // Basket seller switch
+        const customOpt = sellerConflict.pendingCustomOptions
+        const customization = customOpt ? {
+          slot_selections: customOpt.slot_selections || [],
+          live_mrp: customOpt.live_mrp,
+        } : (pendingBasket.customization || {})
         const res = await addBasketToCart({
           basket_id: pendingBasket.id,
-          quantity: pendingQty,
+          quantity: pendingQty || 1,
           clear_cart: true,
+          customization,
         })
         if (res?.success) {
           setSellerConflict(null)
@@ -1073,8 +1110,7 @@ export function MarketplacePage() {
         } else {
           showToast(res?.message || "Failed to switch seller.", "error")
         }
-      } else {
-        // Product seller switch (existing logic)
+      } else {        // Product seller switch (existing logic)
         const res = await addMarketplaceCartItem({
           seller_product_id: pendingProduct.id,
           quantity: pendingQty,
@@ -1831,36 +1867,53 @@ export function MarketplacePage() {
                                     <div className="text-[11px] text-slate-400 line-through">₹{mrpTotal}</div>
                                   )}
                                 </div>
-                                {inCartQty > 0 ? (
-                                  <div
-                                    className="flex items-center bg-violet-600 text-white rounded-xl overflow-hidden shadow-sm"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <button
-                                      type="button"
-                                      onClick={(e) => { e.stopPropagation(); removeMarketplaceCartItem(inCartItem.id).then(reloadCart) }}
-                                      className="px-2 py-1.5 hover:bg-violet-700 transition-colors"
-                                    >
-                                      <Minus className="w-3 h-3" />
-                                    </button>
-                                    <span className="px-2 text-xs font-black">{inCartQty}</span>
+                                {(() => {
+                                  const isMultiOption = Boolean(basket.is_multi_option || basket.slots?.some((s) => s.options?.length > 1))
+                                  if (isMultiOption) {
+                                    return (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); handleOpenBasketDetail(basket) }}
+                                        className="px-3 py-1.5 bg-violet-50 hover:bg-violet-600 hover:text-white text-violet-700 border border-violet-200 hover:border-violet-600 rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm active:scale-95"
+                                      >
+                                        Customize
+                                      </button>
+                                    )
+                                  }
+                                  if (inCartQty > 0) {
+                                    return (
+                                      <div
+                                        className="flex items-center bg-violet-600 text-white rounded-xl overflow-hidden shadow-sm"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <button
+                                          type="button"
+                                          onClick={(e) => { e.stopPropagation(); removeMarketplaceCartItem(inCartItem.id).then(reloadCart) }}
+                                          className="px-2 py-1.5 hover:bg-violet-700 transition-colors"
+                                        >
+                                          <Minus className="w-3 h-3" />
+                                        </button>
+                                        <span className="px-2 text-xs font-black">{inCartQty}</span>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => { e.stopPropagation(); handleAddBasketToCart(basket) }}
+                                          className="px-2 py-1.5 hover:bg-violet-700 transition-colors"
+                                        >
+                                          <Plus className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                    )
+                                  }
+                                  return (
                                     <button
                                       type="button"
                                       onClick={(e) => { e.stopPropagation(); handleAddBasketToCart(basket) }}
-                                      className="px-2 py-1.5 hover:bg-violet-700 transition-colors"
+                                      className="px-3 py-1.5 bg-violet-50 hover:bg-violet-600 hover:text-white text-violet-700 border border-violet-200 hover:border-violet-600 rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm active:scale-95"
                                     >
-                                      <Plus className="w-3 h-3" />
+                                      Add Bundle
                                     </button>
-                                  </div>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); handleAddBasketToCart(basket) }}
-                                    className="px-3 py-1.5 bg-violet-50 hover:bg-violet-600 hover:text-white text-violet-700 border border-violet-200 hover:border-violet-600 rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm active:scale-95"
-                                  >
-                                    Add Bundle
-                                  </button>
-                                )}
+                                  )
+                                })()}
                               </div>
                             </div>
                           </motion.div>
@@ -2351,137 +2404,323 @@ export function MarketplacePage() {
 
       {/* ── Basket / Combo Deal Detail Modal ── */}
       <AnimatePresence>
-        {basketDetailModal && (
-          <div className="fixed inset-0 z-[10006] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 30 }}
-              className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-100 max-h-[90vh] flex flex-col font-sans"
-            >
-              {/* Modal Header */}
-              <div className="p-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-gradient-to-r from-violet-50 to-purple-50">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-xl bg-violet-100 flex items-center justify-center">
-                    <Boxes className="w-4 h-4 text-violet-700" />
-                  </div>
-                  <span className="text-xs font-black uppercase tracking-wider text-violet-800 bg-violet-100 px-2.5 py-1 rounded-md">
-                    Bundle Deal
-                  </span>
-                </div>
-                <button
-                  onClick={() => setBasketDetailModal(null)}
-                  className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
+        {basketDetailModal && (() => {
+          const slots = Array.isArray(basketDetailModal.slots) && basketDetailModal.slots.length > 0 ? basketDetailModal.slots : []
+          const legacyItems = Array.isArray(basketDetailModal.items) ? basketDetailModal.items : []
+          const bundlePrice = Number(basketDetailModal.bundle_price || basketDetailModal.selling_price || 0)
 
-              <div className="p-6 overflow-y-auto space-y-5 flex-1">
-                {/* Title & Meta */}
-                <div>
-                  <h3 className="text-xl font-black text-slate-900 tracking-tight leading-snug">
-                    {basketDetailModal.title}
-                  </h3>
-                  <div className="flex items-center gap-3 mt-2 text-xs text-slate-500">
-                    <span className="flex items-center gap-1"><Store className="w-3 h-3" />{basketDetailModal.seller_name || "Seller Hub Partner"}</span>
-                    {basketDetailModal.item_count > 0 && (
-                      <span className="flex items-center gap-1"><Boxes className="w-3 h-3" />{basketDetailModal.item_count} Items</span>
+          // Compute Dynamic Live Total MRP based on currently chosen options
+          let liveTotalMrp = 0
+          let hasOutOfStockChoice = false
+
+          if (slots.length > 0) {
+            slots.forEach((slot) => {
+              const selectedOptId = selectedBasketSlotOptions[slot.id] || slot.options?.find((o) => o.is_default)?.id || slot.options?.[0]?.id
+              const chosenOpt = slot.options?.find((o) => o.id === selectedOptId) || slot.options?.[0]
+              const optMrp = Number(chosenOpt?.mrp || chosenOpt?.selling_price || 0)
+              const qty = Number(slot.quantity || 1)
+              liveTotalMrp += optMrp * qty
+              if (chosenOpt && (chosenOpt.in_stock === false || (chosenOpt.available_stock !== undefined && chosenOpt.available_stock <= 0))) {
+                hasOutOfStockChoice = true
+              }
+            })
+          } else if (legacyItems.length > 0) {
+            legacyItems.forEach((it) => {
+              const itMrp = Number(it.mrp || it.unit_price || 0)
+              const qty = Number(it.quantity || 1)
+              liveTotalMrp += itMrp * qty
+            })
+          } else {
+            liveTotalMrp = Number(basketDetailModal.mrp_total || basketDetailModal.total_mrp || 0)
+          }
+
+          const liveSavings = Math.max(0, liveTotalMrp - bundlePrice)
+          const liveSavingsPct = liveTotalMrp > 0 ? Math.round((liveSavings / liveTotalMrp) * 100) : 0
+
+          return (
+            <div className="fixed inset-0 z-[10006] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 30 }}
+                className="bg-white rounded-3xl max-w-xl w-full overflow-hidden shadow-2xl border border-slate-100 max-h-[90vh] flex flex-col font-sans"
+              >
+                {/* Modal Header */}
+                <div className="p-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-gradient-to-r from-violet-50 via-purple-50 to-indigo-50">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-xl bg-violet-100 flex items-center justify-center">
+                      <Boxes className="w-4 h-4 text-violet-700" />
+                    </div>
+                    <span className="text-xs font-black uppercase tracking-wider text-violet-800 bg-violet-100/90 px-2.5 py-1 rounded-md">
+                      Combo Offer
+                    </span>
+                    {slots.some((s) => s.options?.length > 1) && (
+                      <span className="text-[10px] font-extrabold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md">
+                        Customizable
+                      </span>
                     )}
                   </div>
-                  {basketDetailModal.description && (
-                    <p className="text-xs text-slate-500 mt-2 leading-relaxed">{basketDetailModal.description}</p>
-                  )}
+                  <button
+                    onClick={() => setBasketDetailModal(null)}
+                    className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
 
-                {/* Savings Summary */}
-                {(() => {
-                  const bundlePrice = Number(basketDetailModal.bundle_price || 0)
-                  const mrpTotal = Number(basketDetailModal.mrp_total || 0)
-                  const savings = Number(basketDetailModal.savings || (mrpTotal > bundlePrice ? mrpTotal - bundlePrice : 0))
-                  return (
-                    <div className="bg-violet-50 border border-violet-200 rounded-2xl p-4 flex items-center justify-between gap-4">
-                      <div>
-                        <div className="text-xs font-bold text-violet-600 uppercase tracking-wider">Bundle Price</div>
-                        <div className="text-3xl font-black text-slate-900 mt-0.5">₹{bundlePrice}</div>
-                        {mrpTotal > bundlePrice && (
-                          <div className="text-sm text-slate-400 line-through">MRP: ₹{mrpTotal}</div>
-                        )}
-                      </div>
-                      {savings > 0 && (
-                        <div className="bg-amber-400 text-amber-950 px-3 py-2 rounded-xl text-center shrink-0">
-                          <div className="text-xs font-bold">You save</div>
-                          <div className="text-lg font-black">₹{savings}</div>
+                <div className="p-6 overflow-y-auto space-y-5 flex-1">
+                  {/* Title & Meta */}
+                  <div>
+                    <h3 className="text-xl font-black text-slate-900 tracking-tight leading-snug">
+                      {basketDetailModal.title}
+                    </h3>
+                    <div className="flex items-center gap-3 mt-2 text-xs text-slate-500 flex-wrap">
+                      <span className="flex items-center gap-1"><Store className="w-3.5 h-3.5 text-slate-400" />{basketDetailModal.seller_name || "Seller Hub Partner"}</span>
+                      <span className="flex items-center gap-1"><Boxes className="w-3.5 h-3.5 text-slate-400" />{slots.length || legacyItems.length || basketDetailModal.item_count || 0} Slots</span>
+                      {basketDetailModal.warehouse_name && (
+                        <span className="text-[11px] text-slate-400 font-medium">Ships from {basketDetailModal.warehouse_name}</span>
+                      )}
+                    </div>
+                    {basketDetailModal.description && (
+                      <p className="text-xs text-slate-500 mt-2 leading-relaxed">{basketDetailModal.description}</p>
+                    )}
+                  </div>
+
+                  {/* Savings Summary (Dynamic Live Recalculation) */}
+                  <div className="bg-gradient-to-br from-violet-50 via-purple-50/50 to-indigo-50/40 border border-violet-200/80 rounded-2xl p-4 flex items-center justify-between gap-4 shadow-2xs">
+                    <div>
+                      <div className="text-[11px] font-black text-violet-600 uppercase tracking-wider">Fixed Combo Price</div>
+                      <div className="text-3xl font-black text-slate-900 mt-0.5">₹{bundlePrice}</div>
+                      {liveTotalMrp > bundlePrice && (
+                        <div className="text-xs text-slate-400 font-semibold mt-0.5">
+                          Total MRP: <span className="line-through">₹{liveTotalMrp}</span>
                         </div>
                       )}
                     </div>
-                  )
-                })()}
-
-                {/* Component Items */}
-                {basketDetailLoading ? (
-                  <div className="space-y-2 animate-pulse">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="h-14 bg-slate-100 rounded-xl" />
-                    ))}
+                    {liveSavings > 0 && (
+                      <div className="bg-amber-400 text-amber-950 px-3.5 py-2 rounded-2xl text-center shrink-0 shadow-xs">
+                        <div className="text-[10px] font-black uppercase tracking-wider">You Save</div>
+                        <div className="text-lg font-black leading-tight">₹{liveSavings}</div>
+                        {liveSavingsPct > 0 && <div className="text-[9px] font-extrabold opacity-80">({liveSavingsPct}% off)</div>}
+                      </div>
+                    )}
                   </div>
-                ) : Array.isArray(basketDetailModal.items) && basketDetailModal.items.length > 0 ? (
-                  <div>
-                    <div className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">What's Included</div>
-                    <div className="space-y-2">
-                      {basketDetailModal.items.map((it, idx) => (
-                        <div key={idx} className="flex items-center gap-3 bg-slate-50 rounded-xl p-3 border border-slate-100">
-                          <div className="w-11 h-11 shrink-0 rounded-xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden">
-                            {it.primary_image ? (
-                              <img src={it.primary_image} alt={it.product_title} className="w-full h-full object-cover"
-                                onError={(e) => { e.target.src = "/mockups/vegetables_realistic.png" }} />
-                            ) : (
-                              <Boxes className="w-5 h-5 text-slate-300" />
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-xs font-extrabold text-slate-900 truncate">{it.product_title}</div>
-                            <div className="text-[11px] text-slate-400 font-medium">
-                              {[it.pack_size || it.unit, it.product_sku].filter(Boolean).join(" · ") || ""}
-                            </div>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <div className="text-xs font-black text-slate-900">×{it.quantity}</div>
-                            {it.unit_price && (
-                              <div className="text-[11px] text-slate-400">₹{it.unit_price} each</div>
-                            )}
-                          </div>
-                        </div>
+
+                  {/* Component Slots / Items */}
+                  {basketDetailLoading ? (
+                    <div className="space-y-3 animate-pulse">
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className="h-16 bg-slate-100 rounded-2xl" />
                       ))}
                     </div>
-                  </div>
-                ) : null}
-              </div>
+                  ) : slots.length > 0 ? (
+                    <div>
+                      <div className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2.5 flex items-center justify-between">
+                        <span>Included Slots ({slots.length})</span>
+                        <span className="text-[11px] font-bold text-violet-600 lowercase">select your options</span>
+                      </div>
+                      <div className="space-y-3.5">
+                        {slots.map((slot, sIdx) => {
+                          const isMulti = Array.isArray(slot.options) && slot.options.length > 1
+                          const selectedOptId = selectedBasketSlotOptions[slot.id] || slot.options?.find((o) => o.is_default)?.id || slot.options?.[0]?.id
+                          const selectedOpt = slot.options?.find((o) => o.id === selectedOptId) || slot.options?.[0]
 
-              {/* Modal Footer CTA */}
-              <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setBasketDetailModal(null)}
-                  className="px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-extrabold transition-colors cursor-pointer"
-                >
-                  Close
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleAddBasketToCart(basketDetailModal)
-                    setBasketDetailModal(null)
-                  }}
-                  className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-xs font-black shadow-md shadow-violet-600/20 transition-all cursor-pointer flex items-center gap-2"
-                >
-                  <Gift className="w-3.5 h-3.5" />
-                  Add Bundle • ₹{basketDetailModal.bundle_price}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
+                          return (
+                            <div key={slot.id || sIdx} className="bg-slate-50/90 rounded-2xl p-3.5 border border-slate-200/90 shadow-2xs space-y-2.5">
+                              {/* Slot Header */}
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="w-5 h-5 rounded-full bg-violet-600 text-white text-[10px] font-black flex items-center justify-center shrink-0">
+                                    {sIdx + 1}
+                                  </span>
+                                  <span className="text-xs font-black text-slate-800 truncate">
+                                    {slot.slot_title || selectedOpt?.product_title || `Slot ${sIdx + 1}`}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {isMulti && (
+                                    <span className="text-[10px] font-black text-violet-700 bg-violet-100/90 border border-violet-200 px-2 py-0.5 rounded-full">
+                                      Choose 1 of {slot.options.length}
+                                    </span>
+                                  )}
+                                  <span className="text-xs font-black text-slate-700 bg-white px-2 py-0.5 rounded-lg border border-slate-200 shadow-2xs">
+                                    Qty: {slot.quantity || 1}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Multi-Option Selector */}
+                              {isMulti ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
+                                  {slot.options.map((opt) => {
+                                    const isSelected = selectedOptId === opt.id
+                                    const isOutOfStock = opt.in_stock === false || (opt.available_stock !== undefined && opt.available_stock <= 0)
+                                    return (
+                                      <div
+                                        key={opt.id}
+                                        onClick={() => {
+                                          if (!isOutOfStock) {
+                                            setSelectedBasketSlotOptions((prev) => ({ ...prev, [slot.id]: opt.id }))
+                                          }
+                                        }}
+                                        className={`relative flex items-center gap-2.5 p-2.5 rounded-xl border transition-all cursor-pointer ${
+                                          isSelected
+                                            ? "bg-violet-50/80 border-violet-500 ring-1 ring-violet-500 shadow-xs"
+                                            : isOutOfStock
+                                            ? "bg-slate-100/70 border-slate-200 opacity-60 cursor-not-allowed"
+                                            : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
+                                        }`}
+                                      >
+                                        {/* Radio Indicator */}
+                                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                                          isSelected ? "border-violet-600 bg-violet-600" : "border-slate-300 bg-white"
+                                        }`}>
+                                          {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                        </div>
+
+                                        {/* Image */}
+                                        <div className="w-9 h-9 shrink-0 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center overflow-hidden">
+                                          {opt.primary_image ? (
+                                            <img src={opt.primary_image} alt={opt.product_title} className="w-full h-full object-cover"
+                                              onError={(e) => { e.target.src = "/mockups/vegetables_realistic.png" }} />
+                                          ) : (
+                                            <Boxes className="w-4 h-4 text-slate-300" />
+                                          )}
+                                        </div>
+
+                                        {/* Info */}
+                                        <div className="flex-1 min-w-0">
+                                          <div className="text-[11px] font-bold text-slate-900 truncate leading-tight">
+                                            {opt.product_title}
+                                          </div>
+                                          <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-400">
+                                            {opt.product_brand && <span className="font-semibold text-slate-600">{opt.product_brand}</span>}
+                                            {opt.pack_size && <span>• {opt.pack_size}</span>}
+                                            {opt.mrp && <span className="text-slate-500 font-medium">• MRP ₹{opt.mrp}</span>}
+                                          </div>
+                                        </div>
+
+                                        {/* Out of stock tag */}
+                                        {isOutOfStock && (
+                                          <span className="text-[9px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
+                                            Out of Stock
+                                          </span>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              ) : (
+                                /* Single Fixed Option (No clutter) */
+                                <div className="flex items-center gap-3 bg-white rounded-xl p-2.5 border border-slate-200">
+                                  <div className="w-10 h-10 shrink-0 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center overflow-hidden">
+                                    {selectedOpt?.primary_image ? (
+                                      <img src={selectedOpt.primary_image} alt={selectedOpt.product_title} className="w-full h-full object-cover"
+                                        onError={(e) => { e.target.src = "/mockups/vegetables_realistic.png" }} />
+                                    ) : (
+                                      <Boxes className="w-4 h-4 text-slate-300" />
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-xs font-bold text-slate-900 truncate">{selectedOpt?.product_title}</div>
+                                    <div className="text-[11px] text-slate-400 font-medium">
+                                      {[selectedOpt?.product_brand, selectedOpt?.pack_size || selectedOpt?.unit].filter(Boolean).join(" • ")}
+                                      {selectedOpt?.mrp && ` • MRP ₹${selectedOpt.mrp}`}
+                                    </div>
+                                  </div>
+                                  {selectedOpt?.in_stock === false && (
+                                    <span className="text-[9px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
+                                      Out of Stock
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ) : legacyItems.length > 0 ? (
+                    <div>
+                      <div className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">What's Included</div>
+                      <div className="space-y-2">
+                        {legacyItems.map((it, idx) => (
+                          <div key={idx} className="flex items-center gap-3 bg-slate-50 rounded-xl p-3 border border-slate-100">
+                            <div className="w-11 h-11 shrink-0 rounded-xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden">
+                              {it.primary_image ? (
+                                <img src={it.primary_image} alt={it.product_title} className="w-full h-full object-cover"
+                                  onError={(e) => { e.target.src = "/mockups/vegetables_realistic.png" }} />
+                              ) : (
+                                <Boxes className="w-5 h-5 text-slate-300" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-extrabold text-slate-900 truncate">{it.product_title}</div>
+                              <div className="text-[11px] text-slate-400 font-medium">
+                                {[it.pack_size || it.unit, it.product_sku].filter(Boolean).join(" · ") || ""}
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <div className="text-xs font-black text-slate-900">×{it.quantity}</div>
+                              {it.unit_price && (
+                                <div className="text-[11px] text-slate-400">₹{it.unit_price} each</div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* Modal Footer CTA */}
+                <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3 shrink-0">
+                  <div className="text-xs font-bold text-slate-500">
+                    Combo Total: <span className="text-sm font-black text-slate-900">₹{bundlePrice}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setBasketDetailModal(null)}
+                      className="px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-extrabold transition-colors cursor-pointer"
+                    >
+                      Close
+                    </button>
+                    <button
+                      type="button"
+                      disabled={hasOutOfStockChoice}
+                      onClick={() => {
+                        const slotSelections = slots.map((slot) => {
+                          const optId = selectedBasketSlotOptions[slot.id]
+                          const opt = slot.options?.find((o) => o.id === optId) || slot.options?.find((o) => o.is_default) || slot.options?.[0]
+                          return {
+                            slot_id: slot.id,
+                            product_id: opt ? opt.product_id : (slot.product_id || slot.options?.[0]?.product_id),
+                          }
+                        })
+                        const customOptions = slotSelections.length > 0 ? {
+                          slot_selections: slotSelections,
+                          live_mrp: liveTotalMrp,
+                        } : null
+
+                        handleAddBasketToCart(basketDetailModal, false, customOptions)
+                        setBasketDetailModal(null)
+                      }}
+                      className={`px-6 py-2.5 rounded-xl text-xs font-black shadow-md transition-all cursor-pointer flex items-center gap-2 ${
+                        hasOutOfStockChoice
+                          ? "bg-slate-300 text-slate-500 cursor-not-allowed"
+                          : "bg-violet-600 hover:bg-violet-700 text-white shadow-violet-600/20"
+                      }`}
+                    >
+                      <Gift className="w-3.5 h-3.5" />
+                      {hasOutOfStockChoice ? "Selection Out of Stock" : `Add Bundle • ₹${bundlePrice}`}
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )
+        })()}
       </AnimatePresence>
 
       {/* ── Cart Drawer (Instamart Style) ── */}
@@ -3520,11 +3759,11 @@ export function MarketplacePage() {
             await refreshMe?.()
             await reloadCart()
             if (pendingAddToCart) {
-              const { product, quantityDelta, basket, isBasket } = pendingAddToCart
+              const { product, quantityDelta, basket, isBasket, customOptions } = pendingAddToCart
               setPendingAddToCart(null)
               setTimeout(() => {
                 if (isBasket && basket) {
-                  handleAddBasketToCart(basket)
+                  handleAddBasketToCart(basket, false, customOptions)
                 } else if (product) {
                   handleAddToCart(product, quantityDelta)
                 }
