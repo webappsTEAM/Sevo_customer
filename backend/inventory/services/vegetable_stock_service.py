@@ -170,7 +170,7 @@ def adjust_stock(product, quantity, unit, reason: str, company, entered_by_user=
         unit_label=item.unit,
         delta_grams=delta,
         balance_after_grams=target_units,
-        reason=str(reason).strip(),
+        reason=reason.strip(),
         entered_by=entered_by_user,
     )
 

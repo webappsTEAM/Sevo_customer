@@ -41,7 +41,7 @@ from .models import (
     TripStop,
     ACInspectionRateCategory, ACInspectionRateItem, ACInspectionConfiguration,
 )
-from .models import is_mason_category
+from .models import is_mason_category, _generate_secure_start_otp
 from .serializers import (
     AdminChangePrioritySerializer,
     FeedbackTokenSummarySerializer,
@@ -2018,7 +2018,7 @@ def _latest_payment_confirmation_otp(sr):
     try:
         import re
         from django.db import connection, transaction
-        with transaction.atomic(), connection.cursor() as cursor:
+        with atomic_transaction(), connection.cursor() as cursor:
             cursor.execute(
                 "SELECT message FROM workforce_notification "
                 "WHERE related_object_id IN (%s, %s) "
@@ -2054,7 +2054,7 @@ def _latest_delivery_otp(sr):
         from django.db import connection, transaction
         # Savepoint: on PostgreSQL a failing raw query (vendor-owned mirror table missing or
         # not readable) would otherwise abort the WHOLE surrounding transaction.
-        with transaction.atomic(), connection.cursor() as cursor:
+        with atomic_transaction(), connection.cursor() as cursor:
             cursor.execute(
                 "SELECT message FROM workforce_notification "
                 "WHERE related_object_id IN (%s, %s) "
@@ -2227,7 +2227,7 @@ def _build_tracking_payload(sr, has_full_access, include_delivery_otp=False, inc
         or (sr.technician_name and sr.status in POST_ACCEPT_STATUSES)
     )
     is_accepted = technician_accepted
-    tracking_available = bool(effective_status in ["accepted", "on_the_way", "en_route", "arrived", "in_progress", "proof_submitted", "cash_pending", "waiting_for_payment"])
+    tracking_available = effective_status in ["accepted", "on_the_way", "en_route", "arrived", "in_progress", "proof_submitted", "cash_pending", "waiting_for_payment"]
     is_terminal = effective_status in ["completed", "closed", "cancelled", "rejected", "feedback_pending", "feedback_received"]
 
     vendor_data = None
@@ -2427,7 +2427,33 @@ def _build_tracking_payload(sr, has_full_access, include_delivery_otp=False, inc
     # Cash Payment Confirmation OTP the vendor app issued for this booking (see
     # _latest_payment_confirmation_otp: it must work in autocommit, i.e. on PostgreSQL).
     payment_confirmation_otp = None
-    if sr.status not in ["cancelled", "rejected"] and sr.payment_status in ("cash_pending", "cash_collected", "pending"):
+    all_payment_notifs = []
+    if sr.status not in ["cancelled", "rejected"]:
+        try:
+            from django.db import connection
+            all_sr_ids = [str(x) for x in [target_sr.id, target_sr.request_id, sr.id, sr.request_id] if x]
+            if getattr(sr, "parent_request", None):
+                all_sr_ids.extend([str(sr.parent_request.id), str(sr.parent_request.request_id)])
+            if getattr(target_sr, "parent_request", None):
+                all_sr_ids.extend([str(target_sr.parent_request.id), str(target_sr.parent_request.request_id)])
+            with atomic_transaction(), connection.cursor() as cursor:
+                placeholders = ", ".join(["%s"] * len(all_sr_ids))
+                cursor.execute(
+                    f"SELECT message, created_at FROM workforce_notification "
+                    f"WHERE related_object_id IN ({placeholders}) "
+                    f"AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
+                    f"ORDER BY created_at DESC;",
+                    all_sr_ids,
+                )
+                all_payment_notifs = cursor.fetchall()
+                if all_payment_notifs and all_payment_notifs[0][0]:
+                    import re
+                    m = re.search(r'OTP\s+([0-9]{6})', all_payment_notifs[0][0])
+                    if m:
+                        payment_confirmation_otp = m.group(1)
+        except Exception:
+            pass
+    if not payment_confirmation_otp and sr.status not in ["cancelled", "rejected"] and sr.payment_status in ("cash_pending", "cash_collected", "pending"):
         payment_confirmation_otp = _latest_payment_confirmation_otp(sr)
 
     # Goods & Transport / Packers & Movers delivery OTP. The vendor app
@@ -5993,7 +6019,7 @@ class CustomerQuotePDFView(APIView):
                 if len(parts) > 1 and parts[1].isdigit():
                     v_target = int(parts[1])
 
-            with transaction.atomic(), connection.cursor() as cursor:
+            with atomic_transaction(), connection.cursor() as cursor:
                 # Try finding quote_id directly or by job/token/versioned quote_number
                 if v_target is not None:
                     sql = """
@@ -6052,7 +6078,7 @@ class CustomerQuotePDFView(APIView):
                 }
                 try:
                     from django.db import connection
-                    with transaction.atomic(), connection.cursor() as cursor:
+                    with atomic_transaction(), connection.cursor() as cursor:
                         cursor.execute("""
                             SELECT id FROM workforce_quote 
                             WHERE job_id = %s OR quote_number = %s 

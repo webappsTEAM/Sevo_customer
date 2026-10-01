@@ -837,8 +837,8 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
 
         if candidate_job_ids or candidate_quote_numbers:
             try:
-                from django.db import connection, transaction
-                with transaction.atomic(), connection.cursor() as cursor:
+                from django.db import connection
+                with connection.cursor() as cursor:
                     job_in = ",".join(["%s"] * len(candidate_job_ids)) if candidate_job_ids else "-1"
                     quote_in = ",".join(["%s"] * len(candidate_quote_numbers)) if candidate_quote_numbers else "''"
                     sql = f"""
@@ -983,8 +983,8 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             return None
         try:
             import re
-            from django.db import connection, transaction
-            with transaction.atomic(), connection.cursor() as cursor:
+            from django.db import connection
+            with connection.cursor() as cursor:
                 cursor.execute(
                     "SELECT message FROM workforce_notification "
                     "WHERE related_object_id = %s "
@@ -1085,8 +1085,8 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             return None
         try:
             import re
-            from django.db import connection, transaction
-            with transaction.atomic(), connection.cursor() as cursor:
+            from django.db import connection
+            with connection.cursor() as cursor:
                 cursor.execute(
                     "SELECT message FROM workforce_notification "
                     "WHERE related_object_id = %s "
@@ -1221,9 +1221,9 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         if ids:
             try:
                 import re
-                from django.db import connection, transaction
+                from django.db import connection
                 placeholders = ",".join(["%s"] * len(ids))
-                with transaction.atomic(), connection.cursor() as cursor:
+                with connection.cursor() as cursor:
                     cursor.execute(
                         "SELECT related_object_id, message FROM workforce_notification "
                         "WHERE related_object_id IN (%s) "
@@ -1432,8 +1432,8 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
             return None
         try:
             import re
-            from django.db import connection, transaction
-            with transaction.atomic(), connection.cursor() as cursor:
+            from django.db import connection
+            with connection.cursor() as cursor:
                 cursor.execute(
                     "SELECT message FROM workforce_notification "
                     "WHERE related_object_id = %s "

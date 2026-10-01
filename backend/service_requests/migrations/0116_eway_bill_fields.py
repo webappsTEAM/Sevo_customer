@@ -3,6 +3,22 @@
 from django.db import migrations, models
 
 
+def add_eway_bill_number_if_not_exists(apps, schema_editor):
+    connection = schema_editor.connection
+    if connection.vendor == "postgresql":
+        schema_editor.execute(
+            "ALTER TABLE service_requests_servicerequest ADD COLUMN IF NOT EXISTS eway_bill_number VARCHAR(50) DEFAULT '';"
+        )
+    elif connection.vendor == "sqlite":
+        with connection.cursor() as cursor:
+            cursor.execute("PRAGMA table_info(service_requests_servicerequest);")
+            columns = [row[1] for row in cursor.fetchall()]
+            if "eway_bill_number" not in columns:
+                schema_editor.execute(
+                    "ALTER TABLE service_requests_servicerequest ADD COLUMN eway_bill_number VARCHAR(50) DEFAULT '';"
+                )
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -20,9 +36,19 @@ class Migration(migrations.Migration):
             name='eway_bill_document',
             field=models.FileField(blank=True, null=True, upload_to='service_requests/eway_bills/'),
         ),
-        migrations.AddField(
-            model_name='servicerequest',
-            name='eway_bill_number',
-            field=models.CharField(blank=True, default='', max_length=50),
+        migrations.SeparateDatabaseAndState(
+            state_operations=[
+                migrations.AddField(
+                    model_name='servicerequest',
+                    name='eway_bill_number',
+                    field=models.CharField(blank=True, default='', max_length=50),
+                ),
+            ],
+            database_operations=[
+                migrations.RunPython(
+                    add_eway_bill_number_if_not_exists,
+                    reverse_code=migrations.RunPython.noop,
+                ),
+            ],
         ),
     ]
