@@ -209,6 +209,33 @@ class MarketplaceIntegrationClient:
             return {"success": False, "message": "Marketplace validation service unreachable"}
 
     @classmethod
+    def get_delivery_slots(cls, warehouse_id=None, date=None) -> dict:
+        """Fetch public, capacity-aware Seller Hub delivery slots."""
+        headers = cls._headers()
+        if not headers:
+            return {"success": False, "status_code": 503, "message": "Integration secret not configured", "data": []}
+        params = {}
+        if warehouse_id is not None and str(warehouse_id).strip():
+            params["warehouse_id"] = warehouse_id
+        if date:
+            params["date"] = str(date).strip()
+        try:
+            response = requests.get(
+                f"{cls._get_base_url()}/marketplace/delivery-slots/",
+                params=params,
+                headers=headers,
+                timeout=10,
+            )
+            if response.status_code == 200:
+                payload = response.json()
+                return {"success": True, "data": payload.get("data", payload) if isinstance(payload, dict) else payload}
+            logger.warning("Vendor delivery slots returned %s", response.status_code)
+            return {"success": False, "status_code": response.status_code, "message": "Failed to fetch delivery slots", "data": []}
+        except requests.RequestException:
+            logger.exception("Delivery-slot request to Vendor failed")
+            return {"success": False, "status_code": 502, "message": "Delivery slot service unreachable", "data": []}
+
+    @classmethod
     def intake_order(
         cls,
         source_order_id: str,
@@ -223,6 +250,9 @@ class MarketplaceIntegrationClient:
         delivery_group_id: str = "",
         warehouse_id: int = None,
         warehouse_name: str = "",
+        delivery_slot: str = "",
+        delivery_slot_id: int = None,
+        delivery_date: str = None,
     ) -> dict:
         """
         Intakes canonical customer order to Vendor Seller Hub and atomically reserves stock.
@@ -244,6 +274,9 @@ class MarketplaceIntegrationClient:
             "delivery_group_id": delivery_group_id,
             "warehouse_id": warehouse_id,
             "warehouse_name": warehouse_name,
+            "delivery_slot": delivery_slot,
+            "delivery_slot_id": delivery_slot_id,
+            "delivery_date": delivery_date,
         }
         try:
             url = f"{cls._get_base_url()}/marketplace/orders/intake/"
@@ -311,6 +344,53 @@ class MarketplaceIntegrationClient:
         except Exception as e:
             logger.error(f"Error cancelling marketplace order on vendor: {e}")
             return {"success": False, "message": "Vendor cancellation service unreachable", "retryable": True}
+
+    @classmethod
+    def fetch_baskets(cls, company_id=None, search=None, page=1, page_size=20) -> dict:
+        """
+        Lists published basket/combo offers from Vendor Seller Hub marketplace feed.
+        GET {base}/marketplace/baskets/
+        """
+        params = {"page": page, "page_size": page_size}
+        if company_id:
+            params["company_id"] = company_id
+        if search:
+            params["search"] = str(search).strip()
+        headers = cls._headers()
+        if not headers:
+            return {"success": False, "message": "Integration secret not configured", "data": {"count": 0, "results": []}}
+        try:
+            url = f"{cls._get_base_url()}/marketplace/baskets/"
+            response = requests.get(url, params=params, headers=headers, timeout=20)
+            if response.status_code == 200:
+                return {"success": True, "data": response.json()}
+            logger.warning(f"Vendor marketplace baskets returned {response.status_code}: {response.text[:300]}")
+            return {"success": False, "status_code": response.status_code, "message": "Failed to fetch basket offers", "data": {"count": 0, "results": []}}
+        except Exception as e:
+            logger.error(f"Error fetching marketplace baskets: {e}")
+            return {"success": False, "message": "Marketplace basket service unreachable", "data": {"count": 0, "results": []}}
+
+    @classmethod
+    def fetch_basket_detail(cls, basket_id: int) -> dict:
+        """
+        Fetches full detail for a single basket combo offer including component breakdown.
+        GET {base}/marketplace/baskets/{basket_id}/
+        """
+        headers = cls._headers()
+        if not headers:
+            return {"success": False, "message": "Integration secret not configured"}
+        try:
+            url = f"{cls._get_base_url()}/marketplace/baskets/{basket_id}/"
+            response = requests.get(url, headers=headers, timeout=20)
+            if response.status_code == 200:
+                return {"success": True, "data": response.json()}
+            elif response.status_code == 404:
+                return {"success": False, "status_code": 404, "message": "Basket offer not found or unavailable"}
+            logger.warning(f"Vendor marketplace basket {basket_id} detail returned {response.status_code}: {response.text[:300]}")
+            return {"success": False, "status_code": response.status_code, "message": "Failed to fetch basket detail"}
+        except Exception as e:
+            logger.error(f"Error fetching basket {basket_id} detail: {e}")
+            return {"success": False, "message": "Marketplace basket service unreachable"}
 
     @classmethod
     def fetch_order_status(cls, source_order_id: str) -> dict:

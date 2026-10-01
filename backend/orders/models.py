@@ -442,8 +442,13 @@ class MarketplaceOrderItem(models.Model):
 
     order = models.ForeignKey(MarketplaceOrder, on_delete=models.CASCADE, related_name="items")
 
-    seller_product_id = models.IntegerField(db_index=True)
-    product_title = models.CharField(max_length=255)
+    # A marketplace line is either a seller product or a published Seller Hub
+    # basket.  These IDs belong to Workforce; Customer stores only an immutable
+    # checkout snapshot and never expands or owns vendor inventory.
+    seller_product_id = models.IntegerField(null=True, blank=True, db_index=True)
+    basket_id = models.IntegerField(null=True, blank=True, db_index=True)
+    basket_title = models.CharField(max_length=255, blank=True, default="")
+    product_title = models.CharField(max_length=255, blank=True, default="")
     product_sku = models.CharField(max_length=100, blank=True, default="")
     product_brand = models.CharField(max_length=150, blank=True, default="")
     unit = models.CharField(max_length=50, blank=True, default="")
@@ -463,7 +468,7 @@ class MarketplaceOrderItem(models.Model):
         ordering = ["id"]
 
     def __str__(self):
-        return f"MarketplaceOrderItem #{self.id} ({self.product_title}) of {self.order.order_number}"
+        return f"MarketplaceOrderItem #{self.id} ({self.basket_title or self.product_title}) of {self.order.order_number}"
 
 
 class MarketplaceOrderOutbox(models.Model):

@@ -24,6 +24,7 @@ class CartItemSerializer(serializers.ModelSerializer):
             "seller_id", "seller_name", "warehouse_id", "warehouse_name",
             "seller_product_id", "product_title", "product_sku", "product_brand",
             "unit", "pack_size", "product_image", "mrp_snapshot",
+            "basket_id", "basket_title",
             "quantity", "unit_price_snapshot", "customization",
             "line_amount", "created_at", "updated_at",
         ]
@@ -115,6 +116,7 @@ class CartItemCreateSerializer(serializers.Serializer):
     variant_id = serializers.IntegerField(required=False, allow_null=True)
     # Marketplace (Seller Hub) item fields
     seller_product_id = serializers.IntegerField(required=False, allow_null=True)
+    basket_id = serializers.IntegerField(required=False, allow_null=True)
     seller_id = serializers.IntegerField(required=False, allow_null=True)
     seller_name = serializers.CharField(required=False, allow_blank=True, default="")
     clear_cart = serializers.BooleanField(required=False, default=False)
@@ -124,8 +126,17 @@ class CartItemCreateSerializer(serializers.Serializer):
     def validate(self, data):
         package_id = data.get("package_id")
         seller_product_id = data.get("seller_product_id")
-        if not package_id and not seller_product_id:
-            raise serializers.ValidationError("Either package_id or seller_product_id is required.")
+        basket_id = data.get("basket_id")
+        # Exactly one item identifier must be provided
+        provided = [x for x in [package_id, seller_product_id, basket_id] if x]
+        if not provided:
+            raise serializers.ValidationError(
+                "One of package_id, seller_product_id, or basket_id is required."
+            )
+        if len(provided) > 1:
+            raise serializers.ValidationError(
+                "Only one of package_id, seller_product_id, or basket_id may be provided."
+            )
         if package_id and not Package.objects.filter(id=package_id).exists():
             raise serializers.ValidationError({"package_id": "Package not found."})
         return data

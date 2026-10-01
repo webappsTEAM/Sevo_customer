@@ -1,4 +1,5 @@
 import logging
+from decimal import Decimal, InvalidOperation
 import re
 from django.core.cache import cache
 from rest_framework import permissions, status
@@ -65,6 +66,44 @@ def _sanitize_category_node(node):
     return sanitized
 
 
+def _resolve_vendor_media_url(url_str):
+    if not url_str or not isinstance(url_str, str):
+        return ""
+    val = url_str.strip()
+    if not val:
+        return ""
+    if val.startswith("http://") or val.startswith("https://") or val.startswith("data:"):
+        return val
+    vendor_base = MarketplaceIntegrationClient._get_base_url()
+    vendor_host = re.sub(r"/api/.*$", "", vendor_base).rstrip("/")
+    clean_path = val.lstrip("/")
+    return f"{vendor_host}/{clean_path}"
+
+
+def _sanitize_product_images_data(prod):
+    if not isinstance(prod, dict):
+        return prod
+    sanitized = dict(prod)
+    if sanitized.get("primary_image"):
+        sanitized["primary_image"] = _resolve_vendor_media_url(sanitized["primary_image"])
+    if isinstance(sanitized.get("images"), list):
+        sanitized["images"] = [_resolve_vendor_media_url(img) for img in sanitized["images"] if img]
+    if isinstance(sanitized.get("variants"), list):
+        new_variants = []
+        for v in sanitized["variants"]:
+            if isinstance(v, dict):
+                v_copy = dict(v)
+                if v_copy.get("primary_image"):
+                    v_copy["primary_image"] = _resolve_vendor_media_url(v_copy["primary_image"])
+                if isinstance(v_copy.get("images"), list):
+                    v_copy["images"] = [_resolve_vendor_media_url(img) for img in v_copy["images"] if img]
+                new_variants.append(v_copy)
+            else:
+                new_variants.append(v)
+        sanitized["variants"] = new_variants
+    return sanitized
+
+
 class MarketplaceProductListView(APIView):
     """
     GET /api/marketplace/products/
@@ -114,7 +153,12 @@ class MarketplaceProductListView(APIView):
         )
 
         if result.get("success"):
-            return Response(result["data"], status=status.HTTP_200_OK)
+            data = result["data"]
+            if isinstance(data, dict) and isinstance(data.get("results"), list):
+                data["results"] = [_sanitize_product_images_data(p) for p in data["results"]]
+            elif isinstance(data, list):
+                data = [_sanitize_product_images_data(p) for p in data]
+            return Response(data, status=status.HTTP_200_OK)
 
         if result.get("status_code") == 404 and (result.get("code") == "CATEGORY_NOT_FOUND" or "Category" in result.get("message", "")):
             return Response(
@@ -135,7 +179,8 @@ class MarketplaceProductDetailView(APIView):
     def get(self, request, pk):
         result = MarketplaceIntegrationClient.fetch_product_detail(product_id=pk)
         if result.get("success"):
-            return Response(result["data"], status=status.HTTP_200_OK)
+            data = _sanitize_product_images_data(result["data"])
+            return Response(data, status=status.HTTP_200_OK)
         if result.get("status_code") == 404:
             return _error("Product not found or unavailable.", status.HTTP_404_NOT_FOUND)
         return _error(result.get("message", "Failed to fetch product detail."), status.HTTP_502_BAD_GATEWAY)
@@ -226,3 +271,117 @@ class MarketplaceCartValidateView(APIView):
         if res.get("success"):
             return Response(res["validation"], status=status.HTTP_200_OK)
         return _error(res.get("message", "Validation failed"), status.HTTP_400_BAD_REQUEST)
+
+
+def _safe_decimal_str(value, default="0"):
+    """Safely coerce a value to a clean decimal string without scientific notation."""
+    try:
+        d = Decimal(str(value or 0))
+        s = f"{d:f}"
+        return s.rstrip("0").rstrip(".") if "." in s else s
+    except (InvalidOperation, TypeError, ValueError):
+        return default
+
+
+def _sanitize_basket(basket):
+    """
+    Sanitize and normalise a basket/combo-offer payload from the Vendor feed.
+    Handles field-name variation across vendor API versions.
+    """
+    if not isinstance(basket, dict):
+        return {}
+
+    raw_items = basket.get("items") or []
+    items = []
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        items.append({
+            "product_id": item.get("product_id") or item.get("seller_product_id") or item.get("id"),
+            "product_title": str(item.get("product_title") or item.get("title") or ""),
+            "product_sku": str(item.get("sku") or item.get("product_sku") or ""),
+            "quantity": int(item.get("quantity") or 1),
+            "unit": str(item.get("unit") or ""),
+            "pack_size": str(item.get("pack_size") or ""),
+            "mrp": _safe_decimal_str(item.get("mrp")),
+            "unit_price": _safe_decimal_str(item.get("selling_price") or item.get("unit_price")),
+            "primary_image": str(item.get("image_url") or item.get("primary_image") or item.get("image") or ""),
+        })
+
+    bundle_price = _safe_decimal_str(
+        basket.get("selling_price") or basket.get("bundle_price") or basket.get("total_price") or basket.get("basket_price")
+    )
+    mrp_total = _safe_decimal_str(
+        basket.get("total_mrp") or basket.get("mrp_total") or basket.get("original_total")
+    )
+    savings = _safe_decimal_str(
+        basket.get("savings_vs_mrp") or basket.get("savings") or basket.get("discount_amount") or basket.get("saving")
+    )
+
+    return {
+        "id": basket.get("id"),
+        "title": str(basket.get("title") or basket.get("name") or "Combo Bundle"),
+        "description": str(basket.get("description") or ""),
+        "seller_id": basket.get("seller_id") or basket.get("company_id"),
+        "seller_name": str(basket.get("seller_name") or basket.get("company_name") or ""),
+        "warehouse_id": basket.get("warehouse_id"),
+        "warehouse_name": str(basket.get("warehouse_name") or ""),
+        "bundle_price": bundle_price,
+        "mrp_total": mrp_total,
+        "savings": savings,
+        "savings_percent": basket.get("savings_percent"),
+        "available_stock": basket.get("available_stock"),
+        "in_stock": bool(basket.get("in_stock", True)),
+        "primary_image": str(basket.get("image_url") or basket.get("primary_image") or basket.get("image") or ""),
+        "items": items,
+        "item_count": int(basket.get("item_count") or len(items)),
+        "is_active": bool(basket.get("status") == "ACTIVE" if "status" in basket else basket.get("is_active", True)),
+    }
+
+
+class CustomerMarketplaceBasketListView(APIView):
+    """
+    GET /api/marketplace/baskets/
+    Public listing of basket/combo offers from Vendor Seller Hub.
+    Accepts: company_id, search, page, page_size query params.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        company_id = request.query_params.get("company_id")
+        search = request.query_params.get("search")
+        page = request.query_params.get("page", 1)
+        page_size = request.query_params.get("page_size", 20)
+
+        result = MarketplaceIntegrationClient.fetch_baskets(
+            company_id=company_id,
+            search=search,
+            page=page,
+            page_size=page_size,
+        )
+        if result.get("success"):
+            raw = result["data"]
+            if isinstance(raw, dict) and "results" in raw:
+                sanitized = [_sanitize_basket(b) for b in raw["results"] if isinstance(b, dict)]
+                return Response({**raw, "results": sanitized}, status=status.HTTP_200_OK)
+            elif isinstance(raw, list):
+                sanitized = [_sanitize_basket(b) for b in raw if isinstance(b, dict)]
+                return Response(sanitized, status=status.HTTP_200_OK)
+            return Response(raw, status=status.HTTP_200_OK)
+        return _error(result.get("message", "Failed to retrieve basket offers."), status.HTTP_502_BAD_GATEWAY)
+
+
+class CustomerMarketplaceBasketDetailView(APIView):
+    """
+    GET /api/marketplace/baskets/<int:basket_id>/
+    Full basket detail with component product breakdown.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, basket_id):
+        result = MarketplaceIntegrationClient.fetch_basket_detail(basket_id=basket_id)
+        if result.get("success"):
+            return Response(_sanitize_basket(result["data"]), status=status.HTTP_200_OK)
+        if result.get("status_code") == 404:
+            return _error("Basket offer not found or unavailable.", status.HTTP_404_NOT_FOUND)
+        return _error(result.get("message", "Failed to fetch basket detail."), status.HTTP_502_BAD_GATEWAY)
