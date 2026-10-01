@@ -1,7 +1,7 @@
 /**
  * CustomerEntryFlowModal.jsx
  * Professional, Clean & Refined Customer Authentication & Onboarding Modal
- * CalServices Signature Emerald & Modern Typography Design
+ * SEVO Signature Emerald & Modern Typography Design
  */
 
 import React, { useState, useEffect, useRef } from "react"

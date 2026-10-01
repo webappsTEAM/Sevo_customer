@@ -177,15 +177,22 @@ export async function apiFetchMe(customSignal = null) {
   // Deduplicate concurrent in-flight requests
   if (_fetchMeInFlight) return _fetchMeInFlight
 
-  // If already confirmed unauthenticated and no tokens in localStorage, skip network call
+  // If there are no auth tokens or saved session in localStorage, skip network call
+  // to avoid triggering an unauthenticated 401 in devtools/console on initial guest load.
   const hasToken = (() => {
     try {
-      return !!(localStorage.getItem("sevo_access_token") || localStorage.getItem("qt_access") || localStorage.getItem("sevo_user"))
+      return !!(
+        localStorage.getItem("sevo_access_token") ||
+        localStorage.getItem("qt_access") ||
+        localStorage.getItem("sevo_user") ||
+        localStorage.getItem("token") ||
+        localStorage.getItem("accessToken")
+      )
     } catch (_) {
       return false
     }
   })()
-  if (_knownUnauthenticated && !hasToken) {
+  if (!hasToken) {
     return null
   }
 

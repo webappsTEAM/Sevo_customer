@@ -48,6 +48,20 @@ function loadCheckoutScript() {
   })
 }
 
+function completePaytmMock(order) {
+  // The confirmation is intentionally labelled as a development mock.  The
+  // browser still cannot mark a booking paid: it submits the server-issued
+  // order, transaction id and HMAC back to /payment/verify/.
+  if (!window.confirm(`Paytm MOCK payment\n\nPay ₹${order.amount} to SEVO?\n\nNo real money will be charged.`)) {
+    return Promise.resolve({ ok: false, cancelled: true, message: "Mock payment was cancelled." })
+  }
+  return verify(order.booking_id, order.tracking_token, {
+    order_id: order.order_id,
+    payment_id: order.transaction_id,
+    signature: order.signature,
+  }).then(() => ({ ok: true }))
+}
+
 async function verify(bookingId, trackingToken, payload) {
   await apiRequest("/payment/verify/", {
     method: "POST",
@@ -73,6 +87,15 @@ export async function settleBookingPayment({ bookingId, trackingToken, method, p
       body: { booking_id: bookingId, token: trackingToken || undefined },
     })
     const order = res?.data || res
+    if (order.provider === "paytm_mock") {
+      return await completePaytmMock({ ...order, booking_id: bookingId, tracking_token: trackingToken })
+    }
+    if (order.provider === "paytm") {
+      // Live Paytm credentials are not configured in this repository yet.
+      // The backend returns the gateway-issued token only after it creates a
+      // transaction; a missing CheckoutJS runtime must fail closed.
+      return { ok: false, message: "Paytm Checkout is awaiting merchant-account configuration." }
+    }
     if (order.sandbox) {
       await verify(bookingId, trackingToken, { order_id: order.order_id })
       return { ok: true }

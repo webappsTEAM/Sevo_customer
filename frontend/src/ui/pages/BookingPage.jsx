@@ -49,6 +49,7 @@ import { EditModeToggleBar, SaveNoticeToast, EditableText, EditableImage } from 
 import { useEditMode } from "../../state/editMode/useEditMode.js"
 import { useMultiServiceCart } from "../../state/multiServiceCart/useMultiServiceCart.js"
 import { createTrackingWebSocket } from "../../api/websocketService.js"
+import { settleBookingPayment } from "../../api/gtPaymentService.js"
 import SavedAddressesPage from "./SavedAddressesPage.jsx"
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
@@ -217,6 +218,27 @@ export const resolveAcServiceImage = (nameOrIdOrSlug) => {
 };
 
 let BOOKING_CURRENCY_SYMBOL = "₹";
+
+export const triggerPdfDownload = (token, filename = 'Quotation.pdf') => {
+  if (!token) {
+    alert("Quotation reference not available for download.");
+    return;
+  }
+  const cleanToken = encodeURIComponent(String(token).trim());
+  const downloadUrl = `/api/booking/quote/${cleanToken}/pdf/?download=1`;
+  const a = document.createElement('a');
+  a.href = downloadUrl;
+  a.download = filename || `Quotation_${token}.pdf`;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    try {
+      document.body.removeChild(a);
+    } catch (_) {}
+  }, 300);
+};
 
 export function getAuthoritativeItemPrice(item, booking) {
   if (!item) return 0;
@@ -2341,12 +2363,24 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
   }
 
   const handleOnlinePayment = async () => {
-    // This screen is unreachable while online payment is disabled above. It
-    // fails closed rather than simulating a result: nothing here has taken a
-    // payment, so it must never report one as taken. See the note on
-    // isOnlinePaymentAvailable for what a real implementation does.
-    setPayPhase('failed')
-    setPayError('Online payment is not available yet. Please choose Cash on Service.')
+    // This legacy sheet is reused by the tracking screen for an existing
+    // unpaid booking. It must never invent a result: use the same canonical
+    // server-issued provider payment flow as new bookings. When no booking
+    // exists yet, stay fail-closed because there is nothing to charge.
+    if (!bookingId) {
+      setPayPhase('failed')
+      setPayError('Create the booking first, then complete its secure payment.')
+      return
+    }
+    setPayPhase('processing')
+    const result = await settleBookingPayment({ bookingId, method: 'online' })
+    if (!result?.ok) {
+      setPayPhase('failed')
+      setPayError(result?.message || 'Payment was not completed. Please try again.')
+      return
+    }
+    setPayPhase('success')
+    setTimeout(() => onConfirm('online'), 700)
   }
 
   const options = [
@@ -2612,11 +2646,12 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const [showMapModal, setShowMapModal] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [copiedOtp, setCopiedOtp] = useState(false)
+  const [copiedPaymentOtp, setCopiedPaymentOtp] = useState(false)
   const [showDeclineReasonModal, setShowDeclineReasonModal] = useState(false)
-  const [showRequestChangesModal, setShowRequestChangesModal] = useState(false)
-  const [changeNotes, setChangeNotes] = useState("")
   const [declineReasonCode, setDeclineReasonCode] = useState("")
   const [declineReasonNotes, setDeclineReasonNotes] = useState("")
+  const [showRequestChangesModal, setShowRequestChangesModal] = useState(false)
+  const [changeNotes, setChangeNotes] = useState("")
   const [quoteExpanded, setQuoteExpanded] = useState(true)
   const [expandedPrevQuotes, setExpandedPrevQuotes] = useState({})
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -2651,10 +2686,47 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const [paymentTargetBookingId, setPaymentTargetBookingId] = useState(null)
   const [paymentTargetAmount, setPaymentTargetAmount] = useState(0)
 
+  // ── Sleek In-Screen Feedback & Confirmation Modal ──────────────────────────────
+  const [feedbackModal, setFeedbackModal] = useState({
+    isOpen: false,
+    type: "success", // "success" | "error" | "info" | "warning"
+    title: "",
+    message: "",
+    onConfirm: null,
+    confirmText: "Got it",
+  })
+
+  const showFeedback = ({ type = "success", title, message, onConfirm = null, confirmText = "Got it" }) => {
+    setFeedbackModal({
+      isOpen: true,
+      type,
+      title: title || (type === "success" ? "Success" : type === "error" ? "Action Failed" : "Notice"),
+      message,
+      onConfirm,
+      confirmText,
+    })
+  }
+
+  const closeFeedback = () => {
+    const callback = feedbackModal.onConfirm
+    setFeedbackModal(prev => ({ ...prev, isOpen: false }))
+    if (typeof callback === "function") {
+      callback()
+    }
+  }
+
   const handleQuoteDecision = async (decision, reasonCode = "", reasonNotes = "") => {
     try {
       const quoteToken = liveData?.quote?.decision_token || liveData?.quote?.customer_decision_token
-      if (!quoteToken) return
+      if (!quoteToken) {
+        showFeedback({
+          type: "warning",
+          title: "Session Expired",
+          message: "Quotation decision token is missing. Please refresh the page.",
+          onConfirm: () => window.location.reload(),
+        })
+        return
+      }
 
       const response = await fetch(`/api/booking/quote/${quoteToken}/decide/`, {
         method: "POST",
@@ -2667,16 +2739,47 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           reason_notes: reasonNotes
         })
       })
-      const result = await response.json()
-      if (result.success) {
-        alert(`Quote successfully ${decision === "CUSTOMER_ACCEPTED" ? "accepted" : "declined"}!`)
-        window.location.reload()
+      const result = await response.json().catch(() => ({}))
+      if (response.ok || result.success) {
+        if (decision === "CUSTOMER_ACCEPTED") {
+          showFeedback({
+            type: "success",
+            title: "Quotation Accepted! 🎉",
+            message: "You have approved the quotation. The service professional has been notified to proceed with execution.",
+            confirmText: "View Live Tracking",
+            onConfirm: () => window.location.reload(),
+          })
+        } else if (decision === "CUSTOMER_DECLINED") {
+          showFeedback({
+            type: "info",
+            title: "Quotation Declined",
+            message: "You have successfully declined this quotation. Our service team has recorded your feedback.",
+            confirmText: "Done",
+            onConfirm: () => window.location.reload(),
+          })
+        } else {
+          showFeedback({
+            type: "info",
+            title: "Revision Requested",
+            message: "Your revision notes have been submitted to the technician for review.",
+            confirmText: "Got it",
+            onConfirm: () => window.location.reload(),
+          })
+        }
       } else {
-        alert("Error saving quote decision: " + (result.message || "Unknown error"))
+        showFeedback({
+          type: "error",
+          title: "Unable to Process Request",
+          message: result.message || result.error || "An error occurred while saving your decision. Please try again.",
+        })
       }
     } catch (err) {
       console.error("Quote decision failed:", err)
-      alert("Connection to server failed. Please try again.")
+      showFeedback({
+        type: "error",
+        title: "Connection Failed",
+        message: "Unable to connect to the server. Please check your network and try again.",
+      })
     }
   }
 
@@ -2874,7 +2977,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   )
 
   const isProofSubmitted = Boolean(
-    liveData?.status && ["proof_submitted", "awaiting_verification"].includes(String(liveData.status).toLowerCase())
+    liveData?.status && ["proof_submitted", "awaiting_verification", "payment_pending", "waiting_for_payment"].includes(String(liveData.status).toLowerCase())
   )
 
   const empInfo = liveData?.assigned_employee || liveData?.technician || successData?.technician || null
@@ -2923,6 +3026,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const etaMinutes = liveData?.technician?.eta_minutes || liveData?.eta_minutes || null
   const distKm = liveData?.technician?.distance_km || liveData?.distance_km || null
   const startOtp = liveData?.start_otp || null
+  const paymentConfirmationOtp = liveData?.payment_confirmation_otp || null
   const trackingToken = liveData?.tracking_token || null
   // Build secure tracking page URL (dedicated standalone page)
   const trackingPageUrl = trackingToken
@@ -2934,6 +3038,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const destLat = rawDestLat != null && !isNaN(parseFloat(rawDestLat)) ? parseFloat(rawDestLat) : null
   const destLng = rawDestLng != null && !isNaN(parseFloat(rawDestLng)) ? parseFloat(rawDestLng) : null
   const currentStatus = (liveData?.status || successData?.status || "confirmed").toLowerCase()
+  const isCashPending = currentStatus === "cash_pending" || liveData?.payment_status === "cash_pending" || Boolean(paymentConfirmationOtp)
 
   const rawTechLat = liveData?.technician_location?.latitude ?? liveData?.technician?.latitude ?? successData?.technician_latitude ?? null
   const rawTechLng = liveData?.technician_location?.longitude ?? liveData?.technician?.longitude ?? successData?.technician_longitude ?? null
@@ -2942,7 +3047,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     rawTechLng != null && !isNaN(parseFloat(rawTechLng))
   )
   const isArrived = currentStatus === "arrived" || currentStatus === "technician_arrived"
-  const isInProgress = currentStatus === "in_progress" || currentStatus === "inspection_in_progress"
+  const isInProgress = ["in_progress", "inspection_in_progress", "service_started", "work_in_progress"].includes(currentStatus)
   const isOnTheWay = currentStatus === "on_the_way" || currentStatus === "technician_on_the_way" || (currentStatus === "accepted" && hasValidTechnicianGPS)
 
   const trackingBookingObj = {
@@ -2967,6 +3072,14 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       navigator.clipboard.writeText(startOtp)
       setCopiedOtp(true)
       setTimeout(() => setCopiedOtp(false), 2000)
+    }
+  }
+
+  const handleCopyPaymentOtp = () => {
+    if (navigator.clipboard && paymentConfirmationOtp) {
+      navigator.clipboard.writeText(paymentConfirmationOtp)
+      setCopiedPaymentOtp(true)
+      setTimeout(() => setCopiedPaymentOtp(false), 2000)
     }
   }
 
@@ -3036,78 +3149,86 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           {["goods_transport_truck", "goods_transport_two_wheeler", "packers_movers"].includes(String(liveData?.service_category || successData?.service_category || "").toLowerCase())
             ? <TripRatingCard feedback={liveData?.feedback} />
             : (
-          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 16, padding: "1.25rem", marginBottom: "1.25rem", textAlign: "center" }}>
-            <h4 style={{ margin: "0 0 6px", fontSize: "1rem", fontWeight: 800, color: "#065f46" }}>
-              {ratingSubmitted ? "Thank you for your rating! ⭐" : "How was your service experience?"}
-            </h4>
-            <p style={{ margin: "0 0 12px", fontSize: "0.82rem", color: "#047857" }}>
-              {ratingSubmitted ? "Your feedback helps us recognize top professionals and maintain quality." : "Tap a star to rate your technician and service quality"}
-            </p>
+                <div style={{ background: isQuoteDeclined ? "#f8fafc" : "#f0fdf4", border: isQuoteDeclined ? "1px solid #e2e8f0" : "1px solid #bbf7d0", borderRadius: 16, padding: "1.25rem", marginBottom: "1.25rem", textAlign: "center" }}>
+                  <h4 style={{ margin: "0 0 6px", fontSize: "1rem", fontWeight: 800, color: isQuoteDeclined ? "#0f172a" : "#065f46" }}>
+                    {ratingSubmitted
+                      ? "Thank you for your rating! ⭐"
+                      : isQuoteDeclined
+                      ? "How was your site consultation experience?"
+                      : "How was your service experience?"}
+                  </h4>
+                  <p style={{ margin: "0 0 12px", fontSize: "0.82rem", color: isQuoteDeclined ? "#64748b" : "#047857" }}>
+                    {ratingSubmitted
+                      ? "Your feedback helps us recognize top professionals and maintain quality."
+                      : isQuoteDeclined
+                      ? "Tap a star to rate your technician and consultation process"
+                      : "Tap a star to rate your technician and service quality"}
+                  </p>
 
-            {/* Stars */}
-            <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 12 }}>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <button
-                  key={star}
-                  type="button"
-                  onClick={() => {
-                    setRatingScore(star)
-                    setRatingSubmitted(true)
-                  }}
-                  onMouseEnter={() => setRatingHover(star)}
-                  onMouseLeave={() => setRatingHover(0)}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: 4,
-                    transform: (ratingHover >= star || ratingScore >= star) ? "scale(1.2)" : "scale(1)",
-                    transition: "transform 0.15s ease"
-                  }}
-                >
-                  <Star
-                    size={32}
-                    color={(ratingHover || ratingScore) >= star ? "#f59e0b" : "#cbd5e1"}
-                    fill={(ratingHover || ratingScore) >= star ? "#f59e0b" : "transparent"}
-                  />
-                </button>
-              ))}
-            </div>
+                  {/* Stars */}
+                  <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 12 }}>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => {
+                          setRatingScore(star)
+                          setRatingSubmitted(true)
+                        }}
+                        onMouseEnter={() => setRatingHover(star)}
+                        onMouseLeave={() => setRatingHover(0)}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          cursor: "pointer",
+                          padding: 4,
+                          transform: (ratingHover >= star || ratingScore >= star) ? "scale(1.2)" : "scale(1)",
+                          transition: "transform 0.15s ease"
+                        }}
+                      >
+                        <Star
+                          size={32}
+                          color={(ratingHover || ratingScore) >= star ? "#f59e0b" : "#cbd5e1"}
+                          fill={(ratingHover || ratingScore) >= star ? "#f59e0b" : "transparent"}
+                        />
+                      </button>
+                    ))}
+                  </div>
 
-            {/* Quick Feedback Tags */}
-            {ratingScore > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6, marginTop: 10 }}>
-                {["Punctual", "Clean Work", "Polite & Professional", "Clear Communication", "Expert Diagnosis", "Great Value"].map((tag) => {
-                  const isSelected = selectedFeedbackTags.includes(tag)
-                  return (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => {
-                        setSelectedFeedbackTags(prev =>
-                          prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+                  {/* Quick Feedback Tags */}
+                  {ratingScore > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6, marginTop: 10 }}>
+                      {["Punctual", "Clear Explanation", "Polite & Professional", "Clear Communication", "Expert Diagnosis", "Helpful Advice"].map((tag) => {
+                        const isSelected = selectedFeedbackTags.includes(tag)
+                        return (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => {
+                              setSelectedFeedbackTags(prev =>
+                                prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+                              )
+                            }}
+                            style={{
+                              padding: "5px 12px",
+                              borderRadius: 99,
+                              fontSize: "0.75rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              border: isSelected ? "1px solid #059669" : "1px solid #cbd5e1",
+                              background: isSelected ? "#059669" : "white",
+                              color: isSelected ? "white" : "#334155",
+                              transition: "all 0.15s ease"
+                            }}
+                          >
+                            {isSelected ? "✓ " : ""}{tag}
+                          </button>
                         )
-                      }}
-                      style={{
-                        padding: "5px 12px",
-                        borderRadius: 99,
-                        fontSize: "0.75rem",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        border: isSelected ? "1px solid #059669" : "1px solid #cbd5e1",
-                        background: isSelected ? "#059669" : "white",
-                        color: isSelected ? "white" : "#334155",
-                        transition: "all 0.15s ease"
-                      }}
-                    >
-                      {isSelected ? "✓ " : ""}{tag}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-          )}
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
 
           {/* 30-Day Doorstep Guarantee Reassurance Card -- a home-services promise (re-inspect and fix the work);
               it does not apply to a goods delivery or a move, so it is not shown for Goods & Transport / Packers & Movers. */}
@@ -3145,27 +3266,35 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           </div>
           )}
 
-          {/* Service & Payment Summary */}
-          <div style={{ padding: "1rem 1.25rem", background: "#f8fafc", borderRadius: 16, border: "1px solid #e2e8f0", marginBottom: "1.5rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontSize: "0.85rem", fontWeight: 800, color: "#0f172a" }}>
-                {displayCart[0]?.name || displayCart[0]?.title || category?.name || liveData?.service_name || "SEVO Home Service"}
-              </span>
-              <span style={{ fontSize: "1.05rem", fontWeight: 900, color: "#059669" }}>₹{Number(displayTotal).toLocaleString("en-IN")}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.78rem", color: "#64748b" }}>
-              <span>Payment Mode: {paymentMethod} ({paymentStatusText})</span>
-              {liveData?.id && (
-                <button
-                  type="button"
-                  onClick={() => window.open(`${API_BASE_URL}/booking/${liveData.id}/invoice/`, '_blank')}
-                  style={{ background: "transparent", border: "none", color: "#0284c7", fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
-                >
-                  <FileText size={12} /> View Invoice
-                </button>
-              )}
-            </div>
-          </div>
+                {/* Service & Payment Summary */}
+                <div style={{ padding: "1rem 1.25rem", background: isQuoteDeclined ? "#fff1f2" : "#f8fafc", borderRadius: 16, border: isQuoteDeclined ? "1px solid #fecdd3" : "1px solid #e2e8f0", marginBottom: "1.5rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <span style={{ fontSize: "0.85rem", fontWeight: 800, color: isQuoteDeclined ? "#9f1239" : "#0f172a" }}>
+                      {isQuoteDeclined
+                        ? `${displayCart[0]?.name || displayCart[0]?.title || category?.name || "Site Consultation"} (Quotation Declined)`
+                        : (displayCart[0]?.name || displayCart[0]?.title || category?.name || liveData?.service_name || "SEVO Home Service")}
+                    </span>
+                    <span style={{ fontSize: "1.05rem", fontWeight: 900, color: isQuoteDeclined ? "#9f1239" : "#059669" }}>
+                      ₹{Number(displayTotal).toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.78rem", color: isQuoteDeclined ? "#be123c" : "#64748b" }}>
+                    <span>
+                      {isQuoteDeclined
+                        ? "Quotation Declined by Customer · No Service Execution Fee"
+                        : `Payment Mode: ${paymentMethod} (${paymentStatusText})`}
+                    </span>
+                    {liveData?.id && !isQuoteDeclined && (
+                      <button
+                        type="button"
+                        onClick={() => window.open(`${API_BASE_URL}/booking/${liveData.id}/invoice/`, '_blank')}
+                        style={{ background: "transparent", border: "none", color: "#0284c7", fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
+                      >
+                        <FileText size={12} /> View Invoice
+                      </button>
+                    )}
+                  </div>
+                </div>
 
           {/* Action CTAs: Book Again, Problem, Back to Home */}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -3521,22 +3650,34 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             )}
           </motion.div>
           <h2 style={{ margin: '0 0 0.25rem', fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>
-            {isArrived
-              ? 'Partner Arrived at Location! 🏠'
-              : isInProgress
-                ? 'Service in Progress 🛠️'
-                : isOnTheWay
-                  ? 'Partner On The Way! 🛵'
-                  : 'Partner Accepted Your Booking! 🎉'}
+            {isCompleted
+              ? 'Service Completed! 🎉'
+              : isCashPending
+                ? 'Cash Payment Verification 💰'
+                : isProofSubmitted
+                  ? 'Proof Submitted - Verification 📋'
+                  : isInProgress
+                    ? 'Service in Progress 🛠️'
+                    : isArrived
+                      ? 'Partner Arrived at Location! 🏠'
+                      : isOnTheWay
+                        ? 'Partner On The Way! 🛵'
+                        : 'Partner Accepted Your Booking! 🎉'}
           </h2>
           <p style={{ margin: '0 0 0.5rem', color: '#64748b', fontSize: '0.88rem' }}>
-            {isArrived
-              ? <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> has arrived at your service address</>
-              : isInProgress
-                ? <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> is servicing your request</>
-                : isOnTheWay
-                  ? <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> is en route to your location</>
-                  : <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> accepted your booking</>}
+            {isCompleted
+              ? <>Thank you! Your service with <strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> is complete</>
+              : isCashPending
+                ? <>Please share the <strong style={{ color: '#059669' }}>Cash Payment OTP</strong> with <strong style={{ color: '#0f172a' }}>{techName || 'your technician'}</strong> to confirm payment</>
+                : isProofSubmitted
+                  ? <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> submitted job proof. Awaiting payment/closing</>
+                  : isInProgress
+                    ? <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> is actively servicing your request</>
+                    : isArrived
+                      ? <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> has arrived at your service address</>
+                      : isOnTheWay
+                        ? <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> is en route to your location</>
+                        : <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> accepted your booking</>}
           </p>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#f5f3ff', border: '1px solid #7C3AED30', borderRadius: 99, padding: '4px 14px', flexWrap: 'wrap', justifyContent: 'center' }}>
             <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#7C3AED', textTransform: 'uppercase' }}>Booking Ref</span>
@@ -3783,15 +3924,30 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               </div>
             </div>
 
-            {isArrived ? (
+            {isCompleted ? (
               <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #10B981, #059669)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 900 }}>At Site</div>
-                <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>ARRIVED</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 900 }}>Completed</div>
+                <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>FINISHED</div>
+              </div>
+            ) : isCashPending ? (
+              <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #10B981, #059669)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 900 }}>Cash Payment</div>
+                <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>OTP PENDING</div>
+              </div>
+            ) : isProofSubmitted ? (
+              <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #3B82F6, #1D4ED8)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 900 }}>Proof Submitted</div>
+                <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>VERIFICATION</div>
               </div>
             ) : isInProgress ? (
               <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #3B82F6, #1D4ED8)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
                 <div style={{ fontSize: '0.85rem', fontWeight: 900 }}>In Progress</div>
                 <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>ACTIVE</div>
+              </div>
+            ) : isArrived ? (
+              <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #10B981, #059669)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 900 }}>At Site</div>
+                <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>ARRIVED</div>
               </div>
             ) : (hasValidTechnicianGPS && etaMinutes != null) ? (
               <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #FC8019, #f97316)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
@@ -3948,8 +4104,72 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         </motion.div>
       )}
 
-      {/* ─────────────────── 6-DIGIT SERVICE START OTP CARD (IF ACCEPTED) ─────────────────── */}
-      {isAccepted && (
+      {/* ─────────────────── 6-DIGIT CASH PAYMENT CONFIRMATION OTP (AMOUNT OTP) ─────────────────── */}
+      {(paymentConfirmationOtp || isCashPending) && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{
+            background: 'linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)',
+            borderRadius: 14,
+            padding: '12px 16px',
+            border: '1.5px solid #10b981',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '1rem',
+            boxShadow: '0 4px 14px rgba(16, 185, 129, 0.15)',
+            gap: 12,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#059669', flexShrink: 0 }}>
+              <KeyRound size={20} color="#059669" />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#047857', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                {liveData?.milestones && liveData.milestones.advance_amount && !liveData.milestones.advance_paid
+                  ? `💰 Milestone 1: 50% Advance Payment OTP (₹${liveData.milestones.advance_amount})`
+                  : liveData?.milestones && liveData.milestones.balance_amount && liveData.milestones.advance_paid
+                    ? `💰 Milestone 2: Balance Payment OTP (₹${liveData.milestones.balance_amount})`
+                    : '💰 Cash Payment Confirmation OTP'}
+              </div>
+              <div style={{ fontSize: '0.76rem', color: '#065f46', marginTop: 1 }}>
+                {liveData?.milestones && liveData.milestones.advance_amount && !liveData.milestones.advance_paid
+                  ? `Technician reported 50% advance collection (₹${liveData.milestones.advance_amount}). Share this OTP to authorize commencement of work.`
+                  : 'Technician reported cash collection. Share this 6-digit OTP with your technician to verify payment.'}
+              </div>
+            </div>
+          </div>
+          <div
+            onClick={handleCopyPaymentOtp}
+            title="Click to copy Payment OTP"
+            style={{
+              cursor: 'pointer',
+              fontFamily: 'monospace',
+              fontSize: '1.25rem',
+              fontWeight: 900,
+              color: '#047857',
+              background: 'white',
+              padding: '6px 14px',
+              borderRadius: 10,
+              border: '1.5px dashed #10b981',
+              letterSpacing: '2px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              whiteSpace: 'nowrap',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.05)',
+            }}
+          >
+            <span>{paymentConfirmationOtp || "Pending"}</span>
+            {copiedPaymentOtp ? <Check size={14} color="#10B981" /> : <Copy size={14} color="#059669" />}
+          </div>
+        </motion.div>
+      )}
+
+      {/* ─────────────────── 6-DIGIT SERVICE START OTP CARD (IF ACCEPTED & PRE-START) ─────────────────── */}
+      {isAccepted && startOtp && !isWorkStartedOrDone && !isProofSubmitted && !isCashPending && (
         <div style={{
           background: '#fff7ed',
           borderRadius: 14,
@@ -4001,12 +4221,9 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         const isAccepted = ["CUSTOMER_ACCEPTED", "APPROVED", "CONVERTED", "ACCEPTED", "ADMIN_APPROVED"].includes(qStatus)
         const isChangesRequested = ["CHANGE_REQUESTED", "CHANGES_REQUESTED", "REQUESTED_CHANGES", "REQUOTE", "RE_QUOTE"].includes(qStatus)
         const isDeclined = ["DECLINED", "CUSTOMER_DECLINED", "REJECTED", "ADMIN_REJECTED", "CANCELLED", "EXPIRED"].includes(qStatus)
-        const isPending = [
-          "SENT", "SENT_TO_CUSTOMER", "PENDING", "PENDING_APPROVAL", "PENDING_REVIEW", 
-          "PENDING REVIEW", "PENDING_ADMIN_REVIEW", "PENDING ADMIN REVIEW", 
-          "AWAITING_CUSTOMER", "AWAITING_APPROVAL", "QUOTATION_SENT", "QUOTE_SENT", 
-          "DRAFT", "VIEWED", "NEW", "OPEN"
-        ].includes(qStatus) || (!isAccepted && !isChangesRequested && !isDeclined)
+        const isUnderReview = ["PENDING_REVIEW", "PENDING REVIEW", "PENDING_ADMIN_REVIEW", "PENDING ADMIN REVIEW", "UNDER_REVIEW", "DRAFT", "CRM_REVIEW", "PRE_SEND_REVIEW"].includes(qStatus)
+              if (isUnderReview || !["SENT", "SENT_TO_CUSTOMER", "OPEN", "VIEWED", "AWAITING_CUSTOMER", "QUOTATION_SENT", "QUOTE_SENT", "PENDING_CUSTOMER_APPROVAL", "CUSTOMER_ACCEPTED", "APPROVED", "CONVERTED", "ACCEPTED", "ADMIN_APPROVED", "CHANGE_REQUESTED", "CHANGES_REQUESTED", "REQUESTED_CHANGES", "REQUOTE", "RE_QUOTE", "DECLINED", "CUSTOMER_DECLINED", "REJECTED", "ADMIN_REJECTED", "CANCELLED", "EXPIRED"].includes(qStatus)) return null
+                const isPending = (["SENT", "SENT_TO_CUSTOMER", "OPEN", "VIEWED", "AWAITING_CUSTOMER", "QUOTATION_SENT", "QUOTE_SENT", "PENDING_CUSTOMER_APPROVAL"].includes(qStatus) || (!isAccepted && !isChangesRequested && !isDeclined && !isUnderReview)) && !isUnderReview
         
         const totalEst = q.net_payable ?? (q.grand_total ?? (q.total_amount ?? 0))
         const itemsList = Array.isArray(q.items) ? q.items : []
@@ -4048,191 +4265,445 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                 padding: '4px 10px',
                 borderRadius: 8,
                 fontWeight: 800,
-                background: isPending ? "#EFF6FF" : isAccepted ? "#ECFDF5" : isChangesRequested ? "#FFFBEB" : "#FEF2F2",
-                color: isPending ? "#1E40AF" : isAccepted ? "#065F46" : isChangesRequested ? "#92400E" : "#991B1B"
+                background: isUnderReview ? "#FEF3C7" : isPending ? "#EFF6FF" : isAccepted ? "#ECFDF5" : isChangesRequested ? "#FFFBEB" : "#FEF2F2",
+                color: isUnderReview ? "#92400E" : isPending ? "#1E40AF" : isAccepted ? "#065F46" : isChangesRequested ? "#92400E" : "#991B1B"
               }}>
-                {isPending ? "Pending Your Approval" : isAccepted ? "Accepted / Approved" : isChangesRequested ? "Changes Requested" : isDeclined ? "Declined" : qStatus.replace(/_/g, " ")}
+                {isUnderReview ? "Under SEVO Review" : isPending ? "Pending Your Approval" : isAccepted ? "Accepted / Approved" : isChangesRequested ? "Changes Requested" : isDeclined ? "Declined" : qStatus.replace(/_/g, " ")}
               </span>
             </div>
 
-          <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: 12 }}>
-            Valid till: {new Date(liveData.quote.valid_until).toLocaleDateString()}
-          </div>
-
-          {/* Status-specific alert message */}
-          {liveData.quote.status !== "SENT_TO_CUSTOMER" && (
-            <div style={{
-              padding: '10px 14px',
-              borderRadius: 12,
-              marginBottom: 16,
-              textAlign: 'left',
-              background:
-                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#F0FDF4" :
-                  liveData.quote.status === "CHANGES_REQUESTED" ? "#FFFBEB" : "#FEF2F2",
-              border: `1px solid ${liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#DCFCE7" :
-                liveData.quote.status === "CHANGES_REQUESTED" ? "#FEF3C7" : "#FEE2E2"
-                }`,
-              color:
-                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#15803D" :
-                  liveData.quote.status === "CHANGES_REQUESTED" ? "#B45309" : "#C2410C",
-              fontSize: '0.82rem',
-              fontWeight: 700
-            }}>
-              {(liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED") && "✓ You have accepted this quotation. Creating your service booking..."}
-              {liveData.quote.status === "CONVERTED" && "✓ Booking confirmed! Your service request has been scheduled."}
-              {liveData.quote.status === "CHANGES_REQUESTED" && `⚠ Changes requested: "${liveData.quote.customer_notes || 'Please adjust the items'}"`}
-              {liveData.quote.status === "DECLINED" && `✗ You declined this quotation: "${liveData.quote.customer_decline_reason || 'Other reason'}"`}
+            {/* Quick Meta Specs (Validity, Area in Sq.Ft, Property Type, Warranty) */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12, fontSize: '0.78rem', color: '#475569' }}>
+              {q.valid_until && (
+                <span style={{ background: '#f8fafc', padding: '3px 8px', borderRadius: 6, border: '1px solid #e2e8f0', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Clock size={12} color="#64748b" /> Valid till: <strong>{new Date(q.valid_until).toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric' })}</strong>
+                </span>
+              )}
+              {totalArea > 0 && (
+                <span style={{ background: '#f0fdf4', color: '#166534', padding: '3px 8px', borderRadius: 6, border: '1px solid #bbf7d0', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  📐 Total Area: <strong>{totalArea} sq.ft</strong>
+                </span>
+              )}
+              {q.property_type && (
+                <span style={{ background: '#f8fafc', padding: '3px 8px', borderRadius: 6, border: '1px solid #e2e8f0', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  🏠 <strong>{q.property_type}</strong>
+                </span>
+              )}
+              {q.warranty && (
+                <span style={{ background: '#ecfdf5', color: '#047857', padding: '3px 8px', borderRadius: 6, border: '1px solid #a7f3d0', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  🛡️ <strong>{q.warranty}</strong>
+                </span>
+              )}
             </div>
-          )}
 
-          {/* Expandable items section */}
-          <div style={{ border: '1px solid #f1f5f9', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
-            <button
-              onClick={() => setQuoteExpanded(!quoteExpanded)}
-              style={{
-                width: '100%',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '10px 14px',
-                background: '#f8fafc',
-                border: 'none',
-                cursor: 'pointer',
-                fontWeight: 800,
-                fontSize: '0.82rem',
-                color: '#0f172a'
-              }}
-            >
-              <span>{quoteExpanded ? "Hide Line Items" : "View Line Items"}</span>
-              <span>{quoteExpanded ? "▲" : "▼"}</span>
-            </button>
-            {quoteExpanded && (
-              <div style={{ padding: '10px 14px', background: 'white', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {liveData.quote.items && liveData.quote.items.map((item, idx) => (
-                  <div key={item.id || idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem' }}>
-                    <div>
-                      <div style={{ fontWeight: 800, color: '#0f172a' }}>
-                        {item.name} {item.warranty_months ? `(Warranty: ${item.warranty_months} mo)` : "(No Warranty)"}
+            {/* 2-Column Milestone Payment Schedule */}
+            {(() => {
+              const numTotal = Number(totalEst) || 0;
+              const advPercent = Number(q.advance_percent || 50);
+              const advAmount = Number(q.advance_amount !== undefined && q.advance_amount !== null && q.advance_amount !== "" ? q.advance_amount : (numTotal * (advPercent / 100)));
+              const balAmount = Number(q.balance_amount !== undefined && q.balance_amount !== null && q.balance_amount !== "" ? q.balance_amount : (numTotal - advAmount));
+              const consultAdjusted = Number(q.inspection_fee_adjusted || q.consultation_fee_adjusted || 0);
+
+              return (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: 6, letterSpacing: '0.04em' }}>
+                    Payment Milestones Breakdown
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div style={{ padding: '10px 12px', background: '#eff6ff', borderRadius: 10, border: '1.5px solid #bfdbfe' }}>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#1e40af', textTransform: 'uppercase' }}>
+                        Milestone 1: {advPercent}% Advance
                       </div>
-                      <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
-                        Source: {item.source_type === "CUSTOMER" || item.item_type === "CUSTOMER" ? "Customer Supplied" : "sevo Supplied"}
+                      <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#1e3a8a', marginTop: 2 }}>
+                        ₹{advAmount.toLocaleString('en-IN')}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#3b82f6', marginTop: 2 }}>
+                        {consultAdjusted > 0 ? `Includes ₹${consultAdjusted} consultation credit` : 'Payable upon work commencement'}
                       </div>
                     </div>
-                    <div style={{ fontWeight: 900, color: '#0f172a' }}>
-                      ₹{item.source_type === "CUSTOMER" || item.item_type === "CUSTOMER" ? "0" : (item.total_amount ?? ((item.unit_price ?? item.price ?? 0) * (item.quantity ?? 1)))}
+
+                    <div style={{ padding: '10px 12px', background: '#f0fdf4', borderRadius: 10, border: '1.5px solid #bbf7d0' }}>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#166534', textTransform: 'uppercase' }}>
+                        Milestone 2: Balance on Completion
+                      </div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#14532d', marginTop: 2 }}>
+                        ₹{balAmount.toLocaleString('en-IN')}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#15803d', marginTop: 2 }}>
+                        Payable after final inspection & proof
+                      </div>
                     </div>
                   </div>
-                ))}
+                </div>
+              );
+            })()}
+
+            {/* Status-specific alert message (Only shown if NOT pending and has resolved state) */}
+            {(isAccepted || isChangesRequested || isDeclined) && (
+              <div style={{
+                padding: '10px 14px',
+                borderRadius: 12,
+                marginBottom: 14,
+                textAlign: 'left',
+                background: isAccepted ? "#F0FDF4" : isChangesRequested ? "#FFFBEB" : "#FEF2F2",
+                border: `1px solid ${isAccepted ? "#DCFCE7" : isChangesRequested ? "#FEF3C7" : "#FEE2E2"}`,
+                color: isAccepted ? "#15803D" : isChangesRequested ? "#B45309" : "#C2410C",
+                fontSize: '0.82rem',
+                fontWeight: 700
+              }}>
+                {isAccepted && "✓ You have accepted this quotation. Your service booking is confirmed and scheduled."}
+                {isChangesRequested && `⚠ Re-quotation / Changes requested: "${q.customer_notes || 'Please adjust quotation items & measurements'}"`}
+                {isDeclined && `✗ You declined this quotation: "${q.customer_decline_reason || q.decline_reason || 'Declined by customer'}"`}
               </div>
             )}
-          </div>
 
-          {/* PDF Download link */}
-          <div style={{ marginBottom: 16 }}>
-            <a
-              href={`${import.meta.env.VITE_VENDOR_API_URL || (import.meta.env.PROD ? (typeof window !== 'undefined' ? `${window.location.origin}/api/workforce` : '') : 'http://localhost:8001')}/customer/quote-token/${liveData.quote.decision_token}/pdf/`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ fontSize: '0.8rem', fontWeight: 800, color: '#4F46E5', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
-            >
-              📄 Download PDF Quotation
-            </a>
-          </div>
-
-          {/* Quote Version History */}
-          {liveData.quote.history && liveData.quote.history.length > 0 && (
-            <div style={{ marginTop: 20, borderTop: '1px dashed #e2e8f0', paddingTop: 16, marginBottom: 16 }}>
-              <h4 style={{ fontSize: '0.78rem', fontWeight: 900, color: '#64748b', textTransform: 'uppercase', marginBottom: 10, letterSpacing: '0.5px' }}>
-                Previous Quotations ({liveData.quote.history.length})
-              </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {liveData.quote.history.map((prevQuote) => {
-                  const isExpanded = expandedPrevQuotes[prevQuote.id];
-                  return (
-                    <div key={prevQuote.id} style={{ background: '#f8fafc', borderRadius: 10, padding: 12, border: '1px solid #f1f5f9' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#0f172a' }}>
-                            {prevQuote.quote_number} (v{prevQuote.quote_version})
+            {/* ── Measurements Section (Square Feet Room-by-Room Breakdown) ── */}
+            {measurementsList.length > 0 && (
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 12, background: '#fafafa' }}>
+                <div style={{ padding: '8px 12px', background: '#f1f5f9', fontWeight: 800, fontSize: '0.78rem', color: '#334155', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>📐 Room &amp; Area Measurements</span>
+                  <span style={{ color: '#4F46E5', fontFamily: 'monospace' }}>Total: {totalArea} sq.ft</span>
+                </div>
+                <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {measurementsList.map((m, mIdx) => (
+                    <div key={m.id || mIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.76rem', borderBottom: mIdx < measurementsList.length - 1 ? '1px dashed #e2e8f0' : 'none', paddingBottom: 4 }}>
+                      <div>
+                        <strong style={{ color: '#0f172a' }}>{m.area_name || `Area ${mIdx + 1}`}</strong>
+                        {m.length && m.width && (
+                          <span style={{ color: '#64748b', marginLeft: 6 }}>
+                            ({m.length}ft × {m.width}ft{m.height ? ` × ${m.height}ft` : ''})
                           </span>
-                          <span style={{ fontSize: '0.7rem', marginLeft: 8, padding: '2px 6px', borderRadius: 6, background: '#f1f5f9', color: '#64748b', fontWeight: 700 }}>
-                            {prevQuote.status.replace(/_/g, " ")}
+                        )}
+                        {Number(m.deductions || 0) > 0 && (
+                          <span style={{ color: '#dc2626', marginLeft: 6 }}>
+                            (Deductions: -{m.deductions} sq.ft)
                           </span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <button
-                            onClick={() => setExpandedPrevQuotes(prev => ({ ...prev, [prevQuote.id]: !prev[prevQuote.id] }))}
-                            style={{ background: 'none', border: 'none', color: '#4F46E5', fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer' }}
-                          >
-                            {isExpanded ? "Hide Details" : "View Details"}
-                          </button>
-                          <a
-                            href={`${import.meta.env.VITE_VENDOR_API_URL || (import.meta.env.PROD ? (typeof window !== 'undefined' ? `${window.location.origin}/api/workforce` : '') : 'http://localhost:8001')}/customer/quote-token/${prevQuote.decision_token}/pdf/`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ fontSize: '0.75rem', fontWeight: 800, color: '#4F46E5', textDecoration: 'underline', cursor: 'pointer' }}
-                          >
-                            📄 PDF
-                          </a>
-                        </div>
+                        )}
                       </div>
-
-                      {isExpanded && (
-                        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e8f0', fontSize: '0.78rem', textAlign: 'left' }}>
-                          <p style={{ margin: '0 0 8px 0', color: '#475569' }}>
-                            <strong>Description:</strong> {prevQuote.description || "No description"}
-                          </p>
-                          <p style={{ margin: '0 0 10px 0', color: '#475569' }}>
-                            <strong>Total Estimate:</strong> ₹{prevQuote.total_amount}
-                          </p>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'white', padding: 8, borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                            {prevQuote.items && prevQuote.items.map((item, idx) => (
-                              <div key={item.id || idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
-                                <span>
-                                  {item.name} (x{item.quantity})
-                                </span>
-                                <span style={{ fontWeight: 700 }}>
-                                  ₹{item.total_amount}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                      <div style={{ fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>
+                        {m.final_area || m.calculated_area} sq.ft
+                      </div>
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Accept / Decline / Request changes buttons */}
-          {liveData.quote.status === "SENT_TO_CUSTOMER" && (
-            <div style={{ display: 'flex', gap: 8 }}>
+            {/* ── Expandable Line Items Section with Rate, Quantity, Square Feet ── */}
+            <div style={{ border: '1px solid #f1f5f9', borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
               <button
-                onClick={() => handleQuoteDecision("CUSTOMER_ACCEPTED")}
+                type="button"
+                onClick={() => setQuoteExpanded(!quoteExpanded)}
                 style={{
-                  flex: 1.2,
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
                   padding: '10px 14px',
-                  background: 'linear-gradient(135deg, #10B981, #059669)',
-                  color: 'white',
+                  background: '#f8fafc',
+                  border: 'none',
+                  cursor: 'pointer',
                   fontWeight: 800,
                   fontSize: '0.82rem',
-                  border: 'none',
-                  borderRadius: 10,
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)'
+                  color: '#0f172a'
                 }}
               >
-                Accept Quote
+                <span>{quoteExpanded ? "Hide Line Items" : "View Line Items & Breakdown"} ({itemsList.length} items)</span>
+                <span>{quoteExpanded ? "▲" : "▼"}</span>
               </button>
+
+              {quoteExpanded && (
+                <div style={{ padding: '10px 14px', background: 'white', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {itemsList.length === 0 ? (
+                    <div style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '8px 0' }}>
+                      Complete package estimation provided.
+                    </div>
+                  ) : (
+                    itemsList.map((item, idx) => {
+                      const itemName = item.name || item.description || item.category || "Quotation Item"
+                      const itemDesc = item.description && item.description !== item.name ? item.description : (item.category || item.classification || "")
+                      const qty = Number(item.quantity) || 1
+                      const unit = item.unit || (item.category?.toLowerCase()?.includes('paint') ? 'sq.ft' : 'Unit')
+                      const rate = item.final_rate ?? item.unit_price ?? item.proposed_rate ?? item.base_rate ?? item.price ?? 0
+                      const itemTotalAmount = item.total_amount ?? item.amount ?? (rate * qty)
+
+                      return (
+                        <div key={item.id || idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontSize: '0.8rem', paddingBottom: 8, borderBottom: idx < itemsList.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                          <div style={{ flex: 1, paddingRight: 10 }}>
+                            <div style={{ fontWeight: 800, color: '#0f172a' }}>
+                              {itemName}
+                            </div>
+                            {itemDesc && (
+                              <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 2 }}>
+                                {itemDesc}
+                              </div>
+                            )}
+                            <div style={{ fontSize: '0.72rem', color: '#475569', marginTop: 3, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                              <span style={{ background: '#f1f5f9', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
+                                {qty} {unit} × ₹{rate}/{unit}
+                              </span>
+                              {item.classification && (
+                                <span style={{ color: '#059669', fontWeight: 700 }}>
+                                  ({item.classification === 'both' ? 'Material + Labour' : item.classification.toUpperCase()})
+                                </span>
+                              )}
+                              {item.warranty_tier && String(item.warranty_tier).toUpperCase() !== 'NONE' && (
+                                <span style={{ color: '#7c3aed', fontWeight: 700 }}>
+                                  🛡️ {item.warranty_tier}
+                                </span>
+                              )}
+                              {Number(item.warranty_months) > 0 && (
+                                <span style={{ color: '#7c3aed', fontWeight: 700 }}>
+                                  🛡️ {item.warranty_months} mo warranty
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div style={{ fontWeight: 900, color: '#0f172a', fontSize: '0.88rem', whiteSpace: 'nowrap' }}>
+                            ₹{itemTotalAmount}
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+
+                  {/* Financial calculation sub-breakdown */}
+                  <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 8, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.76rem', color: '#64748b' }}>
+                    {Number(q.subtotal || q.subtotal_amount || 0) > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Subtotal</span>
+                        <span>₹{q.subtotal || q.subtotal_amount}</span>
+                      </div>
+                    )}
+                    {Number(q.discount || q.discount_amount || 0) > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}>
+                        <span>Discount</span>
+                        <span>-₹{q.discount || q.discount_amount}</span>
+                      </div>
+                    )}
+                    {Number(q.tax || q.tax_amount || q.gst_amount || 0) > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>GST / Taxes</span>
+                        <span>₹{q.tax || q.tax_amount || q.gst_amount}</span>
+                      </div>
+                    )}
+                    {Number(q.inspection_fee_adjusted || 0) > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}>
+                        <span>Site Consultation Fee Adjusted</span>
+                        <span>-₹{q.inspection_fee_adjusted}</span>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900, fontSize: '0.84rem', color: '#0f172a', borderTop: '1px solid #f1f5f9', paddingTop: 4 }}>
+                      <span>Net Total</span>
+                      <span>₹{totalEst}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* PDF Download link */}
+            <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const pdfToken = q.decision_token || q.raw_quote_number || q.quote_number || q.quote_id;
+                  triggerPdfDownload(pdfToken, `Quotation_${q.raw_quote_number || q.quote_number || 'Quotation'}.pdf`);
+                }}
+                style={{ background: 'none', border: 'none', padding: 0, fontSize: '0.8rem', fontWeight: 800, color: '#4F46E5', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
+              >
+                📄 Download PDF Quotation
+              </button>
+            </div>
+
+            {/* Quote Version History */}
+            {(() => {
+              const prevList = (Array.isArray(q.history) && q.history.length > 0)
+                ? q.history
+                : (Array.isArray(liveData?.quotation_history)
+                    ? liveData.quotation_history.filter(h => String(h.quote_id || h.id) !== String(q.quote_id || q.id) && (Number(h.quote_version || h.version || 1) !== Number(q.quote_version || q.version || 1)))
+                    : []);
+              if (prevList.length === 0) return null;
+              return (
+                <div style={{ marginTop: 14, borderTop: '1px dashed #e2e8f0', paddingTop: 12, marginBottom: 14 }}>
+                  <h4 style={{ fontSize: '0.75rem', fontWeight: 900, color: '#64748b', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.5px' }}>
+                    Previous Revisions ({prevList.length})
+                  </h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {prevList.map((prevQuote, pIdx) => {
+                      const pId = prevQuote.quote_id || prevQuote.id || pIdx;
+                      const isExpanded = expandedPrevQuotes[pId];
+                      return (
+                        <div key={pId} style={{ background: '#f8fafc', borderRadius: 10, padding: 10, border: '1px solid #f1f5f9' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#0f172a' }}>
+                                #{prevQuote.raw_quote_number || (typeof prevQuote.quote_number === 'string' ? prevQuote.quote_number.replace(/-V\d+$/i, '') : prevQuote.quote_number)} (v{prevQuote.quote_version || prevQuote.version || 1})
+                              </span>
+                              <span style={{ fontSize: '0.7rem', marginLeft: 8, padding: '2px 6px', borderRadius: 6, background: '#f1f5f9', color: '#64748b', fontWeight: 700 }}>
+                                {String(prevQuote.status || "").replace(/_/g, " ")}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setExpandedPrevQuotes(prev => ({ ...prev, [pId]: !prev[pId] }))}
+                              style={{ background: 'none', border: 'none', color: '#4F46E5', fontSize: '0.74rem', fontWeight: 800, cursor: 'pointer' }}
+                            >
+                              {isExpanded ? "Hide" : "View"}
+                            </button>
+                          </div>
+                          {isExpanded && (
+                            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #e2e8f0', fontSize: '0.75rem' }}>
+                              <p style={{ margin: '0 0 6px 0', color: '#475569' }}>
+                                <strong>Total Estimate:</strong> ₹{Number(prevQuote.total_amount || prevQuote.grand_total || 0).toLocaleString('en-IN')}
+                              </p>
+                              {prevQuote.customer_notes && (
+                                <p style={{ margin: '0 0 6px 0', color: '#b45309' }}>
+                                  <strong>Revision Note:</strong> &quot;{prevQuote.customer_notes}&quot;
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── Action Buttons: Accept Quote / Request Changes / Decline ── */}
+            {isPending && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => handleQuoteDecision("CUSTOMER_ACCEPTED")}
+                  style={{
+                    flex: '1.2 1 140px',
+                    padding: '11px 14px',
+                    background: 'linear-gradient(135deg, #10B981, #059669)',
+                    color: 'white',
+                    fontWeight: 800,
+                    fontSize: '0.84rem',
+                    border: 'none',
+                    borderRadius: 12,
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6
+                  }}
+                >
+                  <Check size={16} /> Accept Quote
+                </button>
+                <button
+                  onClick={() => setShowRequestChangesModal(true)}
+                  style={{
+                    flex: '1 1 120px',
+                    padding: '11px 14px',
+                    background: '#fffbeb',
+                    color: '#92400e',
+                    fontWeight: 800,
+                    fontSize: '0.84rem',
+                    border: '1px solid #fde68a',
+                    borderRadius: 12,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6
+                  }}
+                >
+                  <MessageSquare size={15} /> Request Changes
+                </button>
+                <button
+                  onClick={() => setShowDeclineReasonModal(true)}
+                  style={{
+                    flex: '0.9 1 100px',
+                    padding: '11px 14px',
+                    background: '#fef2f2',
+                    color: '#dc2626',
+                    fontWeight: 800,
+                    fontSize: '0.84rem',
+                    border: '1px solid #fecaca',
+                    borderRadius: 12,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6
+                  }}
+                >
+                  <Ban size={15} /> Decline
+                </button>
+              </div>
+            )}
+          </motion.div>
+        )
+      })()}
+
+      {/* ── Request Changes / Re-Quote Modal Overlay ── */}
+      {showRequestChangesModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15, 23, 42, 0.6)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '1.5rem'
+        }}>
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            style={{
+              background: 'white',
+              borderRadius: 20,
+              padding: '1.75rem',
+              maxWidth: 440,
+              width: '100%',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+            }}
+          >
+            <h3 style={{ margin: '0 0 8px', fontSize: '1.2rem', fontWeight: 900, color: '#0f172a' }}>
+              Request Changes / Re-Quotation
+            </h3>
+            <p style={{ margin: '0 0 14px', fontSize: '0.84rem', color: '#64748b' }}>
+              Tell our service professional what you would like modified (e.g. adjust square feet, change paint brand, remove an area, update pricing):
+            </p>
+
+            <textarea
+              placeholder="e.g., Please change the paint brand to Royal Luxury Emulsion, adjust square footage for living room to 350 sq.ft, and exclude balcony..."
+              value={changeNotes}
+              onChange={(e) => setChangeNotes(e.target.value)}
+              style={{
+                width: '100%',
+                boxSizing: 'border-box',
+                height: 100,
+                padding: '10px 12px',
+                borderRadius: 10,
+                border: '1.5px solid #cbd5e1',
+                fontSize: '0.85rem',
+                fontFamily: 'inherit',
+                marginBottom: 16,
+                resize: 'none',
+                outline: 'none'
+              }}
+            />
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button
                 onClick={() => {
-                  setShowRequestChangesModal(true);
+                  setShowRequestChangesModal(false)
+                  setChangeNotes("")
                 }}
                 style={{
-                  flex: 1,
-                  padding: '10px 14px',
+                  padding: '9px 16px',
                   background: '#f1f5f9',
                   color: '#0f172a',
                   fontWeight: 800,
@@ -4242,132 +4713,41 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                   cursor: 'pointer'
                 }}
               >
-                Request Changes
+                Cancel
               </button>
               <button
-                onClick={() => setShowDeclineReasonModal(true)}
+                onClick={() => {
+                  if (!changeNotes.trim()) {
+                    showFeedback({
+                      type: "warning",
+                      title: "Notes Required",
+                      message: "Please enter what specific changes or updates you would like to request.",
+                    })
+                    return
+                  }
+                  handleQuoteDecision("CHANGE_REQUESTED", "", changeNotes)
+                  setShowRequestChangesModal(false)
+                }}
                 style={{
-                  flex: 1,
-                  padding: '10px 14px',
-                  background: '#fef2f2',
-                  color: '#dc2626',
+                  padding: '9px 18px',
+                  background: '#f59e0b',
+                  color: 'white',
                   fontWeight: 800,
                   fontSize: '0.82rem',
                   border: 'none',
                   borderRadius: 10,
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)'
                 }}
               >
-                Decline
+                Send Request
               </button>
             </div>
-          )}
-        </motion.div>
-      )
-    })()}
+          </motion.div>
+        </div>
+      )}
 
-    {/* ── Request Changes / Re-Quote Modal Overlay ── */}
-    {showRequestChangesModal && (
-      <div style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'rgba(15, 23, 42, 0.6)',
-        backdropFilter: 'blur(4px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 9999,
-        padding: '1.5rem'
-      }}>
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          style={{
-            background: 'white',
-            borderRadius: 20,
-            padding: '1.75rem',
-            maxWidth: 440,
-            width: '100%',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
-          }}
-        >
-          <h3 style={{ margin: '0 0 8px', fontSize: '1.2rem', fontWeight: 900, color: '#0f172a' }}>
-            Request Changes / Re-Quotation
-          </h3>
-          <p style={{ margin: '0 0 14px', fontSize: '0.84rem', color: '#64748b' }}>
-            Tell our service professional what you would like modified (e.g. adjust square feet, change paint brand, remove an area, update pricing):
-          </p>
-
-          <textarea
-            placeholder="e.g., Please change the paint brand to Royal Luxury Emulsion, adjust square footage for living room to 350 sq.ft, and exclude balcony..."
-            value={changeNotes}
-            onChange={(e) => setChangeNotes(e.target.value)}
-            style={{
-              width: '100%',
-              boxSizing: 'border-box',
-              height: 100,
-              padding: '10px 12px',
-              borderRadius: 10,
-              border: '1.5px solid #cbd5e1',
-              fontSize: '0.85rem',
-              fontFamily: 'inherit',
-              marginBottom: 16,
-              resize: 'none',
-              outline: 'none'
-            }}
-          />
-
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button
-              onClick={() => {
-                setShowRequestChangesModal(false)
-                setChangeNotes("")
-              }}
-              style={{
-                padding: '9px 16px',
-                background: '#f1f5f9',
-                color: '#0f172a',
-                fontWeight: 800,
-                fontSize: '0.82rem',
-                border: 'none',
-                borderRadius: 10,
-                cursor: 'pointer'
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => {
-                if (!changeNotes.trim()) {
-                  alert("Please enter what changes you would like to request.")
-                  return
-                }
-                handleQuoteDecision("CHANGE_REQUESTED", "", changeNotes)
-                setShowRequestChangesModal(false)
-              }}
-              style={{
-                padding: '9px 18px',
-                background: '#f59e0b',
-                color: 'white',
-                fontWeight: 800,
-                fontSize: '0.82rem',
-                border: 'none',
-                borderRadius: 10,
-                cursor: 'pointer',
-                boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)'
-              }}
-            >
-              Send Request
-            </button>
-          </div>
-        </motion.div>
-      </div>
-    )}
-
-    {/* Decline Reason Modal Overlay */}
+      {/* Decline Reason Modal Overlay */}
       {showDeclineReasonModal && (
         <div style={{
           position: 'fixed',
@@ -4463,7 +4843,11 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               <button
                 onClick={() => {
                   if (!declineReasonCode) {
-                    alert("Please select a reason code first.")
+                    showFeedback({
+                      type: "warning",
+                      title: "Reason Required",
+                      message: "Please select a reason code before confirming your decision.",
+                    })
                     return
                   }
                   handleQuoteDecision("CUSTOMER_DECLINED", declineReasonCode, declineReasonNotes)
@@ -4486,6 +4870,161 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           </motion.div>
         </div>
       )}
+
+      {/* ─────────────────── ELEGANT IN-SCREEN FEEDBACK & NOTIFICATION MODAL ─────────────────── */}
+      <AnimatePresence>
+        {feedbackModal.isOpen && (
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(15, 23, 42, 0.7)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 99999,
+              padding: '1.25rem',
+            }}
+            onClick={closeFeedback}
+          >
+            <motion.div
+              initial={{ scale: 0.88, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.88, opacity: 0, y: 15 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: 'white',
+                borderRadius: 24,
+                padding: '2rem 1.75rem',
+                maxWidth: 420,
+                width: '100%',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(226, 232, 240, 0.8)',
+                textAlign: 'center',
+                position: 'relative',
+              }}
+            >
+              <button
+                onClick={closeFeedback}
+                style={{
+                  position: 'absolute',
+                  top: 14,
+                  right: 14,
+                  background: '#f1f5f9',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: 32,
+                  height: 32,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: '#64748b',
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = '#e2e8f0')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = '#f1f5f9')}
+              >
+                <X size={16} />
+              </button>
+
+              <div
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 20,
+                  margin: '0 auto 1.25rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background:
+                    feedbackModal.type === 'success'
+                      ? 'linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%)'
+                      : feedbackModal.type === 'error'
+                      ? 'linear-gradient(135deg, #ffe4e6 0%, #fecdd3 100%)'
+                      : feedbackModal.type === 'warning'
+                      ? 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)'
+                      : 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)',
+                  boxShadow:
+                    feedbackModal.type === 'success'
+                      ? '0 10px 25px -5px rgba(16, 185, 129, 0.3)'
+                      : feedbackModal.type === 'error'
+                      ? '0 10px 25px -5px rgba(244, 63, 94, 0.3)'
+                      : feedbackModal.type === 'warning'
+                      ? '0 10px 25px -5px rgba(245, 158, 11, 0.3)'
+                      : '0 10px 25px -5px rgba(99, 102, 241, 0.3)',
+                }}
+              >
+                {feedbackModal.type === 'success' && <CheckCircle2 size={34} color="#059669" />}
+                {feedbackModal.type === 'error' && <XCircle size={34} color="#e11d48" />}
+                {feedbackModal.type === 'warning' && <AlertTriangle size={34} color="#d97706" />}
+                {feedbackModal.type === 'info' && <Info size={34} color="#4f46e5" />}
+              </div>
+
+              <h3
+                style={{
+                  margin: '0 0 8px',
+                  fontSize: '1.25rem',
+                  fontWeight: 900,
+                  color: '#0f172a',
+                  letterSpacing: '-0.02em',
+                }}
+              >
+                {feedbackModal.title}
+              </h3>
+
+              <p
+                style={{
+                  margin: '0 0 1.5rem',
+                  fontSize: '0.88rem',
+                  color: '#64748b',
+                  lineHeight: 1.55,
+                }}
+              >
+                {feedbackModal.message}
+              </p>
+
+              <button
+                onClick={closeFeedback}
+                style={{
+                  width: '100%',
+                  padding: '12px 20px',
+                  borderRadius: 14,
+                  border: 'none',
+                  fontWeight: 800,
+                  fontSize: '0.92rem',
+                  cursor: 'pointer',
+                  color: 'white',
+                  background:
+                    feedbackModal.type === 'success'
+                      ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                      : feedbackModal.type === 'error'
+                      ? 'linear-gradient(135deg, #f43f5e 0%, #e11d48 100%)'
+                      : feedbackModal.type === 'warning'
+                      ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+                      : 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                  boxShadow:
+                    feedbackModal.type === 'success'
+                      ? '0 4px 14px rgba(16, 185, 129, 0.35)'
+                      : feedbackModal.type === 'error'
+                      ? '0 4px 14px rgba(244, 63, 94, 0.35)'
+                      : '0 4px 14px rgba(99, 102, 241, 0.35)',
+                  transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+                }}
+                onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.98)')}
+                onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+              >
+                {feedbackModal.confirmText || 'Got it'}
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* ─────────────────── REAL BOOKING & SERVICE DETAILS (100% ACCURATE IN ₹) ─────────────────── */}
       <motion.div
@@ -4602,23 +5141,75 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         )}
 
         {/* Total Amount & Payment Method Footer */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f5f3ff', border: '1px solid #7C3AED25', borderRadius: 12, padding: '0.75rem 0.95rem' }}>
-          <div>
-            <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#6D28D9', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Payment Mode</div>
-            <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#4c1d95', marginTop: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
-              {paymentMethod === "ONLINE" ? "💳 Online Payment" : "💵 Cash on Service (COD)"}
-              <span style={{ fontSize: '0.68rem', fontWeight: 800, background: paymentMethod === "ONLINE" ? "#dcfce7" : "#fef3c7", color: paymentMethod === "ONLINE" ? "#15803d" : "#b45309", padding: "1px 6px", borderRadius: 6, marginLeft: 4 }}>
-                {paymentStatusText}
-              </span>
+        {(() => {
+          const ms = liveData?.milestones;
+          const hasMilestones = Boolean(ms && ms.advance_amount > 0);
+          const isAdvanceOnlyPaid = hasMilestones && ms.advance_paid && !ms.balance_paid;
+          const isFullyPaidMilestone = hasMilestones && ms.advance_paid && ms.balance_paid;
+
+          let dynamicBadgeText = paymentStatusText;
+          let dynamicBadgeBg = paymentMethod === "ONLINE" ? "#dcfce7" : "#fef3c7";
+          let dynamicBadgeColor = paymentMethod === "ONLINE" ? "#15803d" : "#b45309";
+
+          if (hasMilestones) {
+            if (isFullyPaidMilestone) {
+              dynamicBadgeText = "Fully Paid";
+              dynamicBadgeBg = "#dcfce7";
+              dynamicBadgeColor = "#15803d";
+            } else if (isCashPending && !ms.advance_paid) {
+              dynamicBadgeText = "50% Advance Cash Pending";
+              dynamicBadgeBg = "#fef3c7";
+              dynamicBadgeColor = "#b45309";
+            } else if (isCashPending && ms.advance_paid) {
+              dynamicBadgeText = "Balance Cash Pending";
+              dynamicBadgeBg = "#fef3c7";
+              dynamicBadgeColor = "#b45309";
+            } else if (isAdvanceOnlyPaid) {
+              dynamicBadgeText = "50% Advance Paid";
+              dynamicBadgeBg = "#dbeafe";
+              dynamicBadgeColor = "#1e40af";
+            } else {
+              dynamicBadgeText = "50% Advance Due";
+              dynamicBadgeBg = "#fef3c7";
+              dynamicBadgeColor = "#b45309";
+            }
+          }
+
+          return (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f5f3ff', border: '1px solid #7C3AED25', borderRadius: 12, padding: '0.75rem 0.95rem', flexWrap: 'wrap', gap: 8 }}>
+              <div>
+                <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#6D28D9', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Payment Mode</div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#4c1d95', marginTop: 1, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                  {paymentMethod === "ONLINE" ? "💳 Online Payment" : "💵 Cash on Service (COD)"}
+                  <span style={{ fontSize: '0.68rem', fontWeight: 800, background: dynamicBadgeBg, color: dynamicBadgeColor, padding: "1px 6px", borderRadius: 6, marginLeft: 4 }}>
+                    {dynamicBadgeText}
+                  </span>
+                </div>
+                {hasMilestones && (
+                  <div style={{ fontSize: '0.7rem', color: '#6b21a8', marginTop: 3, fontWeight: 700 }}>
+                    {isFullyPaidMilestone ? (
+                      <>Paid in Full: <strong>₹{(ms.grand_total || displayTotal).toLocaleString("en-IN")}</strong></>
+                    ) : isAdvanceOnlyPaid && !isCashPending ? (
+                      <>Advance Paid: <strong>₹{ms.advance_amount.toLocaleString("en-IN")}</strong> · Due on Completion: <strong>₹{ms.balance_amount.toLocaleString("en-IN")}</strong></>
+                    ) : isAdvanceOnlyPaid && isCashPending ? (
+                      <>Advance Paid: <strong>₹{ms.advance_amount.toLocaleString("en-IN")}</strong> · Balance (<strong>₹{ms.balance_amount.toLocaleString("en-IN")}</strong>) Pending OTP Verification</>
+                    ) : (
+                      <>Advance Due: <strong>₹{ms.advance_amount.toLocaleString("en-IN")}</strong> {isCashPending ? "(OTP Verification Pending)" : ""} · Balance: <strong>₹{ms.balance_amount.toLocaleString("en-IN")}</strong></>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#6D28D9', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  {hasMilestones ? "Total Estimate" : "Total Amount"}
+                </div>
+                <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#6D28D9' }}>
+                  ₹{Number(displayTotal).toLocaleString("en-IN")}
+                </div>
+              </div>
             </div>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#6D28D9', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Amount</div>
-            <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#6D28D9' }}>
-              ₹{Number(displayTotal).toLocaleString("en-IN")}
-            </div>
-          </div>
-        </div>
+          );
+        })()}
       </motion.div>
 
       {/* ─────────────────── MASONRY SPLIT PAYMENT CARD ─────────────────── */}
@@ -5580,8 +6171,17 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
     }
   }
 
+  const isBookingViewTab = [
+    "My Bookings",
+    "Upcoming & Active",
+    "Past Services",
+    "Book Again",
+    "30-Day Warranties",
+    "My Invoices"
+  ].includes(activeTab);
+
   useEffect(() => {
-    if (user) {
+    if (isBookingViewTab && user) {
       const fetchBookings = (showLoading = false) => {
         if (showLoading && (!realBookings || realBookings.length === 0)) {
           setBookingsLoading(true)
@@ -5606,11 +6206,10 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         window.removeEventListener("focus", onFocus)
       }
     }
-  }, [user])
+  }, [activeTab, user, isBookingViewTab])
 
   useEffect(() => {
-    const isOrdersTab = ["My Bookings", "Upcoming & Active", "Past Services"].includes(activeTab)
-    if (isOrdersTab && user) {
+    if (isBookingViewTab && user) {
       const fetchGroceryOrders = (showLoading = false) => {
         if (showLoading && (!groceryOrders || groceryOrders.length === 0)) {
           setGroceryOrdersLoading(true)
@@ -5636,7 +6235,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         window.removeEventListener("focus", onFocus)
       }
     }
-  }, [activeTab, user])
+  }, [activeTab, user, isBookingViewTab])
 
   useEffect(() => {
     if (activeTab === "Wallet" && user) {
@@ -6439,6 +7038,24 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
     );
   };
 
+  const isUpcomingTab = activeTab === "Upcoming & Active" || (activeTab === "My Bookings" && bookingListFilter === "active");
+  const isPastTab = activeTab === "Past Services" || activeTab === "30-Day Warranties" || activeTab === "Book Again" || (activeTab === "My Bookings" && bookingListFilter === "completed");
+  const currentFilter = (activeTab === "Upcoming & Active" || bookingListFilter === "active")
+    ? "active"
+    : (activeTab === "Past Services" || activeTab === "30-Day Warranties" || activeTab === "Book Again" || bookingListFilter === "completed")
+      ? "completed"
+      : "all";
+
+  const allCount = (nonDraftBookings || []).length;
+  const activeCount = (liveActiveBookings || []).length;
+  const completedCount = (completedBookings || []).length;
+
+  const displayedBookings = currentFilter === "active"
+    ? liveActiveBookings
+    : currentFilter === "completed"
+      ? completedBookings
+      : nonDraftBookings;
+
   const renderTabContent = () => {
     switch (activeTab) {
       case "My Profile":
@@ -6630,43 +7247,25 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
             </div>
           </motion.div>
         )
+      case "My Bookings":
       case "Upcoming & Active":
       case "Past Services":
-      case "My Bookings": {
-        const isUpcomingTab = activeTab === "Upcoming & Active"
-        const isPastTab = activeTab === "Past Services"
-        const currentFilter = isUpcomingTab ? "active" : isPastTab ? "completed" : bookingListFilter
-
-        const displayedBookings = (realBookings || []).filter(b => {
-          if (b.parent_request) return false
-          const st = String(b.status || '').toLowerCase()
-          if (currentFilter === "active") {
-            return ['new_request', 'pending', 'assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched', 'confirmed', 'reviewed', 'waiting_for_payment'].includes(st)
-          }
-          if (currentFilter === "completed") {
-            return ['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(st)
-          }
-          return true
-        })
-
-        const activeCount = liveActiveBookings.length
-        const completedCount = completedBookings.length
-        const allCount = (realBookings || []).filter(b => !b.parent_request).length
-
         return (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
             <div style={{ marginBottom: '1.25rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
                 <div>
                   <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>
-                    {isUpcomingTab ? 'Upcoming & Active Services' : isPastTab ? 'Past Completed Services' : 'My Bookings'}
+                    {isUpcomingTab ? 'Upcoming & Active Services' : isPastTab ? 'Past Completed Services' : activeTab === 'My Invoices' ? 'My Invoices & Receipts' : 'My Bookings'}
                   </h3>
                   <p style={{ margin: '3px 0 0', fontSize: '0.82rem', color: '#64748b' }}>
                     {isUpcomingTab
                       ? 'Live tracking, technician assignment, and arrival OTPs for ongoing Hosur services'
                       : isPastTab
                         ? 'Service history, 30-day revisit guarantees, and 1-click rebooking'
-                        : 'Manage all your SEVO service requests, schedules, and warranties in one place'}
+                        : activeTab === 'My Invoices'
+                          ? 'View and download official GST tax invoices, job sheets, and payment receipts'
+                          : 'Manage all your SEVO service requests, schedules, and warranties in one place'}
                   </p>
                 </div>
 
@@ -6862,84 +7461,159 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           )}
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontWeight: 900, color: ['paid', 'collected'].includes(b.payment_status) ? '#059669' : '#d97706', marginBottom: 12, fontSize: '1.02rem', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 5 }}>
-                            <span style={{ fontSize: '0.76rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Payment:</span>
-                            <span>{['paid', 'collected'].includes(b.payment_status) ? 'Paid' : (b.payment_status_display || 'Pending')}</span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                            {['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(String(b.status || '').toLowerCase()) && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleRebookBooking(b)
-                                }}
-                                style={{ fontSize: '0.85rem', padding: '8px 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #059669, #047857)', fontWeight: 800, cursor: 'pointer', color: 'white', boxShadow: '0 2px 8px rgba(5,150,105,0.3)', display: 'inline-flex', alignItems: 'center', gap: 6, transition: 'transform 0.15s' }}
-                                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
-                                onMouseOut={e => e.currentTarget.style.transform = 'none'}
-                              >
-                                <RefreshCw size={13} /> Book Again
-                              </button>
-                            )}
+                          {(() => {
+                            const activeStage = (b.child_requests && b.child_requests.length > 0)
+                              ? (b.child_requests.filter(c => !['cancelled', 'rejected'].includes(c.status)).slice(-1)[0] || b)
+                              : b;
+                            const currentEffectiveStatus = activeStage.status || b.status;
+                            const isAcceptedOrActive = Boolean(
+                              activeStage.is_accepted || b.is_accepted ||
+                              ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched', 'proof_submitted'].includes(currentEffectiveStatus) ||
+                              ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched', 'proof_submitted'].includes(b.status)
+                            );
+                            const effectivePaymentStatus = activeStage.payment_status || b.payment_status;
 
-                            {/* Live Partner Search button if unassigned & searching */}
-                            {!b.is_accepted && !b.technician && !b.technician_name && ['new_request', 'reviewed', 'confirmed', 'assigned'].includes(String(b.status || '').toLowerCase()) && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setTrackingBooking(b)
-                                }}
-                                style={{ fontSize: '0.85rem', padding: '8px 16px', borderRadius: 8, border: '1px solid #10b981', background: 'linear-gradient(135deg, #059669, #047857)', fontWeight: 800, cursor: 'pointer', color: 'white', boxShadow: '0 2px 8px rgba(5,150,105,0.25)', display: 'inline-flex', alignItems: 'center', gap: 6, transition: 'transform 0.15s' }}
-                                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
-                                onMouseOut={e => e.currentTarget.style.transform = 'none'}
-                                title="Open Live Partner Search Radar"
-                              >
-                                <Radio size={14} className="animate-pulse" /> Live Partner Search
-                              </button>
-                            )}
+                            return (
+                              <>
+                                <div style={{ fontWeight: 900, color: ['paid', 'collected'].includes(effectivePaymentStatus) ? '#059669' : '#d97706', marginBottom: 12, fontSize: '1.02rem', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 5 }}>
+                                  <span style={{ fontSize: '0.76rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Payment:</span>
+                                  <span>{activeStage.payment_status_display || b.payment_status_display || (['paid', 'collected'].includes(effectivePaymentStatus) ? 'Paid' : 'Pending')}</span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                                  {['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(String(currentEffectiveStatus || '').toLowerCase()) && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleRebookBooking(b)
+                                      }}
+                                      style={{ fontSize: '0.85rem', padding: '8px 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #059669, #047857)', fontWeight: 800, cursor: 'pointer', color: 'white', boxShadow: '0 2px 8px rgba(5,150,105,0.3)', display: 'inline-flex', alignItems: 'center', gap: 6, transition: 'transform 0.15s' }}
+                                      onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                                      onMouseOut={e => e.currentTarget.style.transform = 'none'}
+                                    >
+                                      <RefreshCw size={13} /> Book Again
+                                    </button>
+                                  )}
 
-                            {Boolean(b.is_accepted || ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status)) && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setTrackingBooking(b)
-                                }}
-                                style={{ fontSize: '0.85rem', padding: '8px 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #FC8019, #f97316)', fontWeight: 800, cursor: 'pointer', color: 'white', boxShadow: '0 2px 8px rgba(252,128,25,0.3)', display: 'inline-flex', alignItems: 'center', gap: 6, transition: 'transform 0.15s' }}
-                                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
-                                onMouseOut={e => e.currentTarget.style.transform = 'none'}
-                              >
-                                <MapPin size={14} /> Track Live
-                              </button>
-                            )}
+                                  {/* Live Partner Search button if unassigned & searching */}
+                                  {!b.is_accepted && !activeStage.is_accepted && !b.technician && !b.technician_name && !activeStage.technician_name && ['new_request', 'reviewed', 'confirmed', 'assigned'].includes(String(currentEffectiveStatus || '').toLowerCase()) && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setTrackingBooking(activeStage || b)
+                                      }}
+                                      style={{ fontSize: '0.85rem', padding: '8px 16px', borderRadius: 8, border: '1px solid #10b981', background: 'linear-gradient(135deg, #059669, #047857)', fontWeight: 800, cursor: 'pointer', color: 'white', boxShadow: '0 2px 8px rgba(5,150,105,0.25)', display: 'inline-flex', alignItems: 'center', gap: 6, transition: 'transform 0.15s' }}
+                                      onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                                      onMouseOut={e => e.currentTarget.style.transform = 'none'}
+                                      title="Open Live Partner Search Radar"
+                                    >
+                                      <Radio size={14} className="animate-pulse" /> Live Partner Search
+                                    </button>
+                                  )}
 
-                            {/* Cancel Booking pre-acceptance */}
-                            {!['completed', 'closed', 'cancelled', 'rejected'].includes(String(b.status || '').toLowerCase()) && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setCancelTargetBooking(b)
-                                }}
-                                style={{ fontSize: '0.82rem', padding: '8px 14px', borderRadius: 8, border: '1px solid #fecaca', background: '#fff1f2', fontWeight: 700, cursor: 'pointer', color: '#e11d48', display: 'inline-flex', alignItems: 'center', gap: 5, transition: 'transform 0.15s' }}
-                                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
-                                onMouseOut={e => e.currentTarget.style.transform = 'none'}
-                                title="Cancel Booking"
-                              >
-                                <Ban size={13} /> Cancel
-                              </button>
-                            )}
+                                  {isAcceptedOrActive && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setTrackingBooking(activeStage || b)
+                                      }}
+                                      style={{ fontSize: '0.85rem', padding: '8px 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #FC8019, #f97316)', fontWeight: 800, cursor: 'pointer', color: 'white', boxShadow: '0 2px 8px rgba(252,128,25,0.3)', display: 'inline-flex', alignItems: 'center', gap: 6, transition: 'transform 0.15s' }}
+                                      onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                                      onMouseOut={e => e.currentTarget.style.transform = 'none'}
+                                    >
+                                      <MapPin size={14} /> Track Live
+                                    </button>
+                                  )}
 
+                                  {/* Cancel Booking pre-acceptance */}
+                                  {!['completed', 'closed', 'cancelled', 'rejected'].includes(String(currentEffectiveStatus || '').toLowerCase()) && !isAcceptedOrActive && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setCancelTargetBooking(b)
+                                      }}
+                                      style={{ fontSize: '0.82rem', padding: '8px 14px', borderRadius: 8, border: '1px solid #fecaca', background: '#fff1f2', fontWeight: 700, cursor: 'pointer', color: '#e11d48', display: 'inline-flex', alignItems: 'center', gap: 5, transition: 'transform 0.15s' }}
+                                      onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                                      onMouseOut={e => e.currentTarget.style.transform = 'none'}
+                                      title="Cancel Booking"
+                                    >
+                                      <Ban size={13} /> Cancel
+                                    </button>
+                                  )}
+
+                                  <button
+                                    onClick={() => setSelectedMockBooking(selectedMockBooking?.id === b.id ? null : b)}
+                                    style={{ fontSize: '0.85rem', padding: '8px 18px', borderRadius: 8, border: 'none', background: '#059669', fontWeight: 700, cursor: 'pointer', color: 'white', boxShadow: '0 2px 4px rgba(5,150,105,0.25)', transition: 'background 0.2s' }}
+                                    onMouseOver={e => e.currentTarget.style.background = '#047857'}
+                                    onMouseOut={e => e.currentTarget.style.background = '#059669'}
+                                  >
+                                    {selectedMockBooking?.id === b.id ? 'Hide Details' : 'View Details'}
+                                  </button>
+                                </div>
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </div>
+
+                      {/* Quotation Ready Action Banner */}
+                      {(() => {
+                        const activeQuote = b.quote || b.estimation?.current_quotation;
+                        const isQuotePendingDecision = activeQuote && ["SENT_TO_CUSTOMER", "SENT", "QUOTATION_SENT"].includes(String(activeQuote.status || activeQuote.quotation_status).toUpperCase());
+                        if (!isQuotePendingDecision) return null;
+                        const decisionToken = activeQuote?.decision_token;
+                        const targetToken = decisionToken || activeQuote?.quote_number || b.request_id || b.id;
+                        return (
+                          <div style={{ marginTop: 14, padding: '12px 16px', background: 'linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%)', border: '1.5px solid #3b82f6', borderRadius: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, width: '100%' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div style={{ width: 34, height: 34, borderRadius: 8, background: '#2563eb', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <FileText size={18} />
+                              </div>
+                              <div>
+                                <div style={{ fontWeight: 800, color: '#1e3a8a', fontSize: '0.9rem' }}>
+                                  Quotation {activeQuote.quote_number ? `#${activeQuote.quote_number}` : ''} Ready for Review
+                                </div>
+                                <div style={{ fontSize: '0.78rem', color: '#475569' }}>
+                                  Total Estimate: <strong style={{ color: '#0f172a' }}>₹{Number(activeQuote.total_amount || activeQuote.net_payable || 0).toLocaleString('en-IN')}</strong>
+                                  {activeQuote.valid_until && <span> • Valid till {new Date(activeQuote.valid_until).toLocaleDateString('en-IN')}</span>}
+                                </div>
+                              </div>
+                            </div>
                             <button
-                              onClick={() => setSelectedMockBooking(selectedMockBooking?.id === b.id ? null : b)}
-                              style={{ fontSize: '0.85rem', padding: '8px 18px', borderRadius: 8, border: 'none', background: '#059669', fontWeight: 700, cursor: 'pointer', color: 'white', boxShadow: '0 2px 4px rgba(5,150,105,0.25)', transition: 'background 0.2s' }}
-                              onMouseOver={e => e.currentTarget.style.background = '#047857'}
-                              onMouseOut={e => e.currentTarget.style.background = '#059669'}
+                              disabled={!targetToken}
+                              onClick={() => {
+                                if (targetToken) {
+                                  window.location.href = `/customer/quote/${targetToken}`
+                                }
+                              }}
+                              style={{
+                                padding: '8px 18px',
+                                background: targetToken ? '#2563eb' : '#94a3b8',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: 8,
+                                fontWeight: 800,
+                                fontSize: '0.82rem',
+                                cursor: targetToken ? 'pointer' : 'not-allowed',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                boxShadow: targetToken ? '0 2px 6px rgba(37,99,235,0.25)' : 'none',
+                                transition: 'background 0.15s',
+                                opacity: targetToken ? 1 : 0.7
+                              }}
+                              onMouseOver={e => { if (targetToken) e.currentTarget.style.background = '#1d4ed8' }}
+                              onMouseOut={e => { if (targetToken) e.currentTarget.style.background = '#2563eb' }}
                             >
-                              {selectedMockBooking?.id === b.id ? 'Hide Details' : 'View Details'}
+                              <CheckCircle2 size={14} /> Review & Decide Quote
                             </button>
                           </div>
+                        );
+                      })()}
+
 
                           {/* GT-D-02: multi-stop trip editor, logistics bookings only */}
                           {LOGISTICS_STOP_CATEGORIES.includes(b.service_category) && (
-                            <div style={{ marginTop: 8 }}>
+                            <div style={{ marginTop: 8, width: '100%' }}>
                               <button
                                 onClick={() => toggleStopsEditor(b)}
                                 style={{ padding: '6px 14px', background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe', borderRadius: 8, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
@@ -6989,7 +7663,6 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                               )}
                             </div>
                           )}
-                        </div>
                       </div>
 
                       {b.child_requests && b.child_requests.length > 0 && (
@@ -7011,25 +7684,48 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                   <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0f172a' }}>Stage {idx + 2}: Quoted Work ({child.issue_title})</div>
                                   <div style={{ fontSize: '0.75rem', color: '#64748b' }}>ID: {child.request_id} • {child.preferred_date}</div>
                                 </div>
-                                <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#05966915', color: '#059669', border: '1px solid #05966930' }}>
-                                  {child.status_display || child.status}
-                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#05966915', color: '#059669', border: '1px solid #05966930' }}>
+                                    {child.status_display || child.status}
+                                  </span>
+                                  {['accepted', 'on_the_way', 'arrived', 'in_progress', 'proof_submitted'].includes(child.status) && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setTrackingBooking(child)
+                                      }}
+                                      style={{ fontSize: '0.72rem', padding: '4px 10px', borderRadius: 6, border: 'none', background: 'linear-gradient(135deg, #FC8019, #f97316)', fontWeight: 800, cursor: 'pointer', color: 'white', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                    >
+                                      <MapPin size={11} /> Track
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             ))}
                           </div>
                         </div>
                       )}
-                    </div>
 
-                    {selectedMockBooking?.id === b.id && (
+                    {selectedMockBooking?.id === b.id && (() => {
+                      const activeStage = (b.child_requests && b.child_requests.length > 0)
+                        ? (b.child_requests.filter(c => !['cancelled', 'rejected'].includes(c.status)).slice(-1)[0] || b)
+                        : b;
+                      const currentEffectiveStatus = activeStage.status || b.status;
+                      const effectiveTechnicianName = activeStage.technician?.name || activeStage.technician_name || b.technician?.name || b.technician_name;
+                      const effectiveTechnicianPhone = activeStage.technician?.phone || activeStage.technician_phone || activeStage.assigned_employee?.phone || b.technician?.phone || b.technician_phone || b.assigned_employee?.phone;
+                      const effectiveStartOtp = activeStage.start_otp || b.start_otp;
+                      const effectivePaymentOtp = activeStage.payment_confirmation_otp || b.payment_confirmation_otp;
+                      const effectivePaymentStatus = activeStage.payment_status || b.payment_status;
+
+                      return (
                       <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 16px 16px', padding: '1.5rem', marginTop: '-16px', position: 'relative', zIndex: 0 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, borderBottom: '1px solid #e2e8f0', paddingBottom: 10 }}>
                           <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem' }}>📋 Full Booking Overview</div>
-                          <span style={{ fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 800, color: '#059669', background: '#05966910', padding: '4px 10px', borderRadius: 8 }}>{b.request_id}</span>
+                          <span style={{ fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 800, color: '#059669', background: '#05966910', padding: '4px 10px', borderRadius: 8 }}>{activeStage.request_id || b.request_id}</span>
                         </div>
 
                         {/* Cash Collection Confirmation OTP Box */}
-                        {(b.payment_status === 'cash_pending' || b.payment_confirmation_otp) && (
+{((effectivePaymentStatus === 'cash_pending' || effectivePaymentStatus === 'cash_collected' || b.payment_status === 'cash_pending' || effectivePaymentOtp || b.payment_confirmation_otp) && !['completed', 'closed', 'cancelled', 'rejected'].includes(currentEffectiveStatus || b.status)) && (
                           <div style={{
                             background: 'linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)',
                             border: '1.5px solid #10b981',
@@ -7068,15 +7764,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                               boxShadow: '0 2px 5px rgba(0,0,0,0.06)',
                               whiteSpace: 'nowrap'
                             }}>
-                              {/* Bug found: this used to fall back to a hardcoded
-                                  '405863' whenever the real OTP wasn't resolved yet
-                                  (this box can render on payment_status === 'cash_pending'
-                                  alone, before payment_confirmation_otp exists) --
-                                  showing a fixed, meaningless code the customer could
-                                  hand to a technician as if it were real, breaking the
-                                  cash-confirmation flow. Show an honest pending state
-                                  instead of fabricating a code. */}
-                              {b.payment_confirmation_otp || (
+{effectivePaymentOtp || b.payment_confirmation_otp || (
                                 <span style={{ fontSize: '0.85rem', letterSpacing: 0, fontWeight: 700, color: '#059669' }}>
                                   Generating OTP...
                                 </span>
@@ -7086,7 +7774,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                         )}
 
                         {/* Service Start OTP Box */}
-                        {['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'proof_submitted'].includes(b.status) && b.start_otp && !['completed', 'closed'].includes(b.status) && (
+                        {['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'proof_submitted'].includes(currentEffectiveStatus) && effectiveStartOtp && !['completed', 'closed'].includes(currentEffectiveStatus) && (
                           <div style={{
                             background: '#fff7ed',
                             border: '1.5px dashed #f97316',
@@ -7121,7 +7809,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                               boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
                               whiteSpace: 'nowrap'
                             }}>
-                              {b.start_otp || '------'}
+                              {effectiveStartOtp || '------'}
                             </div>
                           </div>
                         )}
@@ -7130,19 +7818,19 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           <div>
                             <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: 4 }}>Assigned Technician</div>
                             <div style={{ fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
-                              👤 {['accepted', 'on_the_way', 'arrived', 'in_progress', 'completed'].includes(b.status) && (b.technician?.name || b.technician_name)
-                                ? (b.technician?.name || b.technician_name)
-                                : (b.status === 'assigned' ? 'Finding service professional...' : 'Not assigned yet (Searching partner...)')}
-                              {['accepted', 'on_the_way', 'arrived', 'in_progress', 'completed'].includes(b.status) && (b.technician?.name || b.technician_name) && (
+                              👤 {['accepted', 'on_the_way', 'arrived', 'in_progress', 'proof_submitted', 'completed'].includes(currentEffectiveStatus) && (effectiveTechnicianName || b.technician?.name || b.technician_name)
+                                ? (effectiveTechnicianName || b.technician?.name || b.technician_name)
+                                : (currentEffectiveStatus === 'assigned' ? 'Finding service professional...' : 'Not assigned yet (Searching partner...)')}
+                              {['accepted', 'on_the_way', 'arrived', 'in_progress', 'proof_submitted', 'completed'].includes(currentEffectiveStatus) && (effectiveTechnicianName || b.technician?.name || b.technician_name) && (
                                 <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#059669', background: '#ecfdf5', padding: '1px 6px', borderRadius: 6, border: '1px solid #a7f3d0' }}>✓ Verified Partner</span>
                               )}
                             </div>
-                            {(b.technician?.phone || b.technician_phone || b.assigned_employee?.phone) && (
+                            {effectiveTechnicianPhone && (
                               <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 700, marginTop: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <a href={`tel:${b.technician?.phone || b.technician_phone || b.assigned_employee?.phone}`} style={{ color: '#059669', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                  <Phone size={12} /> {b.technician?.phone || b.technician_phone || b.assigned_employee?.phone}
+                                <a href={`tel:${effectiveTechnicianPhone}`} style={{ color: '#059669', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                  <Phone size={12} /> {effectiveTechnicianPhone}
                                 </a>
-                                <a href={`https://wa.me/91${(b.technician?.phone || b.technician_phone || b.assigned_employee?.phone).replace(/\D/g, '')}`} target="_blank" rel="noreferrer" style={{ color: '#25D366', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <a href={`https://wa.me/91${String(effectiveTechnicianPhone).replace(/\D/g, '')}`} target="_blank" rel="noreferrer" style={{ color: '#25D366', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                   <MessageSquare size={12} /> WhatsApp
                                 </a>
                               </div>
@@ -7152,14 +7840,14 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           <div>
                             <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: 4 }}>Scheduled Date & Time</div>
                             <div style={{ fontWeight: 700, color: '#0f172a' }}>
-                              📅 {b.preferred_date || 'Not scheduled'} {b.preferred_time ? `(${b.preferred_time})` : ''}
+                              📅 {activeStage.preferred_date || b.preferred_date || 'Not scheduled'} {(activeStage.preferred_time || b.preferred_time) ? `(${activeStage.preferred_time || b.preferred_time})` : ''}
                             </div>
                           </div>
 
                           <div>
                             <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: 4 }}>Payment Details</div>
                             <div style={{ fontWeight: 700, color: '#0f172a' }}>
-                              {b.payment_status_display || (b.payment_status === 'paid' ? 'Paid' : 'Pending')} · {b.payment_method_display || (b.payment_method === 'COD' ? 'Cash on Service' : 'Online Payment')}
+                              {activeStage.payment_status_display || b.payment_status_display || (effectivePaymentStatus === 'paid' ? 'Paid' : 'Pending')} · {activeStage.payment_method_display || b.payment_method_display || (b.payment_method === 'COD' ? 'Cash on Service' : 'Online Payment')}
                             </div>
                             <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#059669', marginTop: 2 }}>
                               Total: ₹{(() => {
@@ -7222,6 +7910,240 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                               <div style={{ fontWeight: 500, color: '#334155', background: 'white', padding: '10px 14px', borderRadius: 10, border: '1px solid #e2e8f0' }}>{b.description}</div>
                             </div>
                           )}
+
+                          {/* ── Quotation Details & Version History ── */}
+                          {(((b.quote && (b.quote.id || b.quote.quote_id || b.quote.quote_number) && b.quote.has_quote !== false)) || (b.quotation_history && b.quotation_history.length > 0)) && (() => {
+                            const activeQ = (b.quote && (b.quote.id || b.quote.quote_id || b.quote.quote_number) && b.quote.has_quote !== false) ? b.quote : (b.quotation_history && b.quotation_history[b.quotation_history.length - 1])
+                            if (!activeQ || (!activeQ.id && !activeQ.quote_id && !activeQ.quote_number) || activeQ.has_quote === false) return null
+                            const qStatus = String(activeQ?.status || "").toUpperCase()
+                            const isAccepted = ["CUSTOMER_ACCEPTED", "APPROVED", "CONVERTED", "ACCEPTED", "ADMIN_APPROVED"].includes(qStatus)
+                            const isChangesRequested = ["CHANGE_REQUESTED", "CHANGES_REQUESTED", "REQUESTED_CHANGES", "REQUOTE", "RE_QUOTE"].includes(qStatus)
+                            const isDeclined = ["DECLINED", "CUSTOMER_DECLINED", "REJECTED", "ADMIN_REJECTED", "CANCELLED", "EXPIRED"].includes(qStatus)
+                            const isUnderReview = ["PENDING_REVIEW", "PENDING REVIEW", "PENDING_ADMIN_REVIEW", "PENDING ADMIN REVIEW", "UNDER_REVIEW", "DRAFT", "CRM_REVIEW", "PRE_SEND_REVIEW"].includes(qStatus)
+              if (isUnderReview || !["SENT", "SENT_TO_CUSTOMER", "OPEN", "VIEWED", "AWAITING_CUSTOMER", "QUOTATION_SENT", "QUOTE_SENT", "PENDING_CUSTOMER_APPROVAL", "CUSTOMER_ACCEPTED", "APPROVED", "CONVERTED", "ACCEPTED", "ADMIN_APPROVED", "CHANGE_REQUESTED", "CHANGES_REQUESTED", "REQUESTED_CHANGES", "REQUOTE", "RE_QUOTE", "DECLINED", "CUSTOMER_DECLINED", "REJECTED", "ADMIN_REJECTED", "CANCELLED", "EXPIRED"].includes(qStatus)) return null
+                const isPending = (["SENT", "SENT_TO_CUSTOMER", "OPEN", "VIEWED", "AWAITING_CUSTOMER", "QUOTATION_SENT", "QUOTE_SENT", "PENDING_CUSTOMER_APPROVAL"].includes(qStatus) || (!isAccepted && !isChangesRequested && !isDeclined && !isUnderReview)) && !isUnderReview
+                            const historyList = Array.isArray(b.quotation_history) ? b.quotation_history : [activeQ].filter(Boolean)
+
+                            return (
+                              <div style={{ gridColumn: '1/-1', borderTop: '1px solid #e2e8f0', paddingTop: 14 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                                  <div style={{ fontSize: '0.74rem', fontWeight: 900, color: '#4F46E5', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    📄 Service Quotation &amp; Revision History
+                                  </div>
+                                  <span style={{
+                                    fontSize: '0.7rem',
+                                    padding: '3px 8px',
+                                    borderRadius: 6,
+                                    fontWeight: 800,
+                                    background: isUnderReview ? "#FEF3C7" : isPending ? "#EFF6FF" : isAccepted ? "#ECFDF5" : isChangesRequested ? "#FFFBEB" : "#FEF2F2",
+                                    color: isUnderReview ? "#92400E" : isPending ? "#1E40AF" : isAccepted ? "#065F46" : isChangesRequested ? "#92400E" : "#991B1B"
+                                  }}>
+                                    {isUnderReview ? "Under SEVO Review" : isPending ? "Pending Customer Approval" : isAccepted ? "Accepted / Approved" : isChangesRequested ? "Changes Requested" : isDeclined ? "Declined" : qStatus.replace(/_/g, " ")}
+                                  </span>
+                                </div>
+
+                                {/* Active Quotation Summary Card */}
+                                <div style={{ background: 'white', border: '1.5px solid #e0e7ff', borderRadius: 14, padding: '16px', marginBottom: 12, boxShadow: '0 2px 10px rgba(79, 70, 229, 0.07)' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                                    <div>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                        <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.94rem' }}>
+                                          {activeQ.title || `Quotation #${activeQ.quote_number}`}
+                                        </span>
+                                        <span style={{ fontSize: '0.7rem', fontFamily: 'monospace', fontWeight: 800, color: '#6366f1', background: '#eef2ff', padding: '2px 8px', borderRadius: 6, border: '1px solid #e0e7ff' }}>
+                                          #{activeQ.raw_quote_number || (typeof activeQ.quote_number === 'string' ? activeQ.quote_number.replace(/-V\d+$/i, '') : activeQ.quote_number)} (v{activeQ.quote_version || activeQ.version || 1})
+                                        </span>
+                                      </div>
+                                      {activeQ.service_name && (
+                                        <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 3 }}>{activeQ.service_name}</div>
+                                      )}
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                      <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#0f172a' }}>
+                                        ₹{Number(activeQ.net_payable ?? (activeQ.total_amount || activeQ.grand_total || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </div>
+                                      <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Includes GST &amp; Materials</div>
+                                    </div>
+                                  </div>
+
+                                  {/* Line Items Breakdown */}
+                                  {activeQ.items && activeQ.items.length > 0 && (
+                                    <div style={{ marginTop: 12, background: '#f8fafc', borderRadius: 10, padding: '10px 14px', border: '1px solid #f1f5f9' }}>
+                                      <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: 6, letterSpacing: '0.04em' }}>
+                                        Quotation Line Items ({activeQ.items.length})
+                                      </div>
+                                      {activeQ.items.map((it, itIdx) => (
+                                        <div key={it.id || itIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem', padding: '5px 0', borderBottom: itIdx < activeQ.items.length - 1 ? '1px dashed #e2e8f0' : 'none' }}>
+                                          <span style={{ color: '#334155', fontWeight: 600 }}>
+                                            {it.name || it.description || 'Quotation Item'} ({it.quantity} {it.unit || 'sqft'} × ₹{it.unit_price || it.rate})
+                                          </span>
+                                          <span style={{ color: '#0f172a', fontWeight: 800 }}>
+                                            ₹{Number(it.total_amount || (it.quantity * it.unit_price)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {/* Measurements Breakdown */}
+                                  {activeQ.measurements && activeQ.measurements.length > 0 && (
+                                    <div style={{ marginTop: 10, background: '#f8fafc', borderRadius: 10, padding: '10px 14px', border: '1px solid #f1f5f9' }}>
+                                      <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: 6, letterSpacing: '0.04em' }}>
+                                        📐 Measurements Breakdown ({activeQ.total_area || activeQ.total_paintable_area} sq.ft total)
+                                      </div>
+                                      {activeQ.measurements.map((m, mIdx) => (
+                                        <div key={m.id || mIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.76rem', padding: '4px 0' }}>
+                                          <span style={{ color: '#334155' }}>
+                                            {m.name || m.area_name || `Area ${mIdx + 1}`} ({m.length}ft × {m.width}ft{m.height ? ` × ${m.height}ft` : ''})
+                                          </span>
+                                          <span style={{ color: '#4f46e5', fontWeight: 700, fontFamily: 'monospace' }}>
+                                            {m.calculated_area || m.final_area || m.area} sq.ft
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {/* Financial Summary Breakdown */}
+                                  <div style={{ marginTop: 10, background: '#fcfaff', borderRadius: 10, padding: '10px 14px', border: '1px solid #ede9fe', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.76rem', color: '#475569' }}>
+                                      <span>Service Subtotal:</span>
+                                      <span style={{ fontWeight: 600 }}>₹{Number(activeQ.subtotal || activeQ.subtotal_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                    </div>
+                                    {(activeQ.discount_amount > 0) && (
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.76rem', color: '#15803d' }}>
+                                        <span>Discount Applied:</span>
+                                        <span style={{ fontWeight: 600 }}>- ₹{Number(activeQ.discount_amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                      </div>
+                                    )}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.76rem', color: '#475569' }}>
+                                      <span>GST / Taxes (18%):</span>
+                                      <span style={{ fontWeight: 600 }}>₹{Number(activeQ.tax_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                    </div>
+                                    {(Number(activeQ.inspection_fee_adjusted || 0) > 0) && (
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.76rem', color: '#15803d' }}>
+                                        <span>Site Consultation Fee Adjusted:</span>
+                                        <span style={{ fontWeight: 600 }}>- ₹{Number(activeQ.inspection_fee_adjusted).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                      </div>
+                                    )}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', fontWeight: 800, color: '#0f172a', borderTop: '1px solid #e0e7ff', paddingTop: 4, marginTop: 2 }}>
+                                      <span>Total Net Payable:</span>
+                                      <span style={{ color: '#4338ca' }}>₹{Number(activeQ.net_payable ?? (activeQ.total_amount || activeQ.grand_total || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: '#6366f1', marginTop: 2 }}>
+                                      <span>
+                                        Payment Terms: {Number(activeQ.advance_percent || activeQ.advance_amount || 0) > 0 
+                                          ? `${Number(activeQ.advance_percent || 50)}% Advance (₹${Number(activeQ.advance_amount || ((activeQ.net_payable || activeQ.total_amount || 0) * 0.5)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) + Balance upon completion` 
+                                          : `100% Balance on Completion (₹${Number(activeQ.net_payable ?? (activeQ.total_amount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Notes & Actions */}
+                                  {activeQ.customer_notes && (
+                                    <div style={{ marginTop: 10, padding: '8px 12px', background: '#fffbeb', borderRadius: 8, border: '1px solid #fef3c7', fontSize: '0.76rem', color: '#92400e' }}>
+                                      <strong>Customer Revision Note:</strong> {activeQ.customer_notes}
+                                    </div>
+                                  )}
+
+                                  {/* Download Official Quotation PDF Button */}
+                                  <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end', gap: 10, alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const pdfToken = activeQ.decision_token || activeQ.raw_quote_number || activeQ.quote_number || activeQ.quote_id || b.request_id || b.id;
+                                        triggerPdfDownload(pdfToken, `Quotation_${activeQ.raw_quote_number || activeQ.quote_number || b.request_id}.pdf`);
+                                      }}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        background: 'linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)',
+                                        color: 'white',
+                                        padding: '7px 14px',
+                                        borderRadius: 8,
+                                        fontSize: '0.78rem',
+                                        fontWeight: 700,
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 2px 6px rgba(79, 70, 229, 0.25)',
+                                        transition: 'all 0.15s ease',
+                                      }}
+                                      onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 10px rgba(79, 70, 229, 0.35)'; }}
+                                      onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 6px rgba(79, 70, 229, 0.25)'; }}
+                                    >
+                                      <span>📥</span>
+                                      <span>Download Quotation (PDF)</span>
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Quotation Version History Timeline */}
+                                {historyList.length > 1 && (
+                                  <div style={{ background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0', padding: '10px 14px', marginTop: 8 }}>
+                                    <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#475569', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                      📜 Revision Timeline ({historyList.length} Versions)
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                      {historyList.map((h, hIdx) => {
+                                        const hSt = String(h.status || "").toUpperCase()
+                                        return (
+                                          <div key={h.quote_id || hIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', padding: '8px 12px', borderRadius: 8, border: '1px solid #f1f5f9', fontSize: '0.76rem' }}>
+                                            <div>
+                                              <strong style={{ color: '#0f172a' }}>v{h.version || h.quote_version || (hIdx + 1)} (#{h.raw_quote_number || (typeof h.quote_number === 'string' ? h.quote_number.replace(/-V\d+$/i, '') : h.quote_number)})</strong>
+                                              <span style={{ color: '#64748b', marginLeft: 8 }}>
+                                                ₹{Number(h.net_payable ?? (h.total_amount || h.grand_total || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                              </span>
+                                              {h.customer_notes && (
+                                                <div style={{ fontSize: '0.7rem', color: '#b45309', marginTop: 2 }}>
+                                                  Note: &quot;{h.customer_notes}&quot;
+                                                </div>
+                                              )}
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                              <span style={{
+                                                fontSize: '0.68rem',
+                                                padding: '2px 6px',
+                                                borderRadius: 6,
+                                                fontWeight: 800,
+                                                background: hSt === "SENT_TO_CUSTOMER" ? "#eff6ff" : hSt === "CUSTOMER_ACCEPTED" ? "#ecfdf5" : hSt === "SUPERSEDED" ? "#f1f5f9" : "#fffbeb",
+                                                color: hSt === "SENT_TO_CUSTOMER" ? "#1d4ed8" : hSt === "CUSTOMER_ACCEPTED" ? "#065f46" : hSt === "SUPERSEDED" ? "#64748b" : "#92400e"
+                                              }}>
+                                                {hSt === "SENT_TO_CUSTOMER" ? "Active / Sent" : hSt === "CUSTOMER_ACCEPTED" ? "Accepted" : hSt === "SUPERSEDED" ? "Superseded" : hSt.replace(/_/g, " ")}
+                                              </span>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const pdfToken = h.decision_token || h.raw_quote_number || h.quote_number || h.quote_id;
+                                                  if (pdfToken) {
+                                                    triggerPdfDownload(pdfToken, `Quotation_v${h.quote_version || h.version || 1}_${h.raw_quote_number || h.quote_number}.pdf`);
+                                                  }
+                                                }}
+                                                style={{
+                                                  background: 'none',
+                                                  border: '1px solid #cbd5e1',
+                                                  borderRadius: 6,
+                                                  padding: '2px 8px',
+                                                  fontSize: '0.68rem',
+                                                  fontWeight: 700,
+                                                  color: '#475569',
+                                                  cursor: 'pointer'
+                                                }}
+                                                title="Download PDF for this revision"
+                                              >
+                                                📄 PDF
+                                              </button>
+                                            </div>
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })()}
+
 
                           {(() => {
                             let parsedCart = [];
@@ -7426,7 +8348,8 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           </div>
                         </div>
                       </motion.div>
-                    )}
+                    );
+                    })()}
                   </React.Fragment>
                 )
               })}
@@ -7716,9 +8639,8 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
             </div>
           </motion.div>
         )
-      }
 
-case "Book Again": {
+      case "Book Again": {
         const pastCompleted = (realBookings || []).filter(b =>
           ['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(String(b.status || '').toLowerCase())
         )
@@ -8597,7 +9519,7 @@ case "My Invoices": {
             a: "Once approved by our support team, refunds are initiated immediately to your original payment method (UPI / Cards / Net Banking). Funds typically reflect in your account within 2 to 4 business days depending on your bank."
           },
           {
-            q: "Are CalServices technicians verified and trained?",
+            q: "Are SEVO technicians verified and trained?",
             a: "Yes! 100% of our technicians undergo rigorous background verification, police verification, skill assessment, and standard operating training before being assigned to customer jobs."
           }
         ]
@@ -8726,7 +9648,7 @@ case "My Invoices": {
                           }}>
                             {/* Persona & Username badge */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase', color: '#94a3b8', marginBottom: 4, padding: '0 4px' }}>
-                              <span>{msg.sender_username || (isCust ? (user?.username || 'CUSTOMER') : 'CALSERVICES AGENT')}</span>
+                              <span>{msg.sender_username || (isCust ? (user?.username || 'CUSTOMER') : 'SEVO AGENT')}</span>
                               <span>•</span>
                               <span>{isCust ? 'CUSTOMER' : (msg.sender_persona === 'employee' ? 'SUPPORT AGENT' : 'CARE AGENT')}</span>
                             </div>
@@ -10385,6 +11307,9 @@ function QuickCommerceCartCheckout({
   })
   const [selectedAddressId, setSelectedAddressId] = useState(() => savedAddresses[0]?.id || "addr_home")
   const [isDonationChecked, setIsDonationChecked] = useState(false)
+  const [selectedTip, setSelectedTip] = useState(null)
+  const [customTip, setCustomTip] = useState("")
+  const [isCustomTipOpen, setIsCustomTipOpen] = useState(false)
   const [showAddAddressModal, setShowAddAddressModal] = useState(false)
   const [newAddressText, setNewAddressText] = useState("")
   const [newAddressType, setNewAddressType] = useState("Home")
@@ -10439,12 +11364,13 @@ function QuickCommerceCartCheckout({
   const itemsOriginalTotal = cart.reduce((sum, item) => sum + (item.mrp || Math.round((item.price || 0) * 1.2)) * (item.quantity || 1), 0)
   const savings = Math.max(0, itemsOriginalTotal - itemsTotal)
 
-  const tipAmount = 0
-  const pricing = QUICK_COMMERCE_PRICING.calculateTotals(itemsTotal, { selectedTip: 0 })
+  const tipAmount = selectedTip === "custom" ? Math.max(0, parseInt(customTip, 10) || 0) : Math.max(0, selectedTip || 0)
+  const pricing = QUICK_COMMERCE_PRICING.calculateTotals(itemsTotal, { selectedTip: tipAmount })
   const deliveryCharge = pricing.deliveryCharge
   const handlingCharge = pricing.handlingCharge
   const smallCartFee = pricing.smallCartFee
   const surgeCharge = pricing.surgeCharge
+  const donationAmount = 0
   const grandTotal = pricing.grandTotal
 
   const handleUpdateQty = (id, delta) => {
@@ -10518,6 +11444,13 @@ function QuickCommerceCartCheckout({
       onRequireAuth && onRequireAuth()
       return
     }
+    // Bug found: this used to fall back to a hardcoded "9876543210" and
+    // submit it as the real ServiceRequest.phone whenever a logged-in user
+    // had no phone on file (e.g. email/Google-only signup) -- a fake,
+    // non-functional number would be persisted as the delivery contact, so
+    // whoever fulfills the order would be calling a number that isn't the
+    // customer's. Require a real phone before checkout instead of
+    // fabricating one.
     if (!user?.phone) {
       setErrorMsg("Please add a phone number to your profile before placing this order, so we can reach you for delivery.")
       return
@@ -10532,6 +11465,16 @@ function QuickCommerceCartCheckout({
         return
       }
 
+      // Real grocery checkout (DAILY_ESSENTIALS_IMPLEMENTATION_PLAN.md Phase
+      // 3 / frontend plan Phase 2) -- GroceryCheckoutView reads the
+      // customer's ACTIVE daily_essentials Cart from the backend and
+      // reserves stock atomically, hard-blocking on InsufficientStockError.
+      // No cart_data payload here: unlike the old /booking/ endpoint, this
+      // one is not told what's in the cart, it reads the real Cart rows
+      // that dailyEssentialsCartSync.js has been keeping in sync (Phase 1).
+      // No silent fallback on failure -- a real error (insufficient stock,
+      // network failure, anything) must surface as an error, never a
+      // fabricated success screen.
       const res = await apiRequest("/orders/grocery/checkout/", {
         method: "POST",
         json: {
@@ -10564,6 +11507,11 @@ function QuickCommerceCartCheckout({
           : `Your fresh vegetables will be packed and delivered on ${activeDateObj?.formatted || "scheduled date"} during ${selectedSlot?.slot_label || "6:00 PM – 8:00 PM"}.`
       })
     } catch (err) {
+      // GroceryCheckoutView's insufficient-stock response puts the
+      // human-readable text in `message` (and the machine-readable item
+      // detail in `errors`) -- extractApiErrorMessage() prefers `errors`
+      // first for other endpoints' sake, so check `message` here explicitly
+      // before falling back to it.
       setErrorMsg(err?.body?.message || extractApiErrorMessage(err, "Failed to place order. Please try again."))
     } finally {
       setIsSubmitting(false)
@@ -10983,6 +11931,61 @@ function QuickCommerceCartCheckout({
               </div>
             </div>
 
+            {/* (Donation box removed) */}
+
+            {/* Tip Your Delivery Partner Card */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-3xs space-y-3">
+              <h3 className="text-xs sm:text-sm font-bold text-slate-900">Support your delivery partner</h3>
+              <p className="text-[11px] sm:text-xs text-slate-400 font-medium leading-relaxed">
+                Add a tip to show appreciation. 100% of the tip goes directly to your rider.
+              </p>
+              <div className="grid grid-cols-4 gap-2 pt-1">
+                {[
+                  { label: "₹20", val: 20, desc: "Say Thanks" },
+                  { label: "₹30", val: 30, desc: "Buy a Chai" },
+                  { label: "₹50", val: 50, desc: "Show Love" },
+                  { label: "Custom", val: "custom", desc: "Other" },
+                ].map((t) => {
+                  const isSelected = selectedTip === t.val
+                  return (
+                    <button
+                      key={t.label}
+                      type="button"
+                      onClick={() => {
+                        if (selectedTip === t.val) {
+                          setSelectedTip(null)
+                          setIsCustomTipOpen(false)
+                        } else {
+                          setSelectedTip(t.val)
+                          setIsCustomTipOpen(t.val === "custom")
+                        }
+                      }}
+                      className={`py-3 px-2 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 active:scale-95 ${isSelected
+                        ? "bg-slate-900 border-slate-900 text-white shadow-2xs"
+                        : "bg-slate-50 hover:bg-white border-slate-200 text-slate-700 hover:border-slate-350"
+                        }`}
+                    >
+                      <span className="text-sm font-bold">{t.label}</span>
+                      <span className="text-[9px] font-semibold text-slate-405">{t.desc}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              {isCustomTipOpen && (
+                <div className="pt-2">
+                  <input
+                    type="number"
+                    min="0"
+                    value={customTip}
+                    onKeyDown={e => { if (['-', '+', 'e', 'E'].includes(e.key)) e.preventDefault() }}
+                    onChange={(e) => setCustomTip(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="Enter custom tip amount (₹)"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400"
+                  />
+                </div>
+              )}
+            </div>
+
             {/* Cancellation Policy Card */}
             <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4.5 space-y-1.5 shadow-3xs">
               <h3 className="text-xs font-bold text-slate-800">Cancellation Policy</h3>
@@ -11041,8 +12044,6 @@ function QuickCommerceCartCheckout({
           </button>
         </div>
       </div>
-
-
 
       {/* Standard Swiggy-Style Select Service Address Drawer */}
       {isAddressScreenOpen && (
@@ -12877,21 +13878,45 @@ export function BookingPage() {
   const incomingCategory = routerLocation.state?.category
   const hasIncomingOrder = Boolean((incomingCart && incomingCart.length > 0) || incomingCategory)
 
-  // Retrieve stored active booking from session
+  // Retrieve stored active booking from session, strictly enforcing user ownership
   const storedBookingData = useMemo(() => {
     if (hasIncomingOrder) return null
     try {
       const saved = sessionStorage.getItem("calservice_last_booking")
       if (saved) {
         const parsed = JSON.parse(saved)
-        if (parsed && parsed.status !== "cancelled") return parsed
+        if (parsed) {
+          // If a customer is logged in, verify the stored booking belongs to them:
+          if (user) {
+            const bCustId = parsed.customer_id || parsed.user_id || parsed.customer?.id
+            const bPhone = parsed.phone || parsed.customer_phone || parsed.customer?.phone
+            const isUserMatch = (bCustId && user.id && String(bCustId) === String(user.id)) ||
+                                (bPhone && user.phone && String(bPhone).replace(/\D/g, "") === String(user.phone).replace(/\D/g, "")) ||
+                                (!bCustId && !bPhone)
+            if (!isUserMatch) {
+              // Stored booking belongs to a different customer! Clean up.
+              sessionStorage.removeItem("calservice_last_booking")
+              sessionStorage.removeItem("calservice_active_tracking_id")
+              sessionStorage.removeItem("active_tracking_token")
+              return null
+            }
+          }
+
+          // Don't auto-lock step=0 for already finished/declined bookings unless explicit ?track query exists
+          const st = String(parsed.status || "").toLowerCase()
+          if (["cancelled", "completed", "closed", "declined", "rejected"].includes(st) && !searchParams.get("track") && !searchParams.get("booking_id")) {
+            return null
+          }
+
+          return parsed
+        }
       }
     } catch (e) { }
     return null
-  }, [hasIncomingOrder])
+  }, [hasIncomingOrder, user, searchParams])
 
   const storedTrackingId = useMemo(() => {
-    if (hasIncomingOrder) return null
+    if (hasIncomingOrder || !storedBookingData) return null
     try {
       return sessionStorage.getItem("calservice_active_tracking_id") || storedBookingData?.request_id || (storedBookingData?.id ? `SR-${storedBookingData.id}` : null)
     } catch (e) {
@@ -12973,10 +13998,29 @@ export function BookingPage() {
     window.scrollTo(0, 0);
   }, [step]);
 
-  // When customer removes all items, stay on the page and show empty state (no redirect)
+  // Handle user account changes / logout events to prevent cross-account booking leakage
   useEffect(() => {
-    // Left empty intentionally to disable redirect
-  }, [cart, step, trackParam, incomingCategory, navigate]);
+    const handleBookingCleared = () => {
+      setSuccessData(null);
+      setStep(3);
+    };
+    window.addEventListener("calservice_booking_cleared", handleBookingCleared);
+    return () => window.removeEventListener("calservice_booking_cleared", handleBookingCleared);
+  }, []);
+
+  useEffect(() => {
+    if (successData && user) {
+      const bCustId = successData.customer_id || successData.user_id || successData.customer?.id;
+      const bPhone = successData.phone || successData.customer_phone || successData.customer?.phone;
+      if (bCustId && user.id && String(bCustId) !== String(user.id)) {
+        setSuccessData(null);
+        setStep(3);
+      } else if (bPhone && user.phone && String(bPhone).replace(/\D/g, "") !== String(user.phone).replace(/\D/g, "")) {
+        setSuccessData(null);
+        setStep(3);
+      }
+    }
+  }, [user?.id, user?.phone]);
 
   // Synchronize step and successData when active tracking ID changes or on page refresh
   useEffect(() => {
@@ -12995,9 +14039,20 @@ export function BookingPage() {
         const storedToken = storedBookingData?.tracking_token || sessionStorage.getItem("active_tracking_token") || sessionStorage.getItem("caltrack_tracking_token") || "";
         const tokenQuery = storedToken ? `?token=${encodeURIComponent(storedToken)}` : "";
         apiRequest(`/booking/${encodeURIComponent(trackParam)}/live-location/${tokenQuery}`)
-        apiRequest(`/booking/${encodeURIComponent(trackParam)}/live-location/`)
           .then(res => {
             if (res?.data) {
+              // If user is logged in, ensure this booking belongs to them or token was provided
+              if (user) {
+                const bCustId = res.data.customer_id || res.data.user_id || res.data.customer?.id;
+                const bPhone = res.data.phone || res.data.customer_phone || res.data.customer?.phone;
+                const isMatch = (bCustId && user.id && String(bCustId) === String(user.id)) ||
+                                (bPhone && user.phone && String(bPhone).replace(/\D/g, "") === String(user.phone).replace(/\D/g, "")) ||
+                                (!bCustId && !bPhone) ||
+                                Boolean(storedToken);
+                if (!isMatch) {
+                  return;
+                }
+              }
               setSuccessData(res.data);
               setStep(0);
             }
@@ -13005,7 +14060,7 @@ export function BookingPage() {
           .catch(() => { });
       }
     }
-  }, [isTrackingActive, trackParam, storedBookingData, routerLocation.state, hasIncomingOrder]);
+  }, [isTrackingActive, trackParam, storedBookingData, routerLocation.state, hasIncomingOrder, user]);
   const [selDate, setSelDate] = useState("")
   const [selTime, setSelTime] = useState("")
   const [urgency, setUrgency] = useState("Standard")
@@ -13417,7 +14472,8 @@ export function BookingPage() {
         item?.id === "serv-hvac-ac-inspection" ||
         item?.id === "ac-inspection" ||
         item?.id === "hvac-ac-inspection" ||
-        (item?.ac_brand && item?.ac_type)
+        (item?.ac_brand && item?.ac_type) ||
+        (item?.name && item?.name.toLowerCase().includes("inspection"))
       )
     );
 
@@ -13577,7 +14633,8 @@ export function BookingPage() {
     if (isEstimation) {
       const estItem = (cart && cart.find(c => c.jobType === "ESTIMATION" || c.id === "serv-hvac-ac-inspection" || c.id === "ac-inspection" || c.id === "hvac-ac-inspection" || (c.ac_brand && c.ac_type) || (c.name && c.name.toLowerCase().includes("inspection")))) || (cart && cart[0]) || {};
       data.append("job_type", "ESTIMATION");
-      data.append("estimation_fee", String(estItem.price || dynamicAcInspectionFee || "199"));
+      const estFee = String(estItem.price || (typeof dynamicAcInspectionFee !== "undefined" ? dynamicAcInspectionFee : "199"));
+      data.append("estimation_fee", estFee);
       const rawAc = String(estItem.ac_type || "SPLIT").toUpperCase();
       const normalizedAcType = rawAc.includes("WINDOW") ? "WINDOW" : (rawAc.includes("SPLIT") ? "SPLIT" : (rawAc.includes("CASSETTE") ? "CASSETTE" : (rawAc.includes("TOWER") ? "TOWER" : "SPLIT")));
       data.append("ac_type", normalizedAcType);
@@ -13660,7 +14717,34 @@ export function BookingPage() {
         }
 
         if (serviceOutcome?.success) {
-          const savedData = { ...serviceOutcome.data, paymentMethod: backendPaymentMethod, total_amount: calculatedGrandTotal }
+          // The unified route still creates the service booking before an
+          // online payment.  It must use the same server-verified provider
+          // flow as the normal service route; otherwise a combined grocery
+          // checkout could present an unpaid service as confirmed.
+          let verifiedPayment = null
+          if (backendPaymentMethod === "ONLINE") {
+            verifiedPayment = await settleBookingPayment({
+              bookingId: serviceOutcome.data?.id,
+              trackingToken: serviceOutcome.data?.tracking_token || serviceOutcome.data?.trackingToken || "",
+              method: "online",
+              prefill: { name: customerName, email: customerEmail, phone: customerPhone },
+            })
+            if (!verifiedPayment?.ok) {
+              setError(
+                `${verifiedPayment?.message || "Payment was not completed."} ` +
+                `Your service booking ${serviceOutcome.data?.request_id || ""} remains unpaid; complete payment from My Bookings.`
+              )
+              setLoading(false)
+              return
+            }
+          }
+
+          const savedData = {
+            ...serviceOutcome.data,
+            paymentMethod: backendPaymentMethod,
+            payment_status: verifiedPayment ? "paid" : (serviceOutcome.data?.payment_status || "pending"),
+            total_amount: calculatedGrandTotal,
+          }
           setSuccessData(savedData)
           const bookingTrackingId = String(serviceOutcome.data?.request_id || serviceOutcome.data?.id || "")
           try {
@@ -13693,14 +14777,31 @@ export function BookingPage() {
     try {
       const res = await apiRequest("/booking/", { method: "POST", body: data })
       if (res?.success) {
-        // A client cannot verify its own payment. The order id here was
-        // invented in the browser, so the server rejects it -- and a booking
-        // that looked "paid online" was in fact unpaid. Payment is confirmed
-        // only by /payment/verify/ with a gateway-issued order id, payment id
-        // and signature, which nothing in this app produces yet.
+        // A booking is intentionally created before online collection so the
+        // backend, not the browser, owns its total and payment intent.  The
+        // payment service returns success only after /payment/verify/ has
+        // persisted a verified provider result.
+        let verifiedPayment = null
+        if (backendPaymentMethod === "ONLINE") {
+          verifiedPayment = await settleBookingPayment({
+            bookingId: res.data?.id,
+            trackingToken: res.data?.tracking_token || res.data?.trackingToken || "",
+            method: "online",
+            prefill: { name: customerName, email: customerEmail, phone: customerPhone },
+          })
+          if (!verifiedPayment?.ok) {
+            setError(
+              `${verifiedPayment?.message || "Payment was not completed."} ` +
+              `Your booking ${res.data?.request_id || ""} remains unpaid; complete payment from My Bookings.`
+            )
+            setLoading(false)
+            return
+          }
+        }
         const savedData = {
           ...res.data,
           paymentMethod: backendPaymentMethod,
+          payment_status: verifiedPayment ? "paid" : (res.data?.payment_status || "pending"),
           total_amount: calculatedGrandTotal,
           item_total: itemTotal,
           gst_amount: totalGst,
@@ -14697,7 +15798,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
   const [paintLocation, setPaintLocation] = useState(() => getCustomerLocation(user?.id) || "Hosur, Tamil Nadu")
   const [paintSearchRotateIdx, setPaintSearchRotateIdx] = useState(0)
   const [expandedFaq, setExpandedFaq] = React.useState(null)
-  const [activeTab, setActiveTab] = useState("paint-interior")
+  const [activeTab, setActiveTab] = useState("paint-exterior")
 
   const getHaversineDistance = (lat1, lon1, lat2, lon2) => {
     const R = 6371;
@@ -14714,7 +15815,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
   const customerLng = formData?.longitude ? parseFloat(formData.longitude) : 77.8253;
   const distanceKm = getHaversineDistance(12.7409, 77.8253, customerLat, customerLng);
   const currentFee = distanceKm > 15 ? 300 : 0;
-  const PAINT_SEARCH_HINTS = ["Interior Painting", "Exterior Painting", "Waterproofing", "Wood Polish", "Texture Finish"];
+  const PAINT_SEARCH_HINTS = ["Exterior Painting", "Interior Painting", "Waterproofing", "Wood Polish", "Texture Finish"];
   useEffect(() => {
     const t = setInterval(() => setPaintSearchRotateIdx(i => (i + 1) % PAINT_SEARCH_HINTS.length), 2800);
     return () => clearInterval(t);
@@ -14822,8 +15923,8 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
   };
 
   const PAINTING_CATEGORIES = [
-    { id: "paint-interior", slug: "interior-painting", name: "Interior Painting", image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop" },
     { id: "paint-exterior", slug: "exterior-painting", name: "Exterior Painting", image: "https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=300&q=80&fit=crop" },
+    { id: "paint-interior", slug: "interior-painting", name: "Interior Painting", image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop" },
     { id: "paint-waterproofing", slug: "waterproofing", name: "Waterproofing", image: "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=300&q=80&fit=crop" },
     { id: "paint-wood-metal", slug: "wood-metal", name: "Wood & Metal", image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=300&q=80&fit=crop" },
     { id: "paint-texture", slug: "texture-decor", name: "Texture Decor", image: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=300&q=80&fit=crop" }

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from "react"
-import { useNavigate } from "react-router-dom"
+import React, { useState, useEffect, useRef, useMemo } from "react"
+import { useNavigate, useLocation } from "react-router-dom"
 import {
   Sparkles,
   MessageSquare,
@@ -7,6 +7,7 @@ import {
   Send,
   RotateCcw,
   Minimize2,
+  Maximize2,
   ExternalLink,
   ShieldCheck,
   ChevronRight,
@@ -76,12 +77,15 @@ const formatChatTime = (dateVal) => {
   return `${hours}:${minutes} ${ampm}`
 }
 
-const DEFAULT_WELCOME_MESSAGE = {
-  id: "welcome",
-  sender: "assistant",
-  content: "Hi! 👋 How can I help you with your services or bookings today?",
-  sources: [],
-  created_at: new Date().toISOString(),
+const getWelcomeMessage = (displayName) => {
+  const namePart = displayName && displayName !== "there" ? ` ${displayName}` : ""
+  return {
+    id: "welcome",
+    sender: "assistant",
+    content: `Hi${namePart}! 👋 How can I help you with your services or bookings today?`,
+    sources: [],
+    created_at: new Date().toISOString(),
+  }
 }
 
 const STARTER_PROMPTS = [
@@ -129,13 +133,131 @@ const STARTER_PROMPTS = [
 
 export function AIChatWidget() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { user } = useAuth()
+  const pathname = location.pathname.toLowerCase()
+
+  // ── Route Gating ─────────────────────────────────────────────────────────────
+  // AI Mitra is a customer-facing assistant. It is not required in the Admin Portal
+  // or on the Customer Care page (/support/tickets), but must remain active in the customer portal.
+  const isAdminPortalRoute = useMemo(() => {
+    const adminPrefixes = [
+      "/login",
+      "/reset-password",
+      "/organization-signup",
+      "/accept-invite",
+      "/support/tickets",
+      "/platform",
+      "/dashboard",
+      "/customers",
+      "/settings",
+      "/reports",
+      "/catalog",
+      "/inventory",
+      "/admin",
+      "/marketing",
+      "/vegetables/admin",
+      "/get-started",
+    ]
+    return adminPrefixes.some((prefix) => pathname.startsWith(prefix))
+  }, [pathname])
+
   const [isOpen, setIsOpen] = useState(false)
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
   const [showHistoryView, setShowHistoryView] = useState(false)
   const [conversationsList, setConversationsList] = useState([])
   const [loadingConversations, setLoadingConversations] = useState(false)
+
+  // ── Drag & Reposition and Minimize State ───────────────────────────────────
+  const [position, setPosition] = useState(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const [isMinimized, setIsMinimized] = useState(false)
+  const windowRef = useRef(null)
+  const dragStartRef = useRef({ startX: 0, startY: 0, initialLeft: 0, initialTop: 0, width: 0, height: 0 })
+
+  const handleHeaderPointerDown = (e) => {
+    // Only primary button (left click) or touch
+    if (e.button !== 0 && e.pointerType === "mouse") return
+    if (
+      e.target.closest("button") ||
+      e.target.closest("input") ||
+      e.target.closest("a") ||
+      e.target.closest(".caltrack-ai-header-btn")
+    ) {
+      return
+    }
+    if (typeof window !== "undefined" && window.innerWidth <= 640) return
+    if (!windowRef.current) return
+
+    e.preventDefault()
+
+    const rect = windowRef.current.getBoundingClientRect()
+    dragStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initialLeft: rect.left,
+      initialTop: rect.top,
+      width: rect.width,
+      height: rect.height,
+    }
+    setIsDragging(true)
+
+    const handlePointerMove = (moveEvent) => {
+      const dx = moveEvent.clientX - dragStartRef.current.startX
+      const dy = moveEvent.clientY - dragStartRef.current.startY
+
+      const viewportWidth = window.innerWidth
+      const viewportHeight = window.innerHeight
+      const winWidth = dragStartRef.current.width
+      const winHeight = dragStartRef.current.height
+
+      // Ensure window stays safely within viewport margins
+      const minX = 12
+      const maxX = Math.max(12, viewportWidth - winWidth - 12)
+      const minY = 12
+      const maxY = Math.max(12, viewportHeight - winHeight - 12)
+
+      const targetX = Math.min(Math.max(minX, dragStartRef.current.initialLeft + dx), maxX)
+      const targetY = Math.min(Math.max(minY, dragStartRef.current.initialTop + dy), maxY)
+
+      setPosition({ x: targetX, y: targetY })
+    }
+
+    const handlePointerUp = () => {
+      setIsDragging(false)
+      window.removeEventListener("pointermove", handlePointerMove)
+      window.removeEventListener("pointerup", handlePointerUp)
+      window.removeEventListener("pointercancel", handlePointerUp)
+    }
+
+    window.addEventListener("pointermove", handlePointerMove)
+    window.addEventListener("pointerup", handlePointerUp)
+    window.addEventListener("pointercancel", handlePointerUp)
+  }
+
+  // Keep window in bounds on viewport resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (!position || !windowRef.current) return
+      if (typeof window !== "undefined" && window.innerWidth <= 640) {
+        setPosition(null)
+        return
+      }
+      const rect = windowRef.current.getBoundingClientRect()
+      const maxX = Math.max(12, window.innerWidth - rect.width - 12)
+      const maxY = Math.max(12, window.innerHeight - rect.height - 12)
+      setPosition((prev) => {
+        if (!prev) return null
+        return {
+          x: Math.min(Math.max(12, prev.x), maxX),
+          y: Math.min(Math.max(12, prev.y), maxY),
+        }
+      })
+    }
+    window.addEventListener("resize", handleResize)
+    return () => window.removeEventListener("resize", handleResize)
+  }, [position])
 
   // ── Privacy-safe storage helpers ──────────────────────────────────────────
   // Each session is stamped with the owner's user-id (or "guest" for anonymous).
@@ -191,24 +313,6 @@ export function AIChatWidget() {
     return null
   }
 
-  const [conversationId, setConversationId] = useState(() => readStoredConvId(currentOwnerId))
-
-  const [messages, setMessages] = useState(
-    () => readStoredMessages(currentOwnerId) ?? [DEFAULT_WELCOME_MESSAGE]
-  )
-
-  const [selectedImageFile, setSelectedImageFile] = useState(null)
-  const [imagePreviewUrl, setImagePreviewUrl] = useState(null)
-  const [imageError, setImageError] = useState(null)
-  const fileInputRef = useRef(null)
-
-  const isHandedOff = Boolean(messages.some((m) => m.handed_off))
-  const latestAssistantMsg = [...messages].reverse().find((m) => m.sender === "assistant")
-  const currentExpects = isHandedOff ? "text" : (latestAssistantMsg?.expects || "text")
-
-  const messagesEndRef = useRef(null)
-  const inputRef = useRef(null)
-
   const customerDisplayName = (() => {
     if (!user) return null
     const name = (user.firstName || user.first_name || user.fullName || user.full_name || "").trim()
@@ -223,6 +327,39 @@ export function AIChatWidget() {
     }
     return name || user.username || "there"
   })()
+
+  const [conversationId, setConversationId] = useState(() => readStoredConvId(currentOwnerId))
+
+  const [messages, setMessages] = useState(
+    () => readStoredMessages(currentOwnerId) ?? [getWelcomeMessage(customerDisplayName)]
+  )
+
+  // Update welcome greeting if user auth loads asynchronously
+  useEffect(() => {
+    if (customerDisplayName && customerDisplayName !== "there") {
+      setMessages((prev) => {
+        if (prev.length === 1 && prev[0].id?.startsWith("welcome")) {
+          const fresh = getWelcomeMessage(customerDisplayName)
+          if (prev[0].content !== fresh.content) {
+            return [fresh]
+          }
+        }
+        return prev
+      })
+    }
+  }, [customerDisplayName])
+
+  const [selectedImageFile, setSelectedImageFile] = useState(null)
+  const [imagePreviewUrl, setImagePreviewUrl] = useState(null)
+  const [imageError, setImageError] = useState(null)
+  const fileInputRef = useRef(null)
+
+  const isHandedOff = Boolean(messages.some((m) => m.handed_off))
+  const latestAssistantMsg = [...messages].reverse().find((m) => m.sender === "assistant")
+  const currentExpects = isHandedOff ? "text" : (latestAssistantMsg?.expects || "text")
+
+  const messagesEndRef = useRef(null)
+  const inputRef = useRef(null)
 
   // Save conversationId in sessionStorage — always stamp the owner ID alongside
   useEffect(() => {
@@ -387,9 +524,17 @@ export function AIChatWidget() {
     }
   }, [isOpen, messages, loading, showHistoryView])
 
+  // Automatically close chat if user navigates to an admin portal route
+  useEffect(() => {
+    if (isAdminPortalRoute && isOpen) {
+      setIsOpen(false)
+    }
+  }, [isAdminPortalRoute, isOpen])
+
   // Global trigger: allows any page/section/banner to open AI Mitra and optionally pass an initial prompt
   useEffect(() => {
     const handleOpenAiMitra = (e) => {
+      if (isAdminPortalRoute) return
       setIsOpen(true)
       setShowHistoryView(false)
       const promptText = e?.detail?.prompt
@@ -401,7 +546,7 @@ export function AIChatWidget() {
     }
     window.addEventListener("open-ai-mitra", handleOpenAiMitra)
     return () => window.removeEventListener("open-ai-mitra", handleOpenAiMitra)
-  }, [conversationId, loading])
+  }, [conversationId, loading, isAdminPortalRoute])
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0]
@@ -588,15 +733,7 @@ export function AIChatWidget() {
     handleClearSelectedImage()
     setConversationId(null)
     clearAIChatStorage()
-    setMessages([
-      {
-        id: `welcome_${Date.now()}`,
-        sender: "assistant",
-        content: "Started a new conversation! How can I help you today?",
-        sources: [],
-        created_at: new Date().toISOString(),
-      },
-    ])
+    setMessages([getWelcomeMessage(customerDisplayName)])
     setShowHistoryView(false)
   }
 
@@ -611,15 +748,7 @@ export function AIChatWidget() {
     }
     setConversationId(null)
     clearAIChatStorage()
-    setMessages([
-      {
-        id: `welcome_${Date.now()}`,
-        sender: "assistant",
-        content: "Chat history cleared! How can I help you today?",
-        sources: [],
-        created_at: new Date().toISOString(),
-      },
-    ])
+    setMessages([getWelcomeMessage(customerDisplayName)])
     setConversationsList((prev) => prev.filter((c) => c.id !== conversationId))
   }
 
@@ -755,6 +884,12 @@ export function AIChatWidget() {
     })
   }
 
+  // Do not render AI Mitra in the Admin Portal or on the Customer Care page (/support/tickets).
+  // AI Mitra is a customer-facing assistant for the customer portal.
+  if (isAdminPortalRoute) {
+    return null
+  }
+
   return (
     <>
       {/* Floating Trigger Button - Compact & Sleek */}
@@ -782,9 +917,30 @@ export function AIChatWidget() {
 
       {/* Chat Window Modal */}
       {isOpen && (
-        <div className="caltrack-ai-window" role="dialog" aria-modal="true">
+        <div
+          ref={windowRef}
+          className={`caltrack-ai-window ${isDragging ? "caltrack-ai-window-dragging" : ""} ${position ? "caltrack-ai-window-repositioned" : ""} ${isMinimized ? "caltrack-ai-window-minimized" : ""}`}
+          role="dialog"
+          aria-modal="true"
+          style={
+            position && typeof window !== "undefined" && window.innerWidth > 640
+              ? {
+                  left: `${position.x}px`,
+                  top: `${position.y}px`,
+                  right: "auto",
+                  bottom: "auto",
+                  animation: isDragging ? "none" : undefined,
+                }
+              : undefined
+          }
+        >
           {/* Header */}
-          <div className="caltrack-ai-header">
+          <div
+            className="caltrack-ai-header"
+            onPointerDown={handleHeaderPointerDown}
+            onDoubleClick={() => setPosition(null)}
+            title="Drag anywhere to move · Double-click to reset position"
+          >
             <div className="caltrack-ai-header-info">
               <div className="caltrack-ai-avatar">
                 <img
@@ -803,30 +959,52 @@ export function AIChatWidget() {
             </div>
 
             <div className="caltrack-ai-header-actions">
+              {position && (
+                <button
+                  type="button"
+                  onClick={() => setPosition(null)}
+                  className="caltrack-ai-header-btn"
+                  title="Reset to default position"
+                >
+                  <RotateCcw size={14} />
+                </button>
+              )}
               <button
                 type="button"
-                onClick={toggleHistoryView}
-                className={`caltrack-ai-header-btn ${showHistoryView ? "active" : ""}`}
-                title="Chat history & sessions"
-              >
-                <History size={15} />
-              </button>
-              <button
-                type="button"
-                onClick={handleNewChat}
+                onClick={() => setIsMinimized((prev) => !prev)}
                 className="caltrack-ai-header-btn"
-                title="Start new chat"
+                title={isMinimized ? "Expand chat" : "Minimize to header"}
               >
-                <Plus size={15} />
+                {isMinimized ? <Maximize2 size={15} /> : <Minimize2 size={15} />}
               </button>
-              <button
-                type="button"
-                onClick={handleDeleteCurrentChat}
-                className="caltrack-ai-header-btn caltrack-ai-header-btn-danger"
-                title="Delete current chat"
-              >
-                <Trash2 size={15} />
-              </button>
+              {!isMinimized && (
+                <>
+                  <button
+                    type="button"
+                    onClick={toggleHistoryView}
+                    className={`caltrack-ai-header-btn ${showHistoryView ? "active" : ""}`}
+                    title="Chat history & sessions"
+                  >
+                    <History size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNewChat}
+                    className="caltrack-ai-header-btn"
+                    title="Start new chat"
+                  >
+                    <Plus size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteCurrentChat}
+                    className="caltrack-ai-header-btn caltrack-ai-header-btn-danger"
+                    title="Delete current chat"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </>
+              )}
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
@@ -838,11 +1016,13 @@ export function AIChatWidget() {
             </div>
           </div>
 
-          {/* Safety & Read-Only Notice Banner */}
-          <div className="caltrack-ai-notice">
-            <ShieldCheck size={14} style={{ color: "#059669", flexShrink: 0 }} />
-            <span>Read-only assistant · Real-time verified policies & catalog data</span>
-          </div>
+          {!isMinimized && (
+            <>
+              {/* Safety & Read-Only Notice Banner */}
+              <div className="caltrack-ai-notice">
+                <ShieldCheck size={14} style={{ color: "#059669", flexShrink: 0 }} />
+                <span>Read-only assistant · Real-time verified policies & catalog data</span>
+              </div>
 
           {/* Connected to Support Banner */}
           {isHandedOff && (
@@ -1197,8 +1377,10 @@ export function AIChatWidget() {
               </form>
             </>
           )}
-        </div>
+        </>
       )}
+    </div>
+  )}
     </>
   )
 }

@@ -27,7 +27,12 @@ from settings_hub.models import ServiceZone, ServiceZoneService
 User = get_user_model()
 
 
-@override_settings(PAYMENT_SANDBOX_MODE=True, RAZORPAY_KEY_ID="", RAZORPAY_KEY_SECRET="")
+@override_settings(
+    PAYMENT_PROVIDER="razorpay",
+    PAYMENT_SANDBOX_MODE=True,
+    RAZORPAY_KEY_ID="",
+    RAZORPAY_KEY_SECRET="",
+)
 class GTPaymentVerifyTests(TestCase):
     def setUp(self):
         company, _ = Company.objects.get_or_create(slug="calservices", defaults={"company_name": "Cal"})
@@ -82,6 +87,72 @@ class GTPaymentVerifyTests(TestCase):
             self.assertEqual(self._verify().status_code, 200)
         self.assertEqual(task.delay.call_count, 1)
         self.assertEqual(Payment.objects.filter(service_request=self.sr).count(), 1)
+
+    @override_settings(
+        PAYMENT_PROVIDER="paytm_mock",
+        PAYTM_MOCK_ENABLED=True,
+        PAYTM_MOCK_SECRET="test-paytm-mock-secret",
+        PAYTM_ENV="staging",
+        RAZORPAY_KEY_ID="",
+        RAZORPAY_KEY_SECRET="",
+        PAYMENT_SANDBOX_MODE=False,
+    )
+    def test_paytm_mock_is_server_issued_verified_and_idempotent(self):
+        """A Paytm mock cannot be completed with a browser-invented result."""
+        Payment.objects.filter(service_request=self.sr).delete()
+        init = self.client.post(reverse("payment-initiate"), {"booking_id": self.sr.id})
+        self.assertEqual(init.status_code, 200, init.content)
+        payload = init.data["data"]
+        self.assertEqual(payload["provider"], "paytm_mock")
+        self.assertTrue(payload["mock"])
+        self.assertTrue(payload["transaction_id"])
+        self.assertTrue(payload["signature"])
+
+        verify_body = {
+            "booking_id": self.sr.id,
+            "order_id": payload["order_id"],
+            "payment_id": payload["transaction_id"],
+            "signature": payload["signature"],
+        }
+        with patch("service_requests.tasks.async_dispatch_service_request") as task:
+            with self.captureOnCommitCallbacks(execute=True):
+                first = self.client.post(reverse("payment-verify"), verify_body, format="json")
+            with self.captureOnCommitCallbacks(execute=True):
+                replay = self.client.post(reverse("payment-verify"), verify_body, format="json")
+        self.assertEqual(first.status_code, 200, first.content)
+        self.assertEqual(replay.status_code, 200, replay.content)
+        self.assertEqual(task.delay.call_count, 1)
+
+        payment = Payment.objects.get(service_request=self.sr)
+        self.assertEqual(payment.gateway, "paytm_mock")
+        self.assertEqual(payment.provider_order_id, payload["order_id"])
+        self.assertEqual(payment.provider_transaction_id, payload["transaction_id"])
+
+    @override_settings(
+        PAYMENT_PROVIDER="paytm_mock",
+        PAYTM_MOCK_ENABLED=True,
+        PAYTM_MOCK_SECRET="test-paytm-mock-secret",
+        PAYTM_ENV="staging",
+        RAZORPAY_KEY_ID="",
+        RAZORPAY_KEY_SECRET="",
+        PAYMENT_SANDBOX_MODE=False,
+    )
+    def test_paytm_mock_rejects_forged_completion(self):
+        Payment.objects.filter(service_request=self.sr).delete()
+        init = self.client.post(reverse("payment-initiate"), {"booking_id": self.sr.id})
+        self.assertEqual(init.status_code, 200, init.content)
+        payload = init.data["data"]
+        with patch("service_requests.tasks.async_dispatch_service_request") as task:
+            result = self.client.post(reverse("payment-verify"), {
+                "booking_id": self.sr.id,
+                "order_id": payload["order_id"],
+                "payment_id": payload["transaction_id"],
+                "signature": "forged",
+            }, format="json")
+        self.assertEqual(result.status_code, 400, result.content)
+        self.sr.refresh_from_db()
+        self.assertNotEqual(self.sr.payment_status, ServiceRequest.PaymentStatus.PAID)
+        task.delay.assert_not_called()
 
     @override_settings(PAYMENT_SANDBOX_MODE=False, RAZORPAY_KEY_ID="rzp_test_x", RAZORPAY_KEY_SECRET="secret")
     def test_bad_signature_is_refused_and_nothing_is_paid_or_dispatched(self):

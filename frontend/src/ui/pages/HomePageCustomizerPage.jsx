@@ -12,6 +12,7 @@ import {
   Megaphone, LayoutGrid, Briefcase
 } from "lucide-react"
 import { getHomePageConfig, saveHomePageConfig, resetHomePageConfig, DEFAULT_HOME_PAGE_CONFIG, fetchDirectImageUrl, fetchPublishedHomePageConfig, publishHomePageConfig, resolveDisplayImageUrl } from "../../config/homePageConfig.js"
+import { fetchMarketplaceCategories } from "../../services/marketplaceApi.js"
 import ImageUploadField from "../components/ImageUploadField.jsx"
 import MediaUploadField from "../components/MediaUploadField.jsx"
 import { AdminRecipesPage } from "./catalog/AdminRecipesPage.jsx"
@@ -79,6 +80,48 @@ function buildPreviewSrc(path, screen, editMode) {
   return `${path}${sep}preview=true${screenExtra}${editMode ? "&edit=true" : ""}`
 }
 
+// Recursive checkbox tree for the "Mobile Grocery Sections" tab -- lets the
+// admin multi-select ANY node (category, sub-category or leaf) from the
+// real Seller Hub Marketplace tree fetched via fetchMarketplaceCategories().
+// Picking a parent still only stores that parent's own id -- the products
+// endpoint already aggregates its whole subtree server-side (same
+// convention documented on the backend's "grocerySections" default config),
+// so there's no need to also auto-select every descendant here.
+function GrocerySectionCategoryTree({ nodes, selectedIds, onToggle, depth = 0 }) {
+  if (!Array.isArray(nodes) || nodes.length === 0) return null
+  return (
+    <div style={{ marginLeft: depth > 0 ? 16 : 0 }} className={depth > 0 ? "border-l border-slate-200 pl-2" : ""}>
+      {nodes.map((node) => {
+        const checked = selectedIds.includes(node.id)
+        return (
+          <div key={node.id}>
+            <label className="flex items-center gap-2 py-1 cursor-pointer text-xs">
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => onToggle(node.id)}
+                className="rounded border-slate-300"
+              />
+              <span className={checked ? "font-semibold text-emerald-700" : "text-slate-700"}>{node.name}</span>
+              <span className="text-slate-400">
+                ({node.total_product_count ?? node.product_count ?? 0} products)
+              </span>
+            </label>
+            {Array.isArray(node.children) && node.children.length > 0 && (
+              <GrocerySectionCategoryTree
+                nodes={node.children}
+                selectedIds={selectedIds}
+                onToggle={onToggle}
+                depth={depth + 1}
+              />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function HomePageCustomizerPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const rawTabParam = searchParams.get("tab") || "hero"
@@ -103,6 +146,32 @@ export default function HomePageCustomizerPage() {
 
   const [resolvingUrls, setResolvingUrls] = useState({})
   const iframeRef = useRef(null)
+
+  // Added 2026-09-30 alongside the "Mobile Grocery Sections" tab: the real
+  // Seller Hub Marketplace category tree (fetched read-only, same endpoint
+  // the customer app itself uses), so the admin can pick from real
+  // categories/sub-categories/leaves by name instead of typing raw ids.
+  // Lazily fetched the first time this tab is opened, not on page load.
+  const [grocerySectionCategoryTree, setGrocerySectionCategoryTree] = useState(null)
+  const [grocerySectionCategoryTreeError, setGrocerySectionCategoryTreeError] = useState(null)
+  const [loadingGrocerySectionCategoryTree, setLoadingGrocerySectionCategoryTree] = useState(false)
+
+  useEffect(() => {
+    if (activeTab !== "mobileGrocerySections") return
+    if (grocerySectionCategoryTree !== null || loadingGrocerySectionCategoryTree) return
+    setLoadingGrocerySectionCategoryTree(true)
+    setGrocerySectionCategoryTreeError(null)
+    fetchMarketplaceCategories({ tree: true, hide_empty: false })
+      .then((res) => {
+        const tree = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []
+        setGrocerySectionCategoryTree(tree)
+      })
+      .catch((err) => {
+        setGrocerySectionCategoryTreeError(err?.message || "Could not load Seller Hub categories.")
+        setGrocerySectionCategoryTree([])
+      })
+      .finally(() => setLoadingGrocerySectionCategoryTree(false))
+  }, [activeTab, grocerySectionCategoryTree, loadingGrocerySectionCategoryTree])
 
   // Measure active admin sidebar width dynamically so preview docks perfectly beside it
   useEffect(() => {
@@ -408,6 +477,18 @@ export default function HomePageCustomizerPage() {
     // it's non-empty, falling back to the old auto-grouped vendor tiles
     // only when the admin hasn't configured any yet.
     { id: "mobileBestsellers", label: "Mobile Bestsellers", icon: Star, color: "text-amber-600 bg-amber-50" },
+    // Added 2026-09-30 per explicit request ("give the privilege to the
+    // customer admin to set up the products in UI... user able to enter
+    // name... choose how the data should show and which category should
+    // show... user can select multiple sub-category"): replaces the old
+    // "Essential Picks" strip on the customer app's Grocery Home screen
+    // with any number of admin-named, admin-curated product carousels.
+    // Each section just points at existing Seller Hub Marketplace category
+    // ids (any mix of category / sub-category / leaf -- the products
+    // endpoint already aggregates a picked node's own subtree) fetched
+    // read-only from fetchMarketplaceCategories() below; no write access
+    // into the vendor's own category tree is needed or granted here.
+    { id: "mobileGrocerySections", label: "Mobile Grocery Sections", icon: LayoutGrid, color: "text-green-700 bg-green-50" },
     { id: "trust", label: "Why Choose Us", icon: ShieldCheck, color: "text-emerald-600 bg-emerald-50" },
     { id: "testimonials", label: "Customer Reviews", icon: Award, color: "text-orange-600 bg-orange-50" },
     { id: "vendorBanner", label: "Vendor Hire Banner", icon: Briefcase, color: "text-indigo-600 bg-indigo-50" },
@@ -1726,6 +1807,159 @@ export default function HomePageCustomizerPage() {
                           placeholder="?category=vegetables_groceries, /categories/... or leave blank"
                           className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-mono"
                         />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {activeTab === "mobileGrocerySections" && (
+            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
+              <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <LayoutGrid className="w-5 h-5 text-green-700" />
+                    Mobile App — Grocery Home Sections
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Replaces the old "Essential Picks" strip on the customer app's Grocery Home screen. Add any number of named product carousels here -- each one picks its own layout and any mix of Seller Hub categories, sub-categories or leaf items to pull products from. Leave this list empty (or every section disabled) to fall back to one auto-generated section per real sub-category.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    const newSection = { id: `gs-${Date.now()}`, title: "New Section", layout: "horizontal", category_ids: [], enabled: true }
+                    setConfig(prev => {
+                      const next = { ...prev, mobile: { ...prev.mobile, grocerySections: [...(prev.mobile?.grocerySections || []), newSection] } }
+                      saveHomePageConfig(next)
+                      return next
+                    })
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-green-50 text-green-700 hover:bg-green-100 text-xs font-semibold transition flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" /> Add Section
+                </button>
+              </div>
+
+              {(!config.mobile?.grocerySections || config.mobile.grocerySections.length === 0) && (
+                <p className="text-xs text-slate-400 italic">No Grocery Sections yet -- add one above. Until then the app falls back to its own auto-generated per-sub-category sections.</p>
+              )}
+
+              <div className="space-y-4">
+                {(config.mobile?.grocerySections || []).map((section, idx) => {
+                  const total = config.mobile.grocerySections.length
+                  const updateSectionField = (field, value) => {
+                    setConfig(prev => {
+                      const newItems = [...(prev.mobile?.grocerySections || [])]
+                      newItems[idx] = { ...newItems[idx], [field]: value }
+                      const next = { ...prev, mobile: { ...prev.mobile, grocerySections: newItems } }
+                      saveHomePageConfig(next)
+                      return next
+                    })
+                  }
+                  const toggleCategory = (categoryId) => {
+                    const current = section.category_ids || []
+                    const nextIds = current.includes(categoryId)
+                      ? current.filter((id) => id !== categoryId)
+                      : [...current, categoryId]
+                    updateSectionField("category_ids", nextIds)
+                  }
+                  const moveSection = (delta) => {
+                    setConfig(prev => {
+                      const newItems = [...(prev.mobile?.grocerySections || [])]
+                      const target = idx + delta
+                      if (target < 0 || target >= newItems.length) return prev
+                      ;[newItems[idx], newItems[target]] = [newItems[target], newItems[idx]]
+                      const next = { ...prev, mobile: { ...prev.mobile, grocerySections: newItems } }
+                      saveHomePageConfig(next)
+                      return next
+                    })
+                  }
+                  return (
+                    <div key={section.id || idx} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-xs text-slate-700">Section #{idx + 1}</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button onClick={() => moveSection(-1)} disabled={idx === 0} className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 rounded">
+                            <ArrowUp className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => moveSection(1)} disabled={idx === total - 1} className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 rounded">
+                            <ArrowDown className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => updateSectionField("enabled", section.enabled === false)}
+                            className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border ${section.enabled !== false ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}
+                          >
+                            {section.enabled !== false ? "On" : "Off"}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setConfig(prev => {
+                                const newItems = (prev.mobile?.grocerySections || []).filter((_, i) => i !== idx)
+                                const next = { ...prev, mobile: { ...prev.mobile, grocerySections: newItems } }
+                                saveHomePageConfig(next)
+                                return next
+                              })
+                            }}
+                            className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Section Name</label>
+                        <input
+                          type="text"
+                          value={section.title || ""}
+                          onChange={(e) => updateSectionField("title", e.target.value)}
+                          placeholder="Munchies Night"
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Layout</label>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => updateSectionField("layout", "horizontal")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${(section.layout || "horizontal") === "horizontal" ? "bg-green-600 text-white border-green-600" : "bg-white text-slate-600 border-slate-200"}`}
+                          >
+                            Horizontal (single row)
+                          </button>
+                          <button
+                            onClick={() => updateSectionField("layout", "grid")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${section.layout === "grid" ? "bg-green-600 text-white border-green-600" : "bg-white text-slate-600 border-slate-200"}`}
+                          >
+                            Grid (3 across)
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">
+                          Categories ({(section.category_ids || []).length} selected)
+                        </label>
+                        <div className="max-h-64 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2">
+                          {loadingGrocerySectionCategoryTree && (
+                            <p className="text-xs text-slate-400 italic p-2">Loading Seller Hub categories…</p>
+                          )}
+                          {grocerySectionCategoryTreeError && (
+                            <p className="text-xs text-rose-500 italic p-2">{grocerySectionCategoryTreeError}</p>
+                          )}
+                          {!loadingGrocerySectionCategoryTree && !grocerySectionCategoryTreeError && (
+                            <GrocerySectionCategoryTree
+                              nodes={grocerySectionCategoryTree || []}
+                              selectedIds={section.category_ids || []}
+                              onToggle={toggleCategory}
+                            />
+                          )}
+                          {!loadingGrocerySectionCategoryTree && !grocerySectionCategoryTreeError && (grocerySectionCategoryTree || []).length === 0 && (
+                            <p className="text-xs text-slate-400 italic p-2">No Seller Hub categories found.</p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )

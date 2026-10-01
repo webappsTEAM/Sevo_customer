@@ -493,6 +493,18 @@ RAZORPAYX_ACCOUNT_NUMBER = os.getenv("RAZORPAYX_ACCOUNT_NUMBER", "").strip()
 RAZORPAYX_WEBHOOK_SECRET = os.getenv("RAZORPAYX_WEBHOOK_SECRET", "").strip()
 RAZORPAYX_MOCK_MODE = os.getenv("RAZORPAYX_MOCK_MODE", "0").strip().lower() in ("1", "true", "yes")
 
+# Customer online-payment provider.  `paytm_mock` is an explicit local/test
+# mode; it is never an automatic fallback when a live gateway fails.
+PAYMENT_PROVIDER = (os.getenv("PAYMENT_PROVIDER") or "razorpay").strip().lower()
+PAYTM_MID = os.getenv("PAYTM_MID", "").strip()
+PAYTM_MERCHANT_KEY = os.getenv("PAYTM_MERCHANT_KEY", "").strip()
+PAYTM_WEBSITE = os.getenv("PAYTM_WEBSITE", "WEBSTAGING").strip()
+PAYTM_ENV = os.getenv("PAYTM_ENV", "staging").strip().lower()
+PAYTM_CALLBACK_URL = os.getenv("PAYTM_CALLBACK_URL", "").strip()
+PAYTM_MARKETPLACE_CALLBACK_URL = os.getenv("PAYTM_MARKETPLACE_CALLBACK_URL", "").strip()
+PAYTM_MOCK_ENABLED = (os.getenv("PAYTM_MOCK_ENABLED") or os.getenv("PAYMENT_MOCK_ENABLED") or "0").strip().lower() in ("1", "true", "yes")
+PAYTM_MOCK_SECRET = os.getenv("PAYTM_MOCK_SECRET", "").strip()
+
 # Explicit opt-in only: lets a developer exercise the payment flow end-to-end
 # on a machine with no gateway credentials. Must never be enabled outside
 # local development.
@@ -511,7 +523,15 @@ SEVO_INTEGRATION_SECRET = (
     os.getenv("SEVO_INTEGRATION_SECRET") or WORKFORCE_WEBHOOK_SECRET
 ).strip()
 
-# ── Supabase Storage ─────────────────────────────────────────────────────────
+# ── Public Media Storage ─────────────────────────────────────────────────────
+MEDIA_STORAGE_PROVIDER = os.getenv("MEDIA_STORAGE_PROVIDER", "supabase").strip().lower()
+R2_ENDPOINT_URL = os.getenv("R2_ENDPOINT_URL", "").rstrip("/")
+R2_ACCESS_KEY_ID = os.getenv("R2_ACCESS_KEY_ID", "").strip()
+R2_SECRET_ACCESS_KEY = os.getenv("R2_SECRET_ACCESS_KEY", "").strip()
+R2_PUBLIC_BUCKET = os.getenv("R2_PUBLIC_BUCKET", "").strip()
+R2_PUBLIC_BASE_URL = os.getenv("R2_PUBLIC_BASE_URL", "").rstrip("/")
+
+# Legacy Supabase provider. Keep configured during migration/rollback.
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
 SUPABASE_STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "admin-media").strip()

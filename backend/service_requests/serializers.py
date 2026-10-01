@@ -583,6 +583,14 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
         )
         if slot_error:
             raise serializers.ValidationError({"preferred_date": slot_error})
+        if (attrs.get("logistics_booking_mode") or "spot") != "ptl":
+            from .booking_window import slot_capacity_error
+            _cap_err = slot_capacity_error(
+                attrs.get("service_category"), attrs.get("preferred_date"), attrs.get("preferred_time"),
+                city=attrs.get("city") or "",
+            )
+            if _cap_err:
+                raise serializers.ValidationError({"preferred_time": _cap_err, "code": "SLOT_FULL"})
 
         # Light PTL: advance-only, admin-slot-only, 4W+ ptl_eligible tier, declared weight.
         # Pricing itself (per kg, tamper check) happens in resolve_logistics_fare_v2.

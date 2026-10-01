@@ -2647,6 +2647,13 @@ class Payment(models.Model):
     razorpay_payment_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
     razorpay_signature = models.CharField(max_length=255, blank=True, null=True)
 
+    # Provider-neutral identifiers are authoritative for new gateways.  The
+    # Razorpay-named fields remain for historic transactions and a safe staged
+    # migration; new Paytm payments never have to masquerade as Razorpay rows.
+    provider_order_id = models.CharField(max_length=128, blank=True, null=True, db_index=True)
+    provider_transaction_id = models.CharField(max_length=128, blank=True, null=True, db_index=True)
+    provider_signature = models.CharField(max_length=512, blank=True, null=True)
+
     amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     currency = models.CharField(max_length=10, default="INR")
     status = models.CharField(
@@ -4700,3 +4707,35 @@ class WalletTopUp(models.Model):
     class Meta:
         db_table = "service_requests_wallet_topup"
         ordering = ["-created_at"]
+
+
+class ConsultationPricingConfig(models.Model):
+    """Database-backed consultation pricing for categories that require a visit."""
+
+    service_category = models.CharField(max_length=100, unique=True, db_index=True)
+    free_radius_km = models.DecimalField(max_digits=6, decimal_places=2, default=15.0)
+    standard_fee = models.DecimalField(max_digits=10, decimal_places=2, default=300.0)
+    is_active = models.BooleanField(default=True)
+    description = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.service_category
+
+
+class VendorWarehouse(models.Model):
+    """A vendor-owned warehouse or dispatch origin used by marketplace operations."""
+
+    vendor = models.ForeignKey("companies.Company", on_delete=models.CASCADE, related_name="warehouses")
+    name = models.CharField(max_length=255, default="Main Warehouse")
+    address = models.TextField(blank=True, default="")
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, default=12.7409)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, default=77.8253)
+    is_primary = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.vendor_id}: {self.name}"
