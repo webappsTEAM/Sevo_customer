@@ -83,6 +83,23 @@ def _get_razorpay_client():
     return None
 
 
+class MarketplaceDeliverySlotsView(APIView):
+    """Return only Vendor-authoritative slots to an authenticated customer."""
+    permission_classes = [IsCustomer]
+
+    def get(self, request):
+        result = MarketplaceIntegrationClient.get_delivery_slots(
+            warehouse_id=request.query_params.get("warehouse_id"),
+            date=request.query_params.get("date"),
+        )
+        if result.get("success"):
+            return _success(result.get("data", []))
+        return _error(
+            result.get("message", "Failed to fetch delivery slots."),
+            result.get("status_code", status.HTTP_502_BAD_GATEWAY),
+        )
+
+
 def _finalize_marketplace_orders(
     customer,
     cart,
@@ -108,6 +125,10 @@ def _finalize_marketplace_orders(
     customer_email = str(checkout_payload.get("customer_email") or getattr(customer, "email", "") or "")
     fulfilment_type = checkout_payload.get("fulfilment_type", "DELIVERY")
     delivery_slot = str(checkout_payload.get("delivery_slot", "") or "")
+    delivery_slot_id = checkout_payload.get("delivery_slot_id")
+    delivery_date = checkout_payload.get("delivery_date")
+    if hasattr(delivery_date, "isoformat"):
+        delivery_date = delivery_date.isoformat()
 
     # Double-submit protection: Idempotency check
     if idempotency_key:
@@ -171,14 +192,17 @@ def _finalize_marketplace_orders(
         cart_items = list(cart.items.all())
 
         # Authoritative Pre-Checkout Validation with Vendor Backend
-        validation_items = [
-            {
-                "product_id": ci.seller_product_id,
+        validation_items = []
+        for ci in cart_items:
+            validation_item = {
                 "requested_quantity": ci.quantity,
                 "expected_unit_price": str(ci.unit_price_snapshot),
             }
-            for ci in cart_items
-        ]
+            if ci.basket_id:
+                validation_item["basket_id"] = ci.basket_id
+            else:
+                validation_item["product_id"] = ci.seller_product_id
+            validation_items.append(validation_item)
 
         val_res = MarketplaceIntegrationClient.validate_cart(seller_id=None, items=validation_items)
         if not val_res.get("success") or not val_res.get("is_valid"):
@@ -187,9 +211,13 @@ def _finalize_marketplace_orders(
             return _error(err_msg, status.HTTP_400_BAD_REQUEST, errors=err_list)
 
         # Map validated warehouse info back to cart items if missing
-        val_items_map = {item.get("product_id"): item for item in val_res.get("validation", {}).get("items", [])}
+        val_items_map = {
+            ("basket", item.get("basket_id")) if item.get("basket_id") else ("product", item.get("product_id")): item
+            for item in val_res.get("validation", {}).get("items", [])
+        }
         for ci in cart_items:
-            v_data = val_items_map.get(ci.seller_product_id)
+            item_key = ("basket", ci.basket_id) if ci.basket_id else ("product", ci.seller_product_id)
+            v_data = val_items_map.get(item_key)
             if v_data:
                 if not ci.warehouse_id and v_data.get("warehouse_id"):
                     ci.warehouse_id = v_data.get("warehouse_id")
@@ -199,6 +227,16 @@ def _finalize_marketplace_orders(
                     ci.seller_id = v_data.get("company_id")
                 if not ci.seller_name and v_data.get("seller_name"):
                     ci.seller_name = v_data.get("seller_name")
+
+        # Seller ownership is authoritative in the Vendor response. Never use
+        # a fallback tenant: creating an order for an arbitrary seller would
+        # break isolation and reserve the wrong store's inventory.
+        if any(not ci.seller_id for ci in cart_items):
+            logger.error("Vendor cart validation omitted seller ownership for customer %s", customer.pk)
+            return _error(
+                "The selected store could not be confirmed. Please refresh your cart and try again.",
+                status.HTTP_502_BAD_GATEWAY,
+            )
 
         # Group cart items by warehouse (one consolidated delivery per warehouse)
         warehouse_groups = {}
@@ -223,11 +261,11 @@ def _finalize_marketplace_orders(
             # Group items within this warehouse by distinct seller
             seller_groups = {}
             for item in wh_items:
-                s_id = item.seller_id or 1
+                s_id = item.seller_id
                 if s_id not in seller_groups:
                     seller_groups[s_id] = {
                         "seller_id": s_id,
-                        "seller_name": item.seller_name or f"Seller #{s_id}",
+                        "seller_name": item.seller_name,
                         "items": [],
                     }
                 seller_groups[s_id]["items"].append(item)
@@ -239,14 +277,17 @@ def _finalize_marketplace_orders(
                 total_amount = subtotal + delivery_fee
                 source_order_id = _generate_marketplace_order_number()
 
-                intake_items = [
-                    {
-                        "product_id": ci.seller_product_id,
+                intake_items = []
+                for ci in s_items:
+                    intake_item = {
                         "quantity": ci.quantity,
                         "unit_price": str(ci.unit_price_snapshot),
                     }
-                    for ci in s_items
-                ]
+                    if ci.basket_id:
+                        intake_item["basket_id"] = ci.basket_id
+                    else:
+                        intake_item["product_id"] = ci.seller_product_id
+                    intake_items.append(intake_item)
 
                 payment_snapshot = {
                     "method": payment_method,
@@ -282,6 +323,8 @@ def _finalize_marketplace_orders(
                     MarketplaceOrderItem(
                         order=order,
                         seller_product_id=ci.seller_product_id,
+                        basket_id=ci.basket_id,
+                        basket_title=ci.basket_title,
                         product_title=ci.product_title,
                         product_sku=ci.product_sku,
                         product_brand=ci.product_brand,
@@ -309,6 +352,9 @@ def _finalize_marketplace_orders(
                         "customer_email": customer_email,
                         "fulfilment_type": fulfilment_type,
                         "delivery_address": delivery_address,
+                        "delivery_slot": delivery_slot,
+                        "delivery_slot_id": delivery_slot_id,
+                        "delivery_date": delivery_date,
                         "payment_snapshot": payment_snapshot,
                         "items": intake_items,
                     },
@@ -329,6 +375,9 @@ def _finalize_marketplace_orders(
                     "customer_email": customer_email,
                     "fulfilment_type": fulfilment_type,
                     "delivery_address": delivery_address,
+                    "delivery_slot": delivery_slot,
+                    "delivery_slot_id": delivery_slot_id,
+                    "delivery_date": delivery_date,
                     "payment_snapshot": payment_snapshot,
                     "intake_items": intake_items,
                 })
@@ -349,6 +398,9 @@ def _finalize_marketplace_orders(
             delivery_group_id=item["delivery_group_id"],
             warehouse_id=item["warehouse_id"],
             warehouse_name=item["warehouse_name"],
+            delivery_slot=item["delivery_slot"],
+            delivery_slot_id=item["delivery_slot_id"],
+            delivery_date=item["delivery_date"],
         )
 
         order = item["order"]
@@ -475,20 +527,29 @@ class MarketplaceInitiatePaymentView(APIView):
             return _error("Cart total must be greater than zero.", status.HTTP_400_BAD_REQUEST)
 
         # Pre-checkout validation with Vendor before taking payment
-        validation_items = [
-            {
-                "product_id": ci.seller_product_id,
+        validation_items = []
+        for ci in cart_items:
+            validation_item = {
                 "requested_quantity": ci.quantity,
                 "expected_unit_price": str(ci.unit_price_snapshot),
             }
-            for ci in cart_items
-        ]
+            if ci.basket_id:
+                validation_item["basket_id"] = ci.basket_id
+            else:
+                validation_item["product_id"] = ci.seller_product_id
+            validation_items.append(validation_item)
 
         val_res = MarketplaceIntegrationClient.validate_cart(seller_id=None, items=validation_items)
         if not val_res.get("success") or not val_res.get("is_valid"):
             err_list = val_res.get("validation", {}).get("errors", [])
             err_msg = err_list[0].get("message") if (err_list and isinstance(err_list[0], dict)) else "Some items in your cart are no longer available or prices have changed."
             return _error(err_msg, status.HTTP_400_BAD_REQUEST, errors=err_list)
+
+        # JSONField payloads must be portable across database backends and later
+        # outbox retries, so persist a canonical ISO date rather than a date
+        # object returned by the serializer.
+        if valid_data.get("delivery_date"):
+            valid_data["delivery_date"] = valid_data["delivery_date"].isoformat()
 
         idempotency_key = f"intent_{cart.id}_{cart.updated_at.isoformat()}"
         paise = int(round(float(total_amount) * 100))
