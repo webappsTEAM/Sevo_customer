@@ -77,6 +77,10 @@ def resolve_cargo_payload(
                 "code": "UNKNOWN_GOODS_CATEGORY",
                 "field": "goods_category_id",
             })
+    elif goods_category_slug and str(goods_category_slug).strip().lower() in ("other-not-listed", "other / not listed", "other/not listed", "other not listed"):
+        # GT_OTHER_CATEGORY: the customer-facing "Other / Not listed" bucket is not a catalog category. Its
+        # cargo entries are validated individually (is_custom), so no category is resolved for it.
+        category_obj = None
     elif goods_category_slug:
         slug_clean = goods_category_slug.strip()
         category_obj = GoodsCategory.objects.filter(
@@ -251,6 +255,45 @@ def resolve_cargo_payload(
                     "code": "EXCESSIVE_TOTAL_QUANTITY",
                 })
                 break
+
+            # GT_CUSTOM_CARGO: "Other / Not listed" goods. The customer supplies a description, quantity and a
+            # per-unit weight and volume. These are the customer's own declaration, so they are bounded,
+            # screened against the prohibited-goods rules, and counted into the fitment totals.
+            if bool(entry.get("is_custom")) and not (iid or islug):
+                # GT_CUSTOM_NAME_CLEAN: free text lands in invoices/PDFs/vendor screens; drop markup characters and control chars.
+                _cname = "".join(ch for ch in str(iname or "") if ch not in "<>" and (ch.isprintable() or ch == " ")).strip()
+                if not _cname or len(_cname) > 120:
+                    validation_errors.append({"error": "Describe the unlisted goods (up to 120 characters).",
+                                              "code": "INVALID_CUSTOM_CARGO", "item": identifier})
+                    continue
+                try:
+                    _cw = Decimal(str(entry.get("weight_kg")))
+                    _cc = Decimal(str(entry.get("cft")))
+                    if not (_cw.is_finite() and _cc.is_finite()) or _cw <= 0 or _cc <= 0 or _cw > Decimal("100000") or _cc > Decimal("10000"):
+                        raise ValueError
+                except (InvalidOperation, ValueError, TypeError):
+                    validation_errors.append({"error": f"Enter a valid weight (kg) and volume (CFT) for '{_cname}'.",
+                                              "code": "INVALID_CUSTOM_CARGO", "item": _cname})
+                    continue
+                from .prohibited_goods import validate_cargo_safety as _vcs
+                _ok, _msg, _code = _vcs(description=_cname, service_category="goods_transport_truck")
+                if not _ok:
+                    prohibited_item_names.append(_cname)
+                    continue
+                total_catalog_weight_kg += _cw * quantity
+                total_cft += _cc * quantity
+                _frag = bool(entry.get("is_fragile"))
+                if _frag:
+                    fragile_count += quantity
+                resolved_items.append({
+                    "item_id": None, "item_slug": "", "name": _cname, "category": "Other / Not listed",
+                    "category_slug": "other-not-listed", "unit": "unit", "quantity": quantity,
+                    "unit_weight_kg": str(_cw), "total_weight_kg": str(_cw * quantity),
+                    "unit_cft": str(_cc), "total_cft": str(_cc * quantity),
+                    "is_fragile": _frag, "is_heavy": False, "is_oversized": False, "is_prohibited": False,
+                    "requires_special_handling": False, "special_handling_charge": "0.00", "is_custom": True,
+                })
+                continue
 
             # Resolve item from bulk cache
             item = None

@@ -1,3 +1,4 @@
+// GT_UNLISTED
 import React, { useState, useEffect, useRef } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import {
@@ -1093,6 +1094,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
         cargoItems: cargoItems.map((i) => ({
           goods_item_id: i.goods_item_id || i.goods_item,
           quantity: i.quantity,
+          ...(i.is_custom ? { is_custom: true, name: i.name, weight_kg: i.weight_kg, cft: i.cft, is_fragile: i.is_fragile } : {}),
         })),
         goodsCategoryId: selectedGoodsCategoryObj?.id,
         loadingHelp,
@@ -1112,7 +1114,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
   }, [
     pickupPoint?.lat, pickupPoint?.lng, dropPoint?.lat, dropPoint?.lng,
     (selectedVehicle || selectedVehicleEffective)?._tierId,
-    JSON.stringify(cargoItems.map((i) => [i.goods_item_id || i.goods_item, i.quantity])),
+    JSON.stringify(cargoItems.map((i) => [i.goods_item_id || i.goods_item, i.quantity, i.is_custom ? i.name : 0, i.weight_kg, i.cft])),
     JSON.stringify(intermediateStops.map((s) => [s.address, s.coords?.lat, s.coords?.lng])),
     selectedGoodsCategoryObj?.id,
     loadingHelp,
@@ -1327,6 +1329,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
           cargoItems: cargoItems.map((i) => ({
             goods_item_id: i.goods_item_id || i.goods_item,
             quantity: i.quantity,
+            ...(i.is_custom ? { is_custom: true, name: i.name, weight_kg: i.weight_kg, cft: i.cft, is_fragile: i.is_fragile } : {}),
           })),
           goodsCategoryId: selectedGoodsCategoryObj?.id,
           loadingHelp,
@@ -1575,6 +1578,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
             cargoItems: cargoItems.map((i) => ({
               goods_item_id: i.goods_item_id || i.goods_item,
               quantity: i.quantity,
+              ...(i.is_custom ? { is_custom: true, name: i.name, weight_kg: i.weight_kg, cft: i.cft, is_fragile: i.is_fragile } : {}),
             })),
             goodsCategoryId: selectedGoodsCategoryObj?.id,
             loadingHelp,
@@ -3294,6 +3298,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
                   item_id: i.id || i.goods_item_id,
                   slug: i.slug,
                   quantity: i.quantity,
+                  ...(i.is_custom ? { is_custom: true, name: i.name, weight_kg: i.weight_kg, cft: i.cft, is_fragile: i.is_fragile } : {}),
                 })),
                 goods_category_id: cat?.id,
                 city: currentCitySlug,

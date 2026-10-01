@@ -52,7 +52,9 @@ class IsAdminOrManager(permissions.BasePermission):
         return bool(
             request.user
             and request.user.is_authenticated
-            and request.user.role in ("admin", "manager")
+            # GT_ZONE_PERM: must match the list/create gate, otherwise owner / superadmin / staff
+            # admins can add a zone but get 403 when editing or deleting it.
+            and (request.user.is_staff or getattr(request.user, "role", "") in ("admin", "owner", "superadmin", "manager"))
         )
 
 

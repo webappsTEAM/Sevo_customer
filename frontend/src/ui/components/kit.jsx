@@ -1,4 +1,4 @@
-import { forwardRef, useId } from "react"
+import { forwardRef, useEffect, useId } from "react"
 import { createPortal } from "react-dom"
 
 export function Card({ title, children, actions, className = "", ...props }) {
@@ -132,6 +132,13 @@ export function formatDateTime(value) {
 }
 
 export function Modal({ title, children, onClose, maxWidth = "max-w-2xl", className = "" }) {
+  // GT_MODAL_ESC: Escape closes the dialog (it previously only closed via the X / backdrop).
+  useEffect(() => {
+    if (typeof onClose !== "function") return undefined
+    const onKey = (e) => { if (e.key === "Escape") onClose() }
+    document.addEventListener("keydown", onKey)
+    return () => document.removeEventListener("keydown", onKey)
+  }, [onClose])
   const modalContent = (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto w-screen h-screen">
       <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />

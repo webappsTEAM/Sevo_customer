@@ -1048,6 +1048,24 @@ class AdminLogisticsSlotDetailView(APIView):
         reason = str(data.get("reason") or "Updated via Logistics Admin API").strip()
         changes = []
 
+        # GT_SLOT_PATCH_VALIDATE: a bad capacity / order / category used to be silently ignored
+        # while the API answered "Slot updated successfully".
+        if "capacity" in data:
+            try:
+                if isinstance(data["capacity"], bool) or int(data["capacity"]) < 1:
+                    raise ValueError
+            except (ValueError, TypeError):
+                return _fail("Capacity must be a whole number of at least 1.", "INVALID_CAPACITY", status.HTTP_400_BAD_REQUEST)
+        if "order" in data:
+            try:
+                if isinstance(data["order"], bool):
+                    raise ValueError
+                int(data["order"])
+            except (ValueError, TypeError):
+                return _fail("Order must be a whole number.", "INVALID_ORDER", status.HTTP_400_BAD_REQUEST)
+        if "category" in data and str(data.get("category") or "").strip() not in ("truck", "two_wheeler", "packers_movers", "ptl"):
+            return _fail("Category must be one of truck, two_wheeler, packers_movers or ptl.", "INVALID_CATEGORY", status.HTTP_400_BAD_REQUEST)
+
         if "slot_label" in data and str(data.get("slot_label") or "").strip() != slot.slot_label:
             new_times = _slot_label_times(data.get("slot_label"))
             if new_times is None:
@@ -1336,8 +1354,17 @@ class AdminLaneDetailView(APIView):
                 else:
                     try:
                         new_val = Decimal(str(raw_val))
+                        if not new_val.is_finite():
+                            raise InvalidOperation
                     except (InvalidOperation, TypeError, ValueError):
-                        continue
+                        # GT_LANE_PATCH_VALIDATE: garbage used to be skipped while answering 200.
+                        return _fail(f"{dec_field} must be a valid number.", "VALIDATION_ERROR", status.HTTP_400_BAD_REQUEST)
+                if dec_field in ("fare", "distance_km") and (new_val is None and dec_field == "fare" or (new_val is not None and new_val < 0)):
+                    return _fail(f"{dec_field} must be a non-negative number.", "VALIDATION_ERROR", status.HTTP_400_BAD_REQUEST)
+                if dec_field == "destination_latitude" and new_val is not None and not (-90 <= new_val <= 90):
+                    return _fail("destination_latitude must be between -90 and 90.", "VALIDATION_ERROR", status.HTTP_400_BAD_REQUEST)
+                if dec_field == "destination_longitude" and new_val is not None and not (-180 <= new_val <= 180):
+                    return _fail("destination_longitude must be between -180 and 180.", "VALIDATION_ERROR", status.HTTP_400_BAD_REQUEST)
                 if new_val != old_val:
                     # GT audit fix: same modify_price gate as the create path
                     # above -- fare is a real money field, the other three

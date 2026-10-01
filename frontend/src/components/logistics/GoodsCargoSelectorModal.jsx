@@ -1,3 +1,4 @@
+// GT_UNLISTED: "Other / Not listed" goods entry (description, qty, weight, volume)
 import React, { useState, useEffect, useMemo } from "react"
 import {
   X, Search, Plus, Minus, Trash2, Package, Boxes, ShieldAlert,
@@ -34,6 +35,34 @@ export function GoodsCargoSelectorModal({
   const [loadingItems, setLoadingItems] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [stagedItems, setStagedItems] = useState(selectedCargoItems || [])
+  const OTHER_ID = "__other__"
+  const [cust, setCust] = useState({ name: "", qty: "1", weight: "", cft: "", l: "", w: "", h: "", fragile: false })
+  const [custErr, setCustErr] = useState("")
+  const isOther = activeCategoryId === OTHER_ID
+  const cftFromDims = () => {
+    const l = Number(cust.l), w = Number(cust.w), h = Number(cust.h)
+    return l > 0 && w > 0 && h > 0 ? Math.round((l * w * h / 28316.85) * 100) / 100 : 0
+  }
+  const addCustom = () => {
+    const name = cust.name.trim()
+    const qty = Math.floor(Number(cust.qty))
+    const weight = Number(cust.weight)
+    const cft = Number(cust.cft) > 0 ? Number(cust.cft) : cftFromDims()
+    if (!name) return setCustErr("Describe the goods (e.g. clay pots, steel almirah).")
+    if (name.length > 120) return setCustErr("Description can be at most 120 characters.")
+    if (!(qty >= 1 && qty <= 500)) return setCustErr("Quantity must be between 1 and 500.")
+    if (!(weight > 0 && weight <= 100000)) return setCustErr("Enter the approximate weight of ONE unit in kg.")
+    if (!(cft > 0 && cft <= 10000)) return setCustErr("Enter the volume of ONE unit in CFT, or its length, width and height in cm.")
+    setCustErr("")
+    setStagedItems((prev) => [...prev, {
+      is_custom: true, custom_id: `c${Date.now()}${prev.length}`, name, quantity: qty, unit: "unit",
+      weight_kg: weight, cft, category_name: "Other / Not listed", is_fragile: cust.fragile,
+      is_two_wheeler_compatible: true,
+    }])
+    setCust({ name: "", qty: "1", weight: "", cft: "", l: "", w: "", h: "", fragile: false })
+  }
+  const removeCustom = (cid) => setStagedItems((prev) => prev.filter((it) => it.custom_id !== cid))
+  const customStaged = stagedItems.filter((it) => it.is_custom)
 
   // Sync staged items when modal opens
   useEffect(() => {
@@ -74,7 +103,7 @@ export function GoodsCargoSelectorModal({
 
   // Fetch items for the active category
   useEffect(() => {
-    if (!isOpen || !activeCategoryId) return
+    if (!isOpen || !activeCategoryId || activeCategoryId === "__other__") return
     if (itemsByCat[activeCategoryId]) return // Already cached
 
     let cancelled = false
@@ -112,7 +141,7 @@ export function GoodsCargoSelectorModal({
 
   // Helper to get staged quantity for an item
   const getItemQuantity = (itemId) => {
-    const found = stagedItems.find((it) => it.goods_item_id === itemId || it.goods_item === itemId)
+    const found = stagedItems.find((it) => !it.is_custom && (it.goods_item_id === itemId || it.goods_item === itemId))
     return found ? found.quantity : 0
   }
 
@@ -127,7 +156,7 @@ export function GoodsCargoSelectorModal({
     if (qty > 500) qty = 500 // Max sensible boundary per item
 
     setStagedItems((prev) => {
-      const existingIdx = prev.findIndex((it) => (it.goods_item_id || it.goods_item) === item.id)
+      const existingIdx = prev.findIndex((it) => !it.is_custom && (it.goods_item_id || it.goods_item) === item.id)
       if (qty === 0) {
         if (existingIdx >= 0) {
           const updated = [...prev]
@@ -191,10 +220,13 @@ export function GoodsCargoSelectorModal({
   }, [stagedItems, isTwoWheeler])
 
   const handleApply = () => {
-    if (onSelectCategory && activeCategory) {
-      onSelectCategory(activeCategory)
+    const allCustom = stagedItems.length > 0 && stagedItems.every((it) => it.is_custom)
+    const OTHER_CAT = { id: null, slug: "other-not-listed", name: "Other / Not listed", is_prohibited: false }
+    const realCat = allCustom ? OTHER_CAT : (isOther ? (stagedItems.length ? categories.find((c) => c.id === (stagedItems.find((it) => !it.is_custom)?.category_id)) || activeCategory : null) : activeCategory)
+    if (onSelectCategory && realCat) {
+      onSelectCategory(realCat)
     }
-    onApplyCargo(stagedItems, activeCategory)
+    onApplyCargo(stagedItems, realCat)
     onClose()
   }
 
@@ -272,11 +304,74 @@ export function GoodsCargoSelectorModal({
                   )
                 })
               )}
+              {!loadingCats && (
+                <button
+                  type="button"
+                  onClick={() => setActiveCategoryId(OTHER_ID)}
+                  className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer border border-dashed ${
+                    isOther ? "bg-emerald-600 text-white border-emerald-600" : "text-slate-700 hover:bg-slate-100 border-slate-300"
+                  }`}
+                >
+                  <span className="truncate">Other / Not listed</span>
+                  {isOther && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                </button>
+              )}
             </div>
           </div>
 
           {/* Right: Items Browser & Quantity Adjustment */}
           <div className="flex-1 flex flex-col p-4 sm:p-5 overflow-hidden">
+            {isOther ? (
+              <div className="flex-1 overflow-y-auto pr-1 space-y-3" data-testid="unlisted-goods-form">
+                <p className="text-xs text-slate-600 font-medium">
+                  Can't find your goods? Describe them below. Weight and volume are per ONE unit; we use them to pick a vehicle that can safely carry the load.
+                </p>
+                <input aria-label="Goods description" placeholder="Describe the goods (e.g. clay pots)" maxLength={120}
+                  value={cust.name} onChange={(e) => setCust({ ...cust, name: e.target.value })}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500" />
+                <div className="grid grid-cols-2 gap-2">
+                  <input aria-label="Quantity" inputMode="numeric" placeholder="Quantity" value={cust.qty}
+                    onChange={(e) => setCust({ ...cust, qty: e.target.value.replace(/[^\d]/g, "") })}
+                    className="px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500" />
+                  <input aria-label="Weight of one unit in kg" inputMode="decimal" placeholder="Weight of one unit (kg)" value={cust.weight}
+                    onChange={(e) => setCust({ ...cust, weight: e.target.value.replace(/[^\d.]/g, "") })}
+                    className="px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500" />
+                </div>
+                <input aria-label="Volume of one unit in CFT" inputMode="decimal" placeholder="Volume of one unit (CFT) — or fill size below" value={cust.cft}
+                  onChange={(e) => setCust({ ...cust, cft: e.target.value.replace(/[^\d.]/g, "") })}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500" />
+                <div className="grid grid-cols-3 gap-2">
+                  {[["l", "Length (cm)"], ["w", "Width (cm)"], ["h", "Height (cm)"]].map(([k, ph]) => (
+                    <input key={k} aria-label={ph} inputMode="decimal" placeholder={ph} value={cust[k]}
+                      onChange={(e) => setCust({ ...cust, [k]: e.target.value.replace(/[^\d.]/g, "") })}
+                      className="px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500" />
+                  ))}
+                </div>
+                {!cust.cft && cftFromDims() > 0 && <p className="text-[11px] text-slate-500">≈ {cftFromDims()} CFT per unit from the size entered</p>}
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                  <input type="checkbox" checked={cust.fragile} onChange={(e) => setCust({ ...cust, fragile: e.target.checked })} /> Fragile
+                </label>
+                {custErr && <p role="alert" className="text-xs font-semibold text-rose-600">{custErr}</p>}
+                <button type="button" onClick={addCustom}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer">
+                  Add these goods
+                </button>
+                {customStaged.length > 0 && (
+                  <div className="space-y-2 pt-1">
+                    {customStaged.map((it) => (
+                      <div key={it.custom_id} className="flex items-center justify-between gap-2 p-2.5 rounded-xl border border-emerald-300 bg-emerald-50/40 text-xs">
+                        <span className="font-bold text-slate-900">{it.quantity}× {it.name}
+                          <span className="font-medium text-slate-500"> · {it.weight_kg} kg · {it.cft} CFT each</span></span>
+                        <button type="button" aria-label={`Remove ${it.name}`} onClick={() => removeCustom(it.custom_id)}
+                          className="w-6 h-6 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center cursor-pointer">
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (<>
             {/* Search Input */}
             <div className="relative mb-4">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -404,6 +499,7 @@ export function GoodsCargoSelectorModal({
                 })
               )}
             </div>
+            </>)}
           </div>
         </div>
 

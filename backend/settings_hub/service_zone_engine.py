@@ -263,6 +263,22 @@ def _get_company_id(company) -> Optional[int]:
     return getattr(company, "pk", None) or getattr(company, "id", None)
 
 
+# GT_ZONES_FAIL_CLOSED: "no ACTIVE zones" used to mean "geofencing not set up -> open access" for every service.
+# For Goods & Transport that made pausing the LAST zone (or deactivating every zone) silently open booking
+# everywhere. For GT, open access now applies only when the company has no zones AT ALL; zones that exist but
+# are all paused/coming-soon block GT bookings.
+_GT_ZONE_SLUGS = ("goods_transport_truck", "goods_transport_two_wheeler", "packers_movers")
+
+
+def _geofencing_unconfigured(company_id, service_slug, active_exists):
+    if active_exists:
+        return False
+    if str(service_slug or "") in _GT_ZONE_SLUGS:
+        from settings_hub.models import ServiceZone
+        return not ServiceZone.objects.filter(company_id=company_id, status="paused").exists()
+    return True
+
+
 def find_zone_for_service(
     lat: float,
     lng: float,
@@ -306,7 +322,7 @@ def find_zone_for_service(
         )
 
     # No zones at all → admin hasn't set up geofencing → open access
-    if not active_zones:
+    if not active_zones and _geofencing_unconfigured(company_id, service_slug, False):
         return ZoneCheckResult(
             allowed=True,
             open_access=True,
@@ -484,7 +500,7 @@ def check_booking_eligibility(
             error_code="SERVICE_ZONE_CHECK_FAILED",
         )
 
-    if not has_zones:
+    if not has_zones and _geofencing_unconfigured(company_id, service_slug, False):
         return ZoneCheckResult(
             allowed=True,
             open_access=True,
@@ -753,7 +769,7 @@ def check_route_coverage(
             allowed=True, open_access=True, error_code="SERVICE_ZONE_CHECK_FAILED",
             message="Zone check unavailable — open access.",
         )
-    if not has_zones:
+    if not has_zones and _geofencing_unconfigured(company_id, service_slug, False):
         return RouteCoverageResult(allowed=True, open_access=True, message="No service zones configured — open access.")
 
     zone_ids = {}
