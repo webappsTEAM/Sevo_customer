@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from "react"
+import { lazy, Suspense, useEffect, Component } from "react"
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom"
 import { useAuth } from "../state/auth/useAuth.js"
 import { useRole } from "../state/auth/useRole.js"
@@ -10,6 +10,65 @@ import { GlobalEditModeToggle } from "./components/GlobalEditModeToggle.jsx"
 import { MobileBottomNav } from "./components/common/MobileBottomNav.jsx"
 import { AIChatWidget } from "./components/ai/AIChatWidget.jsx"
 import { LoginPage } from "./pages/LoginPage.jsx"
+
+
+// ── App-level ErrorBoundary — prevents blank screen on uncaught render errors ──
+// Without this, any runtime TypeError during render (e.g. null?.field in
+// LandingPage, AuthProvider, or any route page) unmounts the entire React
+// tree → the user sees a blank white page with no way to recover.
+class AppErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error }
+  }
+
+  componentDidCatch(error, info) {
+    // Log to console so developers can diagnose; never expose raw error to user.
+    console.error("[AppErrorBoundary] Uncaught render error:", error, info?.componentStack)
+  }
+
+  handleReload = () => {
+    this.setState({ hasError: false, error: null })
+    // Navigate to home as a safe fallback
+    window.location.href = "/home"
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          minHeight: "100vh", display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          background: "#f8fafc", padding: "2rem", textAlign: "center",
+          fontFamily: "system-ui, sans-serif"
+        }}>
+          <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>⚠️</div>
+          <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#0f172a", marginBottom: "0.5rem" }}>
+            Something went wrong
+          </h1>
+          <p style={{ color: "#64748b", marginBottom: "1.5rem", maxWidth: 400 }}>
+            The page encountered an unexpected error. Please tap the button below to go home.
+          </p>
+          <button
+            onClick={this.handleReload}
+            style={{
+              background: "#059669", color: "#fff", border: "none",
+              borderRadius: "8px", padding: "0.75rem 1.5rem",
+              fontSize: "1rem", fontWeight: 600, cursor: "pointer"
+            }}
+          >
+            Go to Home
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 // Bridge inside iframe: broadcasts route changes to parent window (Homepage Customizer preview)
 function PreviewNavigationBridge() {
@@ -369,7 +428,7 @@ export function App() {
     )
 
   return (
-    <>
+    <AppErrorBoundary>
       <PreviewNavigationBridge />
       <Suspense fallback={<PageLoader />}>
         <Routes>
@@ -666,6 +725,6 @@ export function App() {
       <AIChatWidget />
       {/* App-Wide Shared Mobile Bottom Navigation with safe area support */}
       <MobileBottomNav />
-    </>
+    </AppErrorBoundary>
   )
 }
