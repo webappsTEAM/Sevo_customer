@@ -6217,7 +6217,11 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         apiRequest("/orders/my/")
           .then(res => {
             const merged = Array.isArray(res?.data) ? res.data : []
-            setGroceryOrders(merged.filter(o => o.order_type === "grocery" || o.order_type === "vegetable"))
+            // Marketplace checkout uses the same customer-owned `/orders/my/`
+            // read contract, but has a different item shape from Daily
+            // Essentials.  Keep it in this account view rather than silently
+            // dropping an order the customer has already paid for.
+            setGroceryOrders(merged.filter(o => ["grocery", "vegetable", "marketplace"].includes(o.order_type)))
           })
           .catch(console.error)
           .finally(() => {
@@ -8354,21 +8358,22 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                 )
               })}
 
-              {/* Phase 4 (DAILY_ESSENTIALS_FRONTEND_IMPLEMENTATION_PLAN.md):
-                  Daily Essentials orders, merged visually into this same
-                  My Bookings tab but kept in their own clearly-labeled
-                  section -- the two order families stay separate on the
-                  write side (own checkout, own status lifecycle), this is
-                  read-only display only, sourced from GET /orders/my/. */}
+              {/* Customer-owned non-service orders are merged visually into
+                  this account view. Daily Essentials and SellerHub Marketplace
+                  retain their independent checkout and fulfillment workflows;
+                  this is a read-only projection of GET /orders/my/. */}
               {groceryOrdersLoading && groceryOrders.length === 0 ? null : groceryOrders.length > 0 && (
                 <div style={{ marginTop: 8 }}>
                   <h4 style={{ margin: '0 0 12px', fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ display: 'inline-flex', width: 28, height: 28, borderRadius: 8, background: '#ecfdf5', color: '#059669', alignItems: 'center', justifyContent: 'center' }}>🛒</span>
-                    Daily Essentials Orders
+                    Shopping Orders
                   </h4>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {groceryOrders.map(o => (
-                      <div
+                    {groceryOrders.map(o => {
+                      const isMarketplaceOrder = o.order_type === 'marketplace'
+                      const sellerName = o.seller_name || o.detail?.seller_name
+                      return (
+                        <div
                         key={`grocery-${o.id}`}
                         style={{
                           border: '1px solid #e2e8f0',
@@ -8392,11 +8397,20 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                             {o.status_label}
                           </span>
                         </div>
+                        {isMarketplaceOrder && sellerName && (
+                          <div style={{ marginTop: 6, fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>
+                            Sold by {sellerName}
+                          </div>
+                        )}
                         {Array.isArray(o.detail?.items) && o.detail.items.length > 0 && (
                           <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed #e2e8f0', display: 'flex', flexDirection: 'column', gap: 4 }}>
                             {o.detail.items.map((it, idx) => (
                               <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#475569' }}>
-                                <span>{it.package_name} × {it.quantity_grams}g</span>
+                                <span>
+                                  {it.product_title || it.package_name || 'Item'}
+                                  {' '}
+                                  {it.pack_size || it.unit || (it.quantity_grams ? `${it.quantity_grams}g` : `× ${it.quantity || 1}`)}
+                                </span>
                                 <span style={{ fontWeight: 700, color: '#334155' }}>₹{it.line_amount}</span>
                               </div>
                             ))}
@@ -8407,7 +8421,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                             <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>Total: </span>
                             <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>₹{o.total_amount}</span>
                           </div>
-                          {String(o.status_label || '').toLowerCase().includes('delivered') && (
+                          {o.order_type === 'vegetable' && String(o.status_label || '').toLowerCase().includes('delivered') && (
                             <button
                               onClick={() => {
                                 setReturnModalOrder(o)
@@ -8432,8 +8446,9 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                             </button>
                           )}
                         </div>
-                      </div>
-                    ))}
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               )}
