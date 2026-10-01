@@ -30,7 +30,7 @@ def insurance_offered():
 def insurance_rate():
     p = _policy()
     if p is not None:
-        return Decimal(str(p.premium_rate))
+        return Decimal(str(p.premium_percent)) / Decimal("100")
     return Decimal(str(getattr(settings, "INSURANCE_RATE", "0.02")))
 
 

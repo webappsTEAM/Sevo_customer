@@ -128,7 +128,9 @@ def reconcile_booking_fare(booking, actual_distance_km=None, notes=""):
     # --- 1. Distance actually travelled -------------------------------
     quoted_km = _dec(estimate.get("distance_km"))
     actual_km = _dec(actual_distance_km, default=None) if actual_distance_km is not None else None
-    if actual_km is not None and actual_km != quoted_km:
+    # Light PTL is priced per kg, not per km: a measured-distance variance never re-prices it.
+    is_ptl_quote = estimate.get("pricing_basis") == "ptl_per_kg"
+    if actual_km is not None and actual_km != quoted_km and not is_ptl_quote:
         # Re-price the difference using the SAME per-km rate the estimate
         # used, recovered from the stored quote. Reading the tier's
         # current rate instead would let a rate change between booking and

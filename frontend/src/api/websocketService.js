@@ -1,6 +1,6 @@
 /**
  * websocketService.js
- * High-performance real-time WebSocket client for CalServices.
+ * High-performance real-time WebSocket client for SEVO.
  * Handles:
  * - Live customer tracking subscriptions (/ws/tracking/<identifier>/)
  * - Instant customer OTP verification (/ws/auth/otp/)

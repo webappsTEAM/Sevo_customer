@@ -8,6 +8,7 @@ class LLMResponse:
     content: str
     tool_calls: List[Dict[str, Any]]
     raw: Optional[Dict[str, Any]] = None
+    provider_name: str = "MockDeterministicProvider"
 
 
 class BaseLLMProvider(ABC):

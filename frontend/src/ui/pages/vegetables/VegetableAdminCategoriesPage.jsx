@@ -757,9 +757,9 @@ export default function VegetableAdminCategoriesPage() {
               </div>
               <p className="text-xs text-slate-600 dark:text-slate-400">
                 Are you sure you want to delete <strong>'{deleteModalCategory.name}'</strong>?
-                {!deleteModalCategory.parent && subcategoriesByParent[deleteModalCategory.id]?.length > 0 && (
+                {!deleteModalCategory.parent && childrenByParent[deleteModalCategory.id]?.length > 0 && (
                   <span className="text-rose-600 block mt-1 font-semibold">
-                    Warning: This will also delete all {subcategoriesByParent[deleteModalCategory.id].length} subcategories under it.
+                    Warning: This will also delete all {childrenByParent[deleteModalCategory.id].length} subcategories under it.
                   </span>
                 )}
                 <span className="block mt-1">

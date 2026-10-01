@@ -209,6 +209,15 @@ class ServiceTier(models.Model):
         null=True, blank=True,
         help_text="Configured labor/crew size for relocation tiers. If unset, informational display only."
     )
+    # Light PTL (part-load, advance-booked, per-kg). Admin decides which
+    # vehicle tiers may carry part-load freight; the booking path additionally
+    # refuses two/three-wheeler classes even if this is ticked by mistake
+    # (see service_requests/services/ptl_pricing.py). Off by default, so no
+    # existing tier becomes PTL-bookable until ops opts it in.
+    ptl_eligible = models.BooleanField(
+        default=False, db_default=False,
+        help_text="Allow this vehicle tier for Part Truck Load (per-kg, slot-booked) bookings. 4-wheeler and larger only.",
+    )
 
     includes = models.JSONField(default=list, blank=True)   # value-added inclusions, movers mainly
     icon = models.CharField(max_length=100, blank=True, default="")  # lucide-react icon name used by frontend
@@ -301,6 +310,14 @@ class Lane(models.Model):
     eta_label = models.CharField(max_length=50, blank=True, default="")  # "~1.5 hrs", "Same Day", "1-2 Days"
     fare = models.DecimalField(max_digits=10, decimal_places=2)
     currency = models.CharField(max_length=3, default="INR")
+    # Light PTL: optional route-specific per-kg rate. When a PTL booking names
+    # this lane (truck category), this rate replaces the platform PTL rate in
+    # GTPTLPricingPolicy. Blank = the lane is not a PTL rate override.
+    ptl_rate_per_kg = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0.01"))],
+        help_text="Part Truck Load rate per kg on this route. Blank = use the platform PTL rate.",
+    )
 
     order = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
@@ -481,6 +498,52 @@ class PackersMoversConfig(models.Model):
 
     def __str__(self):
         return f"P&M Pricing Config ({self.city})"
+
+
+class PMAddOnService(models.Model):
+    """
+    Admin-configurable Packers & Movers add-on/value-added service catalogue: rope pulling for
+    heavy goods, appliance install/uninstall, electrician, carpenter, and a labour/helper-only
+    line item -- the Porter-documented P&M add-ons and labour-only booking, none of which existed
+    as a priced, selectable catalogue before (max_helpers above only sets a crew-size cap, with
+    "no price attached", per its own help text).
+
+    pricing_mode:
+      FLAT       -- one fixed charge regardless of quantity (quantity is always 1)
+      PER_UNIT   -- unit_price * quantity (e.g. per appliance, per helper)
+      PER_CFT    -- unit_price * booking's total CFT (e.g. rope pulling priced by load size)
+    """
+    class PricingMode(models.TextChoices):
+        FLAT = "FLAT", "Flat fee"
+        PER_UNIT = "PER_UNIT", "Per unit"
+        PER_CFT = "PER_CFT", "Per CFT"
+
+    code = models.SlugField(max_length=40, unique=True, help_text="Stable identifier used by the booking payload, e.g. 'rope_pulling'.")
+    name = models.CharField(max_length=100)
+    description = models.CharField(max_length=255, blank=True, default="")
+    city = models.CharField(max_length=50, blank=True, default="", db_index=True, help_text="Blank = available in every city.")
+    pricing_mode = models.CharField(max_length=10, choices=PricingMode.choices, default=PricingMode.FLAT)
+    unit_price = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"), validators=[MinValueValidator(Decimal("0.00"))])
+    max_quantity = models.PositiveSmallIntegerField(default=1, help_text="Largest quantity a customer may select (ignored for FLAT).")
+    is_labour_only = models.BooleanField(default=False, help_text="This add-on represents a helper/labour-only line (Porter's helper-with-vehicle booking) rather than a physical task.")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name = "P&M Add-on Service"
+        verbose_name_plural = "P&M Add-on Services"
+
+    def __str__(self):
+        return f"{self.name} ({self.get_pricing_mode_display()})"
+
+    def price_for(self, quantity, total_cft):
+        if self.pricing_mode == self.PricingMode.FLAT:
+            return self.unit_price
+        if self.pricing_mode == self.PricingMode.PER_CFT:
+            return (self.unit_price * Decimal(str(total_cft or 0))).quantize(Decimal("0.01"))
+        return (self.unit_price * max(1, int(quantity or 1))).quantize(Decimal("0.01"))
 
 
 class GTFaq(models.Model):

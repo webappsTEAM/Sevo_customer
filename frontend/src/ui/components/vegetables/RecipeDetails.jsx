@@ -81,7 +81,7 @@ function getProducePhotoFallback(name) {
  * - Nutrition Facts breakdown (Protein, Carbs, Fat, Fiber)
  * - Informational Health Benefits & Practical Health Tips
  * - Numbered Cooking Instructions
- * - Separated Ingredients: Calservices Catalog Vegetables vs Non-purchasable Pantry Items
+ * - Separated Ingredients: SEVO Catalog Vegetables vs Non-purchasable Pantry Items
  * - 'Complete Your Recipe' 1-click cart addition for missing catalog vegetables
  * - Smart 'Goes Well With' vegetable recommendations below
  */
@@ -97,7 +97,7 @@ export function RecipeDetails({
 
   if (!recipe) return null
 
-  // Separate ingredients into Calservices catalog vegetables vs pantry seasonings
+  // Separate ingredients into SEVO catalog vegetables vs pantry seasonings
   const allIngredients = recipe.ingredients || []
   const catalogVegetables = allIngredients.filter(
     (ing) => ing.is_catalog_vegetable || Boolean(ing.package) || Boolean(ing.package_name)

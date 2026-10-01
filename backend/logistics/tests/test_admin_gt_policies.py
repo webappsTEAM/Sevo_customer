@@ -6,7 +6,7 @@ import uuid
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from rest_framework.test import APITestCase
+from rest_framework.test import APIClient, APITestCase
 
 from service_requests.models import (
     CatalogChangeLog, GTAdvancePaymentPolicy, GTCancellationPolicy, GTWaitingChargePolicy,
@@ -32,7 +32,7 @@ class AdminGTPolicyApiTests(APITestCase):
     def test_overview_lists_every_kind_and_the_categories(self):
         r = self.client.get(BASE)
         self.assertEqual(r.status_code, 200, r.data)
-        self.assertEqual(sorted(k for k in r.data["data"] if k != "categories"), ["advance", "cancellation", "waiting"])
+        self.assertEqual(sorted(k for k in r.data["data"] if k != "categories"), ["advance", "cancellation", "claim", "extra_charge", "insurance", "operations", "ptl", "waiting"])
         self.assertIn("packers_movers", r.data["data"]["categories"])
 
     def test_anonymous_and_customers_are_refused(self):
@@ -120,3 +120,58 @@ class AdminGTPolicyApiTests(APITestCase):
         self.assertEqual(second.status_code, 200)
         r = self.client.patch(f"{BASE}waiting/{first.pk}/", {"is_active": True}, format="json")
         self.assertEqual(r.status_code, 409)
+
+
+class AdminGTNewPolicyKindsTests(APITestCase):
+    """Toll/parking, claims, insurance and operations settings are editable from the Admin API and drive runtime."""
+    def setUp(self):
+        self.client.force_authenticate(user=_user("admin"))
+
+    def test_extra_charge_policy_round_trip_and_validation(self):
+        r = self.client.post(BASE + "extra_charge/", {"is_enabled": True, "max_amount_per_item": "150",
+                                                      "max_total_per_booking": "100"}, format="json")
+        self.assertEqual(r.status_code, 400, r.data)                       # item cap above the total cap
+        r = self.client.post(BASE + "extra_charge/", {"is_enabled": True, "max_amount_per_item": "100",
+                                                      "max_total_per_booking": "250", "require_receipt_photo": True}, format="json")
+        self.assertEqual(r.status_code, 200, r.data)
+        from service_requests.models import get_gt_extra_charge_policy
+        pol = get_gt_extra_charge_policy("goods_transport_truck")
+        self.assertEqual((pol.max_amount_per_item, pol.require_receipt_photo), (Decimal("100.00"), True))
+        self.assertEqual(self.client.post(BASE + "extra_charge/", {"is_enabled": True}, format="json").status_code, 409)
+
+    def test_claim_policy_drives_claim_cap_and_public_terms(self):
+        r = self.client.post(BASE + "claim/", {"service_category": "goods_transport_truck", "is_enabled": True,
+                                               "included_liability_cap": "5000", "claim_window_hours": 24,
+                                               "require_photo": True}, format="json")
+        self.assertEqual(r.status_code, 200, r.data)
+        self.assertEqual(self.client.post(BASE + "claim/", {"claim_window_hours": 0, "is_enabled": True}, format="json").status_code, 400)
+        pub = APIClient().get("/api/logistics/policies/?service_category=goods_transport_truck").data["data"]
+        self.assertEqual(pub["claims"]["claim_window_hours"], 24)
+        self.assertTrue(any("24 hours" in t for t in pub["terms"]))
+        self.assertIsNone(APIClient().get("/api/logistics/policies/?service_category=packers_movers").data["data"]["claims"])
+
+    def test_insurance_and_operations_are_platform_wide_and_change_runtime(self):
+        from service_requests.services.gt_operations import ops
+        from service_requests.services.insurance import insurance_terms
+        self.assertEqual(ops("gt_quote_validity_minutes"), 15)              # historical default with no row
+        r = self.client.post(BASE + "operations/", {
+            "gt_quote_validity_minutes": 5, "pm_instant_quote_validity_minutes": 10, "pm_estimate_validity_hours": 24,
+            "online_payment_window_minutes": 45, "high_value_consignment_threshold": "10000",
+            "checkpoint_radius_meters": 120, "delivery_otp_ttl_minutes": 10, "max_otp_attempts": 3,
+            "delivery_otp_required": False}, format="json")
+        self.assertEqual(r.status_code, 200, r.data)
+        self.assertEqual((ops("gt_quote_validity_minutes"), ops("online_payment_window_minutes")), (5, 45))
+        self.assertEqual((ops("checkpoint_radius_meters"), ops("delivery_otp_ttl_minutes"), ops("max_otp_attempts")), (120, 10, 3))
+        self.assertIs(ops("delivery_otp_required"), False)
+        from service_requests.services.payment_expiry import payment_window_minutes
+        self.assertEqual(payment_window_minutes(), 45)
+        self.assertEqual(self.client.post(BASE + "operations/", {"gt_quote_validity_minutes": 0}, format="json").status_code, 400)
+        r = self.client.post(BASE + "insurance/", {"premium_percent": "1.5", "max_liability": "20000"}, format="json")
+        self.assertEqual(r.status_code, 200, r.data)
+        self.assertEqual(insurance_terms("10000"), (Decimal("150.00"), Decimal("10000.00")))
+        self.assertEqual(self.client.post(BASE + "insurance/", {"premium_percent": "0", "max_liability": "1"}, format="json").status_code, 400)
+
+    def test_customer_cannot_edit_new_kinds(self):
+        self.client.force_authenticate(user=_user("customer"))
+        for kind in ("extra_charge", "claim", "insurance", "operations"):
+            self.assertEqual(self.client.post(BASE + kind + "/", {}, format="json").status_code, 403)

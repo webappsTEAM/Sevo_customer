@@ -66,6 +66,7 @@ DESCRIPTIVE_FIELDS = (
     "dimensions_label",
     "description",
     "order",
+    "ptl_eligible",
 ) + CAPACITY_FIELDS
 
 INTEGER_FIELDS = ("max_additional_stops",)

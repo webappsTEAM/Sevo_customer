@@ -801,12 +801,16 @@ def compute_packers_movers_quote(
     # SEVO Part K: Differentiate Instant Bookable Price Lock vs Survey Estimate
     if is_authoritative and not is_estimate and survey_status == "INSTANT_ESTIMATE_APPROVED" and total is not None:
         # Price-locked instant-booking quote valid for 30 minutes
-        valid_until = timezone.now() + timedelta(minutes=30)
-        cache_timeout = 1800  # 30 mins
+        from .gt_operations import ops
+        _mins = int(ops("pm_instant_quote_validity_minutes"))
+        valid_until = timezone.now() + timedelta(minutes=_mins)
+        cache_timeout = _mins * 60
     else:
         # Non-binding relocation estimate valid for 48 hours for survey scheduling
-        valid_until = timezone.now() + timedelta(hours=48)
-        cache_timeout = 172800  # 48 hours
+        from .gt_operations import ops
+        _hours = int(ops("pm_estimate_validity_hours"))
+        valid_until = timezone.now() + timedelta(hours=_hours)
+        cache_timeout = _hours * 3600
 
     quote_id = f"PMQ-{timezone.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
 

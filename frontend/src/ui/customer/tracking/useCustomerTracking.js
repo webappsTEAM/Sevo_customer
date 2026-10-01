@@ -444,6 +444,41 @@ export function useCustomerTracking({ bookingId, jobId, trackingToken }) {
           })
           return
         }
+
+        if (eventType === "payment_cash_collected") {
+          setData((prev) => {
+            if (!prev) return prev
+            return {
+              ...prev,
+              payment_status: "cash_pending",
+              payment_confirmation_otp: eventData.payment_otp || prev.payment_confirmation_otp,
+              cash_otp_expires_at: eventData.expires_at || prev.cash_otp_expires_at,
+            }
+          })
+          return
+        }
+
+        if (eventType === "job_hold_status_changed") {
+          setData((prev) => {
+            if (!prev) return prev
+            const isOnHold = Boolean(eventData.is_on_hold)
+            return {
+              ...prev,
+              status: isOnHold ? "on_hold" : "in_progress",
+              project_timeline: {
+                ...(prev.project_timeline || {}),
+                is_on_hold: isOnHold,
+                hold_reason: eventData.hold_reason || "",
+              },
+            }
+          })
+          return
+        }
+
+        if (["quote_scope_reduced", "quote_crm_approved", "quote_sent"].includes(eventType)) {
+          fetchTrackingData()
+          return
+        }
       },
       // onStatusChange callback
       (state) => {

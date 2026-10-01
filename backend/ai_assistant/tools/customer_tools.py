@@ -86,7 +86,10 @@ class GetCustomerOrdersTool(BaseTool):
         if status:
             s_clean = status.strip().lower()
             if s_clean == "active":
-                qs = qs.exclude(status__in=["completed", "closed", "cancelled", "rejected"])
+                active_qs = qs.exclude(status__in=["completed", "closed", "cancelled", "rejected"])
+                # Prefer active orders; if none are active, fallback to recent orders so customer queries can reference their bookings
+                if active_qs.exists():
+                    qs = active_qs
             elif s_clean in {"completed", "closed", "cancelled", "rejected"}:
                 qs = qs.filter(status=s_clean)
 

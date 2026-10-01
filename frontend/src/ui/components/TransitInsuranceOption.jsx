@@ -43,6 +43,9 @@ export function TransitInsuranceOption({ value, onChange, payMethod }) {
         <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
         Add transit insurance for your goods
       </label>
+      {!enabled && (
+        <p className="mt-1 text-slate-500">Without insurance your goods are not insured; our liability for loss or damage is limited as set out in the Terms of Service.</p>
+      )}
       {enabled && !prepaid && (
         <p className="mt-1 text-amber-700">Insurance is available with online or wallet payment. Choose one above to add it.</p>
       )}

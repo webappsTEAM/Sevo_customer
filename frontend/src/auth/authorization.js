@@ -13,11 +13,7 @@ export function isSuperAdmin(user) {
   if (role === "super_admin" || role === "superadmin" || role === "platform_admin") {
     return true
   }
-  if (user.is_super_admin === true || user.isSuperAdmin === true) {
-    return true
-  }
-  // Only evaluate is_superuser if role is not explicitly set to a standard administrative/staff role
-  if (user.is_superuser && !["admin", "manager", "support", "catalog", "finance", "customer", "employee"].includes(role)) {
+  if (user.is_super_admin === true || user.isSuperAdmin === true || user.is_superuser === true) {
     return true
   }
   return false

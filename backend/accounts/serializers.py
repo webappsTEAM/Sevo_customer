@@ -162,19 +162,11 @@ class UserSerializer(serializers.ModelSerializer):
             try:
                 url = obj.avatar.url
                 if url:
-                    if 'demo.localhost' in url:
+                    if '/media/' in url:
                         idx = url.find('/media/')
-                        if idx != -1:
-                            return "http://localhost:8000" + url[idx:]
-                    request = self.context.get("request")
-                    if request:
-                        uri = request.build_absolute_uri(url)
-                        if 'demo.localhost' in uri:
-                            idx = uri.find('/media/')
-                            if idx != -1:
-                                return "http://localhost:8000" + uri[idx:]
-                        return uri
-                    return url
+                        return url[idx:]
+                    clean = str(obj.avatar.name).lstrip('/')
+                    return f"/media/{clean}"
             except Exception:
                 return None
         return None

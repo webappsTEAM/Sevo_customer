@@ -7,6 +7,8 @@ from .marketplace_views import (
     MarketplaceProductDetailView,
     MarketplaceCategoryListView,
     MarketplaceCartValidateView,
+    CustomerMarketplaceBasketListView,
+    CustomerMarketplaceBasketDetailView,
 )
 
 urlpatterns = [
@@ -14,4 +16,6 @@ urlpatterns = [
     path("products/<int:pk>/", MarketplaceProductDetailView.as_view(), name="customer-marketplace-product-detail"),
     path("categories/", MarketplaceCategoryListView.as_view(), name="customer-marketplace-categories"),
     path("cart/validate/", MarketplaceCartValidateView.as_view(), name="customer-marketplace-cart-validate"),
+    path("baskets/", CustomerMarketplaceBasketListView.as_view(), name="customer-marketplace-baskets"),
+    path("baskets/<int:basket_id>/", CustomerMarketplaceBasketDetailView.as_view(), name="customer-marketplace-basket-detail"),
 ]

@@ -42,3 +42,10 @@ class DeliveryExceptionWebhookTests(TestCase):
         self.sr.refresh_from_db()
         self.assertEqual(self.sr.delivery_exception["status"], "RESOLVED")
         self.assertIn("resolved_at", self.sr.delivery_exception)
+
+
+class AdminDetailShowsExceptionTests(TestCase):
+    def test_detail_serializer_exposes_exception_and_extra_charges(self):
+        from service_requests.serializers import ServiceRequestDetailSerializer
+        self.assertIn("delivery_exception", ServiceRequestDetailSerializer.Meta.fields)
+        self.assertIn("extra_charges", ServiceRequestDetailSerializer.Meta.fields)

@@ -30,6 +30,7 @@ User = get_user_model()
     RAZORPAY_KEY_SECRET="rzp_test_samplesecret456",
     RAZORPAY_WEBHOOK_SECRET="rzp_test_webhooksecret789",
     PAYMENT_SANDBOX_MODE=False,
+    PAYMENT_PROVIDER="razorpay",
 )
 class MarketplacePaymentTests(TestCase):
     def setUp(self):
@@ -122,6 +123,55 @@ class MarketplacePaymentTests(TestCase):
         self.assertEqual(intent.amount, Decimal("550.00"))
         self.assertEqual(intent.status, MarketplacePaymentIntent.Status.CREATED)
         self.assertEqual(intent.checkout_payload.get("delivery_address"), "123 Green Street, Hosur")
+
+    @override_settings(
+        PAYMENT_PROVIDER="paytm_mock",
+        PAYTM_MOCK_ENABLED=True,
+        PAYTM_MOCK_SECRET="marketplace-test-paytm-mock-secret",
+        PAYTM_ENV="staging",
+    )
+    @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.intake_order")
+    @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.validate_cart")
+    def test_paytm_mock_requires_server_issued_signed_completion(self, mock_validate_cart, mock_intake_order):
+        mock_validate_cart.return_value = {"success": True, "is_valid": True, "validation": {"items": []}}
+        mock_intake_order.return_value = {
+            "success": True,
+            "data": {"order": {"id": 990, "order_number": "VEND-00990"}},
+        }
+
+        initiated = self.client.post(
+            "/api/orders/marketplace/checkout/initiate-payment/", self.checkout_payload, format="json"
+        )
+        self.assertEqual(initiated.status_code, status.HTTP_200_OK)
+        payload = initiated.data["data"]
+        self.assertEqual(payload["provider"], "paytm_mock")
+        self.assertTrue(payload["mock"])
+        self.assertTrue(payload["order_id"].startswith("PAYTM_MOCK_MART_"))
+
+        verified = self.client.post(
+            "/api/orders/marketplace/checkout/verify-payment/",
+            {
+                "order_id": payload["order_id"],
+                "transaction_id": payload["transaction_id"],
+                "signature": payload["signature"],
+            },
+            format="json",
+        )
+        self.assertEqual(verified.status_code, status.HTTP_201_CREATED)
+        intent = MarketplacePaymentIntent.objects.get(pk=payload["intent_id"])
+        self.assertEqual(intent.status, MarketplacePaymentIntent.Status.PAID)
+        self.assertEqual(intent.provider_transaction_id, payload["transaction_id"])
+
+        replay = self.client.post(
+            "/api/orders/marketplace/checkout/verify-payment/",
+            {
+                "order_id": payload["order_id"],
+                "transaction_id": payload["transaction_id"],
+                "signature": payload["signature"],
+            },
+            format="json",
+        )
+        self.assertEqual(replay.status_code, status.HTTP_200_OK)
 
     def test_2_empty_cart_rejected(self):
         """2. empty cart rejected: initiate payment returns 400 when cart is empty."""
@@ -509,3 +559,57 @@ class MarketplacePaymentTests(TestCase):
         order = MarketplaceOrder.objects.filter(payment_transaction_id="pay_slot_test_123").first()
         self.assertIsNotNone(order)
         self.assertEqual(order.delivery_address, "123 Green Street, Hosur")
+
+    @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.intake_order")
+    @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.validate_cart")
+    def test_basket_checkout_preserves_canonical_basket_and_delivery_slot(self, mock_validate_cart, mock_intake_order):
+        """A bundle is sent to Workforce as a basket, never fabricated as a product."""
+        self.cart.items.all().delete()
+        CartItem.objects.create(
+            cart=self.cart,
+            basket_id=777,
+            basket_title="Breakfast combo",
+            product_title="Breakfast combo",
+            quantity=2,
+            unit_price_snapshot=Decimal("325.00"),
+            seller_id=101,
+            seller_name="Fresh Mart",
+            warehouse_id=1,
+            warehouse_name="Main Hub",
+        )
+        mock_validate_cart.return_value = {
+            "success": True,
+            "is_valid": True,
+            "validation": {
+                "items": [{
+                    "basket_id": 777,
+                    "company_id": 101,
+                    "seller_name": "Fresh Mart",
+                    "warehouse_id": 1,
+                    "warehouse_name": "Main Hub",
+                }],
+            },
+        }
+        mock_intake_order.return_value = {
+            "success": True,
+            "data": {"order": {"id": 908, "order_number": "VEND-00908"}},
+        }
+
+        payload = {
+            **self.checkout_payload,
+            "payment_method": "COD",
+            "delivery_slot": "10:00 AM - 12:00 PM",
+            "delivery_slot_id": 14,
+            "delivery_date": "2026-10-02",
+        }
+        response = self.client.post("/api/orders/marketplace/checkout/", payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        item = MarketplaceOrderItem.objects.get(order__customer=self.customer)
+        self.assertEqual(item.basket_id, 777)
+        self.assertEqual(item.basket_title, "Breakfast combo")
+        self.assertIsNone(item.seller_product_id)
+        sent_items = mock_intake_order.call_args.kwargs["items"]
+        self.assertEqual(sent_items, [{"basket_id": 777, "quantity": 2, "unit_price": "325.00"}])
+        self.assertEqual(mock_intake_order.call_args.kwargs["delivery_slot_id"], 14)
+        self.assertEqual(mock_intake_order.call_args.kwargs["delivery_date"], "2026-10-02")

@@ -34,6 +34,9 @@ import {
   fetchMarketplaceOrderDetail,
   cancelMarketplaceOrder,
   fetchMyOrders,
+  fetchMarketplaceBaskets,
+  addBasketToCart,
+  fetchMarketplaceDeliverySlots,
 } from "../../services/marketplaceApi.js"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
@@ -399,6 +402,11 @@ export function MarketplacePage() {
   const [showCustomerEntryModal, setShowCustomerEntryModal] = useState(false)
   const [pendingAddToCart, setPendingAddToCart] = useState(null)
 
+  // Published Seller Hub combo offers. They are fetched from the canonical
+  // Vendor catalog; an empty catalog deliberately renders no fallback cards.
+  const [baskets, setBaskets] = useState([])
+  const [basketsLoading, setBasketsLoading] = useState(false)
+
   // Product Catalog & Category State
   const [products, setProducts] = useState([])
   const [categoryTree, setCategoryTree] = useState([])
@@ -429,6 +437,9 @@ export function MarketplacePage() {
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [checkoutError, setCheckoutError] = useState("")
   const [paymentMethod, setPaymentMethod] = useState("UPI")
+  const [deliverySlots, setDeliverySlots] = useState([])
+  const [deliverySlotsLoading, setDeliverySlotsLoading] = useState(false)
+  const [selectedDeliverySlot, setSelectedDeliverySlot] = useState(null)
   const [activeOrder, setActiveOrder] = useState(null)
   const [trackingModalOpen, setTrackingModalOpen] = useState(false)
   const [cancelLoading, setCancelLoading] = useState(false)
@@ -464,6 +475,12 @@ export function MarketplacePage() {
     if (currentCategorySlug === "all" || !activeCategoryNode) return []
     return getCategoryPathFromTree(categoryTree, currentCategorySlug)
   }, [categoryTree, currentCategorySlug, activeCategoryNode])
+
+  const primaryWarehouseId = useMemo(() => {
+    const groupedWarehouse = cart?.warehouse_groups?.[0]?.warehouse_id
+    if (groupedWarehouse !== undefined && groupedWarehouse !== null) return groupedWarehouse
+    return cart?.items?.find((item) => item.warehouse_id !== undefined && item.warehouse_id !== null)?.warehouse_id ?? null
+  }, [cart])
 
   // Deduplicated / aggregated root categories only (no leaf/child categories) for Instamart sidebar & top pill bar
   const uniqueRootCategories = useMemo(() => {
@@ -598,6 +615,25 @@ export function MarketplacePage() {
       })
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    setBasketsLoading(true)
+    fetchMarketplaceBaskets({ page_size: 12 })
+      .then((response) => {
+        if (cancelled) return
+        const payload = response?.data ?? response
+        const results = Array.isArray(payload) ? payload : (payload?.results || [])
+        setBaskets(Array.isArray(results) ? results : [])
+      })
+      .catch(() => {
+        if (!cancelled) setBaskets([])
+      })
+      .finally(() => {
+        if (!cancelled) setBasketsLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [])
+
   // Refetch products when category, seller, or debounced search changes
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -649,6 +685,30 @@ export function MarketplacePage() {
     reloadCart()
     reloadActiveOrder()
   }, [user])
+
+  useEffect(() => {
+    if (!cartDrawerOpen || !user || !cart?.items?.length) return
+    let cancelled = false
+    setDeliverySlotsLoading(true)
+    const date = new Date().toLocaleDateString("en-CA")
+    fetchMarketplaceDeliverySlots({ warehouse_id: primaryWarehouseId, date })
+      .then((response) => {
+        if (cancelled) return
+        const payload = response?.data ?? response
+        const slots = Array.isArray(payload) ? payload : (payload?.slots || payload?.results || [])
+        const available = Array.isArray(slots) ? slots.filter((slot) => slot.available !== false) : []
+        setDeliverySlots(available)
+        setSelectedDeliverySlot((current) => available.find((slot) => slot.id === current?.id) || available[0] || null)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDeliverySlots([])
+          setSelectedDeliverySlot(null)
+        }
+      })
+      .finally(() => { if (!cancelled) setDeliverySlotsLoading(false) })
+    return () => { cancelled = true }
+  }, [cartDrawerOpen, user, primaryWarehouseId, cart?.items?.length])
 
   // Sellers list derived from current products
   const availableSellers = useMemo(() => {
@@ -759,6 +819,32 @@ export function MarketplacePage() {
     }
   }
 
+  const handleAddBasketToCart = async (basket) => {
+    if (!user) {
+      setShowCustomerEntryModal(true)
+      return
+    }
+    setCartLoading(true)
+    try {
+      let response = await addBasketToCart({ basket_id: basket.id, quantity: 1 })
+      if (!response?.success && (response?.status_code === 409 || response?.error === "seller_mismatch")) {
+        const currentSeller = response?.current_seller_name || cart?.seller_name || "another seller"
+        const replace = window.confirm(`Your cart contains items from ${currentSeller}. Replace it with this offer?`)
+        if (replace) response = await addBasketToCart({ basket_id: basket.id, quantity: 1, clear_cart: true })
+      }
+      if (response?.success) {
+        await reloadCart()
+        showToast(`Added “${basket.title}” to cart`, "success")
+      } else {
+        showToast(response?.message || "This offer could not be added to your cart.", "error")
+      }
+    } catch (error) {
+      showToast(error?.body?.message || "This offer could not be added to your cart.", "error")
+    } finally {
+      setCartLoading(false)
+    }
+  }
+
   // Handle Product Card Click (Open detail)
   const handleOpenDetail = async (prod) => {
     setDetailProduct(prod)
@@ -791,6 +877,9 @@ export function MarketplacePage() {
           customer_email: user?.email || "",
           payment_method: "COD",
           fulfilment_type: "DELIVERY",
+          delivery_slot: selectedDeliverySlot?.label || "",
+          delivery_slot_id: selectedDeliverySlot?.id || null,
+          delivery_date: selectedDeliverySlot ? new Date().toLocaleDateString("en-CA") : null,
         })
 
         if (res?.success && res?.data) {
@@ -812,7 +901,9 @@ export function MarketplacePage() {
       return
     }
 
-    // Option B: UPI (Razorpay) Flow
+    // Option B: online payment. The backend returns the configured provider;
+    // the browser must still submit its server-issued completion payload for
+    // authoritative verification before an order is created.
     try {
       // Step 1: Initiate Payment Intent on backend
       const intentRes = await initiateMarketplacePayment({
@@ -822,6 +913,9 @@ export function MarketplacePage() {
         customer_email: user?.email || "",
         payment_method: "UPI",
         fulfilment_type: "DELIVERY",
+        delivery_slot: selectedDeliverySlot?.label || "",
+        delivery_slot_id: selectedDeliverySlot?.id || null,
+        delivery_date: selectedDeliverySlot ? new Date().toLocaleDateString("en-CA") : null,
       })
 
       if (!intentRes?.success || !intentRes?.data) {
@@ -832,12 +926,18 @@ export function MarketplacePage() {
 
       const intentData = intentRes.data
 
-      // If sandbox fallback mode is active (no keys configured on backend and in debug mode)
-      if (intentData.sandbox_fallback) {
+      if (intentData.provider === "paytm_mock") {
+        const approved = window.confirm(
+          "Paytm MOCK payment\n\nThis is a local/test payment only. No money will be collected. Continue to place the order?"
+        )
+        if (!approved) {
+          setCheckoutLoading(false)
+          return
+        }
         const verifyRes = await verifyMarketplacePayment({
-          razorpay_order_id: intentData.razorpay_order_id,
-          razorpay_payment_id: `pay_mock_${Date.now()}`,
-          razorpay_signature: "sandbox_mock_signature",
+          order_id: intentData.order_id,
+          transaction_id: intentData.transaction_id,
+          signature: intentData.signature,
         })
         if (verifyRes?.success && verifyRes?.data) {
           setActiveOrder(verifyRes.data)
@@ -848,6 +948,12 @@ export function MarketplacePage() {
         } else {
           setCheckoutError(verifyRes?.message || "Order verification failed.")
         }
+        setCheckoutLoading(false)
+        return
+      }
+
+      if (intentData.provider === "paytm") {
+        setCheckoutError("Paytm merchant checkout will be enabled once the merchant account and CheckoutJS configuration are supplied.")
         setCheckoutLoading(false)
         return
       }
@@ -867,7 +973,7 @@ export function MarketplacePage() {
         currency: intentData.currency || "INR",
         name: intentData.name || "Sevo Mart",
         description: intentData.description || "Sevo Grocery Marketplace Order",
-        order_id: intentData.razorpay_order_id,
+        order_id: intentData.order_id || intentData.razorpay_order_id,
         prefill: intentData.prefill || {
           name: user?.name || "",
           email: user?.email || "",
@@ -894,9 +1000,9 @@ export function MarketplacePage() {
           try {
             // Step 3: Authoritative HMAC signature verification on backend
             const verifyRes = await verifyMarketplacePayment({
-              razorpay_order_id: paymentResponse.razorpay_order_id,
-              razorpay_payment_id: paymentResponse.razorpay_payment_id,
-              razorpay_signature: paymentResponse.razorpay_signature,
+              order_id: paymentResponse.razorpay_order_id,
+              transaction_id: paymentResponse.razorpay_payment_id,
+              signature: paymentResponse.razorpay_signature,
             })
 
             if (verifyRes?.success && verifyRes?.data) {
@@ -1299,6 +1405,46 @@ export function MarketplacePage() {
                   </button>
                 )}
               </div>
+
+              {(currentCategorySlug === "all" && !searchQuery && (basketsLoading || baskets.length > 0)) && (
+                <section className="mb-6 rounded-2xl border border-violet-100 bg-violet-50/60 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-black text-slate-900">Seller combo offers</h3>
+                      <p className="text-xs text-slate-500">Curated bundles from verified local stores</p>
+                    </div>
+                    <Boxes className="h-5 w-5 text-violet-600" />
+                  </div>
+                  {basketsLoading ? (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      {[0, 1, 2].map((index) => <div key={index} className="h-28 animate-pulse rounded-xl bg-white" />)}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      {baskets.map((basket) => (
+                        <article key={basket.id} className="rounded-xl border border-violet-100 bg-white p-3 shadow-sm">
+                          <div className="flex gap-3">
+                            {basket.primary_image ? (
+                              <img src={basket.primary_image} alt="" className="h-14 w-14 rounded-lg bg-slate-50 object-cover" />
+                            ) : (
+                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700"><Boxes className="h-6 w-6" /></div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <h4 className="truncate text-sm font-extrabold text-slate-900">{basket.title}</h4>
+                              <p className="mt-0.5 line-clamp-2 text-[11px] text-slate-500">{basket.description || `${basket.item_count || 0} items`}</p>
+                              <p className="mt-1 text-sm font-black text-slate-900">₹{basket.bundle_price}</p>
+                            </div>
+                          </div>
+                          <button type="button" onClick={() => handleAddBasketToCart(basket)} disabled={cartLoading || basket.in_stock === false}
+                            className="mt-3 w-full rounded-lg bg-violet-600 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50">
+                            {basket.in_stock === false ? "Unavailable" : "Add bundle"}
+                          </button>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
 
               {/* Products Header */}
               <div className="flex items-center justify-between mb-6">
@@ -1798,6 +1944,26 @@ export function MarketplacePage() {
                       <p className="text-xs text-slate-700 font-medium leading-snug">
                         {deliveryAddress}
                       </p>
+                    </div>
+
+                    <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-xs font-black text-slate-400 uppercase tracking-wider">Delivery slot</div>
+                        {deliverySlotsLoading && <RefreshCw className="h-3.5 w-3.5 animate-spin text-emerald-600" />}
+                      </div>
+                      {deliverySlots.length > 0 ? (
+                        <div className="grid grid-cols-2 gap-2">
+                          {deliverySlots.map((slot) => (
+                            <button key={slot.id} type="button" onClick={() => setSelectedDeliverySlot(slot)}
+                              className={`rounded-xl border p-2 text-left text-xs transition-colors ${selectedDeliverySlot?.id === slot.id ? "border-emerald-500 bg-emerald-50 text-emerald-950" : "border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300"}`}>
+                              <span className="block truncate font-extrabold">{slot.label}</span>
+                              {slot.start_time && slot.end_time && <span className="mt-0.5 block text-[10px] text-slate-500">{slot.start_time} – {slot.end_time}</span>}
+                            </button>
+                          ))}
+                        </div>
+                      ) : !deliverySlotsLoading ? (
+                        <p className="text-xs text-slate-500">Delivery timing will be confirmed by the seller.</p>
+                      ) : null}
                     </div>
 
                     {/* Bill Summary */}

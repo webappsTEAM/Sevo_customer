@@ -139,7 +139,7 @@ export function loadRazorpayScript() {
 }
 
 /**
- * Initiate Razorpay Payment intent for Marketplace Checkout (Step 1).
+ * Initiate the configured server-side payment provider for Marketplace Checkout.
  */
 export async function initiateMarketplacePayment({
   delivery_address,
@@ -149,6 +149,8 @@ export async function initiateMarketplacePayment({
   payment_method = "UPI",
   fulfilment_type = "DELIVERY",
   delivery_slot = null,
+  delivery_slot_id = null,
+  delivery_date = null,
 }) {
   return await apiRequest("/orders/marketplace/checkout/initiate-payment/", {
     method: "POST",
@@ -160,24 +162,28 @@ export async function initiateMarketplacePayment({
       payment_method,
       fulfilment_type,
       ...(delivery_slot ? { delivery_slot } : {}),
+      ...(delivery_slot_id ? { delivery_slot_id } : {}),
+      ...(delivery_date ? { delivery_date } : {}),
     },
   })
 }
 
 /**
- * Verify Razorpay Payment signature and finalize Marketplace orders (Step 2).
+ * Verify the provider completion payload and finalize Marketplace orders.
+ * The server selects and validates the provider; this function never decides
+ * whether a payment is successful.
  */
 export async function verifyMarketplacePayment({
-  razorpay_order_id,
-  razorpay_payment_id,
-  razorpay_signature,
+  order_id,
+  transaction_id,
+  signature,
 }) {
   return await apiRequest("/orders/marketplace/checkout/verify-payment/", {
     method: "POST",
     json: {
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature,
+      order_id,
+      transaction_id,
+      signature,
     },
   })
 }
@@ -194,6 +200,8 @@ export async function checkoutMarketplaceOrder({
   payment_transaction_id = "",
   fulfilment_type = "DELIVERY",
   delivery_slot = null,
+  delivery_slot_id = null,
+  delivery_date = null,
 }) {
   return await apiRequest("/orders/marketplace/checkout/", {
     method: "POST",
@@ -206,6 +214,8 @@ export async function checkoutMarketplaceOrder({
       payment_transaction_id,
       fulfilment_type,
       ...(delivery_slot ? { delivery_slot } : {}),
+      ...(delivery_slot_id ? { delivery_slot_id } : {}),
+      ...(delivery_date ? { delivery_date } : {}),
     },
   })
 }
@@ -232,5 +242,38 @@ export async function cancelMarketplaceOrder(orderNumber, reason = "Customer can
  */
 export async function fetchMyOrders() {
   return await apiRequest("/orders/my/", { method: "GET" })
+}
+
+/** Published Seller Hub basket/combo offers. */
+export async function fetchMarketplaceBaskets({ company_id = "", search = "", page = 1, page_size = 20 } = {}) {
+  const params = new URLSearchParams()
+  if (company_id) params.append("company_id", company_id)
+  if (search) params.append("search", search)
+  params.append("page", page)
+  params.append("page_size", page_size)
+  const query = params.toString()
+  return await apiRequest(`/marketplace/baskets/${query ? `?${query}` : ""}`, { method: "GET" })
+}
+
+/** Full component breakdown for one published basket. */
+export async function fetchMarketplaceBasketDetail(basketId) {
+  return await apiRequest(`/marketplace/baskets/${basketId}/`, { method: "GET" })
+}
+
+/** Add one basket line. Product and basket IDs are mutually exclusive server-side. */
+export async function addBasketToCart({ basket_id, quantity = 1, clear_cart = false }) {
+  return await apiRequest("/carts/marketplace/items/", {
+    method: "POST",
+    json: { basket_id, quantity, clear_cart },
+  })
+}
+
+/** Available, capacity-aware delivery slots for the selected fulfillment warehouse. */
+export async function fetchMarketplaceDeliverySlots({ warehouse_id, date } = {}) {
+  const params = new URLSearchParams()
+  if (warehouse_id !== undefined && warehouse_id !== null && warehouse_id !== "") params.append("warehouse_id", warehouse_id)
+  if (date) params.append("date", date)
+  const query = params.toString()
+  return await apiRequest(`/orders/marketplace/delivery-slots/${query ? `?${query}` : ""}`, { method: "GET" })
 }
 

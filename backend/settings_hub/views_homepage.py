@@ -62,23 +62,15 @@ MAX_VIDEO_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
 
 def _extract_image_paths(config_data):
     """
-    Recursively scans config data to collect all Supabase Storage paths (homepage/...)
-    stored as relative paths or full canonical Supabase URLs.
+    Recursively scans config data to collect managed storage paths
+    (homepage/...) stored as relative paths or canonical provider URLs.
     """
-    supabase_url, _, bucket, _ = SupabaseStorageService._get_config()
-    prefix = f"{supabase_url}/storage/v1/object/public/{bucket}/" if supabase_url else ""
     paths = set()
 
     def _extract_val(v):
         if not isinstance(v, str):
             return
-        trimmed = v.strip()
-        if prefix and trimmed.startswith(prefix):
-            paths.add(trimmed[len(prefix):])
-            return
-        clean = trimmed.lstrip("/")
-        if clean.startswith("media/"):
-            clean = clean[len("media/"):]
+        clean = SupabaseStorageService.extract_managed_path(v)
         if clean.startswith("homepage/"):
             paths.add(clean)
 
@@ -319,7 +311,35 @@ class HomePageConfigAPIView(APIView):
                         # homepage_repository.dart prefers this list over
                         # the auto-grouped vendor tiles whenever it's
                         # non-empty.
-                        "bestsellers": []
+                        "bestsellers": [],
+                        # Added 2026-09-30 per explicit request ("give the
+                        # privilege to the customer admin to set up the
+                        # products in UI... user able to enter name inside
+                        # that give privilege to choose how the data should
+                        # show and which category should show... user can
+                        # select multiple sub-category"): lets the admin
+                        # define named, curated product carousels for the
+                        # Grocery-mode Home screen (replacing the old
+                        # "Essential Picks" strip) without touching the
+                        # Seller Hub vendor's own category tree at all —
+                        # each entry is {id, title, layout ('horizontal' |
+                        # 'grid'), category_ids (a list of Seller Hub
+                        # Marketplace category ids from
+                        # GET /api/marketplace/categories/ — any mix of
+                        # root/sub-category/leaf; the products endpoint
+                        # already aggregates a department's own subtree, so
+                        # picking a parent implicitly includes its
+                        # children), enabled}. Purely a merchandising layer
+                        # on top of that read-only proxy: no write access
+                        # to the vendor's tree is needed or granted. The
+                        # customer app's homepage_repository.dart prefers
+                        # this list (every enabled entry, in order) over its
+                        # own auto-generated "one section per real
+                        # sub-category" fallback whenever it's non-empty —
+                        # same "admin data wins, auto-generated is only a
+                        # fallback" convention "bestsellers" above already
+                        # uses.
+                        "grocerySections": []
                     }
                 }
                 return Response({
