@@ -113,10 +113,14 @@ class DeliveryOtpVisibilityTests(TestCase):
 
     def setUp(self):
         with connection.cursor() as cursor:
+            # Dialect-aware DDL: this stub table must build on SQLite (unit runs)
+            # AND PostgreSQL (production-parity runs).
+            _pk = "serial primary key" if connection.vendor == "postgresql" else "integer primary key autoincrement"
+            _ts = "timestamptz" if connection.vendor == "postgresql" else "datetime"
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS workforce_notification ("
-                "id integer primary key autoincrement, related_object_id varchar(64), "
-                "notification_type varchar(64), message text, created_at datetime)"
+                f"id {_pk}, related_object_id varchar(64), "
+                f"notification_type varchar(64), message text, created_at {_ts})"
             )
         self.addCleanup(self._drop_table)
 

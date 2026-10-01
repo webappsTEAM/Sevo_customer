@@ -2013,8 +2013,10 @@ def _latest_delivery_otp(sr):
         return None
     try:
         import re
-        from django.db import connection
-        with connection.cursor() as cursor:
+        from django.db import connection, transaction
+        # Savepoint: on PostgreSQL a failing raw query (vendor-owned mirror table missing or
+        # not readable) would otherwise abort the WHOLE surrounding transaction.
+        with transaction.atomic(), connection.cursor() as cursor:
             cursor.execute(
                 "SELECT message FROM workforce_notification "
                 "WHERE related_object_id IN (%s, %s) "
@@ -4342,7 +4344,14 @@ class CustomerInsuranceClaimListCreateView(APIView):
                 claimed_amount=claimed_amount, attachment_files=attachment_files,
             )
         except Exception as e:
-            return _standard_response(success=False, error={"code": "CLAIM_FAILED", "message": str(e)}, status_code=400)
+            # DRF ValidationError.__str__ is a dict repr ({'detail': [ErrorDetail(...)]}); show the sentence.
+            _d = getattr(e, "detail", None)
+            if isinstance(_d, dict) and _d.get("detail") is not None:
+                _d = _d["detail"]
+            if isinstance(_d, (list, tuple)) and _d:
+                _d = _d[0]
+            _msg = str(_d) if _d else str(e)
+            return _standard_response(success=False, error={"code": "CLAIM_FAILED", "message": _msg}, status_code=400)
 
         return _standard_response(success=True, data=InsuranceClaimSerializer(claim).data, status_code=201)
 
@@ -5914,7 +5923,7 @@ class CustomerQuotePDFView(APIView):
                 if len(parts) > 1 and parts[1].isdigit():
                     v_target = int(parts[1])
 
-            with connection.cursor() as cursor:
+            with transaction.atomic(), connection.cursor() as cursor:
                 # Try finding quote_id directly or by job/token/versioned quote_number
                 if v_target is not None:
                     sql = """
@@ -5973,7 +5982,7 @@ class CustomerQuotePDFView(APIView):
                 }
                 try:
                     from django.db import connection
-                    with connection.cursor() as cursor:
+                    with transaction.atomic(), connection.cursor() as cursor:
                         cursor.execute("""
                             SELECT id FROM workforce_quote 
                             WHERE job_id = %s OR quote_number = %s 

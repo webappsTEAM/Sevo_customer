@@ -341,6 +341,11 @@ def resolve_cargo_payload(
     if declared_weight_kg is not None:
         try:
             parsed_declared_weight = Decimal(str(declared_weight_kg))
+            # NaN / +-Infinity / out-of-range exponents parse as Decimals but crash
+            # money arithmetic later (unhandled 500 on public endpoints).
+            if not parsed_declared_weight.is_finite():
+                raise ValueError("non-finite declared weight")
+            _money(parsed_declared_weight)  # raises if not representable
             if parsed_declared_weight < Decimal("0.00"):
                 validation_errors.append({
                     "error": f"Declared weight cannot be negative (received {declared_weight_kg}).",
@@ -350,6 +355,7 @@ def resolve_cargo_payload(
                 if parsed_declared_weight > final_weight_kg:
                     final_weight_kg = parsed_declared_weight
         except Exception:
+            parsed_declared_weight = None  # never echo a non-representable value back
             validation_errors.append({
                 "error": f"Invalid declared weight format '{declared_weight_kg}'.",
                 "code": "INVALID_DECLARED_WEIGHT",

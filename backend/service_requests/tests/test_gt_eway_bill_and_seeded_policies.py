@@ -59,7 +59,7 @@ class SeededDefaultPolicyTests(TestCase):
     def test_default_claim_policies_seeded_per_category(self):
         two_w = GTClaimPolicy.objects.get(service_category="goods_transport_two_wheeler")
         self.assertEqual(two_w.included_liability_cap, Decimal("1500.00"))
-        truck = GTClaimPolicy.objects.get(service_category="goods_transport_truck")
+        truck = GTClaimPolicy.objects.get(service_category="goods_transport_truck", applies_to_ptl=False)
         self.assertEqual(truck.included_liability_cap, Decimal("5000.00"))
         pm = GTClaimPolicy.objects.get(service_category="packers_movers")
         self.assertEqual(pm.included_liability_cap, Decimal("5000.00"))

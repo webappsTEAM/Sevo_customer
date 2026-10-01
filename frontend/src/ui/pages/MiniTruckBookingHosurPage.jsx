@@ -14,7 +14,7 @@ import { TransitInsuranceOption } from "../components/TransitInsuranceOption.jsx
 import { EwayBillField } from "../components/EwayBillField.jsx"
 import { settleBookingPayment } from "../../api/gtPaymentService.js"
 import { GstinField, isValidGstin, LoadingHelpToggle } from "../components/GstinField.jsx"
-import { extractApiErrorMessage } from "../../api/client.js"
+import { extractApiErrorMessage, apiRequest } from "../../api/client.js"
 import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchLogisticsQuote, checkRouteCoverage, checkPointCoverage, fetchGoodsCategories, fetchGoodsItems, evaluateCargoFitment, fetchLogisticsSlots, fetchGTFaqs, fetchLogisticsCities } from "../../api/logisticsService.js"
 import { GoodsCargoSelectorModal } from "../../components/logistics/GoodsCargoSelectorModal.jsx"
 import { MultiStopRouteManager, findUnpinnedStop, locatedStops, coverageIssueForStops } from "../../components/logistics/MultiStopRouteManager.jsx"
@@ -600,6 +600,8 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
   const { user } = useAuth()
   const [showAccountPortal, setShowAccountPortal] = useState(false)
   const [showCustomerEntryModal, setShowCustomerEntryModal] = useState(false)
+  // true when the modal was opened from the header Login button (no booking to submit afterwards)
+  const [entryFromHeader, setEntryFromHeader] = useState(false)
   const [localIsSignedIn, setLocalIsSignedIn] = useState(false)
   const isSignedIn = Boolean(user) || localIsSignedIn
 
@@ -737,6 +739,8 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
   const [activeVehicleDetails, setActiveVehicleDetails] = useState(null)
 
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false)
+  // Date shown/updated by the Reschedule modal after a booking exists (was referenced but never declared -> ReferenceError).
+  const [preferredDate, setPreferredDate] = useState("")
   const [cancelModalOpen, setCancelModalOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState("")
   const [cancelComments, setCancelComments] = useState("")
@@ -2216,7 +2220,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
             ) : (
               <button
                 type="button"
-                onClick={() => setEntryFlowOpen(true)}
+                onClick={() => { setEntryFromHeader(true); setShowCustomerEntryModal(true) }}
                 className="px-4 py-2 bg-[var(--sevo-primary)] hover:bg-[var(--sevo-primary-hover)] text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer active:scale-95"
               >
                 Login / Register
@@ -4805,15 +4809,17 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
       {showCustomerEntryModal && (
         <CustomerEntryFlowModal
           isOpen={showCustomerEntryModal}
-          onClose={() => setShowCustomerEntryModal(false)}
+          onClose={() => { setShowCustomerEntryModal(false); setEntryFromHeader(false) }}
           onComplete={(userData) => {
             setShowCustomerEntryModal(false)
+            const fromHeader = entryFromHeader
+            setEntryFromHeader(false)
             setLocalIsSignedIn(true)
             const resolvedName = (userData?.name || name || "").trim()
             const resolvedPhone = (userData?.phone || phone || "").replace(/\D/g, "").slice(0, 10)
             if (resolvedName) setName(resolvedName)
             if (resolvedPhone) setPhone(resolvedPhone)
-            submitBooking(null, resolvedName, resolvedPhone)
+            if (!fromHeader) submitBooking(null, resolvedName, resolvedPhone)
           }}
         />
       )}

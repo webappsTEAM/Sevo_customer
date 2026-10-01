@@ -94,7 +94,7 @@ TRUCK_TIERS = [
              "Small construction materials", "Shop/warehouse deliveries",
          ]),
     dict(slug="pickup-8ft", name="Pickup 8ft", weight_class="heavy", vehicle_class="pickup",
-         max_weight_kg=Decimal("1200.00"), max_cft=Decimal("150.00"), capacity_label="1250 kg",
+         max_weight_kg=Decimal("1250.00"), max_cft=Decimal("150.00"), capacity_label="1250 kg",
          dimensions_label="8ft x 5ft x 5.5ft", starting_price="300.00", order=3,
          description="Bulky electronics, commercial goods, furniture, home shifting",
          includes=[
@@ -196,7 +196,7 @@ GT_FAQS = [
          answer="We provide comprehensive on-road transit support in and around Hosur. In the unlikely event of an issue, a backup vehicle is immediately dispatched from our local fleet hub to safely transfer goods without additional charges."),
     dict(category=LogisticsCategory.TRUCK, city=CITY, order=2,
          question="What should I consider when determining the truck size I need to book?",
-         answer="Consider cargo dimensions, total weight, and loading height. For 1-2 small appliances or cartons, a 3-Wheeler (500kg) is best. For 1 BHK home shifting or factory supplies, choose a Tata Ace (750kg) or 8ft Pickup (1200kg)."),
+         answer="Consider cargo dimensions, total weight, and loading height. For 1-2 small appliances or cartons, a 3-Wheeler (500kg) is best. For 1 BHK home shifting or factory supplies, choose a Tata Ace (750kg) or 8ft Pickup (1250kg)."),
     dict(category=LogisticsCategory.TRUCK, city=CITY, order=3,
          question="How do I track my mini truck delivery in real time?",
          answer="Once your mini truck booking in Hosur is confirmed and a driver arrives at the pickup point, live GPS tracking becomes active. You can track route progress and share live updates directly with the recipient."),
@@ -330,7 +330,9 @@ class Command(BaseCommand):
         count = 0
         for tier_data in tiers:
             slug = tier_data["slug"]
-            existing = ServiceTier.objects.filter(category=category, city=CITY, slug=slug).first()
+            # city is matched case-insensitively (runtime reads use city__iexact, the
+            # unique key is case-sensitive): avoids a 'Hosur' twin of a 'hosur' row.
+            existing = ServiceTier.objects.filter(category=category, city__iexact=CITY, slug=slug).first()
             defaults = {**tier_data, "is_active": True}
             if existing and not self.force_pricing:
                 if existing.max_weight_kg is not None and existing.max_weight_kg > 0:
@@ -344,10 +346,17 @@ class Command(BaseCommand):
                 if existing.includes:
                     defaults["includes"] = existing.includes
 
-            obj, _created = ServiceTier.objects.update_or_create(
-                category=category, city=CITY, slug=slug,
-                defaults=defaults,
-            )
+            if existing:
+                defaults.pop("city", None)
+                for k, v in defaults.items():
+                    setattr(existing, k, v)
+                existing.save()
+                obj = existing
+            else:
+                obj, _created = ServiceTier.objects.update_or_create(
+                    category=category, city=CITY, slug=slug,
+                    defaults=defaults,
+                )
             self._apply_launch_pricing(obj)
             count += 1
         return count
@@ -393,10 +402,15 @@ class Command(BaseCommand):
     def _seed_lanes(self, category, lanes):
         count = 0
         for lane in lanes:
-            Lane.objects.update_or_create(
-                category=category, city=CITY, destination_label=lane["destination_label"],
-                defaults={**lane, "is_active": True},
-            )
+            existing = Lane.objects.filter(category=category, city__iexact=CITY,
+                                           destination_label=lane["destination_label"]).first()
+            if existing:
+                for k, v in {**lane, "is_active": True}.items():
+                    if k != "city":
+                        setattr(existing, k, v)
+                existing.save()
+            else:
+                Lane.objects.create(category=category, city=CITY, **{**lane, "is_active": True})
             count += 1
         return count
 

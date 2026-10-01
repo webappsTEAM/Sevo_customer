@@ -9,6 +9,7 @@ import { ToastBanner, useToast } from "./useToast.jsx"
 import {
   fetchAdminTierHistory,
   fetchAdminTiers,
+  updateAdminTier,
 } from "../../../api/logisticsAdminService.js"
 import { GTCategoriesTab } from "./gt/GTCategoriesTab.jsx"
 import { GTItemsTab } from "./gt/GTItemsTab.jsx"

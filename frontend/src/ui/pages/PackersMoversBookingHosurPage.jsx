@@ -720,17 +720,6 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
     return () => { live = false }
   }, [selectedCity])
 
-  // Client-side display estimate only -- the amount actually charged always comes back from the
-  // server (booking is rejected if the submitted total doesn't match what the server computes).
-  const addOnEstimate = selectedAddOns.reduce((sum, sel) => {
-    const svc = addOnsCatalog.find((c) => c.code === sel.code)
-    if (!svc) return sum
-    const qty = svc.pricing_mode === "FLAT" ? 1 : sel.quantity || 1
-    const price = svc.pricing_mode === "PER_CFT"
-      ? Number(svc.unit_price) * Number(pmServerQuote?.inventory_summary?.effective_cft || pmServerQuote?.inventory_summary?.total_cft || 0)
-      : Number(svc.unit_price) * qty
-    return sum + (Number.isFinite(price) ? price : 0)
-  }, 0)
 
   useEffect(() => {
     let isMounted = true
@@ -876,6 +865,19 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
   // (PackersMoversConfig.max_helpers) returned by the inventory endpoint.
   const [helpersRequested, setHelpersRequested] = useState(0)
   const [pmServerQuote, setPmServerQuote] = useState(null)
+
+  // (Declared AFTER selectedAddOns/addOnsCatalog/pmServerQuote: it used to sit above them and the page crashed on first render with a TDZ ReferenceError.)
+  // Client-side display estimate only -- the amount actually charged always comes back from the
+  // server (booking is rejected if the submitted total doesn't match what the server computes).
+  const addOnEstimate = selectedAddOns.reduce((sum, sel) => {
+    const svc = addOnsCatalog.find((c) => c.code === sel.code)
+    if (!svc) return sum
+    const qty = svc.pricing_mode === "FLAT" ? 1 : sel.quantity || 1
+    const price = svc.pricing_mode === "PER_CFT"
+      ? Number(svc.unit_price) * Number(pmServerQuote?.inventory_summary?.effective_cft || pmServerQuote?.inventory_summary?.total_cft || 0)
+      : Number(svc.unit_price) * qty
+    return sum + (Number.isFinite(price) ? price : 0)
+  }, 0)
   const [pmQuoteLoading, setPmQuoteLoading] = useState(false)
   const [pmQuoteError, setPmQuoteError] = useState("")
   const bookingAttemptKeyRef = useRef(null)
@@ -1021,6 +1023,8 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
   const [partnerCountdown, setPartnerCountdown] = useState(600) // 10:00 mins
   const [orderDetailsExpanded, setOrderDetailsExpanded] = useState(false)
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false)
+  // Date shown/updated by the Reschedule modal after a booking exists (was referenced but never declared -> ReferenceError).
+  const [preferredDate, setPreferredDate] = useState("")
   const [cancelModalOpen, setCancelModalOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState("")
   const [cancelComments, setCancelComments] = useState("")

@@ -478,6 +478,8 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
   const [activeVehicleDetails, setActiveVehicleDetails] = useState(null)
 
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false)
+  // Date shown/updated by the Reschedule modal after a booking exists (was referenced but never declared -> ReferenceError).
+  const [preferredDate, setPreferredDate] = useState("")
   const [cancelModalOpen, setCancelModalOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState("")
   const [cancelComments, setCancelComments] = useState("")

@@ -13,6 +13,26 @@ import uuid
 import requests
 import threading
 from django.conf import settings
+import contextlib as _contextlib
+from django.db import connection as _dbconn, transaction as _dbtx
+
+
+class _dbguard:
+    """Savepoint guard for raw SQL on vendor-owned tables.
+
+    Inside an open transaction (tests, explicit atomic blocks, ATOMIC_REQUESTS) a
+    failed statement aborts the WHOLE PostgreSQL transaction, so the lookup is
+    wrapped in a savepoint. In autocommit (the normal request path) a failed
+    statement poisons nothing, so no SAVEPOINT/RELEASE round trips are added to
+    these hot polling paths.
+    """
+
+    @staticmethod
+    def atomic():
+        return _dbtx.atomic() if _dbconn.in_atomic_block else _contextlib.nullcontext()
+
+
+_dbtx_guard = _dbguard
 from django.utils import timezone
 
 logger = logging.getLogger("workforce_integration")
@@ -503,7 +523,7 @@ class WorkforceIntegrationService:
         """
         try:
             from django.db import connection
-            with connection.cursor() as cursor:
+            with _dbtx_guard.atomic(), connection.cursor() as cursor:
                 cursor.execute("SELECT * FROM workforce_quote WHERE id = %s", [quote_id])
                 cols = [c[0] for c in cursor.description]
                 row = cursor.fetchone()
@@ -644,7 +664,10 @@ class WorkforceIntegrationService:
                 wf_id = -1
 
             from django.db import connection
-            with connection.cursor() as cursor:
+            # atomic() = SAVEPOINT when nested: a failing lookup (e.g. the vendor-owned
+            # table missing/unreadable) must not abort the caller's outer PostgreSQL
+            # transaction and poison every later query.
+            with _dbtx_guard.atomic(), connection.cursor() as cursor:
                 cursor.execute("""
                     SELECT id FROM workforce_quote 
                     WHERE (job_id IN (%s, %s)
@@ -675,7 +698,7 @@ class WorkforceIntegrationService:
         # 1. DB Lookup first
         try:
             from django.db import connection
-            with connection.cursor() as cursor:
+            with _dbtx_guard.atomic(), connection.cursor() as cursor:
                 cursor.execute("""
                     SELECT id FROM workforce_quote 
                     WHERE (decision_token = %s 
@@ -764,7 +787,7 @@ class WorkforceIntegrationService:
                     wf_id = -1
 
                 from django.db import connection
-                with connection.cursor() as cursor:
+                with _dbtx_guard.atomic(), connection.cursor() as cursor:
                     cursor.execute("""
                         SELECT id FROM workforce_quote 
                         WHERE (job_id IN (%s, %s)
@@ -830,7 +853,7 @@ class WorkforceIntegrationService:
                                     if quote_num:
                                         try:
                                             from django.db import connection
-                                            with connection.cursor() as cursor:
+                                            with _dbtx_guard.atomic(), connection.cursor() as cursor:
                                                 cursor.execute("""
                                                     SELECT decision_token, customer_notes, customer_decline_reason, status 
                                                     FROM workforce_quote 
@@ -876,7 +899,7 @@ class WorkforceIntegrationService:
         job_id_val = None
         try:
             from django.db import connection
-            with connection.cursor() as cursor:
+            with _dbtx_guard.atomic(), connection.cursor() as cursor:
                 cursor.execute("""
                     SELECT decision_token, id, job_id 
                     FROM workforce_quote 
@@ -961,7 +984,7 @@ class WorkforceIntegrationService:
         if quote_id_val:
             try:
                 from django.db import connection
-                with connection.cursor() as cursor:
+                with _dbtx_guard.atomic(), connection.cursor() as cursor:
                     cursor.execute("""
                         UPDATE workforce_quote 
                         SET status = %s,

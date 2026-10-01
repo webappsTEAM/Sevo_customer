@@ -829,8 +829,8 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
 
         if candidate_job_ids or candidate_quote_numbers:
             try:
-                from django.db import connection
-                with connection.cursor() as cursor:
+                from django.db import connection, transaction
+                with transaction.atomic(), connection.cursor() as cursor:
                     job_in = ",".join(["%s"] * len(candidate_job_ids)) if candidate_job_ids else "-1"
                     quote_in = ",".join(["%s"] * len(candidate_quote_numbers)) if candidate_quote_numbers else "''"
                     sql = f"""
