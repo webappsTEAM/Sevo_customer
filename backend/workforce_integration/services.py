@@ -12,6 +12,7 @@ import sys
 import uuid
 import requests
 import threading
+import typing
 from django.conf import settings
 import contextlib as _contextlib
 from django.db import connection as _dbconn, transaction as _dbtx
@@ -28,8 +29,10 @@ class _dbguard:
     """
 
     @staticmethod
-    def atomic():
-        return _dbtx.atomic() if _dbconn.in_atomic_block else _contextlib.nullcontext()
+    def atomic() -> typing.ContextManager[typing.Any]:
+        if _dbconn.in_atomic_block:
+            return typing.cast(typing.ContextManager[typing.Any], _dbtx.atomic())
+        return _contextlib.nullcontext()
 
 
 _dbtx_guard = _dbguard
