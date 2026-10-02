@@ -277,11 +277,18 @@ def _finalize_marketplace_orders(
                 total_amount = subtotal + delivery_fee
                 source_order_id = _generate_marketplace_order_number()
 
-                intake_items = []
-                for ci in s_items:
-                    intake_item = {
+                intake_items = [
+                    {
+                        "basket_id": ci.basket_id,
                         "quantity": ci.quantity,
                         "unit_price": str(ci.unit_price_snapshot),
+                        "customization": ci.customization or {},
+                        "slot_selections": (ci.customization or {}).get("slot_selections") if isinstance(ci.customization, dict) else None,
+                    } if ci.basket_id else {
+                        "product_id": ci.seller_product_id,
+                        "quantity": ci.quantity,
+                        "unit_price": str(ci.unit_price_snapshot),
+                        "customization": ci.customization or {},
                     }
                     if ci.basket_id:
                         intake_item["basket_id"] = ci.basket_id
@@ -527,11 +534,18 @@ class MarketplaceInitiatePaymentView(APIView):
             return _error("Cart total must be greater than zero.", status.HTTP_400_BAD_REQUEST)
 
         # Pre-checkout validation with Vendor before taking payment
-        validation_items = []
-        for ci in cart_items:
-            validation_item = {
+        validation_items = [
+            {
+                "basket_id": ci.basket_id,
                 "requested_quantity": ci.quantity,
                 "expected_unit_price": str(ci.unit_price_snapshot),
+                "customization": ci.customization or {},
+                "slot_selections": (ci.customization or {}).get("slot_selections") if isinstance(ci.customization, dict) else None,
+            } if ci.basket_id else {
+                "product_id": ci.seller_product_id,
+                "requested_quantity": ci.quantity,
+                "expected_unit_price": str(ci.unit_price_snapshot),
+                "customization": ci.customization or {},
             }
             if ci.basket_id:
                 validation_item["basket_id"] = ci.basket_id
