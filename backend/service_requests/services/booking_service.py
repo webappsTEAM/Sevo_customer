@@ -6,6 +6,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 from inventory.services.vegetable_stock_service import reserve_stock_for_booking_items, InsufficientStockError
+from service_requests.models import ServiceRequest
 
 
 class BookingService:
@@ -161,7 +162,6 @@ class BookingService:
         using the real permanent request_id as the booking_ref.
         """
         from service_requests.models import Coupon, CouponUsage
-        from workforce_integration.services import WorkforceIntegrationService
 
         # 1. Save ServiceRequest instance to acquire its permanent request_id
         sr = serializer.save(
@@ -227,8 +227,11 @@ class BookingService:
                     final_amount=final_tot
                 )
 
-        # 5. Dispatch booking notification to workforce management system
-        WorkforceIntegrationService.dispatch_job(sr.id)
+        # 5. Persist dispatch intent in this transaction.  The event is queued
+        # after commit; if the broker is down the recovery sweep still finds it.
+        from service_requests.services.workforce_dispatch_outbox import queue_workforce_dispatch
+        if sr.status == ServiceRequest.Status.CONFIRMED:
+            queue_workforce_dispatch(sr)
 
         return sr
 

@@ -9,7 +9,7 @@ from django.db.models import Q
 from companies.models import Company
 from settings_hub.models import TeamInvite
 
-from rest_framework import permissions, serializers, status
+from rest_framework import permissions, serializers, status, parsers
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -210,13 +210,31 @@ class LoginView(TokenObtainPairView):
 
 class RefreshView(APIView):
     """
-    Rotate the access token using the httpOnly refresh cookie.
-    No body needed — the browser sends the cookie automatically.
+    Rotate the access token using a refresh token.
+
+    Reads the refresh token from the httpOnly cookie first — unchanged
+    behavior for the web client, which sends one automatically and never
+    needs a body. Falls back to a `refresh` field in the JSON request body
+    when no cookie is present, for API/mobile clients (Bearer-token auth,
+    no cookie jar).
+
+    Fixed 2026-10-01 (production resolution — Authentication scope): this
+    previously read ONLY request.COOKIES and returned ONLY
+    {"success": True} with the new access token set as a cookie. A mobile
+    client sends its refresh token in the request body (it has no cookie
+    to send) and has no cookie jar to read a Set-Cookie response back from
+    — so every mobile refresh attempt failed structurally, regardless of
+    whether the stored refresh token was still perfectly valid. The new
+    access token is now ALSO returned in the JSON body (in addition to,
+    not instead of, the existing cookie for the web client) so a
+    Bearer-token client can actually receive and use it.
     """
     permission_classes = [permissions.AllowAny]
 
     def post(self, request, *args, **kwargs):
         refresh_token = request.COOKIES.get(settings.AUTH_COOKIE_REFRESH)
+        if not refresh_token:
+            refresh_token = request.data.get("refresh")
         if not refresh_token:
             return Response(
                 {"success": False, "message": "No refresh token — please log in again."},
@@ -226,7 +244,10 @@ class RefreshView(APIView):
             from rest_framework_simplejwt.tokens import RefreshToken
             token = RefreshToken(refresh_token)
             access_token = token.access_token
-            response = Response({"success": True})
+            response = Response({
+                "success": True,
+                "access": str(access_token),
+            })
             _set_auth_cookies(response, access_token)   # only rotate access cookie
             return response
         except Exception:
@@ -644,29 +665,50 @@ class MyReferralCodeView(APIView):
 
 class ProfileUpdateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
 
     def patch(self, request):
         try:
             from .serializers import ProfileUpdateSerializer
             data = request.data.dict() if hasattr(request.data, 'dict') else dict(request.data)
 
+            avatar_file = request.FILES.get('avatar') or request.FILES.get('image')
+            remove_flag = str(data.pop('remove_avatar', '')).lower() in ('true', '1', 'yes')
+
+            has_avatar_field = 'avatar' in request.data or 'image' in request.data
             avatar_val = data.pop('avatar', None)
             data.pop('profile_picture', None)
+            data.pop('image', None)
 
-            if avatar_val:
-                if isinstance(avatar_val, str) and avatar_val.strip():
-                    if '/media/' in avatar_val:
-                        request.user.avatar.name = avatar_val.split('/media/')[-1]
-                    else:
-                        request.user.avatar.name = avatar_val
-                    try:
-                        request.user.save(update_fields=['avatar'])
-                    except Exception:
-                        request.user.save()
-
-            avatar_file = request.FILES.get('avatar') or request.FILES.get('image')
             if avatar_file:
+                # User uploaded a new avatar file
+                if request.user.avatar:
+                    try:
+                        request.user.avatar.delete(save=False)
+                    except Exception:
+                        pass
                 request.user.avatar = avatar_file
+                try:
+                    request.user.save(update_fields=['avatar'])
+                except Exception:
+                    request.user.save()
+            elif remove_flag or (has_avatar_field and avatar_val in (None, '', 'null', 'None')):
+                # User explicitly requested to remove avatar
+                if request.user.avatar:
+                    try:
+                        request.user.avatar.delete(save=False)
+                    except Exception:
+                        pass
+                request.user.avatar = None
+                try:
+                    request.user.save(update_fields=['avatar'])
+                except Exception:
+                    request.user.save()
+            elif avatar_val and isinstance(avatar_val, str) and avatar_val.strip():
+                if '/media/' in avatar_val:
+                    request.user.avatar.name = avatar_val.split('/media/')[-1]
+                else:
+                    request.user.avatar.name = avatar_val.lstrip('/')
                 try:
                     request.user.save(update_fields=['avatar'])
                 except Exception:
@@ -675,6 +717,10 @@ class ProfileUpdateView(APIView):
             serializer = ProfileUpdateSerializer(request.user, data=data, partial=True, context={"request": request})
             if serializer.is_valid():
                 serializer.save()
+                try:
+                    request.user.refresh_from_db()
+                except Exception:
+                    pass
                 return Response({"success": True, "data": UserSerializer(request.user, context={"request": request}).data})
             return Response({"success": False, "message": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as err:
@@ -1141,7 +1187,7 @@ class SendOTPView(APIView):
             if account_sid and auth_token and from_number and not account_sid.startswith("your_"):
                 client = TwilioClient(account_sid, auth_token)
                 client.messages.create(
-                    body=f"Caltrack security verification code: {code}. Expires in 5 minutes.",
+                    body=f"sevo security verification code: {code}. Expires in 5 minutes.",
                     from_=from_number,
                     to=normalized_phone
                 )
@@ -1453,18 +1499,18 @@ class SendEmailOTPView(APIView):
         cache.set(email_cache_key, email_count + 1, timeout=3600)
 
         # Premium HTML Email Content
-        subject = "CALtrack Verification Code"
+        subject = "sevo Verification Code"
         body_text = (
             "━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "CALTRACK SECURITY HUB\n"
+            "sevo SECURITY HUB\n"
             "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"Hello {user.first_name or user.username},\n\n"
-            "Your CALtrack security verification code is:\n\n"
+            "Your sevo security verification code is:\n\n"
             f"{code}\n\n"
             "This code is valid for 5 minutes.\n"
             "If you did not request this code, please change your password immediately.\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "CALtrack Security Intelligence\n"
+            "sevo Security Intelligence\n"
             "━━━━━━━━━━━━━━━━━━━━━━━"
         )
         
@@ -1472,7 +1518,7 @@ class SendEmailOTPView(APIView):
         <div style="background-color: #03050d; color: #f1f5f9; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px 20px; max-width: 600px; margin: 0 auto; border: 1px solid #1e293b; border-radius: 24px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);">
             <div style="text-align: center; border-bottom: 2px solid #1e293b; padding-bottom: 20px; margin-bottom: 25px;">
                 <div style="color: #6366f1; font-weight: 900; font-size: 20px; letter-spacing: 0.25em; text-transform: uppercase;">
-                    CALTRACK SECURITY HUB
+                    sevo SECURITY HUB
                 </div>
             </div>
             <div style="padding: 0 10px;">
@@ -1493,7 +1539,7 @@ class SendEmailOTPView(APIView):
                 </p>
             </div>
             <div style="text-align: center; border-top: 2px solid #1e293b; padding-top: 20px; margin-top: 35px; color: #475569; font-size: 10px; font-family: monospace; letter-spacing: 0.15em; text-transform: uppercase;">
-                CALtrack Security Intelligence
+                sevo Security Intelligence
             </div>
         </div>
         """
@@ -1838,7 +1884,15 @@ class CustomerAddressDetailView(APIView):
             return _cs(_serialize_address(addr), message="Address updated.")
         except Exception as exc:
             detail = getattr(exc, "detail", str(exc))
-            return _ce(str(detail))
+            if isinstance(detail, dict) and "detail" in detail:
+                detail = detail["detail"]
+            # _get_address_or_404 (called by update_saved_address) raises DRF's
+            # NotFound for a cross-customer/missing address, which carries its
+            # own status_code=404 -- this was previously discarded in favor of
+            # _ce's hardcoded 400 default, so attempting to PATCH another
+            # customer's address returned 400 instead of the 404 that get()
+            # already returns for the same address, one line up.
+            return _ce(str(detail), getattr(exc, "status_code", 400))
 
     def delete(self, request, pk):
         try:
@@ -1848,7 +1902,9 @@ class CustomerAddressDetailView(APIView):
             detail = getattr(exc, "detail", str(exc))
             if isinstance(detail, dict) and "detail" in detail:
                 detail = detail["detail"]
-            return _ce(str(detail), 400)
+            # Same fix as patch() above: respect the real status_code (404 for
+            # a cross-customer/missing address) instead of always forcing 400.
+            return _ce(str(detail), getattr(exc, "status_code", 400))
 
 
 class CustomerAddressSetDefaultView(APIView):
@@ -1861,7 +1917,12 @@ class CustomerAddressSetDefaultView(APIView):
             return _cs(_serialize_address(addr), message="Default address updated.")
         except Exception as exc:
             detail = getattr(exc, "detail", str(exc))
-            return _ce(str(detail))
+            if isinstance(detail, dict) and "detail" in detail:
+                detail = detail["detail"]
+            # Same fix as CustomerAddressDetailView.patch()/delete(): respect
+            # the real status_code (404 for a cross-customer/missing address)
+            # instead of always forcing 400.
+            return _ce(str(detail), getattr(exc, "status_code", 400))
 
 
 class CustomerAddressServiceabilityView(APIView):

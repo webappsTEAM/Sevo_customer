@@ -1,6 +1,6 @@
 {
   "venvPath": "backend",
-  "venv": ".venv",
+  "venv": "venv",
   "extraPaths": [
     "backend"
   ],
@@ -16,5 +16,6 @@
   "reportOperatorIssue": "none",
   "reportCallIssue": "none",
   "reportArgumentType": "none",
-  "reportIndexIssue": "none"
+  "reportIndexIssue": "none",
+  "reportAssignmentType": "none"
 }

@@ -4,7 +4,7 @@ service_requests/services/prohibited_goods.py
 Server-Authoritative Cargo Safety & Prohibited Goods Gate for Goods & Transport.
 
 Enforces business and safety policy preventing dangerous, illegal, or hazardous
-cargo from being booked or dispatched through CalTrack Goods & Transport and
+cargo from being booked or dispatched through sevo Goods & Transport and
 Packers & Movers services.
 
 Covered Prohibited Categories:
@@ -38,7 +38,7 @@ PROHIBITED_CATEGORIES = {
     "EXPLOSIVES_AND_PYROTECHNICS": {
         "label": "Explosives & Pyrotechnics",
         "patterns": [
-            r"\b(dynamite|gunpowder|blasting cap|detonator|fireworks|firecracker|crackers|pyrotechnic|pyrotechnics|rDX|tNT)\b",
+            r"\b(dynamite|gunpowder|blasting caps?|detonators?|fireworks?|fire\s?crackers?|crackers?|pyrotechnics?|rDX|tNT)\b",
         ],
         "message": "Transportation of fireworks, crackers, dynamite, or commercial pyrotechnics is strictly prohibited.",
     },
@@ -162,4 +162,19 @@ def validate_cargo_safety(
                     continue
                 return False, cat_meta["message"], cat_code
 
+    # Admin-managed rules (logistics.ProhibitedGoodsRule): the commercial
+    # prohibited-items list, editable without a deploy.
+    is_pm = category == "packers_movers"
+    for rule in _active_admin_rules():
+        if is_pm and not rule.applies_to_packers_movers:
+            continue
+        for kw in rule.keyword_list():
+            if re.search(r"(?<![a-z0-9])" + re.escape(kw.lower()) + r"(?![a-z0-9])", combined_text):
+                return False, (rule.message or f"{rule.label} cannot be booked."), "ADMIN_RULE"
+
     return True, None, None
+
+
+def _active_admin_rules():
+    from logistics.models import ProhibitedGoodsRule
+    return list(ProhibitedGoodsRule.objects.filter(is_active=True))

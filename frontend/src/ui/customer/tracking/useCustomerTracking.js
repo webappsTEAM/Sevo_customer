@@ -83,10 +83,14 @@ export function useCustomerTracking({ bookingId, jobId, trackingToken }) {
   const lastKnownGpsRef = useRef(null)
   const lastKnownBearingRef = useRef(0)
   const isFetchingRef = useRef(false) // in-flight guard: prevents overlapping REST polls
+  // An expired/missing tracking credential cannot recover through polling.
+  // Keep the error visible, but never keep sending unauthorised requests.
+  const pollingBlockedRef = useRef(false)
 
   /* ── Authoritative REST Fetch ── */
   const fetchLive = useCallback(async () => {
     if (!mountedRef.current) return
+    if (pollingBlockedRef.current) return
     if (isFetchingRef.current) return  // skip cycle if previous request still in-flight
     isFetchingRef.current = true
     try {
@@ -106,11 +110,13 @@ export function useCustomerTracking({ bookingId, jobId, trackingToken }) {
       if (!mountedRef.current) return
 
       if (res.status === 404) {
+        pollingBlockedRef.current = true
         setErrorKind("not_found")
         setLoading(false)
         return
       }
       if (res.status === 401 || res.status === 403) {
+        pollingBlockedRef.current = true
         setErrorKind("unauthorized")
         setLoading(false)
         return
@@ -436,6 +442,41 @@ export function useCustomerTracking({ bookingId, jobId, trackingToken }) {
               otp_verified: true,
             }
           })
+          return
+        }
+
+        if (eventType === "payment_cash_collected") {
+          setData((prev) => {
+            if (!prev) return prev
+            return {
+              ...prev,
+              payment_status: "cash_pending",
+              payment_confirmation_otp: eventData.payment_otp || prev.payment_confirmation_otp,
+              cash_otp_expires_at: eventData.expires_at || prev.cash_otp_expires_at,
+            }
+          })
+          return
+        }
+
+        if (eventType === "job_hold_status_changed") {
+          setData((prev) => {
+            if (!prev) return prev
+            const isOnHold = Boolean(eventData.is_on_hold)
+            return {
+              ...prev,
+              status: isOnHold ? "on_hold" : "in_progress",
+              project_timeline: {
+                ...(prev.project_timeline || {}),
+                is_on_hold: isOnHold,
+                hold_reason: eventData.hold_reason || "",
+              },
+            }
+          })
+          return
+        }
+
+        if (["quote_scope_reduced", "quote_crm_approved", "quote_sent"].includes(eventType)) {
+          fetchTrackingData()
           return
         }
       },

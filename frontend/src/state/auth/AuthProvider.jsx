@@ -29,27 +29,29 @@ export function AuthProvider({ children }) {
   const formatUser = (data) => {
     if (!data?.username) return null
     return {
-      id:        data.id         ?? null,
+      id: data.id ?? null,
       customer_id: data.customer_id ?? data.customer_code ?? "",
       customerId: data.customer_id ?? data.customer_code ?? "",
-      username:  data.username,
-      email:     data.email      ?? "",
+      username: data.username,
+      email: data.email ?? "",
       firstName: data.first_name ?? "",
-      lastName:  data.last_name  ?? "",
-      fullName:  `${data.first_name || ""} ${data.last_name || ""}`.trim() || data.username,
+      first_name: data.first_name ?? "",
+      lastName: data.last_name ?? "",
+      last_name: data.last_name ?? "",
+      fullName: `${data.first_name || ""} ${data.last_name || ""}`.trim() || data.username,
       full_name: `${data.first_name || ""} ${data.last_name || ""}`.trim() || data.username,
-      role:      data.role,
-      is_staff:  data.is_staff ?? false,
+      role: data.role,
+      is_staff: data.is_staff ?? false,
       is_superuser: data.is_superuser ?? false,
       is_super_admin: Boolean(data.is_super_admin || data.is_superuser || data.role === "super_admin" || data.role === "superadmin"),
       isSuperAdmin: Boolean(data.is_super_admin || data.is_superuser || data.role === "super_admin" || data.role === "superadmin"),
       permissions: data.permissions ?? {},
       companyId: data.company,
-      bio:       data.bio        ?? "",
-      phone:     data.phone      ?? data.mobile_number ?? "",
-      timezone:  data.timezone   ?? "Asia/Kolkata",
-      language:  data.language   ?? "en",
-      avatar_url:data.avatar_url ?? null,
+      bio: data.bio ?? "",
+      phone: data.phone ?? data.mobile_number ?? "",
+      timezone: data.timezone ?? "Asia/Kolkata",
+      language: data.language ?? "en",
+      avatar_url: data.avatar_url ?? null,
       two_fa_enabled: data.two_fa_enabled ?? false,
       isCareAgent: data.is_care_agent ?? false,
       careRole: data.care_role ?? null,
@@ -64,12 +66,12 @@ export function AuthProvider({ children }) {
 
   const [user, setUser] = useState(() => {
     try {
-      const raw = localStorage.getItem("caltrack_user")
+      const raw = localStorage.getItem("sevo_user")
       if (raw) {
         const parsed = JSON.parse(raw)
         return formatUser(parsed)
       }
-    } catch (_) {}
+    } catch (_) { }
     return null
   })
   const [isReady, setIsReady] = useState(false)
@@ -89,24 +91,25 @@ export function AuthProvider({ children }) {
     if (u) {
       setUser(u)
       try {
-        localStorage.setItem("caltrack_user", JSON.stringify(me))
+        localStorage.setItem("sevo_user", JSON.stringify(me))
         if (me?.phone || me?.mobile_number) {
-          localStorage.setItem("caltrack_customer_phone", me.phone || me.mobile_number)
+          localStorage.setItem("sevo_customer_phone", me.phone || me.mobile_number)
         }
-      } catch (_) {}
+      } catch (_) { }
       if (me?.company_name) {
-        localStorage.setItem("quicktims.orgName", me.company_name)
+        const cleanName = me.company_name.replace(/calservices/gi, "SEVO")
+        localStorage.setItem("quicktims.orgName", cleanName)
         window.dispatchEvent(new CustomEvent("quicktims:orgName"))
       }
       return u
     } else {
       try {
-        const hasToken = localStorage.getItem("caltrack_access_token") || localStorage.getItem("qt_access")
+        const hasToken = localStorage.getItem("sevo_access_token") || localStorage.getItem("qt_access")
         if (!hasToken) {
-          localStorage.removeItem("caltrack_user")
+          localStorage.removeItem("sevo_user")
           setUser(null)
         }
-      } catch (_) {}
+      } catch (_) { }
       return null
     }
   }, [])
@@ -118,19 +121,20 @@ export function AuthProvider({ children }) {
       if (res?.requires_2fa) return { requires2FA: true }
       if (res?.access) {
         try {
-          localStorage.setItem("caltrack_access_token", res.access)
+          localStorage.setItem("sevo_access_token", res.access)
           localStorage.setItem("qt_access", res.access)
-        } catch (_) {}
+        } catch (_) { }
       }
       if (res?.user) {
         const u = formatUser(res.user)
         if (u) {
           setUser(u)
           try {
-            localStorage.setItem("caltrack_user", JSON.stringify(res.user))
-          } catch (_) {}
+            localStorage.setItem("sevo_user", JSON.stringify(res.user))
+          } catch (_) { }
           if (res.user.company_name) {
-            localStorage.setItem("quicktims.orgName", res.user.company_name)
+            const cleanName = res.user.company_name.replace(/calservices/gi, "SEVO")
+            localStorage.setItem("quicktims.orgName", cleanName)
             window.dispatchEvent(new CustomEvent("quicktims:orgName"))
           }
           return u
@@ -167,19 +171,20 @@ export function AuthProvider({ children }) {
       const res = await apiGoogleLogin(googleAccessToken)
       if (res?.access) {
         try {
-          localStorage.setItem("caltrack_access_token", res.access)
+          localStorage.setItem("sevo_access_token", res.access)
           localStorage.setItem("qt_access", res.access)
-        } catch (_) {}
+        } catch (_) { }
       }
       if (res?.user) {
         const u = formatUser(res.user)
         if (u) {
           setUser(u)
           try {
-            localStorage.setItem("caltrack_user", JSON.stringify(res.user))
-          } catch (_) {}
+            localStorage.setItem("sevo_user", JSON.stringify(res.user))
+          } catch (_) { }
           if (res.user.company_name) {
-            localStorage.setItem("quicktims.orgName", res.user.company_name)
+            const cleanName = res.user.company_name.replace(/calservices/gi, "SEVO")
+            localStorage.setItem("quicktims.orgName", cleanName)
             window.dispatchEvent(new CustomEvent("quicktims:orgName"))
           }
           return u
@@ -196,17 +201,17 @@ export function AuthProvider({ children }) {
       const res = await apiCustomerGoogleLogin(googleAccessToken)
       if (res?.access) {
         try {
-          localStorage.setItem("caltrack_access_token", res.access)
+          localStorage.setItem("sevo_access_token", res.access)
           localStorage.setItem("qt_access", res.access)
-        } catch (_) {}
+        } catch (_) { }
       }
       if (res?.user) {
         const u = formatUser(res.user)
         if (u) {
           setUser(u)
           try {
-            localStorage.setItem("caltrack_user", JSON.stringify(res.user))
-          } catch (_) {}
+            localStorage.setItem("sevo_user", JSON.stringify(res.user))
+          } catch (_) { }
           return u
         }
       }
@@ -219,17 +224,36 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     try {
       await apiLogout()
-    } catch (_) {}
+    } catch (_) { }
     clearLegacyLocationStorage()
     localStorage.removeItem("quicktims.orgName")
-    localStorage.removeItem("caltrack_activation_dossier")
-    localStorage.removeItem("caltrack_access_token")
+    localStorage.removeItem("sevo_activation_dossier")
+    localStorage.removeItem("sevo_access_token")
     localStorage.removeItem("qt_access")
-    localStorage.removeItem("caltrack_user")
-    localStorage.removeItem("caltrack_customer_phone")
+    localStorage.removeItem("sevo_user")
+    localStorage.removeItem("sevo_customer_phone")
+    // Clear all booking, tracking, cart, and AI conversation state so no
+    // customer service details leak to the next user on this browser/session.
+    try {
+      sessionStorage.removeItem("calservice_last_booking")
+      sessionStorage.removeItem("calservice_active_tracking_id")
+      sessionStorage.removeItem("active_tracking_token")
+      sessionStorage.removeItem("caltrack_tracking_token")
+      sessionStorage.removeItem("calservice_customer_token")
+      localStorage.removeItem("calservice_last_booking")
+      localStorage.removeItem("calservice_active_tracking_id")
+      localStorage.removeItem("active_tracking_token")
+      localStorage.removeItem("calservice_customer_token")
+      localStorage.removeItem("calservices_customer_cart")
+      sessionStorage.removeItem("calservices_customer_cart")
+      sessionStorage.removeItem("calservices_ai_conversation_id")
+      sessionStorage.removeItem("calservices_ai_messages")
+      sessionStorage.removeItem("calservices_ai_owner_id")
+    } catch (_) {}
     setUser(null)
     window.dispatchEvent(new CustomEvent("calservice_auth_changed", { detail: { user: null } }))
     window.dispatchEvent(new Event("calservice_address_changed"))
+    window.dispatchEvent(new Event("calservice_booking_cleared"))
   }, [])
 
   // ── Track previous user ID for customer-switch detection ──────────────────
@@ -238,9 +262,23 @@ export function AuthProvider({ children }) {
     const currentId = user?.id || null
     if (prevUserIdRef.current !== currentId) {
       clearLegacyLocationStorage()
+      try {
+        sessionStorage.removeItem("calservice_last_booking")
+        sessionStorage.removeItem("calservice_active_tracking_id")
+        sessionStorage.removeItem("active_tracking_token")
+        sessionStorage.removeItem("caltrack_tracking_token")
+        sessionStorage.removeItem("calservice_customer_token")
+        localStorage.removeItem("calservice_last_booking")
+        localStorage.removeItem("calservice_active_tracking_id")
+        localStorage.removeItem("active_tracking_token")
+        localStorage.removeItem("calservice_customer_token")
+        localStorage.removeItem("calservices_customer_cart")
+        sessionStorage.removeItem("calservices_customer_cart")
+      } catch (_) {}
       prevUserIdRef.current = currentId
       window.dispatchEvent(new CustomEvent("calservice_auth_changed", { detail: { user } }))
       window.dispatchEvent(new Event("calservice_address_changed"))
+      window.dispatchEvent(new Event("calservice_booking_cleared"))
     }
   }, [user?.id, user])
 
@@ -282,11 +320,11 @@ export function AuthProvider({ children }) {
         if (u) {
           setUser(u)
           try {
-            localStorage.setItem("caltrack_user", JSON.stringify(payload.user))
-          } catch (_) {}
+            localStorage.setItem("sevo_user", JSON.stringify(payload.user))
+          } catch (_) { }
         }
       }
-      refreshMe().catch(() => {})
+      refreshMe().catch(() => { })
     }
     window.addEventListener("calservices:customer_login", handleCustomerLogin)
     return () => window.removeEventListener("calservices:customer_login", handleCustomerLogin)
@@ -297,14 +335,14 @@ export function AuthProvider({ children }) {
     const handle = async () => {
       try {
         await apiLogout()
-      } catch (_) {}
+      } catch (_) { }
       clearLegacyLocationStorage()
       localStorage.removeItem("quicktims.orgName")
-      localStorage.removeItem("caltrack_activation_dossier")
-      localStorage.removeItem("caltrack_access_token")
+      localStorage.removeItem("sevo_activation_dossier")
+      localStorage.removeItem("sevo_access_token")
       localStorage.removeItem("qt_access")
-      localStorage.removeItem("caltrack_user")
-      localStorage.removeItem("caltrack_customer_phone")
+      localStorage.removeItem("sevo_user")
+      localStorage.removeItem("sevo_customer_phone")
       setUser(null)
       window.dispatchEvent(new CustomEvent("calservice_auth_changed", { detail: { user: null } }))
       window.dispatchEvent(new Event("calservice_address_changed"))
@@ -313,10 +351,23 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener("quicktims:session-expired", handle)
   }, [])
 
+  const updateUser = useCallback((userData) => {
+    if (!userData) return null
+    const u = formatUser(userData)
+    if (u) {
+      setUser(u)
+      try {
+        localStorage.setItem("sevo_user", JSON.stringify(userData))
+      } catch (_) { }
+      return u
+    }
+    return null
+  }, [])
+
   // ── Context value ─────────────────────────────────────────────────────────
   const value = useMemo(
-    () => ({ isReady, user, login, verify2FA, register, loginWithGoogle, loginWithCustomerGoogle, logout, refreshMe }),
-    [isReady, user, login, verify2FA, register, loginWithGoogle, loginWithCustomerGoogle, logout, refreshMe]
+    () => ({ isReady, user, login, verify2FA, register, loginWithGoogle, loginWithCustomerGoogle, logout, refreshMe, updateUser }),
+    [isReady, user, login, verify2FA, register, loginWithGoogle, loginWithCustomerGoogle, logout, refreshMe, updateUser]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -7,8 +7,7 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment settings from .env (reloaded with correct DB password)
-_dotenv_override = os.getenv("SEVO_DOTENV_OVERRIDE", "1").strip() != "0"
-load_dotenv(BASE_DIR / ".env", override=_dotenv_override)
+load_dotenv(BASE_DIR / ".env", override=True)
 
 _SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 if not _SECRET_KEY:
@@ -22,6 +21,7 @@ SECRET_KEY = _SECRET_KEY
 
 # DEBUG is OFF by default. Must be explicitly set to "1" or "True" in the environment.
 DEBUG = os.getenv("DJANGO_DEBUG", "0").strip().lower() in ("1", "true", "yes")
+IS_TESTING = "test" in sys.argv or os.getenv("DJANGO_TEST_SQLITE") == "1"
 
 # Fixed: this used to hardcode ALLOWED_HOSTS = ["*"] unconditionally,
 # ignoring the DJANGO_ALLOWED_HOSTS env var that's already set correctly in
@@ -31,12 +31,19 @@ DEBUG = os.getenv("DJANGO_DEBUG", "0").strip().lower() in ("1", "true", "yes")
 _allowed_hosts_env = os.getenv("DJANGO_ALLOWED_HOSTS")
 if _allowed_hosts_env:
     ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts_env.split(",") if h.strip()]
+elif DEBUG:
+    ALLOWED_HOSTS = ["*"]
 else:
-    ALLOWED_HOSTS = ["*"] if DEBUG else ["localhost", "127.0.0.1"]
+    # Production fallback without localhost or 127.0.0.1
+    ALLOWED_HOSTS = ["sevo.co.in", "www.sevo.co.in", "vendor.sevo.co.in"]
+# ``testserver`` is Django's test client host.  It must never broaden the
+# accepted Host header set of a deployed process.
+if IS_TESTING and "testserver" not in ALLOWED_HOSTS and "*" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append("testserver")
 
 # ── Subpath / Reverse-proxy settings ─────────────────────────────────────────
-# Required when Django is served under a subpath (e.g. /Caltrack/) behind Nginx.
-# Set FORCE_SCRIPT_NAME=/Caltrack in production .env
+# Required when Django is served under a subpath (e.g. /sevo/) behind Nginx.
+# Set FORCE_SCRIPT_NAME=/sevo in production .env
 FORCE_SCRIPT_NAME = os.getenv("FORCE_SCRIPT_NAME", "")
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
@@ -61,11 +68,13 @@ INSTALLED_APPS = [
     "logistics",
     "orders",
     "carts",
+    "vegetable_orders",
     "customer_care",
     "reports",
     "workforce_integration",
     "customer_analytics",
     "platform_control",
+    "ai_assistant",
 ]
 
 ASGI_APPLICATION = "quicktims.asgi.application"
@@ -96,21 +105,7 @@ SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
 # ---------------------------------------------------------------------------
 
 USE_POSTGRES = os.getenv("DB_NAME") or os.getenv("DB_HOST")
-_argv_str = " ".join(sys.argv).lower()
-IS_TESTING = (
-    "test" in sys.argv
-    or "pytest" in sys.modules
-    or "pytest" in _argv_str
-    or "unittest" in _argv_str
-    or os.getenv("DJANGO_TEST_SQLITE") == "1"
-    or os.getenv("SEVO_TESTING") == "1"
-)
-
 if IS_TESTING:
-    TESTING = True
-    PASSWORD_HASHERS = [
-        "django.contrib.auth.hashers.MD5PasswordHasher",
-    ]
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
@@ -163,19 +158,6 @@ else:
         }
     }
 
-_e2e_sqlite_path = os.getenv("SEVO_E2E_SQLITE_PATH")
-if _e2e_sqlite_path:
-    if DEBUG or IS_TESTING:
-        DATABASES["default"] = {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": Path(_e2e_sqlite_path),
-        }
-    else:
-        import logging
-        logging.getLogger(__name__).warning(
-            "SEVO_E2E_SQLITE_PATH is ignored because DEBUG is False and IS_TESTING is False."
-        )
-
 
 
 ROOT_URLCONF = "quicktims.urls"
@@ -216,7 +198,7 @@ USE_TZ = True
 # service_requests/booking_window.py, which the booking serializer calls -- the
 # frontend filter is a convenience, not the control. Tunable per environment.
 BOOKING_SAME_DAY_CUTOFF_HOUR = int(os.getenv("BOOKING_SAME_DAY_CUTOFF_HOUR", "18"))
-BOOKING_MIN_LEAD_MINUTES = int(os.getenv("BOOKING_MIN_LEAD_MINUTES", "60"))
+BOOKING_MIN_LEAD_MINUTES = int(os.getenv("BOOKING_MIN_LEAD_MINUTES", "30"))
 
 STATIC_URL = "static/"
 
@@ -234,7 +216,7 @@ if EMAIL_HOST:
     DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER)
 else:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-    DEFAULT_FROM_EMAIL = "noreply@caltrack.com"
+    DEFAULT_FROM_EMAIL = "noreply@sevo.com"
 
 AUTHENTICATION_BACKENDS = [
     "accounts.backends.EmailOrUsernameModelBackend",
@@ -332,9 +314,12 @@ SIMPLE_JWT = {
 AUTH_COOKIE          = "qt_access"         # access token cookie name
 AUTH_COOKIE_REFRESH  = "qt_refresh"        # refresh token cookie name
 AUTH_COOKIE_SECURE   = not DEBUG           # HTTPS-only in production; False in dev
+# Session and CSRF cookies are HTTPS-only in production, like the auth cookie above.
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 # "Lax" is required for cross-origin dev (frontend:5173 → backend:8000).
 # In production with same domain, change back to "Strict" via env var.
-AUTH_COOKIE_SAMESITE = os.getenv("AUTH_COOKIE_SAMESITE", "Lax" if DEBUG else "Strict")
+AUTH_COOKIE_SAMESITE = os.getenv("AUTH_COOKIE_SAMESITE", "Lax")
 AUTH_COOKIE_DOMAIN = os.getenv("AUTH_COOKIE_DOMAIN", None)
 
 # ── CORS — must name origins explicitly when credentials=True ────────────────
@@ -353,7 +338,10 @@ _default_cors_origins = [
     "http://127.0.0.1:5176",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    # Production VPS
+    # Production VPS & New Domains
+    "https://sevo.co.in",
+    "https://www.sevo.co.in",
+    "https://vendor.sevo.co.in",
     "https://caldimproducts.com",
     "https://www.caldimproducts.com",
 ]
@@ -361,16 +349,32 @@ _default_cors_origins = [
 _env_cors = os.getenv("CORS_ALLOWED_ORIGINS")
 if _env_cors:
     _parsed_cors = [o.strip() for o in _env_cors.split(",") if o.strip()]
-    CORS_ALLOWED_ORIGINS = list(dict.fromkeys(_parsed_cors + _default_cors_origins))
-else:
+    if DEBUG:
+        CORS_ALLOWED_ORIGINS = list(dict.fromkeys(_parsed_cors + _default_cors_origins))
+    else:
+        # In production, use only explicitly configured production origins
+        CORS_ALLOWED_ORIGINS = _parsed_cors
+elif DEBUG:
     CORS_ALLOWED_ORIGINS = _default_cors_origins
+else:
+    CORS_ALLOWED_ORIGINS = [
+        "https://sevo.co.in",
+        "https://www.sevo.co.in",
+        "https://vendor.sevo.co.in",
+    ]
 
-CORS_ALLOWED_ORIGIN_REGEXES = [
-    r"^http://.*\.localhost:517[0-9]$",
-    r"^http://.*\.127\.0\.0\.1:517[0-9]$",
-    r"^http://localhost:517[0-9]$",
-    r"^http://127\.0\.0\.1:517[0-9]$",
-]
+if DEBUG:
+    CORS_ALLOWED_ORIGIN_REGEXES = [
+        r"^http://.*\.localhost:517[0-9]$",
+        r"^http://.*\.127\.0\.0\.1:517[0-9]$",
+        r"^http://localhost:517[0-9]$",
+        r"^http://127\.0\.0\.1:517[0-9]$",
+    ]
+else:
+    # Credentialed CORS must be an explicit, audited origin allow-list.  A
+    # wildcard subdomain pattern would allow an unrelated or compromised
+    # subdomain to make authenticated browser requests.
+    CORS_ALLOWED_ORIGIN_REGEXES = []
 CORS_ALLOW_CREDENTIALS = True
 
 _default_csrf_origins = [
@@ -391,7 +395,11 @@ _default_csrf_origins = [
     "http://*.127.0.0.1:5174",
     "http://*.127.0.0.1:5175",
     "http://*.127.0.0.1:5176",
-    # Production VPS
+    # Production VPS & New Domains
+    "https://sevo.co.in",
+    "https://www.sevo.co.in",
+    "https://vendor.sevo.co.in",
+    "https://*.sevo.co.in",
     "https://caldimproducts.com",
     "https://www.caldimproducts.com",
 ]
@@ -399,9 +407,33 @@ _default_csrf_origins = [
 _env_csrf = os.getenv("CSRF_TRUSTED_ORIGINS")
 if _env_csrf:
     _parsed_csrf = [o.strip() for o in _env_csrf.split(",") if o.strip()]
-    CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(_parsed_csrf + CORS_ALLOWED_ORIGINS + _default_csrf_origins))
-else:
+    if DEBUG:
+        CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(_parsed_csrf + CORS_ALLOWED_ORIGINS + _default_csrf_origins))
+    else:
+        # In production, use only explicitly configured origins without dev defaults
+        CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(_parsed_csrf + CORS_ALLOWED_ORIGINS))
+elif DEBUG:
     CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(CORS_ALLOWED_ORIGINS + _default_csrf_origins))
+else:
+    CSRF_TRUSTED_ORIGINS = list(dict.fromkeys([
+        "https://sevo.co.in",
+        "https://www.sevo.co.in",
+        "https://vendor.sevo.co.in",
+    ] + CORS_ALLOWED_ORIGINS))
+
+# ── HTTPS & Security Headers (Active when DEBUG=False) ────────────────────────
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "1") == "1"
+    SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "31536000"))  # 1 year
+    # Enable only after every present and future subdomain is HTTPS-ready.
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv("SECURE_HSTS_INCLUDE_SUBDOMAINS", "0") == "1"
+    SECURE_HSTS_PRELOAD = False  # Enabled only after all present/future subdomains are verified HTTPS-ready
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_BROWSER_XSS_FILTER = True
+    X_FRAME_OPTIONS = "SAMEORIGIN"  # Safe default preserving payment/OAuth popups/frames
 
 
 MEDIA_URL = os.getenv("MEDIA_URL", "/media/")
@@ -443,7 +475,7 @@ if _email_user and _email_pass:
     DEFAULT_FROM_EMAIL = _email_user
 else:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend" # Prints to console for dev
-    DEFAULT_FROM_EMAIL = "noreply@caltrack.com"
+    DEFAULT_FROM_EMAIL = "noreply@sevo.com"
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 AUTO_GENERATE_OTP = os.getenv("AUTO_GENERATE_OTP", "False").strip().lower() in ("1", "true", "yes")
@@ -461,20 +493,45 @@ RAZORPAYX_ACCOUNT_NUMBER = os.getenv("RAZORPAYX_ACCOUNT_NUMBER", "").strip()
 RAZORPAYX_WEBHOOK_SECRET = os.getenv("RAZORPAYX_WEBHOOK_SECRET", "").strip()
 RAZORPAYX_MOCK_MODE = os.getenv("RAZORPAYX_MOCK_MODE", "0").strip().lower() in ("1", "true", "yes")
 
+# Customer online-payment provider.  `paytm_mock` is an explicit local/test
+# mode; it is never an automatic fallback when a live gateway fails.
+PAYMENT_PROVIDER = (os.getenv("PAYMENT_PROVIDER") or "razorpay").strip().lower()
+PAYTM_MID = os.getenv("PAYTM_MID", "").strip()
+PAYTM_MERCHANT_KEY = os.getenv("PAYTM_MERCHANT_KEY", "").strip()
+PAYTM_WEBSITE = os.getenv("PAYTM_WEBSITE", "WEBSTAGING").strip()
+PAYTM_ENV = os.getenv("PAYTM_ENV", "staging").strip().lower()
+PAYTM_CALLBACK_URL = os.getenv("PAYTM_CALLBACK_URL", "").strip()
+PAYTM_MARKETPLACE_CALLBACK_URL = os.getenv("PAYTM_MARKETPLACE_CALLBACK_URL", "").strip()
+PAYTM_MOCK_ENABLED = (os.getenv("PAYTM_MOCK_ENABLED") or os.getenv("PAYMENT_MOCK_ENABLED") or "0").strip().lower() in ("1", "true", "yes")
+PAYTM_MOCK_SECRET = os.getenv("PAYTM_MOCK_SECRET", "").strip()
+
 # Explicit opt-in only: lets a developer exercise the payment flow end-to-end
 # on a machine with no gateway credentials. Must never be enabled outside
 # local development.
 PAYMENT_SANDBOX_MODE = os.getenv("PAYMENT_SANDBOX_MODE", "0").strip().lower() in ("1", "true", "yes")
+# Unpaid online/wallet logistics bookings are cancelled after this many minutes.
+GT_ONLINE_PAYMENT_WINDOW_MINUTES = int(os.getenv("GT_ONLINE_PAYMENT_WINDOW_MINUTES", "30") or 30)
 
 # ── Workforce Integration ────────────────────────────────────────────────────
-WORKFORCE_API_BASE_URL = os.getenv("WORKFORCE_API_BASE_URL", "http://localhost:8001/api/workforce").rstrip("/")
+WORKFORCE_API_BASE_URL = os.getenv("WORKFORCE_API_BASE_URL", "http://localhost:8001/api/workforce" if DEBUG else "https://vendor.sevo.co.in/api/workforce").rstrip("/")
 WORKFORCE_API_KEY = os.getenv("WORKFORCE_API_KEY", "").strip()
 WORKFORCE_WEBHOOK_SECRET = os.getenv(
     "WORKFORCE_WEBHOOK_SECRET",
     "dev-insecure-workforce-webhook-secret-local-testing-only" if DEBUG else ""
 ).strip()
+SEVO_INTEGRATION_SECRET = (
+    os.getenv("SEVO_INTEGRATION_SECRET") or WORKFORCE_WEBHOOK_SECRET
+).strip()
 
-# ── Supabase Storage ─────────────────────────────────────────────────────────
+# ── Public Media Storage ─────────────────────────────────────────────────────
+MEDIA_STORAGE_PROVIDER = os.getenv("MEDIA_STORAGE_PROVIDER", "supabase").strip().lower()
+R2_ENDPOINT_URL = os.getenv("R2_ENDPOINT_URL", "").rstrip("/")
+R2_ACCESS_KEY_ID = os.getenv("R2_ACCESS_KEY_ID", "").strip()
+R2_SECRET_ACCESS_KEY = os.getenv("R2_SECRET_ACCESS_KEY", "").strip()
+R2_PUBLIC_BUCKET = os.getenv("R2_PUBLIC_BUCKET", "").strip()
+R2_PUBLIC_BASE_URL = os.getenv("R2_PUBLIC_BASE_URL", "").rstrip("/")
+
+# Legacy Supabase provider. Keep configured during migration/rollback.
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
 SUPABASE_STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "admin-media").strip()
@@ -487,7 +544,6 @@ ENABLE_LOCAL_STORAGE_FALLBACK = os.getenv(
 GOOGLE_CLIENT_ID = (os.getenv("GOOGLE_CLIENT_ID") or os.getenv("Client_ID") or "").strip()
 GOOGLE_CLIENT_SECRET = (os.getenv("GOOGLE_CLIENT_SECRET") or os.getenv("Client_secret") or "").strip()
 
-# — Google Maps (X-10: server-side routing/ETA & geocoding) ────────────────────
 # Backend-only key -- never send this to the frontend. The Vite
 # VITE_GOOGLE_MAPS_KEY/VITE_GOOGLE_MAPS_API_KEY vars are a separate,
 # browser-restricted key for the Maps JS SDK; this one is used server-side
@@ -500,6 +556,16 @@ GOOGLE_MAPS_API_KEY = (
     or ""
 ).strip()
 
+# S-06: Road curvature factor for straight-line routing fallback.
+LOGISTICS_ROAD_CURVATURE_FACTOR = float(os.getenv("LOGISTICS_ROAD_CURVATURE_FACTOR", "1.00"))
+
+
+# Behind a reverse proxy every client shares the proxy's IP unless DRF is told how many
+# proxies to trust, so anon throttling (and per-IP scopes) would pool all visitors into one
+# bucket. Opt-in: set THROTTLE_NUM_PROXIES to the number of trusted proxies in front of Django.
+_throttle_num_proxies = os.getenv("THROTTLE_NUM_PROXIES", "").strip()
+if _throttle_num_proxies.isdigit():
+    REST_FRAMEWORK["NUM_PROXIES"] = int(_throttle_num_proxies)
 
 # ── Celery ────────────────────────────────────────────────────────────────────
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
@@ -509,7 +575,22 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
-CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "True") == "True"
+# Inline (eager) execution only by default for local dev and tests; production runs the
+# sevo-celery worker, so tasks must be queued. Set CELERY_TASK_ALWAYS_EAGER explicitly to override.
+CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "True" if (DEBUG or IS_TESTING) else "False").strip().lower() in ("true", "1", "yes")
+CELERY_BEAT_SCHEDULE = {
+    "process-pending-workforce-dispatches": {
+        "task": "service_requests.process_pending_workforce_dispatches",
+        "schedule": 60.0,
+    },
+}
+# Fail fast when the broker / result store is unreachable. Without these, task.delay() inside a booking
+# request blocked ~19 s (kombu publish retries + result-backend reconnects) before the caller's
+# direct-dispatch fallback could run -- a Redis outage turned every booking POST into a 20 s hang.
+CELERY_TASK_PUBLISH_RETRY_POLICY = {"max_retries": 1, "interval_start": 0, "interval_step": 0.2, "interval_max": 0.5}
+CELERY_BROKER_TRANSPORT_OPTIONS = {"socket_connect_timeout": 2, "socket_timeout": 5, "retry_on_timeout": False}
+CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {"retry_policy": {"max_retries": 1, "interval_start": 0, "interval_step": 0.2, "interval_max": 0.5}, "socket_connect_timeout": 2}
+CELERY_BROKER_CONNECTION_TIMEOUT = 2
 
 # ── Performance & Application Logging Configuration ──────────────────────────
 LOGGING = {
@@ -550,32 +631,19 @@ if "test" in sys.argv or IS_TESTING:
         k: "10000/minute" for k in REST_FRAMEWORK.get("DEFAULT_THROTTLE_RATES", {})
     }
 
-
 # ── Test Database Safety Guard ───────────────────────────────────────────────
-# Aborts execution if testing mode is active but the final resolved database
-# engine is anything other than SQLite.
 if IS_TESTING:
-    _final_engine = DATABASES.get("default", {}).get("ENGINE", "")
+    _final_engine = str(DATABASES.get("default", {}).get("ENGINE", "") or "")
     if "sqlite3" not in _final_engine:
         raise RuntimeError(
             f"TEST DATABASE SAFETY GUARD FATAL: Testing mode detected (IS_TESTING=True), "
             f"but final DATABASES['default']['ENGINE'] is '{_final_engine}'. "
             "Tests must run on SQLite only to protect shared/production databases."
         )
+    REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
+        k: "10000/minute" for k in REST_FRAMEWORK.get("DEFAULT_THROTTLE_RATES", {})
+    }
 
-# ── Workforce & Marketplace Integration Settings ──────────────────────────────
-WORKFORCE_API_BASE_URL = (os.getenv("WORKFORCE_API_BASE_URL") or "http://127.0.0.1:8001/api/workforce").replace("localhost", "127.0.0.1").rstrip("/")
-SEVO_INTEGRATION_SECRET = (os.getenv("SEVO_INTEGRATION_SECRET") or "caldim_secure_webhook_token_2026").strip()
-WORKFORCE_WEBHOOK_SECRET = (os.getenv("WORKFORCE_WEBHOOK_SECRET") or "caldim_secure_webhook_token_2026").strip()
-
-# ── Razorpay Payment Gateway Settings ────────────────────────────────────────
-RAZORPAY_KEY_ID = (os.getenv("RAZORPAY_KEY_ID") or "").strip()
-RAZORPAY_KEY_SECRET = (os.getenv("RAZORPAY_KEY_SECRET") or "").strip()
-RAZORPAY_WEBHOOK_SECRET = (os.getenv("RAZORPAY_WEBHOOK_SECRET") or "").strip()
-PAYMENT_SANDBOX_MODE = os.getenv("PAYMENT_SANDBOX_MODE", "1").lower() in ("1", "true", "yes")
-
-
-
-
-
+# Workforce integration settings are defined above.  Do not overwrite them
+# here with a development URL or a source-controlled secret.
 

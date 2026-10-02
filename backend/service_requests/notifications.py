@@ -23,7 +23,7 @@ def build_customer_tracking_url(service_request_or_token) -> str:
     Construct the canonical public customer live tracking URL.
     - Resolves the unguessable UUID tracking_token (never sequential ServiceRequest IDs).
     - Respects settings.FRONTEND_URL.
-    - Handles production base paths (/Caltrack) gracefully whether FRONTEND_URL
+    - Handles production base paths (/sevo) gracefully whether FRONTEND_URL
       already includes it or whether it's configured via FRONTEND_BASE_PATH / FRONTEND_SUBPATH.
     - Guaranteed to point to the existing public tracking page and work after reload.
     """
@@ -39,18 +39,28 @@ def build_customer_tracking_url(service_request_or_token) -> str:
     else:
         token = str(service_request_or_token or "").strip()
 
+    return f"{_frontend_base_url()}/tracking/{token}"
+
+
+def _frontend_base_url() -> str:
+    """FRONTEND_URL plus the production base path (see build_customer_tracking_url)."""
     frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173").rstrip("/")
     subpath = os.getenv("FRONTEND_SUBPATH", "").strip().rstrip("/")
     if not subpath:
-        # In production, Vite builds with base '/Caltrack/' and main.jsx uses basename '/Caltrack'
-        if not getattr(settings, "DEBUG", False) and "/Caltrack" not in frontend_url and "localhost" not in frontend_url:
-            subpath = os.getenv("FRONTEND_BASE_PATH", "/Caltrack").strip().rstrip("/")
+        # In production, Vite builds with base '/sevo/' and main.jsx uses basename '/sevo'
+        if not getattr(settings, "DEBUG", False) and "/sevo" not in frontend_url and "localhost" not in frontend_url:
+            subpath = os.getenv("FRONTEND_BASE_PATH", "/sevo").strip().rstrip("/")
     if subpath and not subpath.startswith("/"):
         subpath = f"/{subpath}"
     if subpath and frontend_url.endswith(subpath):
         subpath = ""
+    return f"{frontend_url}{subpath}"
 
-    return f"{frontend_url}{subpath}/tracking/{token}"
+
+def build_feedback_url(feedback_token) -> str:
+    """Public, token-keyed rating page. Honors the same production base path as the tracking link:
+    the feedback links used to be built from the bare FRONTEND_URL and 404'd behind '/sevo'."""
+    return f"{_frontend_base_url()}/feedback/{feedback_token}"
 
 
 # ── Canonical SMS Notification Dispatcher ─────────────────────────────────────
@@ -342,8 +352,7 @@ def send_completion_and_feedback_email(service_request, feedback_token: str) -> 
         )
         return
 
-    frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173")
-    feedback_url = f"{frontend_url}/feedback/{feedback_token}"
+    feedback_url = build_feedback_url(feedback_token)
 
     # ServiceRequest.assigned_employee was removed by migration 0038 when the
     # workforce concern moved to the vendor app, so this raised AttributeError
@@ -436,8 +445,7 @@ def send_feedback_link(service_request, feedback_token: str) -> None:
     Kept for backward compatibility (admin resend-feedback/ endpoint).
     Sends only the feedback link email when admin manually resends.
     """
-    frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173")
-    link = f"{frontend_url}/feedback/{feedback_token}"
+    link = build_feedback_url(feedback_token)
     category_name = _get_category_display_name(service_request)
 
     subject = f"How was your service? [{service_request.request_id}]"
@@ -825,6 +833,228 @@ def notify_delivery_recipient(service_request, technician_name="") -> None:
         logger.error("[ServiceRequests] Failed to send delivery-recipient email for %s: %s", service_request.request_id, exc)
 
 
+def notify_gt_delivery_completed(service_request, technician_name="") -> None:
+    """
+    GT Mini Truck audit fix: DELIVERED (the moment the trip is over and the
+    final, reconciled fare is set -- see workforce_integration/views.py
+    _reconcile_final_fare) previously only broadcast a websocket event and
+    updated the DB; the customer who booked the trip got no SMS/email
+    telling them their goods actually arrived (the earlier delivery-OTP
+    notice fires when the driver reaches the drop location, before
+    unloading -- not the same moment as DELIVERED). Modeled directly on the
+    existing notify_customer_cancelled()/notify_delivery_recipient()
+    pattern in this file: same SMS helper, same preference check, same
+    HTML template helper. Scoped to goods_transport_truck only.
+    """
+    customer = getattr(service_request, "customer", None)
+    tracking_url = build_customer_tracking_url(service_request)
+    tech_display = technician_name or getattr(service_request, "technician_name", "") or "Your driver"
+
+    # Rating link: a delivered trip gets its own feedback token (nothing else issues one for GT --
+    # the admin "verify" step that creates it for home services is not part of a delivery).
+    feedback_url = ""
+    try:
+        from .services.trip_feedback import ensure_trip_feedback
+        _fb = ensure_trip_feedback(service_request)
+        if _fb is not None and not _fb.is_submitted:
+            feedback_url = build_feedback_url(_fb.feedback_token)
+    except Exception as fb_err:
+        logger.warning("[GTDelivery] Could not prepare rating link for %s: %s", service_request.request_id, fb_err)
+
+    # The final, reconciled fare is set at DELIVERED (Porter finalises the fare after the trip);
+    # tell the customer what they are charged instead of leaving them to find it in the app.
+    _final = getattr(service_request, "total_amount", None)
+    try:
+        fare_text = f"Rs. {float(_final):,.2f}" if _final is not None and float(_final) > 0 else ""
+    except (TypeError, ValueError):
+        fare_text = ""
+
+    # 1. SMS delivery-completed notification
+    phone = (getattr(service_request, "phone", "") or "").strip()
+    if phone:
+        sms_msg = f"SEVO: Your goods for booking {service_request.request_id} have been delivered."
+        if fare_text:
+            sms_msg += f" Final fare {fare_text}."
+        sms_msg += f" Details: {tracking_url}"
+        if feedback_url:
+            sms_msg += f" Rate your driver: {feedback_url}"
+        event_key = f"booking:{service_request.request_id}:gt-delivered"
+        try:
+            send_sms_notification(
+                mobile_number=phone,
+                message=sms_msg,
+                event_key=event_key,
+                service_request=service_request,
+                preference_field="booking_confirmations",
+            )
+        except Exception as sms_err:
+            logger.warning("[GTDelivery] Failed to send delivered SMS for %s: %s", service_request.request_id, sms_err)
+
+    # 2. Email delivery-completed notification
+    customer_email = getattr(customer, "email", None) or service_request.email
+    if not customer_email:
+        return
+    if not _customer_wants(customer, "booking_confirmations"):
+        logger.info("[GTDelivery] Customer opted out of booking_confirmations -- skipping delivered notification for booking %s.", service_request.request_id)
+        return
+
+    subject = f"[sevo] Delivered — {service_request.request_id}"
+    body = _render_html_template(
+        title="Goods Delivered",
+        greeting=f"Hello {customer.get_full_name() if customer else service_request.customer_name or 'Customer'},",
+        intro_text=f"Your goods for booking {service_request.request_id} have been delivered, handled by {tech_display}.",
+        details_dict={
+            "Booking ID": service_request.request_id,
+            "Pickup": service_request.address or "N/A",
+            "Drop-off": getattr(service_request, "drop_address", "") or "N/A",
+            "Driver": tech_display,
+            **({"Final fare": fare_text} if fare_text else {}),
+            **({"Rate your driver": feedback_url} if feedback_url else {}),
+        },
+        cta_url=tracking_url,
+        cta_text="View Trip Details",
+        footer_note="If a balance payment is due, please settle it with the driver or via the app.",
+    )
+    try:
+        _sent = send_mail(
+            subject,
+            f"Your goods for booking {service_request.request_id} have been delivered. Details: {tracking_url}"
+            + (f" Rate your driver: {feedback_url}" if feedback_url else ""),
+            settings.DEFAULT_FROM_EMAIL,
+            [customer_email],
+            html_message=body,
+            fail_silently=True,
+        )
+        if _sent:
+            logger.info("[GTDelivery] Delivered notification sent to %s for %s", customer_email, service_request.request_id)
+        else:
+            logger.error("[GTDelivery] send_mail reported 0 messages delivered to %s for booking %s", customer_email, service_request.request_id)
+    except Exception as exc:
+        logger.error("[GTDelivery] Failed to send delivered notification for %s: %s", service_request.request_id, exc)
+
+
+_PM_LEG_NOTICE_COPY = {
+    "TEAM_EN_ROUTE": (
+        "Your packers & movers crew is on the way to your pickup location.",
+        "Move Crew On The Way",
+    ),
+    "ARRIVED_PICKUP": (
+        "Your crew has arrived at the pickup location and will begin packing shortly.",
+        "Crew Arrived At Pickup",
+    ),
+    "IN_TRANSIT": (
+        "Your belongings are packed and in transit to the drop-off location.",
+        "Move In Transit",
+    ),
+    "ARRIVED_DROP": (
+        "Your crew has arrived at the drop-off location and will begin unloading shortly.",
+        "Crew Arrived At Drop-off",
+    ),
+    "DELIVERED": (
+        "Your move is complete -- all items have been delivered and unpacked.",
+        "Move Completed",
+    ),
+    # Bug found: COMPLETED used to carry the identical copy as DELIVERED.
+    # PM_LEG_SEQUENCE treats DELIVERED and COMPLETED as two distinct,
+    # forward-only legs a normal move genuinely transitions through, and each
+    # leg transition calls notify_pm_move_update() separately (see
+    # workforce_integration/views.py), so every customer received the same
+    # "your move is complete" SMS + email twice -- the SMS dedup key is keyed
+    # per-leg (pm-delivered vs pm-completed), not per logical event, so it
+    # didn't catch this, and the email path has no dedup at all. DELIVERED is
+    # the customer-meaningful moment (goods actually arrived/unpacked);
+    # COMPLETED is an internal finalization step with nothing new to tell the
+    # customer, so it intentionally has no entry here and notify_pm_move_update
+    # no-ops for it (see the `if not copy: return` below) rather than sending
+    # a second identical notice.
+}
+
+
+def notify_pm_move_update(service_request, leg, technician_name="") -> None:
+    """
+    P&M audit fix: unlike the GT (Mini Truck / Two Wheeler) categories,
+    Packers & Movers had NO leg-transition customer notifications at all --
+    the GT-only leg-notice block in workforce_integration/views.py is
+    explicitly scoped to goods_transport_truck/goods_transport_two_wheeler
+    and correctly does not fire for packers_movers, but nothing was put in
+    its place, so a P&M customer got no SMS/email at crew-en-route,
+    arrived-at-pickup, in-transit, arrived-at-drop, or move-completed --
+    only a single generic "technician on the way" notice tied to the old
+    (non-leg-aware) employee_on_the_way status event. This sends
+    P&M-worded (never GT delivery-style "goods delivered") notices for the
+    handful of legs a customer actually cares about, modeled on the same
+    notify_gt_delivery_completed()/notify_delivery_recipient() pattern:
+    same SMS helper, same preference check, same HTML template helper.
+    Unknown/other legs (PACKING, DISMANTLING, LOADING, UNLOADING,
+    REASSEMBLY, UNPACKING, ASSIGNED) are intentionally silent to avoid
+    over-notifying the customer with every one of the 13 internal stages.
+    """
+    leg_key = str(leg or "").strip().upper()
+    copy = _PM_LEG_NOTICE_COPY.get(leg_key)
+    if not copy:
+        return
+    sms_text, title = copy
+
+    customer = getattr(service_request, "customer", None)
+    tracking_url = build_customer_tracking_url(service_request)
+    tech_display = technician_name or getattr(service_request, "technician_name", "") or "Your crew"
+
+    # 1. SMS notification
+    phone = (getattr(service_request, "phone", "") or "").strip()
+    if phone:
+        sms_msg = f"SEVO: {sms_text} Track: {tracking_url}"
+        event_key = f"booking:{service_request.request_id}:pm-{leg_key.lower()}"
+        try:
+            send_sms_notification(
+                mobile_number=phone,
+                message=sms_msg,
+                event_key=event_key,
+                service_request=service_request,
+                preference_field="booking_confirmations",
+            )
+        except Exception as sms_err:
+            logger.warning("[PMMove] Failed to send %s SMS for %s: %s", leg_key, service_request.request_id, sms_err)
+
+    # 2. Email notification
+    customer_email = getattr(customer, "email", None) or service_request.email
+    if not customer_email:
+        return
+    if not _customer_wants(customer, "booking_confirmations"):
+        logger.info("[PMMove] Customer opted out of booking_confirmations -- skipping %s notification for booking %s.", leg_key, service_request.request_id)
+        return
+
+    subject = f"[sevo] {title} — {service_request.request_id}"
+    body = _render_html_template(
+        title=title,
+        greeting=f"Hello {customer.get_full_name() if customer else service_request.customer_name or 'Customer'},",
+        intro_text=sms_text,
+        details_dict={
+            "Booking ID": service_request.request_id,
+            "Pickup": service_request.address or "N/A",
+            "Drop-off": getattr(service_request, "drop_address", "") or "N/A",
+            "Crew Contact": tech_display,
+        },
+        cta_url=tracking_url,
+        cta_text="View Move Details",
+        footer_note="If a balance payment is due, please settle it with the crew lead or via the app.",
+    )
+    try:
+        _sent = send_mail(
+            subject,
+            f"{sms_text} Details: {tracking_url}",
+            settings.DEFAULT_FROM_EMAIL,
+            [customer_email],
+            html_message=body,
+            fail_silently=True,
+        )
+        if _sent:
+            logger.info("[PMMove] %s notification sent to %s for %s", leg_key, customer_email, service_request.request_id)
+        else:
+            logger.error("[PMMove] send_mail reported 0 messages delivered to %s for booking %s", customer_email, service_request.request_id)
+    except Exception as exc:
+        logger.error("[PMMove] Failed to send %s notification for %s: %s", leg_key, service_request.request_id, exc)
+
+
 def send_work_completion_email(service_request) -> None:
     """DEPRECATED no-op. Use send_completion_and_feedback_email() instead."""
     pass
@@ -852,7 +1082,7 @@ def notify_reschedule_created(reschedule_request) -> None:
         logger.info("[Reschedule] No admin email found for booking %s", booking.request_id)
         return
 
-    subject = f"[CalTrack] Reschedule Request — {booking.request_id}"
+    subject = f"[sevo] Reschedule Request — {booking.request_id}"
     try:
         _sent = send_mail(
             subject,
@@ -891,7 +1121,7 @@ def notify_reschedule_decision(reschedule_request) -> None:
         return
 
     decision = reschedule_request.status  # APPROVED or REJECTED
-    subject = f"[CalTrack] Reschedule {decision.title()} — {booking.request_id}"
+    subject = f"[sevo] Reschedule {decision.title()} — {booking.request_id}"
     if decision == "APPROVED":
         body = (
             f"Great news! Your reschedule request for booking {booking.request_id} has been APPROVED.\n\n"
@@ -927,7 +1157,7 @@ def notify_employee_reschedule_request(reschedule_request) -> None:
         return
 
     booking = reschedule_request.booking
-    subject = f"[CalTrack] New Schedule Confirmation Required — {booking.request_id}"
+    subject = f"[sevo] New Schedule Confirmation Required — {booking.request_id}"
     body = _render_html_template(
         title="Reschedule Confirmation Required",
         greeting=f"Hello {emp.user.get_full_name() or emp.user.username},",
@@ -971,7 +1201,7 @@ def notify_admin_employee_rejection(reschedule_request) -> None:
 
     emp = reschedule_request.proposed_technician
     emp_name = emp.user.get_full_name() if emp else "Employee"
-    subject = f"[CalTrack] Employee Declined Reschedule — {booking.request_id} (Action Required)"
+    subject = f"[sevo] Employee Declined Reschedule — {booking.request_id} (Action Required)"
     body = (
         f"An employee has declined the reschedule assignment.\n\n"
         f"Booking: {booking.request_id}\n"
@@ -1000,7 +1230,7 @@ def notify_customer_slot_suggestion(reschedule_request) -> None:
         return
 
     booking = reschedule_request.booking
-    subject = f"[CalTrack] Admin Suggested a New Slot — {booking.request_id}"
+    subject = f"[sevo] Admin Suggested a New Slot — {booking.request_id}"
     body = _render_html_template(
         title="New Slot Suggested",
         greeting=f"Hello {reschedule_request.requested_by.get_full_name() or 'Customer'},",
@@ -1036,7 +1266,7 @@ def notify_customer_rescheduled(reschedule_request) -> None:
 
     booking = reschedule_request.booking
     emp = reschedule_request.proposed_technician
-    subject = f"[CalTrack] Booking Rescheduled Successfully — {booking.request_id}"
+    subject = f"[sevo] Booking Rescheduled Successfully — {booking.request_id}"
     body = _render_html_template(
         title="Booking Rescheduled",
         greeting=f"Hello {reschedule_request.requested_by.get_full_name() or 'Customer'},",
@@ -1071,7 +1301,7 @@ def notify_customer_reschedule_rejected(reschedule_request) -> None:
         return
 
     booking = reschedule_request.booking
-    subject = f"[CalTrack] Reschedule Request Rejected — {booking.request_id}"
+    subject = f"[sevo] Reschedule Request Rejected — {booking.request_id}"
     body = (
         f"Unfortunately, your reschedule request for booking {booking.request_id} could not be approved.\n\n"
         f"Reason: {reschedule_request.get_rejection_reason_display() if reschedule_request.rejection_reason else 'N/A'}\n"
@@ -1172,7 +1402,7 @@ def notify_customer_cancelled(service_request, reason="") -> None:
         logger.info("[Cancellation] Customer opted out of booking_confirmations -- skipping cancellation notification for booking %s.", service_request.request_id)
         return
 
-    subject = f"[CalTrack] Booking Cancelled — {service_request.request_id}"
+    subject = f"[sevo] Booking Cancelled — {service_request.request_id}"
     body = _render_html_template(
         title="Booking Cancelled",
         greeting=f"Hello {customer.get_full_name() if customer else 'Customer'},",
@@ -1236,7 +1466,7 @@ def notify_customer_technician_delayed(service_request, reason="", delay_count=1
         )
         return
 
-    subject = f"[CalTrack] Service Delay Update — {service_request.request_id} (#{delay_count})"
+    subject = f"[sevo] Service Delay Update — {service_request.request_id} (#{delay_count})"
 
     # Persistent dedup: NotificationOutbox already records every send, so it
     # doubles as the "have we told them about this delay yet?" ledger without
@@ -1305,7 +1535,7 @@ def notify_refund_status_change(refund_request) -> None:
 
     status = refund_request.status
     booking = refund_request.booking
-    subject = f"[CalTrack] Refund {status.title()} — {booking.request_id}"
+    subject = f"[sevo] Refund {status.title()} — {booking.request_id}"
 
     status_messages = {
         "APPROVED":  f"Your refund of ₹{refund_request.amount} for booking {booking.request_id} has been APPROVED and will be processed shortly.",
@@ -1346,7 +1576,7 @@ def notify_complaint_created(complaint) -> None:
 
     customer = complaint.raised_by
     booking_ref = complaint.booking.request_id if complaint.booking else "General"
-    subject = f"[CalTrack] New Complaint — {complaint.get_category_display()} (Booking: {booking_ref})"
+    subject = f"[sevo] New Complaint — {complaint.get_category_display()} (Booking: {booking_ref})"
     body = (
         f"A new complaint has been filed.\n\n"
         f"Category: {complaint.get_category_display()}\n"
@@ -1374,7 +1604,7 @@ def notify_complaint_status_change(complaint) -> None:
         logger.info("[Complaint] Customer opted out of complaint_updates -- skipping status change notification.")
         return
 
-    subject = f"[CalTrack] Complaint Update — {complaint.get_status_display()}"
+    subject = f"[sevo] Complaint Update — {complaint.get_status_display()}"
     body = (
         f"Your complaint has been updated.\n\n"
         f"Category: {complaint.get_category_display()}\n"
@@ -1410,7 +1640,7 @@ def notify_complaint_response(complaint, response) -> None:
     for email in recipients:
         try:
             _sent = send_mail(
-                f"[CalTrack] New Response on Your Complaint",
+                f"[sevo] New Response on Your Complaint",
                 f"A new response has been added to your complaint.\n\n{response.message}",
                 settings.DEFAULT_FROM_EMAIL,
                 [email],
@@ -1433,7 +1663,7 @@ def notify_complaint_assigned(complaint) -> None:
     customer = complaint.raised_by
     try:
         _sent = send_mail(
-            "[CalTrack] Complaint Assigned To You",
+            "[sevo] Complaint Assigned To You",
             (
                 f"A complaint has been assigned to you.\n\n"
                 f"Category: {complaint.get_category_display()}\n"
@@ -1501,3 +1731,52 @@ def broadcast_tracking_event(service_request, event_type="job_updated", custom_d
     except Exception as e:
         logger.warning("[Tracking WS] Failed to broadcast event %s for SR %s: %s", event_type, getattr(service_request, "request_id", None), e)
 
+
+def notify_delivery_exception(service_request) -> None:
+    """Tell the customer the driver reported a problem on the trip (receiver unavailable, ...)."""
+    exc = service_request.delivery_exception if isinstance(service_request.delivery_exception, dict) else {}
+    if exc.get("status") != "OPEN":
+        return
+    tracking_url = build_customer_tracking_url(service_request)
+    label = exc.get("label") or "A problem was reported on your trip"
+    phone = (getattr(service_request, "phone", "") or "").strip()
+    if phone:
+        try:
+            send_sms_notification(
+                mobile_number=phone,
+                message=f"SEVO: Booking {service_request.request_id}: {label}. Please contact your driver or support. Details: {tracking_url}",
+                event_key=f"booking:{service_request.request_id}:gt-exception:{exc.get('type')}:{exc.get('leg')}",
+                service_request=service_request,
+                preference_field="booking_confirmations",
+            )
+        except Exception as sms_err:
+            logger.warning("[GTException] SMS failed for %s: %s", service_request.request_id, sms_err)
+
+
+_CLAIM_SMS = {
+    "OPEN": "your damage/loss claim has been received and is under review",
+    "APPROVED": "your claim was approved for INR {amount}. Payout follows to your SEVO wallet",
+    "REJECTED": "your claim was reviewed and could not be approved. Contact support for details",
+    "PAID": "your claim payout of INR {amount} has been credited to your SEVO wallet",
+}
+
+
+def notify_claim_update(claim) -> None:
+    """Tell the customer where their damage/loss claim stands. One SMS per (claim, status): the event
+    key makes retries and duplicate calls idempotent."""
+    template = _CLAIM_SMS.get(claim.status)
+    booking = claim.booking
+    phone = (getattr(booking, "phone", "") or "").strip()
+    if not template or not phone:
+        return
+    body = template.format(amount=claim.approved_amount if claim.approved_amount is not None else claim.claimed_amount)
+    try:
+        send_sms_notification(
+            mobile_number=phone,
+            message=f"SEVO: Booking {booking.request_id}: {body}. Claim #{claim.pk}.",
+            event_key=f"claim:{claim.pk}:{claim.status}",
+            service_request=booking,
+            preference_field="booking_confirmations",
+        )
+    except Exception as exc:
+        logger.warning("[Claim] SMS failed for claim %s: %s", claim.pk, exc)

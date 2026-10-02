@@ -380,6 +380,7 @@ export function MapPickerScreen({
   initialCoords,
   initialLocation = null,
   serviceSlug = "",
+  vehicleClass = "",
   onClose,
   onConfirm,
   onCenterChange,
@@ -393,7 +394,11 @@ export function MapPickerScreen({
   const [isDragging, setIsDragging] = useState(false)
   const [isLocating, setIsLocating] = useState(false)
   const [serviceZones, setServiceZones] = useState([])
-  const [zoneStatus, setZoneStatus] = useState({ inZone: true, serviceAllowed: true, zoneName: null, message: "" })
+  // Fail CLOSED: until the backend has answered for the current pin the
+  // location is "checking", not "available". Previously the initial state and
+  // any request error (429 throttle, 5xx, network) showed "Service available
+  // in your area (Active Zone)" and enabled Confirm for ANY location.
+  const [zoneStatus, setZoneStatus] = useState({ inZone: null, serviceAllowed: null, zoneName: null, message: "", checking: true })
   const [currentCenter, setCurrentCenter] = useState(() => {
     const lat = Number(initialLocation?.latitude || initialLocation?.lat || initialCoords?.lat || initialCoords?.latitude) || 12.754598
     const lng = Number(initialLocation?.longitude || initialLocation?.lng || initialCoords?.lng || initialCoords?.longitude) || 77.834477
@@ -422,17 +427,33 @@ export function MapPickerScreen({
   const [showSearchBox, setShowSearchBox] = useState(false)
 
   // ── Load active service zones from backend ─────────────────────
+  // Only draw the zones configured for THIS booking's service. Without the
+  // filter every active zone (e.g. a home-services radius circle) was drawn
+  // on top of / instead of the Goods & Transport polygon coverage.
   useEffect(() => {
+    let active = true
     async function loadZones() {
+      const slug = String(serviceSlug || "").trim()
+      const isScopedService = /^(goods_transport_|packers_movers)/.test(slug)
       try {
-        const res = await apiRequest("/settings/service-zones/")
-        if (Array.isArray(res)) {
+        let res = await apiRequest(
+          slug && slug !== "general"
+            ? `/settings/service-zones/?services=${encodeURIComponent(slug)}`
+            : "/settings/service-zones/"
+        )
+        // Non-GT flows whose slug is not a zone service slug keep the old
+        // "show all zones" behaviour rather than showing nothing.
+        if (Array.isArray(res) && res.length === 0 && slug && slug !== "general" && !isScopedService) {
+          res = await apiRequest("/settings/service-zones/")
+        }
+        if (active && Array.isArray(res)) {
           setServiceZones(res)
         }
       } catch { }
     }
     loadZones()
-  }, [])
+    return () => { active = false }
+  }, [serviceSlug])
 
   // ── Live Geocoding Search Auto-suggest ─────────────────────────
   useEffect(() => {
@@ -464,7 +485,7 @@ export function MapPickerScreen({
   // ── Reverse geocoding of current map center ────────────────────
   const { address, loading: geoLoading, error: geoError } = useReverseGeocode(currentCenter)
 
-  // ── Real-time service-specific zone check on pin movement (Debounced 600ms & Race Condition Protected) ──────
+  // ── Real-time service-specific zone check on pin movement (no calls while the pin is being dragged; one call 200ms after it settles; stale responses ignored) ──────
   const zoneCheckReqIdRef = useRef(0)
 
   useEffect(() => {
@@ -472,6 +493,7 @@ export function MapPickerScreen({
 
     const currentReqId = ++zoneCheckReqIdRef.current
     let active = true
+    setZoneStatus({ inZone: null, serviceAllowed: null, zoneId: null, zoneName: null, message: "", checking: true })
 
     const timer = setTimeout(async () => {
       try {
@@ -480,7 +502,10 @@ export function MapPickerScreen({
           json: {
             lat: currentCenter.lat,
             lng: currentCenter.lng,
-            service_slug: serviceSlug || ""
+            service_slug: serviceSlug || "",
+            // Zones can restrict which vehicle classes they serve; without this the pin
+            // could read "serviceable" here and then be refused once a vehicle is chosen.
+            ...(vehicleClass ? { vehicle_class: vehicleClass } : {}),
           }
         })
         if (active && currentReqId === zoneCheckReqIdRef.current && res) {
@@ -491,11 +516,22 @@ export function MapPickerScreen({
             zoneName: res.zone?.name || res.zone_name || null,
             message: res.message || "",
             errorCode: res.error_code || "",
+            checking: false,
           })
         }
-      } catch {
+      } catch (err) {
         if (active && currentReqId === zoneCheckReqIdRef.current) {
-          setZoneStatus({ inZone: true, serviceAllowed: true, zoneId: null, zoneName: null, message: "" })
+          setZoneStatus({
+            inZone: null,
+            serviceAllowed: null,
+            zoneId: null,
+            zoneName: null,
+            checking: false,
+            checkFailed: true,
+            message: err?.status === 429
+              ? "Too many location checks just now. Please wait a few seconds, then move the pin slightly to check again."
+              : "We couldn't verify service availability for this location. Please move the pin slightly or try again.",
+          })
         }
       }
     }, 200)
@@ -504,7 +540,7 @@ export function MapPickerScreen({
       active = false
       clearTimeout(timer)
     }
-  }, [currentCenter.lat, currentCenter.lng, serviceSlug, isDragging])
+  }, [currentCenter.lat, currentCenter.lng, serviceSlug, vehicleClass, isDragging])
 
   // ── "Re-center on me" / Live GPS fetch ─────────────────────────
   const handleRecenter = useCallback(() => {
@@ -631,6 +667,8 @@ export function MapPickerScreen({
 
   const isOutOfZone = zoneStatus.inZone === false
   const isServiceBlocked = zoneStatus.inZone === true && zoneStatus.serviceAllowed === false
+  // Only a completed, successful backend check may mark a location serviceable.
+  const isZoneVerified = zoneStatus.inZone === true && !zoneStatus.checking && !zoneStatus.checkFailed
 
   const handleConfirmLocation = (resolvedAddr) => {
     const targetAddr = resolvedAddr || address || initialLocation || {}
@@ -646,27 +684,35 @@ export function MapPickerScreen({
 
     const streetAddress = targetAddr.address_line1 || targetAddr.street_address || [targetAddr.flat_house_no || initialFlat, targetAddr.landmark || initialLandmark].filter(Boolean).join(", ") || fullDisplay.split(",")[0]
 
-    // If user selected an ALREADY SAVED address or explicitly confirms without needing full details form
-    if (resolvedAddr && (resolvedAddr.id || resolvedAddr.isSaved || resolvedAddr.is_saved || initialLocation?.id)) {
-      const rawType = resolvedAddr.address_type || resolvedAddr.label || resolvedAddr.tag || initialLocation?.address_type || "Home"
+    // Only treat as already saved if explicitly an existing saved address record
+    const isExplicitSaved = Boolean(
+      resolvedAddr && (
+        resolvedAddr.isSaved ||
+        resolvedAddr.is_saved ||
+        (resolvedAddr.id && !String(resolvedAddr.id).startsWith("addr_") && !String(resolvedAddr.id).startsWith("search-") && !String(resolvedAddr.id).startsWith("local_") && !String(resolvedAddr.id).startsWith("loc_"))
+      )
+    )
+
+    if (isExplicitSaved) {
+      const rawType = resolvedAddr.address_type || resolvedAddr.label || resolvedAddr.tag || "Home"
       const confirmedData = {
-        id: resolvedAddr.id || resolvedAddr.saved_address_id || initialLocation?.address_id || initialLocation?.saved_address_id || initialLocation?.id || `addr_${Date.now()}`,
+        id: resolvedAddr.id,
         address_type: rawType.charAt(0).toUpperCase() + rawType.slice(1).toLowerCase(),
         label: rawType.toLowerCase(),
-        flat_house_no: resolvedAddr.flat_house_no || resolvedAddr.house_number || initialLocation?.flat_house_no || initialFlat || "",
-        address_line1: streetAddress,
-        street_address: streetAddress,
-        landmark: resolvedAddr.landmark || initialLocation?.landmark || initialLandmark || "",
+        flat_house_no: resolvedAddr.flat_house_no || resolvedAddr.house_number || "",
+        address_line1: resolvedAddr.address_line1 || streetAddress,
+        street_address: resolvedAddr.street_address || streetAddress,
+        landmark: resolvedAddr.landmark || "",
         locality: resolvedAddr.locality || address?.locality || "",
-        city: resolvedAddr.city || address?.city || initialLocation?.city || "Hosur",
-        state: resolvedAddr.state || address?.state || initialLocation?.state || "Tamil Nadu",
-        pincode: resolvedAddr.pincode || address?.pincode || initialLocation?.pincode || "635109",
-        formatted_address: fullDisplay,
-        latitude: Number(currentCenter.lat),
-        longitude: Number(currentCenter.lng),
-        location_source: initialLocation?.location_source || resolvedAddr.location_source || (resolvedAddr.id ? "saved_address" : "map_pin"),
+        city: resolvedAddr.city || address?.city || "Hosur",
+        state: resolvedAddr.state || address?.state || "Tamil Nadu",
+        pincode: resolvedAddr.pincode || address?.pincode || "635109",
+        formatted_address: resolvedAddr.formatted_address || fullDisplay,
+        latitude: Number(resolvedAddr.latitude || currentCenter.lat),
+        longitude: Number(resolvedAddr.longitude || currentCenter.lng),
+        location_source: "saved_address",
         geocoding_status: "verified",
-        serviceable: zoneStatus.inZone !== false && zoneStatus.serviceAllowed !== false,
+        serviceable: isZoneVerified && zoneStatus.serviceAllowed !== false,
         zone_id: zoneStatus.zoneId || resolvedAddr.zone_id || null,
         zone_name: zoneStatus.zoneName || resolvedAddr.zone_name || "Hosur City",
         confirmed_at: new Date().toISOString()
@@ -684,25 +730,30 @@ export function MapPickerScreen({
       return
     }
 
+    const finalCity = targetAddr.city || address?.city || ""
+    const finalState = targetAddr.state || address?.state || ""
+    const finalPincode = targetAddr.pincode || address?.pincode || ""
+
     const finalObj = {
       ...initialLocation,
       ...resolvedAddr,
+      id: `loc_${Date.now()}`,
       formatted_address: fullDisplay || "Custom Location",
       address_line1: streetAddress,
       street_address: streetAddress,
-      locality: resolvedAddr?.locality || address?.locality || "",
-      city: resolvedAddr?.city || address?.city || initialLocation?.city || "Hosur",
-      state: resolvedAddr?.state || address?.state || initialLocation?.state || "Tamil Nadu",
-      pincode: resolvedAddr?.pincode || address?.pincode || initialLocation?.pincode || "635109",
+      locality: targetAddr.locality || address?.locality || "",
+      city: finalCity,
+      state: finalState,
+      pincode: finalPincode,
       latitude: Number(currentCenter.lat),
       longitude: Number(currentCenter.lng),
       zone_id: zoneStatus.zoneId || resolvedAddr?.zone_id || null,
       zone_name: zoneStatus.zoneName || resolvedAddr?.zone_name || "Hosur City",
-      flat_house_no: selectedAddressData?.flat_house_no || initialLocation?.flat_house_no || initialFlat || "",
-      landmark: selectedAddressData?.landmark || initialLocation?.landmark || initialLandmark || "",
-      location_source: initialLocation?.location_source || "map_pin",
+      flat_house_no: selectedAddressData?.flat_house_no || initialFlat || "",
+      landmark: selectedAddressData?.landmark || initialLandmark || "",
+      location_source: "gps",
       geocoding_status: "verified",
-      address_type: initialLocation?.address_type || "Home"
+      address_type: "Home"
     }
 
     // If initialLocation had mode === 'details' or isNew or isEditing
@@ -713,25 +764,24 @@ export function MapPickerScreen({
     }
 
     // Direct confirm without requiring redundant form if address is already rich
-    const rawType = finalObj.address_type || finalObj.label || "Home"
     const confirmedData = {
-      id: finalObj.id || finalObj.saved_address_id || `addr_${Date.now()}`,
-      address_type: rawType.charAt(0).toUpperCase() + rawType.slice(1).toLowerCase(),
-      label: rawType.toLowerCase(),
+      id: `loc_${Date.now()}`,
+      address_type: "Home",
+      label: "current location",
       flat_house_no: finalObj.flat_house_no || "",
       address_line1: finalObj.address_line1 || finalObj.street_address || "",
       street_address: finalObj.address_line1 || finalObj.street_address || "",
       landmark: finalObj.landmark || "",
       locality: finalObj.locality || "",
-      city: finalObj.city || "Hosur",
-      state: finalObj.state || "Tamil Nadu",
-      pincode: finalObj.pincode || "635109",
+      city: finalObj.city || finalCity,
+      state: finalObj.state || finalState,
+      pincode: finalObj.pincode || finalPincode,
       formatted_address: finalObj.formatted_address,
       latitude: Number(currentCenter.lat),
       longitude: Number(currentCenter.lng),
-      location_source: finalObj.location_source || "map_pin",
+      location_source: "gps",
       geocoding_status: "verified",
-      serviceable: zoneStatus.inZone !== false && zoneStatus.serviceAllowed !== false,
+      serviceable: isZoneVerified && zoneStatus.serviceAllowed !== false,
       zone_id: zoneStatus.zoneId || null,
       zone_name: zoneStatus.zoneName || "Hosur City",
       confirmed_at: new Date().toISOString()
@@ -831,7 +881,7 @@ export function MapPickerScreen({
                 longitude: Number(currentCenter.lng),
                 location_source: initialLocation?.location_source || "add_new",
                 geocoding_status: "verified",
-                serviceable: zoneStatus.inZone !== false && zoneStatus.serviceAllowed !== false,
+                serviceable: isZoneVerified && zoneStatus.serviceAllowed !== false,
                 zone_id: zoneStatus.zoneId || finalPayload.zone_id || null,
                 zone_name: zoneStatus.zoneName || finalPayload.zone_name || "Hosur City",
                 confirmed_at: new Date().toISOString()

@@ -12,7 +12,8 @@ import logging
 import uuid
 from decimal import Decimal
 from django.conf import settings
-from django.db.models import Sum
+from django.db import transaction
+from django.db.models import Q, Sum
 from django.utils import timezone
 from django.http import HttpResponse
 from rest_framework import permissions, status
@@ -25,6 +26,14 @@ from accounts.permissions import is_admin_role
 from .models import Payment, ServiceRequest
 from .serializers import ServiceRequestDetailSerializer
 from .state_machine import apply_transition
+from .paytm_gateway import (
+    configured_provider,
+    create_live_transaction,
+    create_mock_transaction,
+    paytm_mock_enabled,
+    verify_live_transaction,
+    verify_mock_transaction,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +98,22 @@ def _verify_booking_ownership(request, sr):
     return token_matches or phone_matches
 
 
+def _wallet_part_payment_enabled():
+    from .services.gt_operations import ops
+    return bool(ops("allow_wallet_part_payment"))
+
+
+_LOGISTICS_CATEGORIES = ("goods_transport_truck", "goods_transport_two_wheeler", "packers_movers")
+
+
+def _has_balance_due(sr):
+    """A prepaid logistics trip whose final fare is now above what was paid."""
+    if (sr.service_category or "").strip().lower() not in _LOGISTICS_CATEGORIES:
+        return False
+    from .services.prepaid_variance import balance_due
+    return balance_due(sr) > 0
+
+
 # ─── Payment Initiation & Verification ────────────────────────────────────────
 
 class PaymentInitiateView(APIView):
@@ -122,7 +147,7 @@ class PaymentInitiateView(APIView):
         if sr.payment_method != ServiceRequest.PaymentMethod.ONLINE:
             return _error("This booking does not require online payment.")
 
-        if sr.payment_status == ServiceRequest.PaymentStatus.PAID:
+        if sr.payment_status == ServiceRequest.PaymentStatus.PAID and not _has_balance_due(sr):
             return _error("This booking is already paid.")
 
         # How much to charge for THIS order.
@@ -145,23 +170,86 @@ class PaymentInitiateView(APIView):
         if due_error:
             return _error(due_error)
 
-        gateway_configured = bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
+        # E2E QA 2026-10-01: every initiate call minted a NEW gateway order, and every order could be paid and
+        # verified. A customer whose first payment screen timed out and who retried therefore ended up with
+        # two live orders and could be charged twice for one booking. For Goods & Transport (never for other
+        # services) an open order for the same amount is handed back instead of creating another one.
+        if (sr.service_category or "").strip().lower() in _LOGISTICS_CATEGORIES:
+            _open = Payment.objects.filter(
+                service_request=sr, status=ServiceRequest.PaymentStatus.PENDING, amount=amount_due,
+                gateway__in=("razorpay", "sandbox"),
+                created_at__gte=timezone.now() - __import__("datetime").timedelta(minutes=30),
+            ).order_by("-created_at").first()
+            if _open is not None and _open.provider_order_id:
+                return _success(
+                    data={
+                        "order_id": _open.provider_order_id,
+                        "amount": float(amount_due),
+                        "booking_total": float(sr.total_amount),
+                        "currency": "INR",
+                        "booking_id": sr.id,
+                        "request_id": sr.request_id,
+                        "customer_name": sr.customer_name,
+                        "customer_email": sr.email or "",
+                        "customer_phone": sr.phone or "",
+                        "description": f"Payment for {sr.issue_title}",
+                        "key_id": settings.RAZORPAY_KEY_ID if _open.gateway == "razorpay" else "",
+                        "provider": _open.gateway,
+                        "sandbox": _open.gateway == "sandbox",
+                        "payment_id": _open.id,
+                        **({"provider": "sandbox", "mock": True} if _open.gateway == "sandbox" else {}),
+                    },
+                    message="Payment order already open.",
+                )
 
-        if gateway_configured:
+        provider = configured_provider()
+        razorpay_configured = bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
+        paytm_configured = bool(settings.PAYTM_MID and settings.PAYTM_MERCHANT_KEY)
+
+        if provider == "razorpay" and razorpay_configured:
             order_id, gateway_error = self._create_razorpay_order(sr, amount_due)
             if gateway_error:
                 return _error(gateway_error, 502)
-        else:
+            gateway = "razorpay"
+            provider_payload = {}
+        elif provider == "paytm_mock" and paytm_mock_enabled():
+            order_id = f"PAYTM_MOCK_ORDER_{uuid.uuid4().hex[:20].upper()}"
+            gateway = "paytm_mock"
+            provider_payload = create_mock_transaction(order_id, amount_due)
+        elif provider == "paytm" and paytm_configured:
+            order_id = f"SEVO{sr.id}{uuid.uuid4().hex[:12].upper()}"
+            gateway = "paytm"
+            callback_url = settings.PAYTM_CALLBACK_URL or request.build_absolute_uri("/api/payment/paytm/callback/")
+            try:
+                provider_payload = create_live_transaction(
+                    order_id,
+                    amount_due,
+                    {"id": sr.customer_id, "phone": sr.phone, "email": sr.email},
+                    callback_url,
+                )
+            except Exception as exc:
+                logger.warning("Paytm transaction initiation failed for booking %s: %s", sr.id, exc)
+                return _error("Could not start Paytm payment. Please try again.", 502)
+        elif provider == "razorpay" and settings.PAYMENT_SANDBOX_MODE:
+            # Legacy local Razorpay sandbox remains explicit, but does not
+            # pretend to be Paytm.  New mock testing should use paytm_mock.
             order_id = f"order_sandbox_{uuid.uuid4().hex[:16]}"
+            gateway = "sandbox"
+            provider_payload = {"provider": "sandbox", "mock": True}
+        elif not provider:
+            return _error("Online payment provider is invalid.", 503)
+        else:
+            return _error("Online payment is not configured.", 503)
 
-        Payment.objects.create(
+        payment = Payment.objects.create(
             customer=sr.customer,
             service_request=sr,
             razorpay_order_id=order_id,
+            provider_order_id=order_id,
             amount=amount_due,
             currency="INR",
             status=ServiceRequest.PaymentStatus.PENDING,
-            gateway="razorpay" if gateway_configured else "sandbox",
+            gateway=gateway,
         )
 
         return _success(
@@ -176,8 +264,11 @@ class PaymentInitiateView(APIView):
                 "customer_email": sr.email or "",
                 "customer_phone": sr.phone or "",
                 "description": f"Payment for {sr.issue_title}",
-                "key_id": settings.RAZORPAY_KEY_ID if gateway_configured else "",
-                "sandbox": not gateway_configured,
+                "key_id": settings.RAZORPAY_KEY_ID if gateway == "razorpay" else "",
+                "provider": gateway,
+                "sandbox": gateway in {"sandbox", "paytm_mock"},
+                "payment_id": payment.id,
+                **provider_payload,
             },
             message="Payment order created.",
         )
@@ -230,7 +321,22 @@ class PaymentInitiateView(APIView):
             else:
                 due = total - paid
         else:
-            due = total - paid
+            # P&M audit fix: same "advance now, balance later" shape as the
+            # quote branch above, for bookings that never go through the
+            # painting-quote flow (P&M and other flat-fee GT categories).
+            # GTAdvancePaymentPolicy defaults to disabled, so this is a
+            # no-op producing the exact same `due = total - paid` as before
+            # until an admin actually configures and enables a real
+            # advance_percent for a category.
+            from .models import get_gt_advance_due
+            advance = get_gt_advance_due(sr, total)
+            if advance and advance > 0:
+                if paid < advance:
+                    due = advance - paid
+                else:
+                    due = total - paid
+            else:
+                due = total - paid
 
         if due <= 0:
             return None, "This booking is already fully paid."
@@ -309,8 +415,8 @@ class PaymentVerifyView(APIView):
         if not _verify_booking_ownership(request, sr):
             return _error("You are not authorized to verify payment for this booking.", 403)
 
-        payment = Payment.objects.filter(
-            service_request=sr, razorpay_order_id=order_id
+        payment = Payment.objects.filter(service_request=sr).filter(
+            Q(provider_order_id=order_id) | Q(razorpay_order_id=order_id)
         ).order_by("-created_at").first()
         if not payment:
             logger.warning(f"Payment verify attempted for booking {sr.id} with unknown order_id={order_id!r}.")
@@ -329,9 +435,27 @@ class PaymentVerifyView(APIView):
                 message="Payment already confirmed.",
             )
 
-        gateway_configured = bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
-
-        if gateway_configured:
+        if payment.gateway == "paytm_mock":
+            if not verify_mock_transaction(order_id, payment_id, signature, payment.amount):
+                payment.status = ServiceRequest.PaymentStatus.FAILED
+                payment.error_code = "paytm_mock_signature_mismatch"
+                payment.save(update_fields=["status", "error_code", "updated_at"])
+                return _error("Mock Paytm payment verification failed.", 400)
+        elif payment.gateway == "paytm":
+            try:
+                verified = verify_live_transaction(order_id, payment.amount)
+            except ValueError as exc:
+                payment.status = ServiceRequest.PaymentStatus.FAILED
+                payment.error_code = "paytm_not_confirmed"
+                payment.error_description = str(exc)
+                payment.save(update_fields=["status", "error_code", "error_description", "updated_at"])
+                return _error("Paytm has not confirmed this payment yet.", 400)
+            except Exception as exc:
+                logger.warning("Paytm status lookup failed for booking %s: %s", sr.id, exc)
+                return _error("Could not verify Paytm payment. Please try again.", 502)
+            payment_id = verified["transaction_id"]
+            signature = verified["signature"]
+        elif payment.gateway == "razorpay":
             if not (payment_id and signature):
                 return _error("payment_id and signature are required.")
             expected_signature = hmac.new(
@@ -339,13 +463,13 @@ class PaymentVerifyView(APIView):
                 f"{order_id}|{payment_id}".encode("utf-8"),
                 hashlib.sha256,
             ).hexdigest()
-            if not hmac.compare_digest(expected_signature, str(signature)):
+            if not hmac.compare_digest(expected_signature.encode("utf-8"), str(signature).encode("utf-8")):
                 payment.status = ServiceRequest.PaymentStatus.FAILED
                 payment.error_code = "signature_mismatch"
                 payment.save(update_fields=["status", "error_code", "updated_at"])
                 logger.warning(f"Payment signature mismatch for booking {sr.id}, order {order_id}.")
                 return _error("Payment verification failed.", 400)
-        elif not settings.PAYMENT_SANDBOX_MODE:
+        elif payment.gateway != "sandbox" or not settings.PAYMENT_SANDBOX_MODE:
             return _error(
                 "Online payment is not available right now. Please choose cash on service or contact support.",
                 503,
@@ -355,13 +479,134 @@ class PaymentVerifyView(APIView):
 
         payment.razorpay_payment_id = payment_id or f"SANDBOX_{uuid.uuid4().hex[:12].upper()}"
         payment.razorpay_signature = signature or ""
+        payment.provider_transaction_id = payment.razorpay_payment_id
+        payment.provider_signature = payment.razorpay_signature
         payment.status = ServiceRequest.PaymentStatus.PAID
-        payment.save(update_fields=["razorpay_payment_id", "razorpay_signature", "status", "updated_at"])
+        payment.save(update_fields=["razorpay_payment_id", "razorpay_signature", "provider_transaction_id", "provider_signature", "status", "updated_at"])
 
+        return self._finalize(request, sr, payment)
+
+    def _finalize(self, request, sr, payment):
+        """Everything that follows a payment being recorded PAID (shared with wallet payment)."""
+        _prev_txn = sr.transaction_id
         sr.transaction_id = payment.razorpay_payment_id
         sr.payment_gateway = payment.gateway
         if not sr.invoice_id:
             sr.invoice_id = f"INV-{sr.request_id}-{uuid.uuid4().hex[:6].upper()}"
+
+        # A logistics trip that is already past payment (a balance paid after the final fare
+        # rose) only records the money: it must never re-run the booking confirmation/dispatch.
+        if (sr.service_category or "").strip().lower() in _LOGISTICS_CATEGORIES and \
+                sr.status != ServiceRequest.Status.WAITING_FOR_PAYMENT and \
+                sr.payment_status == ServiceRequest.PaymentStatus.PAID and not _has_balance_due(sr) and \
+                _prev_txn and _prev_txn != payment.razorpay_payment_id:
+            # The booking was already fully paid by another order: this money is an extra charge.
+            # Keep the original transaction on the booking and flag this payment for refund.
+            payment.error_code = "duplicate_payment_refund_required"
+            payment.error_description = (
+                f"Booking {sr.request_id} was already paid by {_prev_txn}; "
+                f"{payment.razorpay_payment_id} is a duplicate and needs a refund."
+            )
+            payment.save(update_fields=["error_code", "error_description", "updated_at"])
+            logger.error("[DUPLICATE_PAYMENT] %s", payment.error_description)
+            return _success(
+                data={
+                    "request_id":     sr.request_id,
+                    "booking_status": sr.status,
+                    "payment_status": sr.payment_status,
+                    "transaction_id": _prev_txn,
+                    "invoice_id":     sr.invoice_id,
+                    "duplicate_payment": True,
+                },
+                message="This booking was already paid. Your extra payment has been recorded and flagged for refund.",
+            )
+
+        # Money arrived for a booking that was cancelled (or rejected) while the customer was at the
+        # gateway. The gateway already took it, so record it truthfully, keep the booking cancelled
+        # (never re-confirm/dispatch), and queue a refund -- otherwise the customer is charged for a
+        # booking that no longer exists and nothing tracks it.
+        if sr.status in (ServiceRequest.Status.CANCELLED, ServiceRequest.Status.REJECTED):
+            sr.payment_status = ServiceRequest.PaymentStatus.PAID
+            sr.save(update_fields=["transaction_id", "payment_gateway", "invoice_id", "payment_status", "updated_at"])
+            payment.error_code = "payment_after_cancellation_refund_required"
+            payment.error_description = (
+                f"Booking {sr.request_id} was cancelled before payment {payment.razorpay_payment_id} "
+                f"arrived; the amount needs a refund."
+            )
+            payment.save(update_fields=["error_code", "error_description", "updated_at"])
+            logger.error("[PAYMENT_AFTER_CANCELLATION] %s", payment.error_description)
+            try:
+                from .models import RefundRequest, RefundStatus, RefundReason, RefundType
+                from . import services as sr_services
+                already = RefundRequest.objects.filter(booking=sr, status__in=[
+                    RefundStatus.PENDING, RefundStatus.INFO_REQUESTED, RefundStatus.APPROVED_FULL,
+                    RefundStatus.APPROVED_PARTIAL, RefundStatus.SENT_TO_FINANCE]).exists()
+                if not already:
+                    sr_services.create_refund_request(
+                        booking=sr, customer=sr.customer, amount=payment.amount, reason=RefundReason.OTHER,
+                        additional_notes=f"Auto-created: payment {payment.razorpay_payment_id} arrived after the booking was cancelled.",
+                        refund_type=RefundType.FULL,
+                    )
+            except Exception:
+                logger.exception("Could not queue refund for payment-after-cancellation on booking %s", sr.id)
+            return _success(
+                data={
+                    "request_id":     sr.request_id,
+                    "booking_status": sr.status,
+                    "payment_status": sr.payment_status,
+                    "transaction_id": sr.transaction_id,
+                    "invoice_id":     sr.invoice_id,
+                    "refund_required": True,
+                },
+                message="This booking was cancelled before your payment arrived. A refund has been requested.",
+            )
+
+        if (sr.service_category or "").strip().lower() in _LOGISTICS_CATEGORIES and \
+                sr.status != ServiceRequest.Status.WAITING_FOR_PAYMENT:
+            sr.payment_status = ServiceRequest.PaymentStatus.PAID
+            sr.save(update_fields=["transaction_id", "payment_gateway", "invoice_id", "payment_status", "updated_at"])
+            return _success(
+                data={
+                    "request_id":     sr.request_id,
+                    "booking_status": sr.status,
+                    "payment_status": sr.payment_status,
+                    "transaction_id": sr.transaction_id,
+                    "invoice_id":     sr.invoice_id,
+                },
+                message="Balance payment received. Thank you!",
+            )
+
+        # Special handling for AC Estimation bookings
+        has_est = hasattr(sr, "estimation") and sr.estimation is not None
+        if has_est and sr.status in (ServiceRequest.Status.CUSTOMER_REJECTED, ServiceRequest.Status.ESTIMATION_CLOSED):
+            # Inspection fee payment for rejected estimation
+            fee = getattr(sr.estimation, "fee", None)
+            if fee:
+                fee.status = "PAID"
+                fee.collected_at = timezone.now()
+                fee.payment_reference = payment.razorpay_payment_id
+                fee.save(update_fields=["status", "collected_at", "payment_reference", "updated_at"])
+
+            sr.estimation.status = "CLOSED"
+            sr.estimation.save(update_fields=["status", "updated_at"])
+            sr.status = ServiceRequest.Status.ESTIMATION_CLOSED
+            sr.payment_status = ServiceRequest.PaymentStatus.PAID
+            sr.save(update_fields=["status", "payment_status", "transaction_id", "payment_gateway", "invoice_id", "updated_at"])
+
+            return _success(
+                data={
+                    "request_id":     sr.request_id,
+                    "booking_status": sr.status,
+                    "payment_status": sr.payment_status,
+                    "transaction_id": sr.transaction_id,
+                    "invoice_id":     sr.invoice_id,
+                },
+                message="Inspection fee payment confirmed. Estimation request closed.",
+            )
+
+        if has_est and (sr.status == ServiceRequest.Status.CUSTOMER_APPROVED or sr.job_type == ServiceRequest.JobType.CHANGE_REQUEST):
+            sr.estimation.status = "REPAIR_AUTHORIZED"
+            sr.estimation.save(update_fields=["status", "updated_at"])
 
         try:
             apply_transition(
@@ -399,6 +644,27 @@ class PaymentVerifyView(APIView):
                 message="Payment confirmed. Your booking status is being updated — please contact support if it does not update within a few minutes.",
             )
 
+        # Payment verified; booking is now CONFIRMED. Dispatch to Workforce.
+        def _dispatch_after_payment():
+            if sr.status in [ServiceRequest.Status.ESTIMATION_CLOSED, ServiceRequest.Status.CLOSED, ServiceRequest.Status.CUSTOMER_REJECTED]:
+                logger.info(f"Skipping workforce dispatch for closed/rejected estimation {sr.id}")
+                return
+            try:
+                from service_requests.tasks import async_dispatch_service_request
+                async_dispatch_service_request.delay(sr.id)
+            except Exception as dispatch_err:
+                logger.warning(
+                    f"Could not queue workforce dispatch after payment for booking {sr.id}: {dispatch_err}"
+                )
+                try:
+                    from service_requests.tasks import async_dispatch_service_request
+                    async_dispatch_service_request(sr.id)
+                except Exception as direct_err:
+                    logger.error(
+                        f"Direct dispatch also failed after payment for booking {sr.id}: {direct_err}"
+                    )
+        transaction.on_commit(_dispatch_after_payment)
+
         return _success(
             data={
                 "request_id":     sr.request_id,
@@ -409,6 +675,282 @@ class PaymentVerifyView(APIView):
             },
             message="Payment confirmed! Your booking is active.",
         )
+
+
+class PaymentConfigView(APIView):
+    """
+    GET /api/payment/config/  -- what the booking pages may offer, decided by the server.
+
+    online: a real gateway is configured, or the local sandbox is explicitly enabled. Without
+    this the page would offer "Pay online" on a deployment where verification returns 503.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        provider = configured_provider()
+        razorpay = provider == "razorpay" and bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
+        paytm = provider == "paytm" and bool(settings.PAYTM_MID and settings.PAYTM_MERCHANT_KEY)
+        paytm_mock = provider == "paytm_mock" and paytm_mock_enabled()
+        return _success(data={
+            "online_available": razorpay or paytm or paytm_mock or (
+                provider == "razorpay" and bool(getattr(settings, "PAYMENT_SANDBOX_MODE", False))
+            ),
+            "sandbox": paytm_mock or (provider == "razorpay" and not razorpay and bool(getattr(settings, "PAYMENT_SANDBOX_MODE", False))),
+            "provider": provider,
+            "key_id": settings.RAZORPAY_KEY_ID if razorpay else "",
+            "paytm_mid": settings.PAYTM_MID if paytm else "",
+            "wallet_part_payment": _wallet_part_payment_enabled(),
+        })
+
+
+class PaytmCallbackView(APIView):
+    """Receive Paytm's return POST and verify it with Paytm server-to-server.
+
+    The callback body is deliberately not treated as proof of payment. It
+    supplies only the order reference; the status/amount/transaction ID are
+    fetched again from Paytm before the booking can transition or dispatch.
+    This is not used by the local Paytm mock flow.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        order_id = str(request.data.get("ORDERID") or request.data.get("orderId") or "").strip()
+        if not order_id:
+            return _error("Paytm callback did not contain an order ID.")
+
+        try:
+            with transaction.atomic():
+                payment = Payment.objects.select_for_update().select_related("service_request").filter(
+                    gateway="paytm", provider_order_id=order_id
+                ).first()
+                if not payment:
+                    return _error("Unknown Paytm payment order.", 404)
+                if payment.status == ServiceRequest.PaymentStatus.PAID:
+                    return _success(message="Payment already confirmed.")
+
+                try:
+                    verified = verify_live_transaction(order_id, payment.amount)
+                except ValueError:
+                    # A cancel/failure callback is not a payment failure
+                    # signal by itself; the customer may retry an unexpired
+                    # Paytm transaction. Keep the intent pending.
+                    return _error("Paytm has not confirmed this payment yet.", 400)
+                except Exception as exc:
+                    logger.warning("Paytm callback status lookup failed for order %s: %s", order_id, exc)
+                    return _error("Could not verify Paytm payment. Please try again.", 502)
+
+                payment.razorpay_payment_id = verified["transaction_id"]
+                payment.razorpay_signature = verified["signature"]
+                payment.provider_transaction_id = verified["transaction_id"]
+                payment.provider_signature = verified["signature"]
+                payment.status = ServiceRequest.PaymentStatus.PAID
+                payment.save(update_fields=[
+                    "razorpay_payment_id", "razorpay_signature", "provider_transaction_id",
+                    "provider_signature", "status", "updated_at",
+                ])
+                return PaymentVerifyView()._finalize(request, payment.service_request, payment)
+        except Exception:
+            logger.exception("Unhandled Paytm callback failure for order %s", order_id)
+            return _error("Could not complete Paytm payment.", 502)
+
+
+class PaymentWalletPayView(APIView):
+    """
+    POST /api/payment/wallet-pay/   {"booking_id": 12}
+
+    Pay a goods-transport / packers-and-movers booking from the customer's SEVO wallet.
+
+    Only the logged-in owner may spend their wallet (the guest phone/token rule that lets
+    someone start a card payment is deliberately NOT enough to spend stored credit). The wallet
+    must cover the whole amount due -- there is no part-wallet/part-card split. The debit and
+    the Payment row are written in one transaction, and the amount is decided server-side by
+    the same _amount_due() the gateway path uses, so the two can never disagree.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "payment"
+
+    def post(self, request):
+        from .services import debit_wallet
+        from .models import CustomerWallet, WalletTransaction
+
+        booking_id = request.data.get("booking_id")
+        if not booking_id:
+            return _error("booking_id is required.")
+        try:
+            with transaction.atomic():
+                sr = ServiceRequest.objects.select_for_update().get(pk=booking_id)
+                if sr.customer_id != request.user.id:
+                    return _error("You are not authorized to pay for this booking.", 403)
+                if (sr.service_category or "").strip().lower() not in _LOGISTICS_CATEGORIES:
+                    return _error("Wallet payment is available for goods transport and packers & movers bookings.")
+                if sr.payment_method != ServiceRequest.PaymentMethod.ONLINE:
+                    return _error("This booking does not require online payment.")
+                if sr.status in (ServiceRequest.Status.CANCELLED, ServiceRequest.Status.REJECTED):
+                    return _error("This booking is cancelled.")
+
+                amount_due, due_error = PaymentInitiateView()._amount_due(sr)
+                if due_error:
+                    return _error(due_error)
+
+                wallet = CustomerWallet.objects.filter(user=request.user).first()
+                balance = wallet.balance if wallet else Decimal("0")
+                part_ok = False
+                if balance < amount_due and balance > 0:
+                    from .services.gt_operations import ops
+                    part_ok = bool(ops("allow_wallet_part_payment")) and str(request.data.get("allow_partial")).lower() in ("1", "true", "yes")
+                if part_ok:
+                    return self._part_pay(request, sr, balance, amount_due)
+                if balance < amount_due:
+                    return Response({
+                        "success": False,
+                        "message": f"Your wallet balance (Rs. {balance}) does not cover Rs. {amount_due}.",
+                        "wallet_balance": float(balance),
+                        "amount_due": float(amount_due),
+                    }, status=400)
+
+                ref = f"wallet_{uuid.uuid4().hex[:16]}"
+                tx = debit_wallet(
+                    request.user, amount_due, WalletTransaction.Reason.BOOKING_DEBIT,
+                    note=f"Payment for booking {sr.request_id}", actor=request.user,
+                    reference_type="booking", reference_id=sr.request_id,
+                )
+                payment = Payment.objects.create(
+                    customer=sr.customer, service_request=sr, razorpay_order_id=ref,
+                    razorpay_payment_id=f"WALLET_{tx.id}", amount=amount_due, currency="INR",
+                    status=ServiceRequest.PaymentStatus.PAID, gateway="wallet",
+                )
+                return PaymentVerifyView()._finalize(request, sr, payment)
+        except (ServiceRequest.DoesNotExist, ValueError, TypeError):
+            return _error("Booking not found.", 404)
+        except ValidationError as e:
+            return _error(str(getattr(e, "detail", e)))
+
+
+    def _part_pay(self, request, sr, balance, amount_due):
+        """Wallet + online split: spend the whole wallet now; the remainder is an ordinary online
+        order (PaymentInitiateView._amount_due already subtracts recorded payments). The booking
+        is only confirmed and dispatched when the remainder lands."""
+        from .services import debit_wallet
+        from .models import WalletTransaction
+        ref = f"wallet_{uuid.uuid4().hex[:16]}"
+        tx = debit_wallet(
+            request.user, balance, WalletTransaction.Reason.BOOKING_DEBIT,
+            note=f"Part payment for booking {sr.request_id}", actor=request.user,
+            reference_type="booking", reference_id=sr.request_id,
+        )
+        Payment.objects.create(
+            customer=sr.customer, service_request=sr, razorpay_order_id=ref,
+            razorpay_payment_id=f"WALLET_{tx.id}", amount=balance, currency="INR",
+            status=ServiceRequest.PaymentStatus.PAID, gateway="wallet",
+        )
+        remaining = (amount_due - balance).quantize(Decimal("0.01"))
+        return _success(
+            data={"partial": True, "wallet_paid": float(balance), "remaining_due": float(remaining),
+                  "request_id": sr.request_id, "booking_status": sr.status},
+            message=f"Rs. {balance} paid from your wallet. Pay the remaining Rs. {remaining} online to confirm the booking.",
+        )
+
+
+def _topup_limits():
+    from .services.gt_operations import ops
+    return bool(ops("wallet_topup_enabled")), ops("wallet_max_topup"), ops("wallet_max_balance")
+
+
+class WalletTopUpInitiateView(APIView):
+    """POST /api/wallet/topup/  {"amount": "500"} -> a gateway order for a wallet recharge.
+
+    Off until Admin enables it. The per-recharge limit and the wallet-balance cap are Admin values;
+    both are checked here (and again at verification) so the client can never decide them."""
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "payment"
+
+    def post(self, request):
+        from .models import WalletTopUp
+        from .services import get_or_create_wallet
+        enabled, max_topup, max_balance = _topup_limits()
+        if not enabled:
+            return _error("Adding money to the wallet is not available right now.", 403)
+        try:
+            amount = Decimal(str(request.data.get("amount"))).quantize(Decimal("0.01"))
+        except Exception:
+            return _error("Enter a valid amount.")
+        if amount <= 0:
+            return _error("Enter an amount greater than zero.")
+        if max_topup is not None and amount > Decimal(str(max_topup)):
+            return _error(f"You can add at most Rs. {max_topup} at a time.")
+        balance = get_or_create_wallet(request.user).balance
+        if max_balance is not None and balance + amount > Decimal(str(max_balance)):
+            room = max(Decimal("0"), Decimal(str(max_balance)) - balance)
+            return _error(f"Your wallet can hold at most Rs. {max_balance}. You can add up to Rs. {room}.")
+
+        gateway = bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
+        if gateway:
+            try:
+                import razorpay
+                client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+                order_id = client.order.create({"amount": int(amount * 100), "currency": "INR",
+                                                "receipt": f"wallet-{request.user.id}-{uuid.uuid4().hex[:8]}"})["id"]
+            except Exception:
+                logger.exception("Razorpay wallet top-up order failed for user %s", request.user.id)
+                return _error("Could not start payment. Please try again.", 502)
+        elif getattr(settings, "PAYMENT_SANDBOX_MODE", False):
+            order_id = f"order_sandbox_{uuid.uuid4().hex[:16]}"
+        else:
+            return _error("Online payment is not available right now.", 503)
+        WalletTopUp.objects.create(customer=request.user, order_id=order_id, amount=amount,
+                                   gateway="razorpay" if gateway else "sandbox")
+        return _success(data={"order_id": order_id, "amount": float(amount), "currency": "INR",
+                              "key_id": settings.RAZORPAY_KEY_ID if gateway else "", "sandbox": not gateway},
+                        message="Top-up order created.")
+
+
+class WalletTopUpVerifyView(APIView):
+    """POST /api/wallet/topup/verify/ {"order_id","payment_id","signature"} -> credits the wallet once."""
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "payment"
+
+    def post(self, request):
+        from .models import CustomerWallet, WalletTopUp, WalletTransaction
+        from .services import credit_wallet
+        order_id = request.data.get("order_id")
+        payment_id = request.data.get("payment_id")
+        signature = request.data.get("signature") or request.data.get("razorpay_signature")
+        if not order_id:
+            return _error("order_id is required.")
+        with transaction.atomic():
+            top = WalletTopUp.objects.select_for_update().filter(order_id=order_id, customer=request.user).first()
+            if not top:
+                return _error("Unknown top-up order.", 404)
+            if top.status == WalletTopUp.Status.PAID:
+                return _success(data={"status": "PAID", "amount": float(top.amount)}, message="Top-up already credited.")
+            gateway = bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
+            if gateway:
+                if not (payment_id and signature):
+                    return _error("payment_id and signature are required.")
+                expected = hmac.new(settings.RAZORPAY_KEY_SECRET.encode(), f"{order_id}|{payment_id}".encode(), hashlib.sha256).hexdigest()
+                if not hmac.compare_digest(expected.encode(), str(signature).encode()):
+                    top.status = WalletTopUp.Status.FAILED
+                    top.save(update_fields=["status", "updated_at"])
+                    return _error("Payment verification failed.", 400)
+            elif not getattr(settings, "PAYMENT_SANDBOX_MODE", False):
+                return _error("Online payment is not available right now.", 503)
+            # The cap is enforced again: two orders opened back to back must not both fit.
+            _, _, max_balance = _topup_limits()
+            wallet = CustomerWallet.objects.filter(user=request.user).first()
+            balance = wallet.balance if wallet else Decimal("0")
+            if max_balance is not None and balance + top.amount > Decimal(str(max_balance)):
+                top.status = WalletTopUp.Status.FAILED
+                top.save(update_fields=["status", "updated_at"])
+                return _error("This top-up would take your wallet above its limit. It was not credited; contact support for a refund.", 409)
+            credit_wallet(request.user, top.amount, WalletTransaction.Reason.TOPUP,
+                          note="Wallet recharge", reference_type="wallet_topup", reference_id=top.order_id)
+            top.status = WalletTopUp.Status.PAID
+            top.payment_id = payment_id or f"SANDBOX_{uuid.uuid4().hex[:12].upper()}"
+            top.save(update_fields=["status", "payment_id", "updated_at"])
+        return _success(data={"status": "PAID", "amount": float(top.amount)}, message="Money added to your wallet.")
 
 
 # ─── Admin Payment Management ─────────────────────────────────────────────────
@@ -452,6 +994,123 @@ class AdminPaymentUpdateView(APIView):
 
 
 # ─── Invoice PDF Generation ───────────────────────────────────────────────────
+
+_INVOICE_FONT = {}
+
+
+def _invoice_unicode_font():
+    """
+    A Unicode TrueType font for customer-entered text that the built-in Helvetica cannot draw
+    (Tamil, Hindi, ... names and addresses used to print as black boxes). Configure with the
+    INVOICE_UNICODE_FONT setting/env (path to a .ttf); otherwise common system fonts are tried.
+    Returns the registered font name or None. Note: reportlab draws glyph by glyph, so complex
+    scripts are not shaped -- use a font/pipeline with shaping if exact Indic typography is needed.
+    """
+    if "name" in _INVOICE_FONT:
+        return _INVOICE_FONT["name"]
+    import os
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    candidates = [
+        getattr(settings, "INVOICE_UNICODE_FONT", "") or "",
+        os.getenv("INVOICE_UNICODE_FONT", ""),
+        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "C:\\Windows\\Fonts\\Nirmala.ttf",
+        "C:\\Windows\\Fonts\\arialuni.ttf",
+    ]
+    for path in candidates:
+        if path and os.path.exists(path):
+            try:
+                pdfmetrics.registerFont(TTFont("SevoInvoiceUnicode", path))
+                _INVOICE_FONT["name"] = "SevoInvoiceUnicode"
+                return "SevoInvoiceUnicode"
+            except Exception:
+                continue
+    _INVOICE_FONT["name"] = None
+    return None
+
+
+def _pdf_text(c, text, size, bold=False):
+    """Set the right font on canvas `c` for `text` and return the (sanitised) text to draw."""
+    text = "".join(ch for ch in str(text or "") if ch.isprintable())
+    base = "Helvetica-Bold" if bold else "Helvetica"
+    try:
+        text.encode("cp1252")
+        c.setFont(base, size)
+        return text
+    except UnicodeEncodeError:
+        pass
+    uni = _invoice_unicode_font()
+    if uni:
+        c.setFont(uni, size)
+        return text
+    c.setFont(base, size)
+    return text.encode("cp1252", "replace").decode("cp1252")   # readable "?" instead of black boxes
+
+
+def _shaped_font_paths():
+    import os
+    cfg = [getattr(settings, "INVOICE_UNICODE_FONT", "") or "", os.getenv("INVOICE_UNICODE_FONT", "")]
+    dirs = ["/usr/share/fonts", "/usr/local/share/fonts", "C:\\Windows\\Fonts", os.path.expanduser("~/.fonts")]
+    names = ["Nirmala.ttf", "NotoSansTamil", "NotoSansDevanagari", "NotoSans-Regular", "FreeSans.ttf", "DejaVuSans.ttf"]
+    found = [p for p in cfg if p and os.path.exists(p)]
+    for n in names:
+        for d in dirs:
+            for root, _dirs, files in os.walk(d) if os.path.isdir(d) else []:
+                for f in files:
+                    if f.startswith(n) and f.lower().endswith(".ttf") and "Bold" not in f:
+                        found.append(os.path.join(root, f))
+    return found
+
+
+def _shaped_image(text, size):
+    """Render `text` with a shaping engine (Pillow+raqm) so Indic conjuncts/vowel signs are correct.
+    Returns (PNG bytes, width_pt, height_pt) or None when no shaper/font that covers the text exists."""
+    try:
+        import io
+        from PIL import Image, ImageDraw, ImageFont, features
+        if not features.check("raqm"):
+            return None
+        scale = 4
+        for path in _shaped_font_paths():
+            try:
+                font = ImageFont.truetype(path, int(size * scale), layout_engine=ImageFont.Layout.RAQM)
+                # every character must be covered by this font (no .notdef boxes)
+                notdef = bytes(font.getmask("\U0010FFFF"))
+                if any(ch != " " and bytes(font.getmask(ch)) == notdef for ch in set(text)):
+                    continue
+                l, t, r, b = font.getbbox(text)
+                img = Image.new("RGBA", (max(1, r + 4), max(1, b - min(t, 0) + 4)), (255, 255, 255, 0))
+                ImageDraw.Draw(img).text((0, -min(t, 0)), text, font=font, fill=(0, 0, 0, 255))
+                buf = io.BytesIO()
+                img.save(buf, "PNG")
+                return buf.getvalue(), img.width / scale, img.height / scale
+            except Exception:
+                continue
+    except Exception:
+        return None
+    return None
+
+
+def _draw_text(c, x, y, text, size, bold=False):
+    """drawString that also handles Tamil/Hindi/etc.: shaped image when a shaper is available,
+    else the glyph-by-glyph Unicode font, else '?' (never black boxes)."""
+    clean = "".join(ch for ch in str(text or "") if ch.isprintable())
+    try:
+        clean.encode("cp1252")
+    except UnicodeEncodeError:
+        shaped = _shaped_image(clean, size)
+        if shaped:
+            from reportlab.lib.utils import ImageReader
+            import io
+            png, w, h = shaped
+            c.drawImage(ImageReader(io.BytesIO(png)), x, y - size * 0.25, width=w, height=h, mask="auto")
+            return
+    c.drawString(x, y, _pdf_text(c, clean, size, bold))
+
 
 class InvoiceDownloadView(APIView):
     """
@@ -551,8 +1210,9 @@ class InvoiceDownloadView(APIView):
             c.setFont("Helvetica", 10)
             c.drawString(180, y, sr.transaction_id)
 
-        # Billed To
-        y -= 30
+        # Billed To (the panel spans y-10..y+60, so start it clear of the meta lines above
+        # or it paints over Booking Reference / Date / Transaction ID)
+        y -= 90
         c.setFillColor(HexColor("#F8FAFC"))
         c.rect(25, y - 10, W - 50, 70, fill=1, stroke=0)
         c.setFillColor(HexColor("#4F46E5"))
@@ -560,17 +1220,20 @@ class InvoiceDownloadView(APIView):
         c.drawString(35, y + 48, "BILLED TO")
         c.setFillColor(black)
         c.setFont("Helvetica-Bold", 11)
-        c.drawString(35, y + 30, sr.customer_name)
+        _draw_text(c, 35, y + 30, sr.customer_name, 11, bold=True)
         c.setFont("Helvetica", 10)
         c.drawString(35, y + 14, sr.phone)
         if sr.email:
-            c.drawString(35, y - 2, sr.email)
+            _draw_text(c, 35, y - 2, sr.email, 10)
         c.setFont("Helvetica", 9)
         addr = sr.address[:80] + "..." if len(sr.address) > 80 else sr.address
-        c.drawString(35, y - 18, addr)
+        _draw_text(c, 35, y - 18, addr, 9)
+        if getattr(sr, "customer_gstin", ""):
+            c.setFont("Helvetica-Bold", 9)
+            c.drawRightString(W - 35, y + 48, f"Customer GSTIN: {sr.customer_gstin}")
 
         # Line items
-        y -= 50
+        y -= 62
         c.setFillColor(HexColor("#4F46E5"))
         c.rect(25, y, W - 50, 24, fill=1, stroke=0)
         c.setFillColor(white)
@@ -591,7 +1254,172 @@ class InvoiceDownloadView(APIView):
                 cart = []
 
         base_total = 0.0
-        if cart:
+        gst_row = None
+        rcm_note = ""
+        gt_snapshot = next(
+            (i.get("logistics_snapshot") for i in cart
+             if isinstance(i, dict) and isinstance(i.get("logistics_snapshot"), dict)),
+            None,
+        )
+        # A PTL quote can be revised before dispatch; the booking's fare_breakdown is the
+        # current one, so it wins over the snapshot copied into cart_data at booking time.
+        _fb = getattr(sr, "fare_breakdown", None)
+        if isinstance(_fb, dict) and _fb.get("pricing_basis") == "ptl_per_kg":
+            gt_snapshot = _fb
+        # E2E QA 2026-10-01: a GT booking made without cart_data (e.g. straight API client) has no
+        # logistics_snapshot in the cart, so the invoice fell back to one opaque line with no GST. The
+        # booking's own locked quote (fare_breakdown) is the same source of truth, so use it.
+        elif (gt_snapshot is None and isinstance(_fb, dict) and _fb.get("quote_id") and _fb.get("total") is not None
+              and sr.service_category in ("goods_transport_truck", "goods_transport_two_wheeler")):
+            gt_snapshot = _fb
+        if gt_snapshot:
+            # Goods transport: itemise the locked quote instead of one opaque
+            # "Service" line. Rows come only from the stored snapshot, so the
+            # invoice can never disagree with what the customer was quoted.
+            from decimal import Decimal as _D
+            def _amt(key):
+                try:
+                    return _D(str(gt_snapshot.get(key) or "0"))
+                except Exception:
+                    return _D("0")
+            total_q = _D(str(getattr(sr, "total_amount", 0) or gt_snapshot.get("total") or "0"))
+            pm = gt_snapshot.get("pricing") if isinstance(gt_snapshot.get("pricing"), dict) else None
+            gst_row = None
+            if pm and "gst_amount" in pm:
+                # Packers & Movers: the locked quote already carries its own line items and GST.
+                def _p(key):
+                    try:
+                        return _D(str(pm.get(key) or "0"))
+                    except Exception:
+                        return _D("0")
+                veh = (gt_snapshot.get("vehicle") or {}).get("name") if isinstance(gt_snapshot.get("vehicle"), dict) else ""
+                rows = [
+                    (f"Transport{f' - {veh}' if veh else ''} ({gt_snapshot.get('distance_km') or 0} km)", _p("transport_total")),
+                    (f"Additional stops ({pm.get('additional_stops') or 0})", _p("additional_stops_charge")),
+                    (f"Packing ({pm.get('packing_tier') or 'standard'})", _p("packing_charge")),
+                    ("Loading / unloading labour", _p("base_labor_charge")),
+                    ("Floor / no-lift labour", _p("floor_labor_charge")),
+                    ("Dismantling / reassembly", _p("dismantling_charge")),
+                    ("Unpacking", _p("unpacking_charge")),
+                    (f"Peak-day / off-hours surcharge", _p("date_surcharge")),
+                ]
+                rows = [(n, a) for n, a in rows if a > 0]
+                pm_subtotal = _p("subtotal")
+                other = pm_subtotal - sum((a for _, a in rows), _D("0"))
+                if abs(other) >= _D("0.01"):
+                    rows.append(("Other charges", other))
+                # Porter-parity P&M add-ons (rope pulling, appliance install/uninstall,
+                # electrician, carpenter, labour-only) -- server-priced, one line per add-on,
+                # added after GST since the add-on total is charged on top of the GST-inclusive
+                # quote (see _apply_pm_addons in logistics_pricing.py), not taxed itself.
+                addon_total = _D("0")
+                for addon in (pm.get("pm_addons") or []):
+                    if not isinstance(addon, dict):
+                        continue
+                    try:
+                        amt = _D(str(addon.get("amount") or "0"))
+                    except Exception:
+                        amt = _D("0")
+                    if amt <= 0:
+                        continue
+                    qty = addon.get("quantity") or 1
+                    label = f"{addon.get('name') or addon.get('code')}" + (f" x{qty}" if qty and int(qty) > 1 else "")
+                    rows.append((label, amt))
+                    addon_total += amt
+                gst_row = (f"GST ({pm.get('gst_rate') or ''}):", _p("gst_amount"), pm_subtotal + addon_total)
+            else:
+                km = gt_snapshot.get("chargeable_km") or gt_snapshot.get("distance_km") or "0"
+                if gt_snapshot.get("pricing_basis") == "ptl_per_kg":
+                    # Light PTL: per-kg freight (rate x chargeable weight), optional Load Assist.
+                    _cw = gt_snapshot.get("chargeable_weight_kg") or gt_snapshot.get("declared_weight_kg") or "0"
+                    _dw = gt_snapshot.get("declared_weight_kg") or _cw
+                    _min_note = f", min {_cw}" if str(_cw) != str(_dw) else ""
+                    rows = [
+                        (f"Part-load freight - {_dw} kg{_min_note} x Rs.{gt_snapshot.get('rate_per_kg') or 0}/kg", _amt("freight_charge")),
+                        ("Load Assist", _amt("load_assist_fee")),
+                    ]
+                else:
+                    rows = [
+                    (f"Base fare - {gt_snapshot.get('tier_name') or 'Vehicle'}", _amt("base_fare")),
+                    (f"Distance charge ({km} km)", _amt("distance_charge")),
+                    (f"Additional stops ({gt_snapshot.get('additional_stops') or 0})", _amt("additional_stop_charge")),
+                    ("Loading / unloading", _amt("loading_unloading")),
+                    ("Special handling", _amt("special_handling_charge")),
+                    ]
+                rows = [(n, a) for n, a in rows if a > 0]
+                # A coupon and transit-insurance premium are part of what was charged; show them as
+                # their own lines instead of letting them masquerade as a fare adjustment.
+                _prem = _D(str(sr.insurance_premium or 0)) if getattr(sr, "insurance_opted_in", False) else _D("0")
+                _disc = _D(str(sr.discount_amount or 0)) if getattr(sr, "coupon_id", None) else _D("0")
+                from .services.extra_charges import applied_entries
+                _extras = [(f"{e['label']} (receipt)", _D(str(e["amount"]))) for e in applied_entries(sr)]
+                # GT_INVOICE_RECON_ADJUSTMENTS: itemise the delivery-time reconciliation (waiting time,
+                # extra stops, approved extra work, distance variance) under its own label instead of
+                # letting it fall into the "surge / minimum fare" residual. Toll/parking are already
+                # shown as receipts above.
+                _recon_rows = []
+                try:
+                    _rec = getattr(sr, "fare_reconciliation", None)
+                    for _a in (getattr(_rec, "adjustments", None) or []):
+                        if not isinstance(_a, dict) or _a.get("code") == "TOLL_PARKING":
+                            continue
+                        _amt_adj = _D(str(_a.get("amount") or "0"))
+                        if _amt_adj != 0:
+                            _recon_rows.append((str(_a.get("label") or _a.get("code") or "Adjustment"), _amt_adj))
+                except Exception:
+                    _recon_rows = []
+                other = (total_q - _prem + _disc - sum((a for _, a in _extras), _D("0"))
+                         - sum((a for _, a in rows), _D("0")) - sum((a for _, a in _recon_rows), _D("0")))
+                rows.extend(_recon_rows)
+                if abs(other) >= _D("0.01"):
+                    rows.append(("Surge / minimum fare adjustment", other))
+                rows.extend(_extras)
+                if _disc > 0:
+                    rows.append(("Coupon discount", -_disc))
+                if _prem > 0:
+                    rows.append(("Transit insurance", _prem))
+                # GST configured on the tier (admin) is already INCLUDED in the fare; show its
+                # component, from the rate recorded on the quote (never the tier's current value).
+                _gst_rate = _amt("gst_rate")
+                if _gst_rate > 0:
+                    _gst_amt = _amt("gst_included")
+                    _pct = _gst_rate.quantize(_D("0.01")).normalize()
+                    gst_row = (f"Includes GST ({_pct:f}%):", _gst_amt, total_q)
+                # Round 13: Reverse Charge Mechanism. When the snapshot recorded RCM as
+                # applicable (Admin-configured GTTaxPolicy, opted in for this booking's
+                # category, at the time this booking was quoted), the supplier did not
+                # charge GST -- gst_row above never fires (gst_included was zeroed at quote
+                # time) -- and the invoice instead states the statement GST law requires on
+                # an RCM invoice. rcm_note is drawn separately below, not as a rows[] line
+                # item, since it is a statement, not a charge.
+                rcm_note = str(gt_snapshot.get("rcm_statement") or "").strip() if gt_snapshot.get("rcm_applicable") else ""
+            for i, (name, amt) in enumerate(rows):
+                y -= 22
+                c.setFillColor(HexColor("#F8FAFC") if i % 2 == 0 else white)
+                c.rect(25, y - 4, W - 50, 22, fill=1, stroke=0)
+                c.setFillColor(black)
+                c.setFont("Helvetica", 10)
+                _draw_text(c, 35, y + 4, name[:48], 10)
+                c.drawString(320, y + 4, "1")
+                c.drawRightString(W - 35, y + 4, f"Rs. {amt:,.2f}")
+            base_total = float(gst_row[2]) if gst_row else float(total_q)
+            try:
+                from .models import TripStop
+                route = [t.address for t in TripStop.objects.filter(booking=sr).order_by("sequence") if t.address]
+            except Exception:
+                route = []
+            if not route and sr.address:
+                route = [sr.address] + ([sr.drop_address] if getattr(sr, "drop_address", "") else [])
+            if route:
+                y -= 22
+                c.setFont("Helvetica-Bold", 9)
+                c.drawString(35, y + 4, "Route:")
+                c.setFont("Helvetica", 9)
+                for n, a in enumerate(route):
+                    y -= 13
+                    label = "Pickup" if n == 0 else ("Drop" if n == len(route) - 1 else f"Stop {n}")
+                    _draw_text(c, 45, y + 4, f"{label}: {a[:90]}", 9)
+        elif cart:
             for i, item in enumerate(cart):
                 y -= 22
                 bg = HexColor("#F8FAFC") if i % 2 == 0 else white
@@ -600,7 +1428,7 @@ class InvoiceDownloadView(APIView):
                 c.setFillColor(black)
                 c.setFont("Helvetica", 10)
                 name = str(item.get("name", "Service"))[:40]
-                c.drawString(35, y + 4, name)
+                _draw_text(c, 35, y + 4, name, 10)
                 qty = item.get("quantity", 1)
                 c.drawString(320, y + 4, str(qty))
                 price = float(item.get("price", 0))
@@ -611,7 +1439,7 @@ class InvoiceDownloadView(APIView):
             base_total = float(getattr(sr, "total_amount", 0) or 599.0)
             y -= 22
             c.setFont("Helvetica", 10)
-            c.drawString(35, y + 4, sr.issue_title or "Standard Service Package")
+            _draw_text(c, 35, y + 4, sr.issue_title or "Standard Service Package", 10)
             c.drawString(320, y + 4, "1")
             c.drawString(370, y + 4, f"Rs. {base_total:,.0f}")
             c.drawRightString(W - 35, y + 4, f"Rs. {base_total:,.0f}")
@@ -638,12 +1466,23 @@ class InvoiceDownloadView(APIView):
             c.setFillColor(HexColor("#B45309"))
             c.setFont("Helvetica-Bold", 9)
             reason_clean = ext_reason[:42] if ext_reason else "Approved Extension"
-            c.drawString(35, y + 4, f"Approved Extension: {reason_clean}")
+            _draw_text(c, 35, y + 4, f"Approved Extension: {reason_clean}", 9, bold=True)
             c.drawString(320, y + 4, "1")
             c.drawString(370, y + 4, f"Rs. {ext_amount:,.0f}")
             c.drawRightString(W - 35, y + 4, f"Rs. {ext_amount:,.0f}")
 
-        final_total = base_total + ext_amount
+        # Bug found (mirrors the identical fix already applied to
+        # ServiceRequestDetailSerializer.get_base_amount): cart_data rows for
+        # GT/Packers & Movers bookings carry quote_id/cargo_items/pickup_floor
+        # etc, not a "price" key, so summing item.get("price", 0) here silently
+        # produced base_total=0 (invoice showing Rs. 0.00) for every such
+        # booking even though sr.total_amount was correctly charged.
+        # total_amount is the authoritative, already GST/fee/discount-inclusive
+        # figure captured at booking creation -- prefer it for the invoice's
+        # printed total, and only fall back to the cart/base_total sum (which
+        # stays as the per-line-item display above) if total_amount is unset.
+        authoritative_total = float(getattr(sr, "total_amount", 0) or 0)
+        final_total = authoritative_total if authoritative_total > 0 else (base_total + ext_amount)
 
         # Totals
         y -= 35
@@ -651,7 +1490,19 @@ class InvoiceDownloadView(APIView):
         c.line(25, y + 20, W - 25, y + 20)
         c.setFont("Helvetica", 10)
         c.drawString(320, y + 4, "Base Subtotal:")
-        c.drawRightString(W - 35, y + 4, f"Rs. {base_total:,.0f}")
+        c.drawRightString(W - 35, y + 4, f"Rs. {base_total:,.2f}" if gt_snapshot else f"Rs. {base_total:,.0f}")
+        if gst_row:
+            y -= 18
+            c.drawString(320, y + 4, gst_row[0])
+            c.drawRightString(W - 35, y + 4, f"Rs. {gst_row[1]:,.2f}")
+
+        if rcm_note:
+            y -= 18
+            c.setFont("Helvetica-Oblique", 8)
+            c.setFillColor(HexColor("#B45309"))
+            _draw_text(c, 320, y + 4, rcm_note[:90], 8)
+            c.setFillColor(black)
+            c.setFont("Helvetica", 10)
 
         if ext_amount > 0:
             y -= 18
@@ -674,7 +1525,7 @@ class InvoiceDownloadView(APIView):
         is_paid = sr.payment_status in (ServiceRequest.PaymentStatus.PAID, ServiceRequest.PaymentStatus.COLLECTED)
         total_text = "TOTAL PAID:" if is_paid else "TOTAL DUE:"
         c.drawString(320, y + 6, total_text)
-        c.drawRightString(W - 35, y + 6, f"₹{final_total:,.2f}")
+        c.drawRightString(W - 35, y + 6, f"Rs. {final_total:,.2f}")
 
         # Footer
         c.setFillColor(HexColor("#F1F5F9"))

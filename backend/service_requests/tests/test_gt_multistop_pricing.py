@@ -113,6 +113,10 @@ class MultiStopPricingTests(TestCase):
             "duration_seconds": 1200,
             "source": "google_maps",
         }
+        # This test is about pricing scale; the per-tier stop ceiling has its own tests
+        # (test_gt_max_stops), so lift it for this tier.
+        self.tier.max_additional_stops = 10
+        self.tier.save(update_fields=["max_additional_stops"])
         quote = quote_logistics_fare(
             tier=self.tier,
             pickup_lat=self.pickup[0],

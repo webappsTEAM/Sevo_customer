@@ -139,6 +139,10 @@ class CartItemListView(APIView):
 
                 with transaction.atomic():
                     cart = _get_active_cart(request.user, cart_type, create=True)
+                    # The seller binding and item mutation are one critical
+                    # section: lock the cart so simultaneous add/switch
+                    # requests cannot mix sellers or duplicate bundle state.
+                    cart = Cart.objects.select_for_update().get(pk=cart.pk)
 
                     conflict_response = _check_seller_conflict(cart, basket_seller_id, basket_seller_name, clear_cart)
                     if conflict_response is not None:
@@ -210,6 +214,7 @@ class CartItemListView(APIView):
 
                 with transaction.atomic():
                     cart = _get_active_cart(request.user, cart_type, create=True)
+                    cart = Cart.objects.select_for_update().get(pk=cart.pk)
 
                     conflict_response = _check_seller_conflict(cart, item_seller_id, item_seller_name, clear_cart)
                     if conflict_response is not None:
@@ -258,13 +263,24 @@ class CartItemListView(APIView):
 
         # Non-marketplace (Services / Daily Essentials)
         package = Package.objects.get(id=data["package_id"])
-        unit_price = package.offer_price if package.offer_price is not None else package.base_price
+        
+        variant = None
+        if data.get("variant_id"):
+            variant = package.variants.filter(id=data["variant_id"], is_active=True).first()
+        if variant is None:
+            variant = package.variants.filter(is_default=True, is_active=True).first() or package.variants.filter(is_active=True).first()
+
+        if variant is not None:
+            unit_price = variant.base_price
+        else:
+            unit_price = package.offer_price if package.offer_price is not None else package.base_price
 
         with transaction.atomic():
             cart = _get_active_cart(request.user, cart_type, create=True)
             item, created = CartItem.objects.get_or_create(
                 cart=cart,
                 package=package,
+                variant=variant,
                 customization=data.get("customization") or {},
                 defaults={
                     "quantity": data["quantity"],

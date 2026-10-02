@@ -9,7 +9,7 @@ import { ThemeToggle } from "./ThemeToggle.jsx"
 import ThemeSwitch from "@/components/ui/theme-switch"
 import { CommandPalette } from "./CommandPalette.jsx"
 import { NotificationCenter } from "./NotificationCenter.jsx"
-import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
+import { SevoLogo, sevoLogo } from "../components/sevoLogo.jsx"
 import { apiRequest, unwrapResults } from "../../api/client.js"
 import { NotificationService } from "../../utils/notifications.js"
 import { useWebSocket } from "../../hooks/useWebSocket.js"
@@ -19,6 +19,7 @@ import { fetchTrialStatus, fetchTrialNotifications } from "../../store/trialSlic
 import { TrialBanner } from "../components/TrialBanner.jsx"
 import { TrialExpiredModal } from "../components/TrialExpiredModal.jsx"
 import { isSuperAdmin, hasModule } from "../../auth/authorization.js"
+import { resolveImageUrl } from "../../utils/imageUrl.js"
 
 import {
   Home, Clock, CheckSquare, CalendarDays, Banknote, CalendarRange,
@@ -26,7 +27,8 @@ import {
   ChevronLeft, ChevronRight, Rocket, ShieldAlert, Globe, Package, Award,
   FolderOpen, GraduationCap, Bell, FileText, CheckCircle, XCircle, Car, X,
   Wrench, MessageSquare, UserCheck, Activity, ArrowUpRight, Repeat2, User,
-  Shield, Palette, CreditCard, Building2, ShieldCheck, Ticket, Gift, Truck, Sprout, Layers
+  Shield, Palette, CreditCard, Building2, ShieldCheck, Ticket, Gift, Truck, Sprout, Layers,
+  Smartphone, Megaphone, LayoutGrid
 } from "lucide-react"
 
 const SUPER_ADMIN_NAV_ITEMS = [
@@ -36,7 +38,7 @@ const SUPER_ADMIN_NAV_ITEMS = [
     icon: <ShieldCheck size={20} />,
     color: "#6366F1",
     children: [
-      { label: "Dashboard", to: "/platform/dashboard", icon: <Home size={16} />, color: "#6366F1" },
+      { label: "Command Center", to: "/platform/dashboard", icon: <ShieldCheck size={16} />, color: "#6366F1" },
       { label: "Staff & Access", to: "/platform/users", icon: <Users size={16} />, color: "#4F46E5" },
       { label: "RBAC Matrix", to: "/platform/rbac", icon: <Shield size={16} />, color: "#8B5CF6" },
       { label: "Customer 360", to: "/platform/customers", icon: <UserCheck size={16} />, color: "#0EA5E9" },
@@ -63,6 +65,7 @@ const ADMIN_NAV_ITEMS = [
       { label: "Dashboard", to: "/customers/dashboard", icon: <BarChart3 size={16} />, color: "#6366F1" },
       { label: "Customers", to: "/customers/list", icon: <Users size={16} />, color: "#4F46E5" },
       { label: "Bookings", to: "/customers/bookings", icon: <CalendarDays size={16} />, color: "#38BDF8" },
+      { label: "AC Inspection Bookings", to: "/customers/ac-inspections", icon: <Wrench size={16} />, color: "#0EA5E9" },
       { label: "Reschedule Requests", to: "/customers/reschedules", icon: <Repeat2 size={16} />, color: "#F59E0B" },
       { label: "Refund Requests", to: "/customers/refunds", icon: <Banknote size={16} />, color: "#10B981" },
       { label: "Payments", to: "/customers/payments", icon: <Banknote size={16} />, color: "#10B981" },
@@ -85,8 +88,17 @@ const ADMIN_NAV_ITEMS = [
       { label: "Change Log", to: routes.catalog_change_log, icon: <FileText size={16} />, color: "#3B82F6" },
       { label: "Vendor Approvals", to: routes.catalog_vendor_approvals, icon: <UserCheck size={16} />, color: "#3B82F6" },
       { label: "Painting Rate Card", to: routes.catalog_painting_rates, icon: <Palette size={16} />, color: "#3B82F6" },
-      { label: "Goods & Transport Rates", to: routes.catalog_gt_pricing, icon: <Truck size={16} />, color: "#3B82F6", module: "pricing" },
+      { label: "AC Inspection & Rates", to: routes.catalog_ac_inspection_rates, icon: <Wrench size={16} />, color: "#F59E0B" },
+      { label: "Goods & Transport Rate Card (reference)", to: routes.catalog_gt_pricing, icon: <Truck size={16} />, color: "#3B82F6", module: "pricing" },
+      { label: "Time Slot Management", to: routes.time_slot_management, icon: <Clock size={16} />, color: "#F59E0B", module: "time_slots" },
     ]
+  },
+  {
+    label: "Time Slot Management",
+    to: routes.time_slot_management,
+    icon: <Clock size={20} />,
+    color: "#F59E0B",
+    module: "time_slots",
   },
   {
     label: "Marketing",
@@ -104,27 +116,36 @@ const ADMIN_NAV_ITEMS = [
     to: routes.homepage_customizer,
     icon: <Globe size={20} />,
     color: "#F59E0B",
-    children: [
-      { label: "Hero Banner", to: `${routes.homepage_customizer}?tab=hero`, icon: <Globe size={16} />, color: "#F59E0B" },
-      { label: "Browse Categories", to: `${routes.homepage_customizer}?tab=categories`, icon: <FolderOpen size={16} />, color: "#3B82F6" },
-      { label: "Vendor Hire Banner", to: `${routes.homepage_customizer}?tab=vendorBanner`, icon: <Users size={16} />, color: "#0D9488" },
-      { label: "Promotional Offers", to: `${routes.homepage_customizer}?tab=offers`, icon: <Gift size={16} />, color: "#EC4899" },
-      { label: "Why Choose Us", to: `${routes.homepage_customizer}?tab=trust`, icon: <ShieldCheck size={16} />, color: "#10B981" },
-      { label: "How It Works", to: `${routes.homepage_customizer}?tab=workflow`, icon: <Repeat2 size={16} />, color: "#8B5CF6" },
-      { label: "Live Stats Bar", to: `${routes.homepage_customizer}?tab=stats`, icon: <BarChart3 size={16} />, color: "#0EA5E9" },
-      { label: "Featured Pros", to: `${routes.homepage_customizer}?tab=experts`, icon: <Users size={16} />, color: "#D946EF" },
-      { label: "Testimonials", to: `${routes.homepage_customizer}?tab=testimonials`, icon: <Award size={16} />, color: "#F59E0B" },
-      { label: "Footer & Contacts", to: `${routes.homepage_customizer}?tab=footer`, icon: <FileText size={16} />, color: "#64748B" },
-    ]
+  },
+  // Added 2026-09-17 per explicit request ("add a side section 'Mobile'
+  // ... give the access to upload the banners, advertisement, top cards
+  // [Groceries, Services] images"). Deliberately its own top-level nav
+  // group rather than nested under "Home Page Builder" above, since these
+  // three uploads are specifically for the mobile app (mobile-*
+  // sections/storage folders — see settings_hub/views_homepage.py) and
+  // never shown on the website.
+  {
+    label: "Mobile App",
+    to: `${routes.homepage_customizer}?tab=mobileBanners`,
+    icon: <Smartphone size={20} />,
+    color: "#0EA5E9",
   },
   {
-    label: "Warehouse Inventory",
-    to: routes.inventory,
-    icon: <Package size={20} />,
-    color: "#8B5CF6",
+    label: "Vegetable Inventory",
+    to: routes.inventory_vegetables,
+    icon: <Sprout size={20} />,
+    color: "#10B981",
     children: [
+      { label: "Home", to: routes.vegetable_admin_home, icon: <Home size={16} />, color: "#10B981" },
+      { label: "Orders", to: routes.vegetable_admin_orders, icon: <Package size={16} />, color: "#3B82F6" },
+      { label: "Returns", to: routes.vegetable_admin_returns, icon: <Repeat2 size={16} />, color: "#F59E0B" },
+      { label: "Claims", to: routes.vegetable_admin_claims, icon: <ShieldAlert size={16} />, color: "#EF4444" },
+      { label: "Inventory", to: routes.inventory_vegetables, icon: <Layers size={16} />, color: "#10B981" },
       { label: "Stock Catalog", to: routes.inventory, icon: <Package size={16} />, color: "#8B5CF6" },
-      { label: "Vegetables", to: routes.inventory_vegetables, icon: <Sprout size={16} />, color: "#10B981" },
+      { label: "Catalog Uploads", to: routes.vegetable_admin_catalog_uploads, icon: <FolderOpen size={16} />, color: "#8B5CF6" },
+      { label: "Categories Approval", to: routes.vegetable_admin_categories_approval, icon: <ShieldCheck size={16} />, color: "#F59E0B" },
+      { label: "Categories", to: routes.vegetable_admin_categories, icon: <FolderOpen size={16} />, color: "#06B6D4" },
+      { label: "Coupons", to: routes.marketing_coupons, icon: <Ticket size={16} />, color: "#EC4899" },
     ]
   },
   { label: "Reports & Analytics", to: routes.reports, icon: <BarChart3 size={20} />, color: "#10B981" },
@@ -134,11 +155,6 @@ const ADMIN_NAV_ITEMS = [
     to: "/settings",
     icon: <Settings size={20} />,
     color: "#64748B",
-    children: [
-      { label: "My Profile", to: "/settings?section=profile", icon: <User size={16} />, color: "#3B82F6" },
-      { label: "Security", to: "/settings?section=security", icon: <Shield size={16} />, color: "#10B981" },
-      { label: "Appearance", to: "/settings?section=appearance", icon: <Palette size={16} />, color: "#8B5CF6" },
-    ]
   },
 ]
 
@@ -214,6 +230,70 @@ function playStatusBeep(isOnline) {
   } catch (e) {
     console.warn("Status beep failed", e)
   }
+}
+
+function matchesRoute(currentPathname, routeTo) {
+  if (!routeTo || !currentPathname) return false
+  const basePath = routeTo.split("?")[0].split("#")[0]
+  if (basePath === "/") {
+    return currentPathname === "/"
+  }
+  return currentPathname === basePath || currentPathname.startsWith(basePath + "/")
+}
+
+function isItemActive(item, location) {
+  if (!item) return false
+  const currentPathname = typeof location === "string" ? location : location?.pathname || ""
+  const currentSearch = typeof location === "object" ? location?.search || "" : ""
+
+  if (item.to === "/customers/dashboard" && (currentPathname === "/customers" || currentPathname.startsWith("/customers/"))) {
+    return true
+  }
+
+  // Handle Mobile App vs Home Page Builder route distinction
+  if (item.label === "Mobile App") {
+    if (matchesRoute(currentPathname, routes.homepage_customizer)) {
+      const tab = new URLSearchParams(currentSearch).get("tab")
+      return ["mobileBanners", "mobileAds", "mobileTopCards"].includes(tab)
+    }
+    return false
+  }
+
+  if (item.label === "Home Page Builder") {
+    if (matchesRoute(currentPathname, routes.homepage_customizer)) {
+      const tab = new URLSearchParams(currentSearch).get("tab")
+      return !["mobileBanners", "mobileAds", "mobileTopCards"].includes(tab)
+    }
+    return false
+  }
+
+  if (matchesRoute(currentPathname, item.to)) return true
+  if (item.children && Array.isArray(item.children)) {
+    return item.children.some(child => matchesRoute(currentPathname, child.to))
+  }
+  return false
+}
+
+function isChildActive(child, location, siblingRoutes = []) {
+  const currentFullUrl = location.pathname + location.search
+  if (child.to.includes("?")) {
+    return currentFullUrl === child.to || currentFullUrl.startsWith(child.to + "&")
+  }
+  
+  if (location.pathname === child.to) return true
+
+  const isSiblingMoreSpecific = siblingRoutes.some(sib => {
+    if (sib === child.to) return false
+    const sibBase = sib.split("?")[0].split("#")[0]
+    const childBase = child.to.split("?")[0].split("#")[0]
+    return matchesRoute(location.pathname, sibBase) &&
+      sibBase.startsWith(childBase) &&
+      sibBase.length > childBase.length
+  })
+
+  if (isSiblingMoreSpecific) return false
+
+  return matchesRoute(location.pathname, child.to)
 }
 
 function SidebarTooltip({ tooltip }) {
@@ -307,7 +387,7 @@ export function AppShell() {
   const items = useMemo(() => {
     if (!user) return []
     const isAdminUser = user.role === "admin" || user.role === "manager" || isSuper
-    
+
     if (isSuper) {
       return [
         ...SUPER_ADMIN_NAV_ITEMS,
@@ -337,7 +417,7 @@ export function AppShell() {
   }, [user, isSuper])
 
   useEffect(() => {
-    localStorage.setItem("caltrack.sidebarCollapsed", sidebarCollapsed)
+    localStorage.setItem("sevo.sidebarCollapsed", sidebarCollapsed)
   }, [sidebarCollapsed])
 
   useEffect(() => {
@@ -347,23 +427,30 @@ export function AppShell() {
     }
   }, [user, dispatch])
 
+  const closedParentRef = useRef(null)
+
   useEffect(() => {
     const parent = items.find(item => {
       if (!item.children) return false
-      if (item.to === "/") {
-        return location.pathname === "/"
-      }
-      if (item.to === "/customers/dashboard") {
-        return location.pathname.startsWith("/customers")
-      }
-      return location.pathname.startsWith(item.to)
+      return isItemActive(item, location)
     })
-    if (parent) {
-      setDrillDownParent(parent)
-    } else {
+
+    if (!parent) {
       setDrillDownParent(null)
+      closedParentRef.current = null
+      return
     }
-  }, [location.pathname, items])
+
+    if (closedParentRef.current && closedParentRef.current !== parent.label) {
+      closedParentRef.current = null
+    }
+
+    if (closedParentRef.current === parent.label) {
+      return
+    }
+
+    setDrillDownParent(parent)
+  }, [location, items])
 
   const showTooltip = (label, e) => {
     if (!sidebarCollapsed) return
@@ -400,12 +487,12 @@ export function AppShell() {
   useEffect(() => {
     // Use native browser events instead of polling — fires instantly on network change,
     // zero CPU overhead when network is stable
-    const handleOnline  = () => setOffline(false)
+    const handleOnline = () => setOffline(false)
     const handleOffline = () => setOffline(true)
-    window.addEventListener("online",  handleOnline)
+    window.addEventListener("online", handleOnline)
     window.addEventListener("offline", handleOffline)
     return () => {
-      window.removeEventListener("online",  handleOnline)
+      window.removeEventListener("online", handleOnline)
       window.removeEventListener("offline", handleOffline)
     }
   }, [])
@@ -483,11 +570,11 @@ export function AppShell() {
       <header className="flex items-center justify-between h-[var(--header-height)] px-8 bg-[var(--sevo-surface)]/90 backdrop-blur-xl border-b border-[var(--sevo-border)] z-50 shrink-0 shadow-xs">
         <div className="flex items-center gap-8">
           <div className="flex items-center gap-3.5">
-            <CalTrackLogo size="sm" className="hover:scale-105 transition-transform" />
+            <SevoLogo size="sm" className="hover:scale-105 transition-transform" />
             <div className="h-6 w-px bg-[var(--sevo-border)] hidden sm:block" />
             <div className="flex flex-col">
-              <span className="font-bold text-[var(--sevo-text-primary)] text-xs tracking-tight truncate max-w-[200px]" title={orgName && orgName !== "Sevo" ? orgName : "Operations Hub"}>
-                {orgName && orgName !== "Sevo" ? orgName : "Operations Hub"}
+              <span className="font-bold text-[var(--sevo-text-primary)] text-xs tracking-tight truncate max-w-[200px]" title={(!orgName || /calservices/i.test(orgName) || orgName.toLowerCase() === "sevo") ? "SEVO" : orgName.replace(/calservices/gi, "SEVO")}>
+                {(!orgName || /calservices/i.test(orgName) || orgName.toLowerCase() === "sevo") ? "SEVO" : orgName.replace(/calservices/gi, "SEVO")}
               </span>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <span className="text-[9px] font-bold text-[var(--sevo-primary)] uppercase tracking-wider leading-none">Admin Portal</span>
@@ -524,10 +611,10 @@ export function AppShell() {
               type="button"
               onClick={() => setProfileOpen(v => !v)}
             >
-              <div className="relative w-10 h-10 flex items-center justify-center rounded-xl bg-[var(--sevo-primary)] text-white font-bold text-sm shadow-md group-hover:scale-105 transition-transform">
+              <div className="relative w-10 h-10 flex items-center justify-center rounded-xl bg-[var(--sevo-primary)] text-white font-bold text-sm shadow-md group-hover:scale-105 transition-transform overflow-hidden">
                 {user.avatar_url ? (
                   <img
-                    src={user.avatar_url.includes("demo.localhost") ? `${window.location.origin}${user.avatar_url.substring(user.avatar_url.indexOf('/media/'))}` : user.avatar_url}
+                    src={resolveImageUrl(user.avatar_url)}
                     alt="avatar"
                     className="w-full h-full object-cover rounded-xl"
                     onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -546,21 +633,21 @@ export function AppShell() {
                       user?.role === "manager"
                         ? { color: "#0ea5e9", background: "#e0f2fe" }
                         : user?.role === "support" || user?.isCareAgent
-                        ? { color: "#10b981", background: "#d1fae5" }
-                        : user?.role === "customer"
-                        ? { color: "#f59e0b", background: "#fef3c7" }
-                        : { color: "#4f46e5", background: "#ede9fe" }
+                          ? { color: "#10b981", background: "#d1fae5" }
+                          : user?.role === "customer"
+                            ? { color: "#f59e0b", background: "#fef3c7" }
+                            : { color: "#4f46e5", background: "#ede9fe" }
                     }
                   >
                     {user?.role === "admin"
                       ? "Administrator"
                       : user?.role === "manager"
-                      ? "Manager"
-                      : user?.role === "support" || user?.isCareAgent
-                      ? "Support"
-                      : user?.role === "customer"
-                      ? "Customer"
-                      : user?.role || "Staff"}
+                        ? "Manager"
+                        : user?.role === "support" || user?.isCareAgent
+                          ? "Support"
+                          : user?.role === "customer"
+                            ? "Customer"
+                            : user?.role || "Staff"}
                   </span>
                 </div>
               )}
@@ -572,9 +659,14 @@ export function AppShell() {
                 <div className="absolute top-full right-0 mt-3 w-80 bg-[var(--sevo-surface)] rounded-2xl shadow-2xl border border-[var(--sevo-border)] z-[99999] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
                   <div className="p-6 bg-[var(--sevo-surface-raised)]/80 backdrop-blur-xl border-b border-[var(--sevo-border)]">
                     <div className="flex items-center gap-4">
-                      <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-[var(--sevo-primary)] text-white text-xl font-bold shadow-md">
+                      <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-[var(--sevo-primary)] text-white text-xl font-bold shadow-md overflow-hidden">
                         {user.avatar_url ? (
-                          <img src={user.avatar_url} alt="avatar" className="w-full h-full object-cover rounded-2xl" />
+                          <img
+                            src={resolveImageUrl(user.avatar_url)}
+                            alt="avatar"
+                            className="w-full h-full object-cover rounded-2xl"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          />
                         ) : (
                           initials(user.username)
                         )}
@@ -588,21 +680,21 @@ export function AppShell() {
                             user?.role === "manager"
                               ? { color: "#0ea5e9", background: "#e0f2fe", border: "1px solid #bae6fd" }
                               : user?.role === "support" || user?.isCareAgent
-                              ? { color: "#10b981", background: "#d1fae5", border: "1px solid #a7f3d0" }
-                              : user?.role === "customer"
-                              ? { color: "#f59e0b", background: "#fef3c7", border: "1px solid #fde68a" }
-                              : { color: "#4f46e5", background: "#ede9fe", border: "1px solid #c4b5fd" }
+                                ? { color: "#10b981", background: "#d1fae5", border: "1px solid #a7f3d0" }
+                                : user?.role === "customer"
+                                  ? { color: "#f59e0b", background: "#fef3c7", border: "1px solid #fde68a" }
+                                  : { color: "#4f46e5", background: "#ede9fe", border: "1px solid #c4b5fd" }
                           }
                         >
                           {user?.role === "admin"
                             ? "Administrator"
                             : user?.role === "manager"
-                            ? "Manager"
-                            : user?.role === "support" || user?.isCareAgent
-                            ? "Support"
-                            : user?.role === "customer"
-                            ? "Customer"
-                            : user?.title || user?.role || "Staff"}
+                              ? "Manager"
+                              : user?.role === "support" || user?.isCareAgent
+                                ? "Support"
+                                : user?.role === "customer"
+                                  ? "Customer"
+                                  : user?.title || user?.role || "Staff"}
                         </span>
                       </div>
                     </div>
@@ -636,7 +728,7 @@ export function AppShell() {
         >
           <nav className="flex-1 overflow-y-auto py-6 flex flex-col items-center gap-4 scrollbar-hide">
             {items.map((item) => {
-              const active = (item.to === "/" && location.pathname === "/") || (item.to !== "/" && location.pathname.startsWith(item.to));
+              const active = isItemActive(item, location) || drillDownParent?.label === item.label;
               const color = item.color || "#0B8F7A";
               const hasChildren = !!item.children;
 
@@ -644,7 +736,12 @@ export function AppShell() {
                 <div key={item.label} className="relative group">
                   <button
                     onClick={() => {
-                      if (hasChildren) setDrillDownParent(item);
+                      if (hasChildren) {
+                        closedParentRef.current = null;
+                        setDrillDownParent(item);
+                      } else {
+                        setDrillDownParent(null);
+                      }
                       navigate(item.to);
                     }}
                     className={`flex flex-col items-center justify-center w-20 h-20 rounded-2xl transition-all duration-300 relative gap-1.5 cursor-pointer ${active ? 'shadow-xs bg-[var(--sevo-surface-raised)] border border-[var(--sevo-border)]' : 'text-[var(--sevo-text-secondary)] hover:bg-[var(--sevo-surface-raised)]/60'}`}
@@ -701,11 +798,7 @@ export function AppShell() {
                     .filter(child => (!child.adminOnly || isAdmin) && hasModuleAccess(user, child))
                     .map((child) => {
                       const childSiblings = drillDownParent.children.map(c => c.to)
-                      const isSiblingMoreSpecific = childSiblings.some(
-                        sib => sib !== child.to && location.pathname.startsWith(sib) && sib.startsWith(child.to)
-                      )
-                      const active = location.pathname === child.to ||
-                        (!isSiblingMoreSpecific && child.to !== '/settings' && location.pathname.startsWith(child.to));
+                      const active = isChildActive(child, location, childSiblings)
                       const color = child.color || drillDownParent.color || "#0B8F7A";
                       return (
                         <NavLink
@@ -732,7 +825,12 @@ export function AppShell() {
                 </div>
 
                 <button
-                  onClick={() => setDrillDownParent(null)}
+                  onClick={() => {
+                    if (drillDownParent) {
+                      closedParentRef.current = drillDownParent.label;
+                    }
+                    setDrillDownParent(null);
+                  }}
                   className="mt-auto w-full py-3 flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest text-[var(--sevo-text-muted)] hover:text-[var(--sevo-text-primary)] transition-colors cursor-pointer"
                 >
                   <ChevronLeft size={14} /> Close

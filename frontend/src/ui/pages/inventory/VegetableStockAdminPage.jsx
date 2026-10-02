@@ -13,8 +13,9 @@ import {
   History, CheckCircle2, AlertCircle, HelpCircle,
   X, Calendar, ArrowUpRight, ArrowDownRight, Search,
   Download, FileSpreadsheet, FileText, Tag, Percent,
-  Scale, Layers, Save, SlidersHorizontal
+  Scale, Layers, Save, SlidersHorizontal, ImageIcon
 } from "lucide-react"
+import ImageUploader from "../../components/ImageUploader.jsx"
 
 export function VegetableStockAdminPage() {
   const dispatch = useDispatch()
@@ -32,6 +33,7 @@ export function VegetableStockAdminPage() {
 
   // Edit details form state
   const [editForm, setEditForm] = useState({
+    image: "",
     price: "",
     offer_price: "",
     offer_percentage: "",
@@ -53,6 +55,15 @@ export function VegetableStockAdminPage() {
   const [applyNow, setApplyNow] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [actionError, setActionError] = useState("")
+  const [toast, setToast] = useState(null)
+
+  const showToast = (msg, type = "success") => {
+    const id = Date.now()
+    setToast({ msg, type, id })
+    setTimeout(() => {
+      setToast((curr) => (curr?.id === id ? null : curr))
+    }, 4000)
+  }
 
   useEffect(() => {
     dispatch(fetchVegetableStock())
@@ -88,28 +99,40 @@ export function VegetableStockAdminPage() {
     setEditDetailsModalItem(item)
     setActionError("")
 
-    // Parse values in kg/g for ease of editing
-    const currKg = item.today_available_grams != null ? (item.today_available_grams / 1000).toString() : ""
-    const opKg = item.opening_stock_grams != null ? (item.opening_stock_grams / 1000).toString() : ""
-    const rstkKg = item.restock_level_grams ? (item.restock_level_grams / 1000).toString() : ""
-    const reorderKg = item.reorder_level_grams ? (item.reorder_level_grams / 1000).toString() : ""
+    const isCount = item.unit_basis === "COUNT"
+    const defaultUnit = item.unit || (isCount ? "pcs" : "kg")
+
+    // Parse values in kg or raw count units for ease of editing
+    const currQty = item.today_available_grams != null
+      ? (isCount ? item.today_available_grams.toString() : (item.today_available_grams / 1000).toString())
+      : ""
+    const opQty = item.opening_stock_grams != null
+      ? (isCount ? item.opening_stock_grams.toString() : (item.opening_stock_grams / 1000).toString())
+      : ""
+    const rstkQty = item.restock_level_grams
+      ? (isCount ? item.restock_level_grams.toString() : (item.restock_level_grams / 1000).toString())
+      : ""
+    const reorderQty = item.reorder_level_grams
+      ? (isCount ? item.reorder_level_grams.toString() : (item.reorder_level_grams / 1000).toString())
+      : ""
 
     const mrpVal = item.mrp ? Math.round(Number(item.mrp)).toString() : ""
     const priceVal = item.price ? Math.round(Number(item.price)).toString() : ""
 
     setEditForm({
+      image: item.image || "",
       mrp: mrpVal,
       price: priceVal,
       offer_percentage: item.offer_percentage || "0",
-      vegetable_gram: item.vegetable_gram || "500 g",
-      opening_stock_quantity: opKg,
-      opening_stock_unit: "kg",
-      current_stock_quantity: currKg,
-      current_stock_unit: "kg",
-      restock_level_quantity: rstkKg,
-      restock_level_unit: "kg",
-      reorder_level_quantity: reorderKg,
-      reorder_level_unit: "kg",
+      vegetable_gram: item.vegetable_gram || (isCount ? `1 ${defaultUnit}` : "500 g"),
+      opening_stock_quantity: opQty,
+      opening_stock_unit: defaultUnit,
+      current_stock_quantity: currQty,
+      current_stock_unit: defaultUnit,
+      restock_level_quantity: rstkQty,
+      restock_level_unit: defaultUnit,
+      reorder_level_quantity: reorderQty,
+      reorder_level_unit: defaultUnit,
     })
   }
 
@@ -153,10 +176,12 @@ export function VegetableStockAdminPage() {
 
     try {
       const payload = {
+        image: (editForm.image || "").trim(),
         price: parseFloat(editForm.price) || 0,
         mrp: editForm.mrp !== "" ? parseFloat(editForm.mrp) : null,
         offer_percentage: parseFloat(editForm.offer_percentage) || 0,
         vegetable_gram: editForm.vegetable_gram.trim() || "500 g",
+        unit_basis: editDetailsModalItem.unit_basis || "WEIGHT",
         opening_stock_quantity: editForm.opening_stock_quantity !== "" ? parseFloat(editForm.opening_stock_quantity) : null,
         opening_stock_unit: editForm.opening_stock_unit,
         current_stock_quantity: editForm.current_stock_quantity !== "" ? parseFloat(editForm.current_stock_quantity) : null,
@@ -167,16 +192,19 @@ export function VegetableStockAdminPage() {
         reorder_level_unit: editForm.reorder_level_unit,
       }
 
+      const itemName = editDetailsModalItem.name
       await dispatch(updateVegetableDetails({
         productId: editDetailsModalItem.product_id,
         data: payload
       })).unwrap()
 
       setEditDetailsModalItem(null)
+      showToast(`Stock and details for "${itemName}" updated successfully.`, "success")
       dispatch(fetchVegetableStock())
     } catch (err) {
       const msg = typeof err === "string" ? err : (err?.message || (err?.body ? (typeof err.body === "string" ? err.body : JSON.stringify(err.body)) : "Failed to update vegetable details."))
       setActionError(msg)
+      showToast(msg, "error")
     } finally {
       setSubmitting(false)
     }
@@ -186,22 +214,30 @@ export function VegetableStockAdminPage() {
   const handleOpenRestock = (item) => {
     setRestockModalItem(item)
     setActionQty("")
-    setActionUnit("kg")
+    setActionUnit(item.unit || (item.unit_basis === "COUNT" ? "pcs" : "kg"))
     setActionError("")
   }
 
   const handleOpenAdjust = (item) => {
     setAdjustModalItem(item)
-    setActionQty(item.today_available_grams ? (item.today_available_grams / 1000).toString() : "")
-    setActionUnit("kg")
+    const isCount = item.unit_basis === "COUNT"
+    const qty = item.today_available_grams != null
+      ? (isCount ? item.today_available_grams.toString() : (item.today_available_grams / 1000).toString())
+      : ""
+    setActionQty(qty)
+    setActionUnit(item.unit || (isCount ? "pcs" : "kg"))
     setActionReason("")
     setActionError("")
   }
 
   const handleOpenSetDefault = (item) => {
     setDefaultModalItem(item)
-    setActionQty(item.default_daily_grams ? (item.default_daily_grams / 1000).toString() : "")
-    setActionUnit("kg")
+    const isCount = item.unit_basis === "COUNT"
+    const qty = item.default_daily_grams != null
+      ? (isCount ? item.default_daily_grams.toString() : (item.default_daily_grams / 1000).toString())
+      : ""
+    setActionQty(qty)
+    setActionUnit(item.unit || (isCount ? "pcs" : "kg"))
     setApplyNow(false)
     setActionError("")
   }
@@ -401,10 +437,14 @@ export function VegetableStockAdminPage() {
         unit: actionUnit,
       })).unwrap()
 
+      const itemName = restockModalItem.name
       setRestockModalItem(null)
+      showToast(`Restocked ${actionQty} ${actionUnit} for "${itemName}".`, "success")
       dispatch(fetchVegetableStock())
     } catch (err) {
-      setActionError(err || "Failed to restock item.")
+      const msg = err || "Failed to restock item."
+      setActionError(msg)
+      showToast(msg, "error")
     } finally {
       setSubmitting(false)
     }
@@ -428,10 +468,14 @@ export function VegetableStockAdminPage() {
         reason: actionReason.trim(),
       })).unwrap()
 
+      const itemName = adjustModalItem.name
       setAdjustModalItem(null)
+      showToast(`Adjusted stock to ${actionQty} ${actionUnit} for "${itemName}".`, "success")
       dispatch(fetchVegetableStock())
     } catch (err) {
-      setActionError(err || "Failed to adjust stock.")
+      const msg = err || "Failed to adjust stock."
+      setActionError(msg)
+      showToast(msg, "error")
     } finally {
       setSubmitting(false)
     }
@@ -451,10 +495,14 @@ export function VegetableStockAdminPage() {
         applyNow: applyNow,
       })).unwrap()
 
+      const itemName = defaultModalItem.name
       setDefaultModalItem(null)
+      showToast(`Default daily stock updated for "${itemName}".`, "success")
       dispatch(fetchVegetableStock())
     } catch (err) {
-      setActionError(err || "Failed to set default daily stock.")
+      const msg = err || "Failed to set default daily stock."
+      setActionError(msg)
+      showToast(msg, "error")
     } finally {
       setSubmitting(false)
     }
@@ -710,6 +758,17 @@ export function VegetableStockAdminPage() {
             )}
 
             <form onSubmit={handleSubmitEditDetails} className="overflow-y-auto space-y-4 pr-1">
+              {/* Produce Image Uploader */}
+              <ImageUploader
+                label="Produce Image"
+                description="Upload custom produce image or paste an image URL. Automatically converted to WebP."
+                value={editForm.image}
+                assetType="packages"
+                fallbackSrc="/mockups/vegetables_realistic.png"
+                aspectRatio="aspect-square"
+                onChange={(url) => setEditForm(prev => ({ ...prev, image: url }))}
+              />
+
               {/* Product Pricing & Pack Weight */}
               <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-3">
                 <h4 className="text-xs font-black uppercase text-slate-600 tracking-wider flex items-center gap-1.5">
@@ -770,9 +829,9 @@ export function VegetableStockAdminPage() {
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Current Live Stock */}
+                  {/* Stock */}
                   <div>
-                    <label className="text-[11px] font-bold text-slate-700 block mb-1">Current Live Stock</label>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">Stock</label>
                     <div className="flex gap-1.5">
                       <input
                         type="number"
@@ -788,8 +847,19 @@ export function VegetableStockAdminPage() {
                         onChange={(e) => setEditForm(prev => ({ ...prev, current_stock_unit: e.target.value }))}
                         className="px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none"
                       >
-                        <option value="kg">kg</option>
-                        <option value="g">g</option>
+                        {editDetailsModalItem?.unit_basis === "COUNT" ? (
+                          <>
+                            <option value="pcs">pcs</option>
+                            <option value="bunch">bunch</option>
+                            <option value="packet">packet</option>
+                            <option value="dozen">dozen</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="kg">kg</option>
+                            <option value="g">g</option>
+                          </>
+                        )}
                       </select>
                     </div>
                   </div>
@@ -812,8 +882,19 @@ export function VegetableStockAdminPage() {
                         onChange={(e) => setEditForm(prev => ({ ...prev, opening_stock_unit: e.target.value }))}
                         className="px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none"
                       >
-                        <option value="kg">kg</option>
-                        <option value="g">g</option>
+                        {editDetailsModalItem?.unit_basis === "COUNT" ? (
+                          <>
+                            <option value="pcs">pcs</option>
+                            <option value="bunch">bunch</option>
+                            <option value="packet">packet</option>
+                            <option value="dozen">dozen</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="kg">kg</option>
+                            <option value="g">g</option>
+                          </>
+                        )}
                       </select>
                     </div>
                   </div>
@@ -836,8 +917,19 @@ export function VegetableStockAdminPage() {
                         onChange={(e) => setEditForm(prev => ({ ...prev, restock_level_unit: e.target.value }))}
                         className="px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none"
                       >
-                        <option value="kg">kg</option>
-                        <option value="g">g</option>
+                        {editDetailsModalItem?.unit_basis === "COUNT" ? (
+                          <>
+                            <option value="pcs">pcs</option>
+                            <option value="bunch">bunch</option>
+                            <option value="packet">packet</option>
+                            <option value="dozen">dozen</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="kg">kg</option>
+                            <option value="g">g</option>
+                          </>
+                        )}
                       </select>
                     </div>
                   </div>
@@ -860,8 +952,19 @@ export function VegetableStockAdminPage() {
                         onChange={(e) => setEditForm(prev => ({ ...prev, reorder_level_unit: e.target.value }))}
                         className="px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none"
                       >
-                        <option value="kg">kg</option>
-                        <option value="g">g</option>
+                        {editDetailsModalItem?.unit_basis === "COUNT" ? (
+                          <>
+                            <option value="pcs">pcs</option>
+                            <option value="bunch">bunch</option>
+                            <option value="packet">packet</option>
+                            <option value="dozen">dozen</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="kg">kg</option>
+                            <option value="g">g</option>
+                          </>
+                        )}
                       </select>
                     </div>
                   </div>
@@ -919,16 +1022,18 @@ export function VegetableStockAdminPage() {
 
             <form onSubmit={handleSubmitRestock} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">Quantity to Add</label>
+                <label className="text-xs font-bold text-slate-700">
+                  Quantity to Add ({actionUnit})
+                </label>
                 <div className="flex gap-2">
                   <input
                     type="number"
-                    step="any"
-                    min="0.001"
+                    step={restockModalItem.unit_basis === "COUNT" ? "1" : "any"}
+                    min={restockModalItem.unit_basis === "COUNT" ? "1" : "0.001"}
                     required
                     value={actionQty}
                     onChange={(e) => setActionQty(e.target.value)}
-                    placeholder="e.g. 10"
+                    placeholder={restockModalItem.unit_basis === "COUNT" ? "e.g. 10" : "e.g. 10.5"}
                     className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bold"
                   />
                   <select
@@ -936,8 +1041,19 @@ export function VegetableStockAdminPage() {
                     onChange={(e) => setActionUnit(e.target.value)}
                     className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   >
-                    <option value="kg">kg</option>
-                    <option value="g">g</option>
+                    {restockModalItem.unit_basis === "COUNT" ? (
+                      <>
+                        <option value="pcs">pcs</option>
+                        <option value="bunch">bunch</option>
+                        <option value="packet">packet</option>
+                        <option value="dozen">dozen</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="kg">kg</option>
+                        <option value="g">g</option>
+                      </>
+                    )}
                   </select>
                 </div>
               </div>
@@ -992,16 +1108,18 @@ export function VegetableStockAdminPage() {
 
             <form onSubmit={handleSubmitAdjust} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">New Live Quantity</label>
+                <label className="text-xs font-bold text-slate-700">
+                  New Live Quantity ({actionUnit})
+                </label>
                 <div className="flex gap-2">
                   <input
                     type="number"
-                    step="any"
+                    step={adjustModalItem.unit_basis === "COUNT" ? "1" : "any"}
                     min="0"
                     required
                     value={actionQty}
                     onChange={(e) => setActionQty(e.target.value)}
-                    placeholder="e.g. 15"
+                    placeholder={adjustModalItem.unit_basis === "COUNT" ? "e.g. 15" : "e.g. 15.5"}
                     className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 font-bold"
                   />
                   <select
@@ -1009,8 +1127,19 @@ export function VegetableStockAdminPage() {
                     onChange={(e) => setActionUnit(e.target.value)}
                     className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
                   >
-                    <option value="kg">kg</option>
-                    <option value="g">g</option>
+                    {adjustModalItem.unit_basis === "COUNT" ? (
+                      <>
+                        <option value="pcs">pcs</option>
+                        <option value="bunch">bunch</option>
+                        <option value="packet">packet</option>
+                        <option value="dozen">dozen</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="kg">kg</option>
+                        <option value="g">g</option>
+                      </>
+                    )}
                   </select>
                 </div>
               </div>
@@ -1066,7 +1195,7 @@ export function VegetableStockAdminPage() {
             </div>
 
             <p className="text-xs text-slate-500 font-medium">
-              Configure the default capacity that automatically resets every day at 4:00 AM IST. Leave blank to disable auto-reset.
+              Configure the default baseline capacity. Leave blank to clear baseline.
             </p>
 
             {actionError && (
@@ -1077,15 +1206,17 @@ export function VegetableStockAdminPage() {
 
             <form onSubmit={handleSubmitSetDefault} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">Default Daily Quantity</label>
+                <label className="text-xs font-bold text-slate-700">
+                  Default Daily Quantity ({actionUnit})
+                </label>
                 <div className="flex gap-2">
                   <input
                     type="number"
-                    step="any"
+                    step={defaultModalItem.unit_basis === "COUNT" ? "1" : "any"}
                     min="0"
                     value={actionQty}
                     onChange={(e) => setActionQty(e.target.value)}
-                    placeholder="e.g. 20 (leave blank to clear)"
+                    placeholder={defaultModalItem.unit_basis === "COUNT" ? "e.g. 20 (leave blank to clear)" : "e.g. 20.5 (leave blank to clear)"}
                     className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold"
                   />
                   <select
@@ -1093,8 +1224,19 @@ export function VegetableStockAdminPage() {
                     onChange={(e) => setActionUnit(e.target.value)}
                     className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
-                    <option value="kg">kg</option>
-                    <option value="g">g</option>
+                    {defaultModalItem.unit_basis === "COUNT" ? (
+                      <>
+                        <option value="pcs">pcs</option>
+                        <option value="bunch">bunch</option>
+                        <option value="packet">packet</option>
+                        <option value="dozen">dozen</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="kg">kg</option>
+                        <option value="g">g</option>
+                      </>
+                    )}
                   </select>
                 </div>
               </div>
@@ -1111,7 +1253,7 @@ export function VegetableStockAdminPage() {
                 <label htmlFor="apply_now_check" className="text-xs font-bold text-indigo-950 cursor-pointer">
                   Apply now to today's available stock
                   <span className="block text-[11px] font-medium text-indigo-700 mt-0.5">
-                    Immediately resets today's live stock to this new default value.
+                    Immediately updates today's live stock to this baseline value.
                   </span>
                 </label>
               </div>
@@ -1235,12 +1377,16 @@ export function VegetableStockAdminPage() {
                             <tr key={m.id} className="hover:bg-slate-50/70">
                               <td className="py-2 px-3 text-slate-500 font-medium whitespace-nowrap">{m.time}</td>
                               <td className="py-2 px-3 font-bold">
-                                <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold ${m.type === 'RESTOCK' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                                    m.type === 'DAILY_RESET' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' :
-                                      m.type === 'SOLD' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                                        'bg-blue-50 text-blue-700 border border-blue-200'
-                                  }`}>
-                                  {m.type_display}
+                                <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                  m.type === 'RESTOCK' || m.type === 'RESTOCKED_ON_RETURN' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                                  m.type === 'RESTOCKED_ON_CANCELLATION' ? 'bg-cyan-50 text-cyan-700 border border-cyan-200' :
+                                  m.type === 'SOLD' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                                  m.type === 'RETURN_REPLACEMENT' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
+                                  m.type === 'CLAIM_WRITEOFF' ? 'bg-rose-50 text-rose-700 border border-rose-200' :
+                                  m.type === 'RETURN_WRITEOFF' ? 'bg-purple-50 text-purple-700 border border-purple-200' :
+                                  'bg-blue-50 text-blue-700 border border-blue-200'
+                                }`}>
+                                  {m.type_display || m.type}
                                 </span>
                               </td>
                               <td className={`py-2 px-3 font-bold ${m.delta_grams >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
@@ -1275,6 +1421,23 @@ export function VegetableStockAdminPage() {
           </div>
         </div>
       )}
+
+      {/* Toast Notification */}
+      <div className="fixed bottom-6 right-6 z-50 pointer-events-none">
+        {toast && (
+          <div
+            className={`pointer-events-auto flex items-center gap-2 px-4 py-3 rounded-xl shadow-xl text-white text-xs font-bold animate-in slide-in-from-bottom-5 duration-200 ${
+              toast.type === "error" ? "bg-rose-600" : "bg-emerald-600"
+            }`}
+          >
+            {toast.type === "error" ? <AlertCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+            <span>{toast.msg}</span>
+            <button onClick={() => setToast(null)} className="ml-2 hover:opacity-80 cursor-pointer">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

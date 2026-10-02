@@ -25,9 +25,12 @@ export async function fetchLanes(category, city) {
   return unwrapResults(res)
 }
 
-export async function fetchServiceAreas(city) {
+// "Areas We Serve" is derived server-side from real coverage for this
+// city + service category (truck | two_wheeler | packers_movers).
+export async function fetchServiceAreas(city, category) {
   const params = {}
   if (city && city !== "undefined") params.city = city
+  if (category && category !== "undefined") params.category = category
   const qs = new URLSearchParams(params).toString()
   const res = await apiRequest(`/logistics/areas/${qs ? `?${qs}` : ""}`)
   return unwrapResults(res)
@@ -73,7 +76,7 @@ export async function evaluateCargoFitment(payload) {
  * for display only, and never treat that as an authoritative fare.
  */
 export async function fetchLogisticsQuote({
-  serviceCategory, tierId, pickup, drop, stopCount, waypoints, cargoItems, goodsCategoryId, goodsCategorySlug, declaredWeightKg,
+  serviceCategory, tierId, pickup, drop, stopCount, waypoints, cargoItems, goodsCategoryId, goodsCategorySlug, declaredWeightKg, loadingHelp,
 }) {
   if (!serviceCategory || !tierId || !pickup?.lat || !pickup?.lng || !drop?.lat || !drop?.lng) {
     return { error: true, errorCode: "COORDINATES_REQUIRED" }
@@ -94,6 +97,7 @@ export async function fetchLogisticsQuote({
         ...(goodsCategoryId ? { goods_category_id: goodsCategoryId } : {}),
         ...(goodsCategorySlug ? { goods_category: goodsCategorySlug } : {}),
         ...(declaredWeightKg != null ? { declared_weight_kg: declaredWeightKg } : {}),
+        ...(loadingHelp === false ? { loading_help: false } : {}),
       },
     })
     const data = res?.data || res
@@ -120,6 +124,17 @@ export async function fetchLogisticsQuote({
     }
   } catch (err) {
     const payload = err?.data || err?.body || {}
+    // A throttled call (HTTP 429) has no `message`, only DRF's `detail`; without
+    // this the fare panel silently vanished with nothing to tell the customer why.
+    if (err?.status === 429) {
+      const wait = /(\d+)\s*second/.exec(String(payload.detail || ""))
+      return {
+        error: true,
+        errorCode: "RATE_LIMITED",
+        message: `Too many fare requests just now. Please wait${wait ? ` about ${wait[1]} seconds` : " a few seconds"} and change the trip slightly to refresh the fare.`,
+        recommendedVehicle: null, suitableVehicles: [], cargoSummary: null, validationErrors: [],
+      }
+    }
     return {
       error: true,
       errorCode: payload.error_code || "QUOTE_FAILED",
@@ -141,6 +156,18 @@ export async function fetchPackersMoversInventory() {
 }
 
 /**
+ * Porter-parity P&M add-on catalogue (rope pulling, appliance install/uninstall, electrician,
+ * carpenter, labour-only). Prices shown here are informational; the server always reprices
+ * from this same table at booking time (see logistics/views.py PackersMoversAddOnsView and
+ * service_requests/services/pm_addons.py).
+ */
+export async function fetchPackersMoversAddOns(city) {
+  const qs = city ? `?city=${encodeURIComponent(city)}` : ""
+  const res = await apiRequest(`/logistics/packers-movers/addons/${qs}`)
+  return res?.data || res || []
+}
+
+/**
  * Server-authoritative quote for Packers & Movers relocation.
  */
 export async function fetchPackersMoversQuote({
@@ -157,6 +184,9 @@ export async function fetchPackersMoversQuote({
   relocationType = "Within City",
   city = "Hosur",
   serviceTierId = null,
+  extraStops = 0,
+  moveDate = null,
+  moveTime = null,
 }) {
   if (!pickup?.lat || !pickup?.lng || !drop?.lat || !drop?.lng) {
     return { error: true, errorCode: "COORDINATES_REQUIRED", message: "Pickup and drop coordinates are required." }
@@ -173,6 +203,7 @@ export async function fetchPackersMoversQuote({
         packing_tier: packingTier,
         dismantling_required: dismantlingRequired,
         unpacking_required: unpackingRequired,
+        extra_stops: extraStops,
         pickup_floor: pickupFloor,
         pickup_has_lift: pickupHasLift,
         drop_floor: dropFloor,
@@ -180,6 +211,9 @@ export async function fetchPackersMoversQuote({
         relocation_type: relocationType,
         city,
         selected_tier_id: serviceTierId,
+        // Move date/slot: Admin peak-day / off-hours surcharge rules are priced server-side.
+        ...(moveDate ? { move_date: moveDate } : {}),
+        ...(moveTime ? { move_time: moveTime } : {}),
       },
     })
     const data = res?.data || res
@@ -196,10 +230,11 @@ export async function fetchPackersMoversQuote({
 /**
  * P1-11: Fetch authoritative booking slot availability evaluated server-side.
  */
-export async function fetchLogisticsSlots({ date, category = "goods_transport_truck" } = {}) {
+export async function fetchLogisticsSlots({ date, category = "goods_transport_truck", city = "" } = {}) {
   const params = {}
   if (date) params.date = date
   if (category) params.category = category
+  if (city) params.city = city
   const qs = new URLSearchParams(params).toString()
   try {
     const res = await apiRequest(`/logistics/slots/${qs ? `?${qs}` : ""}`)
@@ -212,3 +247,107 @@ export async function fetchLogisticsSlots({ date, category = "goods_transport_tr
   }
 }
 
+/**
+ * Fetch dynamic list of cities configured in system settings.
+ * Pass { launchedOnly: true } to restrict to launched operating cities.
+ */
+export async function fetchLogisticsCities({ launchedOnly = false } = {}) {
+  try {
+    const url = launchedOnly ? "/settings/cities/?launched=true" : "/settings/cities/"
+    const res = await apiRequest(url)
+    return unwrapResults(res)
+  } catch (err) {
+    console.warn("Could not load cities:", err)
+    return []
+  }
+}
+
+/**
+ * Fetch dynamic FAQs for Goods Transport & Packers/Movers.
+ * Filterable by category ("truck", "two_wheeler", "packers_movers") and city.
+ */
+export async function fetchGTFaqs({ category = "", city = "" } = {}) {
+  const params = {}
+  if (category) params.category = category
+  if (city) params.city = city
+  const qs = new URLSearchParams(params).toString()
+  try {
+    const res = await apiRequest(`/logistics/faqs/${qs ? `?${qs}` : ""}`)
+    if (Array.isArray(res)) return res
+    if (Array.isArray(res?.data)) return res.data
+    return []
+  } catch (err) {
+    console.warn("Failed to fetch GT FAQs:", err)
+    return []
+  }
+}
+
+
+
+/**
+ * Service Coverage: is this pickup -> drop trip inside ACTIVE admin-configured
+ * coverage for the category? Calls the route mode of the public geofence
+ * check (settings_hub ServiceZone). Resolves to
+ *   { inCoverage: true }  or
+ *   { inCoverage: false, failedPoint: "pickup"|"drop", errorCode, message }
+ * Network failures resolve to inCoverage: true -- the booking and quote
+ * endpoints enforce coverage server-side regardless.
+ */
+// One end of a trip on its own (point = "pickup" | "drop"): the same coverage rules
+// and messages as the route check, so an uncovered pickup or drop is reported as soon
+// as it is chosen instead of only once both ends exist. Fails open like the route
+// check -- the server enforces coverage again at quote and booking.
+export async function checkPointCoverage({ serviceCategory, point, location, vehicleClass }) {
+  if (!location?.lat || !location?.lng) return { inCoverage: true, skipped: true }
+  try {
+    const res = await apiRequest("/settings/service-zones/check/", {
+      method: "POST",
+      body: {
+        lat: location.lat,
+        lng: location.lng,
+        point,
+        service_slug: serviceCategory,
+        ...(vehicleClass ? { vehicle_class: vehicleClass } : {}),
+      },
+    })
+    const data = res?.data || res || {}
+    if (data.in_zone === false) {
+      return { inCoverage: false, failedPoint: data.failed_point || point, message: data.message || "This location is outside our service area." }
+    }
+    return { inCoverage: true }
+  } catch {
+    return { inCoverage: true, skipped: true }
+  }
+}
+
+export async function checkRouteCoverage({ serviceCategory, pickup, drop, vehicleClass, stops }) {
+  if (!pickup?.lat || !pickup?.lng || !drop?.lat || !drop?.lng) return { inCoverage: true, skipped: true }
+  try {
+    const res = await apiRequest("/settings/service-zones/check/", {
+      method: "POST",
+      body: {
+        lat: pickup.lat,
+        lng: pickup.lng,
+        drop_lat: drop.lat,
+        drop_lng: drop.lng,
+        service_slug: serviceCategory,
+        // Intermediate stops must be inside coverage too (same rule as pickup/drop).
+        ...(Array.isArray(stops) && stops.length > 0 ? { stops: stops.map((p) => ({ lat: p.lat, lng: p.lng })) } : {}),
+        ...(vehicleClass ? { vehicle_class: vehicleClass } : {}),
+      },
+    })
+    const data = res?.data || res || {}
+    if (data.in_zone === false) {
+      return {
+        inCoverage: false,
+        failedPoint: data.failed_point || "",
+        failedStopIndex: data.failed_stop_index ?? null,
+        errorCode: data.error_code || "",
+        message: data.message || "This trip is outside our service area.",
+      }
+    }
+    return { inCoverage: true }
+  } catch {
+    return { inCoverage: true, skipped: true }
+  }
+}

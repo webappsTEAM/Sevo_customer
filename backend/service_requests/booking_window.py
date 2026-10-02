@@ -15,7 +15,7 @@ Asia/Kolkata) via django.utils.timezone, never a naive datetime.now().
 Both values are settings-driven so they can be tuned per environment without a
 code change:
     BOOKING_SAME_DAY_CUTOFF_HOUR  (default 18, i.e. 6 PM local)
-    BOOKING_MIN_LEAD_MINUTES      (default 60)
+    BOOKING_MIN_LEAD_MINUTES      (default 30)
 """
 import datetime
 import logging
@@ -26,7 +26,7 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 DEFAULT_CUTOFF_HOUR = 18
-DEFAULT_MIN_LEAD_MINUTES = 60
+DEFAULT_MIN_LEAD_MINUTES = 30
 
 # Accepted spellings for a slot, in the order they are tried. The frontend
 # sends 24-hour "HH:MM"; the 12-hour forms are accepted because several of the
@@ -36,6 +36,28 @@ _TIME_FORMATS = ("%H:%M", "%H:%M:%S", "%I:%M %p", "%I %p", "%I:%M%p")
 
 ON_DEMAND_LOGISTICS_CATEGORIES = {"goods_transport_truck", "goods_transport_two_wheeler"}
 DEFAULT_LOGISTICS_CUTOFF_HOUR = 22
+
+# Bug found: every GT category (Mini Truck, Two Wheeler, Packers & Movers) has
+# its own authoritative slot/availability engine -- the admin-configured
+# LogisticsSlot rows, the capacity check in LogisticsSlotAvailabilityView, and
+# the logistics-specific cutoff hour/lead-time rules right in this file. That
+# engine already fully governs which GT slots are bookable. But
+# validate_booking_slot() below unconditionally also tries to resolve a
+# generic Service (the Service/Package catalog used by painting, AC, and
+# other non-GT verticals) for whatever service_category it's given, and if
+# one resolves it further validates against THAT service's separate
+# ServiceTimeSlotConfig-driven operating-hours engine. For GT bookings this
+# second, unrelated engine's default/configured hours and slot grid don't
+# line up with LogisticsSlot's own labels (e.g. GT's "06:00 AM - 07:00 AM"
+# falling outside the generic engine's default 9am-6pm window), so it
+# rejected every GT slot with "outside operating hours for this service" --
+# even ones LogisticsSlotAvailabilityView had just reported as available.
+# GT/logistics categories must skip this generic per-Service check entirely;
+# their own slot validation further down (same-day cutoff, lead time) and the
+# capacity check already applied by the caller are the authoritative gate.
+LOGISTICS_SLOT_CATEGORIES = {
+    "goods_transport_truck", "goods_transport_two_wheeler", "packers_movers", "goods_transport",
+}
 
 
 def get_cutoff_hour(service_category=None):
@@ -103,14 +125,56 @@ def cutoff_label(service_category=None):
     return f"{display}:00 {suffix}"
 
 
-def validate_booking_slot(preferred_date, preferred_time=None, now=None, service_category=None):
+# GT_SLOT_CAPACITY_ENFORCED: LogisticsSlotAvailabilityView hides a full slot, but nothing refused the
+# booking itself, so the slot capacity an admin configured was advisory only (a direct API call, a stale
+# page or two customers at once could overfill it). Same count the availability view uses, per category.
+_SLOT_CATEGORY_KEYS = {
+    "goods_transport_truck": ("truck",), "goods_transport": ("truck",),
+    "goods_transport_two_wheeler": ("two_wheeler",), "packers_movers": ("packers_movers",),
+}
+
+
+def slot_capacity_error(service_category, preferred_date, preferred_time, city="", exclude_booking_id=None):
+    """Error string when the admin-configured slot is already full, else None. Applies only when
+    preferred_time is an active LogisticsSlot label for that category/city and has a capacity > 0."""
+    cat = (service_category or "").strip().lower()
+    keys = _SLOT_CATEGORY_KEYS.get(cat)
+    label = str(preferred_time or "").strip()
+    if not keys or not label or preferred_date is None:
+        return None
+    try:
+        from django.db.models import Q
+        from logistics.models import LogisticsSlot
+        from service_requests.models import ServiceRequest
+        city = str(city or "").strip()
+        slots = LogisticsSlot.objects.filter(is_active=True, slot_label__iexact=label).filter(
+            Q(category="") | Q(category__in=keys))
+        if city:
+            slots = slots.filter(Q(city="") | Q(city__iexact=city))
+        cap = max((s.capacity or 0 for s in slots), default=0)
+        if cap <= 0:
+            return None
+        qs = ServiceRequest.objects.filter(
+            service_category__in=[c for c, k in _SLOT_CATEGORY_KEYS.items() if k == keys],
+            preferred_date=preferred_date, preferred_time__iexact=label,
+            status__in=["new_request", "assigned", "accepted", "in_progress", "scheduled", "confirmed", "unassigned"],
+        )
+        if exclude_booking_id:
+            qs = qs.exclude(pk=exclude_booking_id)
+        booked = qs.count()
+        if booked >= cap:
+            return f"That time slot is fully booked ({booked}/{cap}). Please choose another slot."
+    except Exception:
+        return None
+    return None
+
+
+def validate_booking_slot(preferred_date, preferred_time=None, now=None, service_category=None, service=None):
     """
-    Validate a requested date/slot against the booking window.
+    Validate a requested date/slot against the booking window and service time slot engine.
 
     Returns an error string suitable for showing to a customer, or None when
-    the slot is acceptable. Only same-day bookings are constrained; future
-    dates are always allowed, and an unparseable slot string falls back to the
-    day-level rule rather than rejecting a booking we simply cannot read.
+    the slot is acceptable.
     """
     if preferred_date is None:
         return None
@@ -120,6 +184,29 @@ def validate_booking_slot(preferred_date, preferred_time=None, now=None, service
 
     if preferred_date < today:
         return "Preferred date cannot be in the past."
+
+    # If service is passed or resolvable, validate against the authoritative service time slot engine.
+    # Skipped for GT/logistics categories -- see LOGISTICS_SLOT_CATEGORIES docstring above: they have
+    # their own dedicated slot engine (LogisticsSlot + capacity check + the cutoff/lead-time checks
+    # below), and running them through this generic, unrelated per-Service engine as well incorrectly
+    # rejected every slot.
+    is_logistics_category = (service_category or "").strip().lower() in LOGISTICS_SLOT_CATEGORIES
+    resolved_svc = service
+    if not resolved_svc and service_category and not is_logistics_category:
+        try:
+            from service_requests.services.time_slot_service import resolve_service
+            resolved_svc, _ = resolve_service(service_category)
+        except Exception:
+            resolved_svc = None
+
+    if resolved_svc and not is_logistics_category:
+        try:
+            from service_requests.services.time_slot_service import validate_slot_availability_for_booking
+            is_valid, err_msg = validate_slot_availability_for_booking(resolved_svc, preferred_date, preferred_time)
+            if not is_valid:
+                return err_msg
+        except Exception as exc:
+            logger.warning(f"Error during service slot validation: {exc}")
 
     if preferred_date > today:
         return None
@@ -138,10 +225,12 @@ def validate_booking_slot(preferred_date, preferred_time=None, now=None, service
         datetime.datetime.combine(preferred_date, slot_time),
         timezone.get_current_timezone(),
     )
-    earliest = now + datetime.timedelta(minutes=get_min_lead_minutes())
+    now_floor = now.replace(second=0, microsecond=0)
+    earliest = now_floor + datetime.timedelta(minutes=get_min_lead_minutes())
     if slot_dt < earliest:
         return (
             f"That time slot has already passed or is too soon. "
             f"Please choose a slot at least {get_min_lead_minutes()} minutes from now."
         )
     return None
+

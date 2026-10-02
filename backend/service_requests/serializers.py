@@ -19,6 +19,8 @@ from .models import (
     DeliveryProof,
     Estimation, EstimationFee, Inspection, InspectionFinding, InspectionPhoto,
     EstimationQuotation, EstimationQuotationItem,
+    ACInspectionRateCategory, ACInspectionRateItem, ACInspectionConfiguration,
+    CustomerInspection, CustomerInspectionRateSnapshot,
     BookingSeries,
     BookingMessage,
     VendorCapabilityRequest,
@@ -29,7 +31,11 @@ from .models import (
 # accountable receiver on a logistics booking. Env-overridable like the
 # other threshold constants in this codebase.
 from django.conf import settings as _dj_settings
-HIGH_VALUE_CONSIGNMENT_THRESHOLD = int(getattr(_dj_settings, "HIGH_VALUE_CONSIGNMENT_THRESHOLD", 25000))
+def _high_value_threshold():
+    """Admin-editable (GTOperationsConfig); falls back to 25000."""
+    from .services.gt_operations import ops
+    from decimal import Decimal
+    return Decimal(str(ops("high_value_consignment_threshold")))
 
 
 class CatalogServiceSerializer(serializers.ModelSerializer):
@@ -43,20 +49,38 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
     service_customization = serializers.JSONField(source="service.customization", read_only=True)
     service_sort_order = serializers.IntegerField(source="service.sort_order", read_only=True)
     service_image = serializers.CharField(source="service.image", read_only=True)
-    category_slug = serializers.CharField(source="service.category.slug", read_only=True)
+    category_slug = serializers.CharField(source="service.category.slug", read_only=True, default=None)
+    vegetable_category_name = serializers.CharField(source="stock_item.category.name", read_only=True, default=None)
+    vegetable_category_slug = serializers.CharField(source="stock_item.category.slug", read_only=True, default=None)
+    vegetable_category_parent_name = serializers.CharField(source="stock_item.category.parent.name", read_only=True, default=None)
+    vegetable_category_full_path = serializers.CharField(source="stock_item.category.full_path", read_only=True, default=None)
+    image = serializers.SerializerMethodField()
     in_stock = serializers.SerializerMethodField()
     max_quantity = serializers.SerializerMethodField()
+    variants = serializers.SerializerMethodField()
 
     class Meta:
         model = Package
         fields = [
-            "id", "category", "category_slug", "name", "slug", "description", "price", "base_price", "offer_price", "platform_fee", "gst_rate", "duration",
+            "id", "category", "category_slug",
+            "vegetable_category_name", "vegetable_category_slug", "vegetable_category_parent_name", "vegetable_category_full_path",
+            "name", "slug", "description", "price", "base_price", "offer_price", "platform_fee", "gst_rate", "duration",
             "image", "popular", "tag", "includes", "excludes", "payment_policy",
-            "faqs", "sort_order", "tools", "ready", "custom_packs", "customization",
+            "faqs", "sort_order", "tools", "ready", "custom_packs", "customization", "sub_service_key",
             "service_id", "service_name", "service_slug", "service_description",
             "service_customization", "service_sort_order", "service_image",
-            "in_stock", "max_quantity",
+            "in_stock", "max_quantity", "variants",
         ]
+
+    def get_image(self, obj):
+        if obj.image and str(obj.image).strip():
+            return str(obj.image).strip()
+        if hasattr(obj, 'stock_item') and obj.stock_item:
+            if obj.stock_item.image and str(obj.stock_item.image).strip():
+                return str(obj.stock_item.image).strip()
+            if obj.stock_item.category and obj.stock_item.category.image and str(obj.stock_item.category.image).strip():
+                return str(obj.stock_item.category.image).strip()
+        return ""
 
     def get_category(self, obj):
         if obj.service_id and obj.service:
@@ -67,8 +91,14 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
         if not hasattr(self, "_stock_status_cache"):
             self._stock_status_cache = {}
         if obj.pk not in self._stock_status_cache:
-            from inventory.selectors.vegetable_stock_selectors import get_stock_status
-            self._stock_status_cache[obj.pk] = get_stock_status(obj)
+            if not getattr(obj, "stock_item_id", None):
+                self._stock_status_cache[obj.pk] = {"in_stock": True, "max_quantity": None}
+            else:
+                try:
+                    from inventory.selectors.vegetable_stock_selectors import get_stock_status
+                    self._stock_status_cache[obj.pk] = get_stock_status(obj)
+                except Exception:
+                    self._stock_status_cache[obj.pk] = {"in_stock": True, "max_quantity": None}
         return self._stock_status_cache[obj.pk]
 
     def get_in_stock(self, obj):
@@ -76,6 +106,26 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
 
     def get_max_quantity(self, obj):
         return self.get_stock_status(obj)["max_quantity"]
+
+    def get_variants(self, obj):
+        variants_list = [
+            v for v in obj.variants.all()
+            if getattr(v, "is_active", True) and getattr(v, "status", "APPROVED") == "APPROVED"
+        ]
+        variants_list.sort(key=lambda v: (getattr(v, "sort_order", 0) or 0, getattr(v, "pack_value", 0) or 0, getattr(v, "id", 0) or 0))
+        return [{
+            "id": v.id,
+            "name": v.display_name,
+            "pack_value": str(v.pack_value),
+            "unit": v.unit,
+            "unit_basis": v.unit_basis,
+            "base_price": str(v.base_price),
+            "mrp": str(v.mrp) if v.mrp else None,
+            "sku": v.sku,
+            "is_default": v.is_default,
+            "is_active": v.is_active,
+            "sort_order": v.sort_order,
+        } for v in variants_list]
 
 
 class CatalogCategorySerializer(serializers.ModelSerializer):
@@ -135,6 +185,7 @@ class CatalogCategorySerializer(serializers.ModelSerializer):
 
 class ServiceSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source="category.name", read_only=True)
+    category_slug = serializers.CharField(source="category.slug", read_only=True)
 
     class Meta:
         model = Service
@@ -166,6 +217,30 @@ class AddOnSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class PackageVariantSerializer(serializers.ModelSerializer):
+    package_name = serializers.CharField(source="package.name", read_only=True)
+    vegetable_name = serializers.CharField(source="vegetable.name", read_only=True, default=None)
+    display_name = serializers.CharField(read_only=True)
+    base_unit_deduction = serializers.DecimalField(max_digits=12, decimal_places=3, read_only=True)
+    requested_by_name = serializers.SerializerMethodField()
+    reviewed_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        from service_requests.models import PackageVariant
+        model = PackageVariant
+        fields = '__all__'
+
+    def get_requested_by_name(self, obj):
+        if obj.requested_by:
+            return obj.requested_by.get_full_name() or obj.requested_by.username or obj.requested_by.email
+        return "Admin"
+
+    def get_reviewed_by_name(self, obj):
+        if obj.reviewed_by:
+            return obj.reviewed_by.get_full_name() or obj.reviewed_by.username or obj.reviewed_by.email
+        return None
+
+
 class PackageSerializer(serializers.ModelSerializer):
     service_name = serializers.CharField(source="service.name", read_only=True)
     service_slug = serializers.CharField(source="service.slug", read_only=True)
@@ -174,7 +249,11 @@ class PackageSerializer(serializers.ModelSerializer):
     category_slug = serializers.CharField(source="service.category.slug", read_only=True)
     in_stock = serializers.SerializerMethodField()
     max_quantity = serializers.SerializerMethodField()
+    vegetable_category = serializers.SerializerMethodField()
     add_ons = AddOnSerializer(many=True, read_only=True)
+    rating = serializers.SerializerMethodField()
+    reviews_count = serializers.SerializerMethodField()
+    variants = serializers.SerializerMethodField()
 
     class Meta:
         model = Package
@@ -184,15 +263,82 @@ class PackageSerializer(serializers.ModelSerializer):
         if not hasattr(self, "_stock_status_cache"):
             self._stock_status_cache = {}
         if obj.pk not in self._stock_status_cache:
-            from inventory.selectors.vegetable_stock_selectors import get_stock_status
-            self._stock_status_cache[obj.pk] = get_stock_status(obj)
+            if not getattr(obj, "stock_item_id", None):
+                self._stock_status_cache[obj.pk] = {"in_stock": True, "max_quantity": None}
+            else:
+                try:
+                    from inventory.selectors.vegetable_stock_selectors import get_stock_status
+                    self._stock_status_cache[obj.pk] = get_stock_status(obj)
+                except Exception:
+                    self._stock_status_cache[obj.pk] = {"in_stock": True, "max_quantity": None}
         return self._stock_status_cache[obj.pk]
 
     def get_in_stock(self, obj):
-        return self.get_stock_status(obj)["in_stock"]
+        return self.get_stock_status(obj).get("in_stock", True)
 
     def get_max_quantity(self, obj):
-        return self.get_stock_status(obj)["max_quantity"]
+        return self.get_stock_status(obj).get("max_quantity", 99)
+
+    def get_variants(self, obj):
+        variants_qs = obj.variants.filter(is_active=True, status="APPROVED").order_by("sort_order", "pack_value", "id")
+        return [{
+            "id": v.id,
+            "name": v.display_name,
+            "pack_value": str(v.pack_value),
+            "unit": v.unit,
+            "unit_basis": v.unit_basis,
+            "base_price": str(v.base_price),
+            "mrp": str(v.mrp) if v.mrp else None,
+            "sku": v.sku,
+            "is_default": v.is_default,
+            "is_active": v.is_active,
+            "sort_order": v.sort_order,
+        } for v in variants_qs]
+
+    def get_variants(self, obj):
+        variants_qs = obj.variants.filter(is_active=True, status="APPROVED").order_by("sort_order", "pack_value", "id")
+        return [{
+            "id": v.id,
+            "name": v.display_name,
+            "pack_value": str(v.pack_value),
+            "unit": v.unit,
+            "unit_basis": v.unit_basis,
+            "base_price": str(v.base_price),
+            "mrp": str(v.mrp) if v.mrp else None,
+            "sku": v.sku,
+            "is_default": v.is_default,
+            "is_active": v.is_active,
+            "sort_order": v.sort_order,
+        } for v in variants_qs]
+
+    def get_vegetable_category(self, obj):
+        item = getattr(obj, "stock_item", None)
+        if item and item.category:
+            return {
+                "id": item.category.id,
+                "name": item.category.name,
+                "slug": item.category.slug,
+                "image": item.category.image,
+            }
+        return None
+
+    def get_rating(self, obj):
+        if obj.reviews and isinstance(obj.reviews, list) and len(obj.reviews) > 0:
+            ratings = []
+            for r in obj.reviews:
+                if isinstance(r, dict) and "rating" in r:
+                    try:
+                        ratings.append(float(r["rating"]))
+                    except (ValueError, TypeError):
+                        pass
+            if ratings:
+                return round(sum(ratings) / len(ratings), 2)
+        return None
+
+    def get_reviews_count(self, obj):
+        if obj.reviews and isinstance(obj.reviews, list):
+            return len(obj.reviews)
+        return 0
 
 
 class CatalogChangeLogSerializer(serializers.ModelSerializer):
@@ -242,7 +388,7 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
     ac_type = serializers.CharField(required=False, allow_blank=True, default="")
     ac_brand = serializers.CharField(required=False, allow_blank=True, default="")
     ac_capacity = serializers.CharField(required=False, allow_blank=True, default="")
-    ac_quantity = serializers.IntegerField(required=False, default=1)
+    ac_quantity = serializers.IntegerField(required=False, default=1, min_value=1, max_value=50)
     customer_symptom = serializers.CharField(required=False, allow_blank=True, default="")
     customer_notes = serializers.CharField(required=False, allow_blank=True, default="")
 
@@ -256,6 +402,7 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             "payment_method", "total_amount", "cart_data",
             "drop_address", "drop_latitude", "drop_longitude", "logistics_tier", "logistics_lane",
             "job_type", "idempotency_key",
+            "request_kind", "catalog_service_id",
             "ac_type", "ac_brand", "ac_capacity", "ac_quantity",
             "customer_symptom", "customer_notes",
             # Fixes GT-D-03: accept the recipient's contact info if the
@@ -273,10 +420,22 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             # GT-C-03: opt-in only; premium/liability_cap are never accepted
             # from the client -- see validate() below.
             "insurance_opted_in",
+            # Optional customer GSTIN for the invoice (format-validated below).
+            "customer_gstin",
+            # Light PTL: booking mode marker + declared cargo weight (per-kg pricing).
+            "logistics_booking_mode", "ptl_declared_weight_kg",
+            # Gap 1: optional e-way-bill reference the customer can attach at booking time
+            # (or later, before dispatch, via the same detail endpoint an admin uses).
+            # SEVO records/attaches only -- no generation, no government API. See the
+            # field's comment in models.py for why eway_bill_number exists at all
+            # (out-of-band DB drift, same as customer_gstin's crash class).
+            "eway_bill_number", "eway_bill_document",
         )
         extra_kwargs = {
             "issue_title":         {"required": False, "allow_blank": True},
             "job_type":            {"required": False, "default": "SERVICE"},
+            "request_kind":        {"required": False, "allow_blank": True},
+            "catalog_service_id":  {"required": False, "allow_blank": True, "allow_null": True},
             "idempotency_key":     {"required": False, "allow_null": True, "allow_blank": True},
             "ac_type":             {"required": False, "allow_blank": True},
             "ac_brand":            {"required": False, "allow_blank": True},
@@ -303,7 +462,20 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             "declared_value":        {"required": False, "allow_null": True},
             "consignee_relationship": {"required": False, "allow_blank": True},
             "insurance_opted_in":    {"required": False},
+            "customer_gstin":        {"required": False, "allow_blank": True},
+            "logistics_booking_mode": {"required": False, "allow_blank": True},
+            "ptl_declared_weight_kg": {"required": False, "allow_null": True},
+            "eway_bill_number":   {"required": False, "allow_blank": True},
+            "eway_bill_document": {"required": False, "allow_null": True},
         }
+
+    def validate_customer_gstin(self, value):
+        from service_requests.gstin import normalize_gstin
+        return normalize_gstin(value)
+
+    def validate_eway_bill_number(self, value):
+        from service_requests.gstin import normalize_eway_bill_number
+        return normalize_eway_bill_number(value)
 
     def validate_latitude(self, value):
         if value is not None and not (-90.0 <= float(value) <= 90.0):
@@ -411,6 +583,39 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
         )
         if slot_error:
             raise serializers.ValidationError({"preferred_date": slot_error})
+        if (attrs.get("logistics_booking_mode") or "spot") != "ptl":
+            from .booking_window import slot_capacity_error
+            _cap_err = slot_capacity_error(
+                attrs.get("service_category"), attrs.get("preferred_date"), attrs.get("preferred_time"),
+                city=attrs.get("city") or "",
+            )
+            if _cap_err:
+                raise serializers.ValidationError({"preferred_time": _cap_err, "code": "SLOT_FULL"})
+
+        # Light PTL: advance-only, admin-slot-only, 4W+ ptl_eligible tier, declared weight.
+        # Pricing itself (per kg, tamper check) happens in resolve_logistics_fare_v2.
+        mode = (attrs.get("logistics_booking_mode") or "spot").strip().lower() or "spot"
+        attrs["logistics_booking_mode"] = mode
+        if mode == "ptl":
+            from .services.ptl_pricing import PTLError, PTL_SERVICE_CATEGORY, assert_tier_ptl_eligible, validate_ptl_slot
+            if attrs.get("service_category") != PTL_SERVICE_CATEGORY:
+                raise serializers.ValidationError({"logistics_booking_mode": "Part Truck Load is booked as a truck trip."})
+            if not attrs.get("ptl_declared_weight_kg"):
+                raise serializers.ValidationError({"ptl_declared_weight_kg": "Enter the cargo weight in kg."})
+            tier = attrs.get("logistics_tier")
+            try:
+                assert_tier_ptl_eligible(tier)
+                validate_ptl_slot(
+                    preferred_date=attrs.get("preferred_date"),
+                    preferred_time=attrs.get("preferred_time"),
+                    city=getattr(tier, "city", ""),
+                )
+            except PTLError as e:
+                raise serializers.ValidationError({"logistics_booking_mode": str(e), "code": e.code})
+        elif mode != "spot":
+            raise serializers.ValidationError({"logistics_booking_mode": "Unknown booking mode."})
+        else:
+            attrs["ptl_declared_weight_kg"] = None
 
         # Fixes GT-B-04: nothing captured what's actually being moved for a
         # Goods & Transport booking -- `description` already exists as a
@@ -456,7 +661,7 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
         # explicit relationship to the customer, so there's at least a named,
         # accountable person the driver is handing high-value goods to.
         declared_value = attrs.get("declared_value")
-        if category in LOGISTICS_CATEGORIES and declared_value is not None and declared_value >= HIGH_VALUE_CONSIGNMENT_THRESHOLD:
+        if category in LOGISTICS_CATEGORIES and declared_value is not None and declared_value >= _high_value_threshold():
             missing = []
             if not (attrs.get("drop_contact_name") or "").strip():
                 missing.append("drop_contact_name")
@@ -467,7 +672,7 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             if missing:
                 raise serializers.ValidationError({
                     "declared_value": (
-                        f"Consignments declared at ₹{HIGH_VALUE_CONSIGNMENT_THRESHOLD:,.0f} or more require a named "
+                        f"Consignments declared at ₹{_high_value_threshold():,.0f} or more require a named "
                         f"receiver: {', '.join(missing)}."
                     )
                 })
@@ -482,21 +687,29 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     "insurance_opted_in": "declared_value is required to purchase insurance coverage."
                 })
-            from decimal import Decimal
-            rate = Decimal(str(getattr(_dj_settings, "INSURANCE_RATE", "0.02")))
-            max_liability = Decimal(str(getattr(_dj_settings, "INSURANCE_MAX_LIABILITY", "500000")))
-            attrs["insurance_premium"] = (Decimal(str(declared_value)) * rate).quantize(Decimal("0.01"))
-            attrs["insurance_liability_cap"] = min(Decimal(str(declared_value)), max_liability)
+            from .services.insurance import insurance_terms
+            attrs["insurance_premium"], attrs["insurance_liability_cap"] = insurance_terms(declared_value)
+            if attrs["insurance_premium"] is None:
+                raise serializers.ValidationError({
+                    "insurance_opted_in": "Transit insurance is not currently offered."
+                })
 
         # AC Inspection / Estimation validation
-        job_type = attrs.get("job_type") or "SERVICE"
-        if str(job_type).upper() == "ESTIMATION":
+        job_type = str(attrs.get("job_type") or "").strip().upper()
+        request_kind = str(attrs.get("request_kind") or "").strip().upper()
+        if job_type == "ESTIMATION" or request_kind == "ESTIMATION":
+            attrs["job_type"] = "ESTIMATION"
+            attrs["request_kind"] = "ESTIMATION"
+            if "customer_symptom" not in attrs or not str(attrs.get("customer_symptom") or "").strip():
+                raise serializers.ValidationError({"customer_symptom": "Please describe the AC issue or symptom."})
             ac_type = str(attrs.get("ac_type") or "").strip().upper()
-            if not ac_type:
-                raise serializers.ValidationError({"ac_type": "AC type is required for estimation bookings."})
-            if ac_type not in {"SPLIT", "WINDOW", "CASSETTE", "TOWER", "OTHER"}:
+            if ac_type and ac_type not in {"SPLIT", "WINDOW", "CASSETTE", "TOWER", "OTHER"}:
                 raise serializers.ValidationError({"ac_type": f"Unsupported AC type: '{ac_type}'."})
-            attrs["service_category"] = "appliances"
+            if not ac_type:
+                ac_type = "SPLIT"
+            attrs["ac_type"] = ac_type
+            if not attrs.get("service_category"):
+                attrs["service_category"] = "appliances"
             if not attrs.get("issue_title"):
                 attrs["issue_title"] = f"AC Estimation / Inspection - {ac_type.capitalize()}"
             if not attrs.get("description"):
@@ -559,7 +772,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
     payment_method_display = serializers.CharField(source="get_payment_method_display", read_only=True)
     payment_status_display = serializers.CharField(source="get_payment_status_display", read_only=True)
     customer_id            = serializers.SerializerMethodField()
-    customer_user_id       = serializers.IntegerField(source="customer.id", read_only=True)
+    customer_user_id       = serializers.IntegerField(source="customer_id", read_only=True)
     start_otp              = serializers.SerializerMethodField()
     payment_confirmation_otp = serializers.SerializerMethodField()
     active_extension       = serializers.SerializerMethodField()
@@ -577,11 +790,128 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
     estimation             = serializers.SerializerMethodField()
     child_requests         = serializers.SerializerMethodField()
     is_search_expired      = serializers.SerializerMethodField()
+    quote                  = serializers.SerializerMethodField()
+    quotation_history      = serializers.SerializerMethodField()
 
     def get_estimation(self, obj):
         if hasattr(obj, "estimation") and obj.estimation is not None:
             return EstimationSummarySerializer(obj.estimation, context=self.context).data
         return None
+
+    def _quote_maps(self):
+        cached = getattr(self, "_quote_maps_cache", None)
+        if cached is not None:
+            return cached
+
+        holder = self.parent if isinstance(self.parent, serializers.ListSerializer) else self
+        source = getattr(holder, "instance", None)
+        if source is None:
+            items = []
+        elif isinstance(source, (list, tuple)):
+            items = list(source)
+        elif hasattr(source, "__iter__"):
+            items = list(source)
+        else:
+            items = [source]
+
+        active_map = {}
+        history_map = {}
+
+        if not items:
+            self._quote_maps_cache = (active_map, history_map)
+            return self._quote_maps_cache
+
+        from workforce_integration.services import WorkforceIntegrationService
+        candidate_job_ids = []
+        candidate_quote_numbers = []
+        for o in items:
+            if not (o.service_category or "").startswith("goods_transport") and (o.service_category or "") != "packers_movers":
+                if getattr(o, "id", None):
+                    candidate_job_ids.append(o.id)
+                if getattr(o, "workforce_job_id", None):
+                    wf = str(o.workforce_job_id).replace("WF-", "").replace("WFJ-", "")
+                    if wf.isdigit():
+                        candidate_job_ids.append(int(wf))
+                if getattr(o, "request_id", None):
+                    candidate_quote_numbers.append(str(o.request_id))
+
+        if candidate_job_ids or candidate_quote_numbers:
+            try:
+                from django.db import connection
+                with connection.cursor() as cursor:
+                    job_in = ",".join(["%s"] * len(candidate_job_ids)) if candidate_job_ids else "-1"
+                    quote_in = ",".join(["%s"] * len(candidate_quote_numbers)) if candidate_quote_numbers else "''"
+                    sql = f"""
+                        SELECT id, job_id, quote_number, status 
+                        FROM workforce_quote 
+                        WHERE job_id IN ({job_in}) 
+                           OR quote_number IN ({quote_in})
+                        ORDER BY id ASC
+                    """
+                    params = (candidate_job_ids or []) + (candidate_quote_numbers or [])
+                    cursor.execute(sql, params)
+                    rows = cursor.fetchall()
+
+                    priority = {
+                        "CUSTOMER_ACCEPTED": 1,
+                        "APPROVED": 1,
+                        "CONVERTED": 1,
+                        "ADMIN_APPROVED": 1,
+                        "SENT_TO_CUSTOMER": 2,
+                        "SENT": 2,
+                        "CHANGES_REQUESTED": 3,
+                        "CHANGE_REQUESTED": 3,
+                        "DECLINED": 4,
+                        "DRAFT": 5,
+                        "SUPERSEDED": 6,
+                        "CANCELLED": 7,
+                    }
+                    for r in rows:
+                        qid, jid, qnum, st = r[0], r[1], r[2], r[3]
+                        q_dict = WorkforceIntegrationService._build_quote_dict_from_db(qid)
+                        if not q_dict:
+                            continue
+
+                        for k in [str(jid), qnum, str(qnum).split('-V')[0]]:
+                            if k:
+                                if k not in history_map:
+                                    history_map[k] = []
+                                history_map[k].append(q_dict)
+
+                                cur_active = active_map.get(k)
+                                if not cur_active:
+                                    active_map[k] = q_dict
+                                else:
+                                    cur_st = str(cur_active.get("status") or "").upper()
+                                    new_st = str(st or "").upper()
+                                    cur_p = priority.get(cur_st, 9)
+                                    new_p = priority.get(new_st, 9)
+                                    cur_id = int(cur_active.get("id") or cur_active.get("quote_id") or 0)
+                                    if new_p < cur_p or (new_p == cur_p and qid >= cur_id):
+                                        active_map[k] = q_dict
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).debug(f"Batch quote lookup failed: {e}")
+
+        self._quote_maps_cache = (active_map, history_map)
+        return self._quote_maps_cache
+
+    def get_quote(self, obj):
+        active_map, _ = self._quote_maps()
+        for k in [str(obj.id), str(obj.request_id), getattr(obj, "workforce_job_id", None)]:
+            if k and str(k) in active_map:
+                candidate = active_map[str(k)]
+                if isinstance(candidate, dict) and candidate.get("has_quote") is not False:
+                    if candidate.get("quote_number") or candidate.get("id") or candidate.get("quote_id") or candidate.get("items"):
+                        return candidate
+        return None
+
+    def get_quotation_history(self, obj):
+        _, history_map = self._quote_maps()
+        for k in [str(obj.id), str(obj.request_id), getattr(obj, "workforce_job_id", None)]:
+            if k and str(k) in history_map:
+                return history_map[str(k)]
+        return []
 
     class Meta:
         model = ServiceRequest
@@ -600,8 +930,8 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             "technician", "technician_name", "technician_phone", "technician_photo", "technician_rating",
             "workforce_job_id", "external_assignment_id",
             "start_otp", "payment_confirmation_otp", "tracking_token", "active_extension", "latest_reschedule", "available_actions", "created_at", "updated_at",
-            "parent_request", "request_kind", "quote_number", "child_requests",
-            "job_type", "estimation",
+            "parent_request", "request_kind", "catalog_service_id", "quote_number", "child_requests",
+            "job_type", "estimation", "quote", "quotation_history",
             # GT-C-03: so the customer-facing bookings list can tell which
             # completed bookings are eligible to file an insurance claim
             # against, without a second per-booking API call.
@@ -643,8 +973,13 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             return ServiceRequestListSerializer(children, many=True, context=self.context).data
         return []
 
+
     def get_payment_confirmation_otp(self, obj):
-        if getattr(obj, "payment_status", None) not in ("cash_pending", "pending", "cash_collected"):
+        # N+1 fix: only query workforce_notification for COD-specific OTP states.
+        # "pending" is the default online-payment status and never has a
+        # PAYMENT_CONFIRMATION_OTP — querying for it caused one raw SQL call
+        # per booking in every listing endpoint (active, my-bookings, admin, etc.).
+        if getattr(obj, "payment_status", None) not in ("cash_pending", "cash_collected"):
             return None
         try:
             import re
@@ -745,7 +1080,8 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         return None
 
     def get_payment_confirmation_otp(self, obj):
-        if getattr(obj, "payment_status", None) not in ("cash_pending", "pending", "cash_collected"):
+        # N+1 fix: only query for COD OTP states, not the default online-payment "pending".
+        if getattr(obj, "payment_status", None) not in ("cash_pending", "cash_collected"):
             return None
         try:
             import re
@@ -1013,6 +1349,7 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
     feedback_token         = serializers.SerializerMethodField()
     feedback               = ServiceFeedbackNestedSerializer(read_only=True, allow_null=True)
     start_otp              = serializers.SerializerMethodField()
+    eway_bill_warning      = serializers.SerializerMethodField()
     payment_confirmation_otp = serializers.SerializerMethodField()
     active_extension       = serializers.SerializerMethodField()
     extension_amount       = serializers.SerializerMethodField()
@@ -1024,11 +1361,16 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
 
     job_type               = serializers.CharField(read_only=True)
     estimation             = serializers.SerializerMethodField()
+    customer_inspection    = serializers.SerializerMethodField()
 
     def get_estimation(self, obj):
         if hasattr(obj, "estimation") and obj.estimation is not None:
             return EstimationSerializer(obj.estimation, context=self.context).data
         return None
+
+    def get_customer_inspection(self, obj):
+        from service_requests.services.customer_inspection_service import CustomerInspectionService
+        return CustomerInspectionService.get_booking_inspection_snapshot(obj)
 
     class Meta:
         model = ServiceRequest
@@ -1046,15 +1388,47 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
             "photo_url", "status", "status_display", "priority", "priority_display",
             "technician", "workforce_job_id", "external_assignment_id",
             "logistics_leg", "logistics_leg_updated_at",
+            # GT Mini Truck audit fix: an admin opening a booking's detail
+            # view could see the CURRENT leg but not the trip's full history
+            # (logistics_leg_history is on the model and already returned to
+            # the customer's own tracking payload, just never to admin), how
+            # many times dispatch was attempted, or where the trip was
+            # actually headed (drop_address/lat/lng) -- all present on the
+            # model, none previously serialized here.
+            "logistics_leg_history", "dispatch_attempts",
+            # Support/Admin intervention needs to see a driver-reported problem and the toll/parking
+            # receipts the driver logged, not just the customer.
+            "delivery_exception", "extra_charges",
+            "drop_address", "drop_latitude", "drop_longitude",
+            # P&M audit fix: these sibling fields were added in the same
+            # GT-A-03/GT-C-03/GT-D-03 pass as drop_address/lat/lng above
+            # (declared-value/insurance for high-value consignments,
+            # delivery-recipient contact info) but were missed from this
+            # serializer -- an admin opening a booking's detail view
+            # (P&M and goods-transport alike) still couldn't see who the
+            # goods were declared to, their stated value, insurance status,
+            # or the drop-off recipient's contact, despite it being
+            # captured and validated at booking time.
+            "drop_contact_name", "drop_contact_phone", "drop_contact_email",
+            "declared_value", "consignee_relationship",
+            "insurance_opted_in", "insurance_premium", "insurance_liability_cap", "customer_gstin",
+            # Gap 1: e-way-bill record/attach fields + a non-blocking warning, visible to
+            # both the customer (their own booking) and Admin (booking detail view).
+            "eway_bill_number", "eway_bill_document", "eway_bill_warning",
             "start_otp", "payment_confirmation_otp", "active_extension", "latest_reschedule", "allowed_transitions", "available_actions",
             "has_feedback", "feedback_token", "feedback",
-            "job_type", "estimation",
+            "job_type", "request_kind", "catalog_service_id", "quote_number", "parent_request", "estimation", "customer_inspection",
             "created_at", "updated_at",
             "is_search_expired", "cancellation_reason", "cancellation_note", "cancelled_at",
         )
 
+    def get_eway_bill_warning(self, obj):
+        from .services.eway_bill import eway_bill_warning
+        return eway_bill_warning(obj)
+
     def get_payment_confirmation_otp(self, obj):
-        if getattr(obj, "payment_status", None) not in ("cash_pending", "pending", "cash_collected"):
+        # N+1 fix: only query for COD OTP states, not the default online-payment "pending".
+        if getattr(obj, "payment_status", None) not in ("cash_pending", "cash_collected"):
             return None
         try:
             import re
@@ -1835,9 +2209,9 @@ class EstimationQuotationItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = EstimationQuotationItem
         fields = (
-            "id", "catalog_service_id", "service_name", "description",
-            "quantity", "unit", "unit_price", "tax_rate",
-            "tax_amount", "discount_amount", "line_total", "sort_order",
+            "id", "catalog_service_id", "service_name", "category_name_snapshot", "item_name_snapshot",
+            "description", "quantity", "unit", "unit_price", "unit_price_snapshot",
+            "tax_rate", "tax_amount", "discount_amount", "line_total", "sort_order", "rate_item",
         )
 
 
@@ -1849,7 +2223,7 @@ class EstimationQuotationSerializer(serializers.ModelSerializer):
         fields = (
             "id", "version", "quote_ref", "status",
             "subtotal", "tax_amount", "discount_amount", "total_amount",
-            "currency", "notes", "valid_until",
+            "currency", "notes", "admin_notes", "admin_reviewed_at", "valid_until",
             "customer_approved_at", "customer_rejected_at",
             "rejection_reason", "rejection_note",
             "created_at", "updated_at", "items",
@@ -1871,14 +2245,14 @@ class EstimationSerializer(serializers.ModelSerializer):
         )
 
     def get_active_quotation(self, obj):
-        latest = obj.quotations.order_by("-version").first()
+        latest = obj.quotations.order_by("-version", "-id").first()
         if latest:
             return EstimationQuotationSerializer(latest, context=self.context).data
         return None
 
 
 class EstimationSummarySerializer(serializers.ModelSerializer):
-    fee_amount = serializers.DecimalField(source="fee.amount", max_digits=10, decimal_places=2, read_only=True)
+    fee_amount = serializers.FloatField(source="fee.amount", read_only=True)
     fee_status = serializers.CharField(source="fee.status", read_only=True)
 
     class Meta:
@@ -1888,3 +2262,546 @@ class EstimationSummarySerializer(serializers.ModelSerializer):
             "customer_symptom", "status", "fee_amount", "fee_status",
             "created_at",
         )
+
+
+class ACInspectionConfigurationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ACInspectionConfiguration
+        fields = (
+            "id", "diagnostic_fee", "currency", "is_active",
+            "title", "subtitle", "image", "badges", "includes", "ready",
+            "updated_at"
+        )
+
+
+class ACInspectionRateItemSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source="category.name", read_only=True)
+    category_slug = serializers.CharField(source="category.slug", read_only=True)
+
+    class Meta:
+        model = ACInspectionRateItem
+        fields = (
+            "id", "category", "category_name", "category_slug",
+            "name", "description", "price", "unit",
+            "service_type", "display_order", "is_active",
+            "created_at", "updated_at",
+        )
+
+    def validate_price(self, value):
+        if value < 0:
+            raise serializers.ValidationError("Price must be >= 0.")
+        return value
+
+
+class ACInspectionRateCategorySerializer(serializers.ModelSerializer):
+    items_count = serializers.SerializerMethodField()
+    active_items_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ACInspectionRateCategory
+        fields = (
+            "id", "name", "slug", "description",
+            "display_order", "is_active",
+            "items_count", "active_items_count",
+            "created_at", "updated_at",
+        )
+
+    def get_items_count(self, obj):
+        return obj.items.count()
+
+    def get_active_items_count(self, obj):
+        return obj.items.filter(is_active=True).count()
+
+
+class ACRateCardPublicItemSerializer(serializers.ModelSerializer):
+    price_formatted = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ACInspectionRateItem
+        fields = (
+            "id", "name", "description", "price",
+            "price_formatted", "unit", "service_type",
+            "display_order",
+        )
+
+    def get_price_formatted(self, obj):
+        if obj.price == 0:
+            return "Free"
+        return f"₹{int(obj.price):,}" if obj.price == int(obj.price) else f"₹{obj.price:,.2f}"
+
+
+class ACRateCardPublicCategorySerializer(serializers.ModelSerializer):
+    items = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ACInspectionRateCategory
+        fields = ("id", "name", "slug", "description", "display_order", "items")
+
+    def get_items(self, obj):
+        active_items = obj.items.filter(is_active=True).order_by("display_order", "id")
+        return ACRateCardPublicItemSerializer(active_items, many=True).data
+
+
+# ==============================================================================
+# CUSTOMER INSPECTION & ADMIN AC INSPECTION SERIALIZERS
+# ==============================================================================
+
+class CustomerInspectionRateSnapshotSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomerInspectionRateSnapshot
+        fields = (
+            "id", "customer_inspection_id", "rate_item_id", "category_name_snapshot",
+            "item_name_snapshot", "description_snapshot", "price_snapshot", "unit_snapshot",
+            "service_type_snapshot", "display_order_snapshot", "created_at"
+        )
+
+
+class CustomerInspectionSerializer(serializers.ModelSerializer):
+    rate_snapshots = CustomerInspectionRateSnapshotSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = CustomerInspection
+        fields = (
+            "id", "service_request_id", "inspection_configuration_id",
+            "inspection_name_snapshot", "diagnostic_fee_snapshot", "currency",
+            "quantity", "status", "created_at", "updated_at", "rate_snapshots"
+        )
+
+
+class AdminACInspectionListSerializer(serializers.ModelSerializer):
+    """
+    Listing serializer for Admin AC Inspection Bookings module.
+    Provides: Booking ID, Customer, Booking date, Technician, Assignment status,
+    Inspection status, Diagnosis status, Estimation status, Customer approval status,
+    Overall booking status.
+    """
+    booking_id = serializers.CharField(source="request_id", read_only=True)
+    customer_phone = serializers.CharField(source="phone", read_only=True)
+    overall_status = serializers.CharField(source="status", read_only=True)
+    overall_status_display = serializers.CharField(source="get_status_display", read_only=True)
+    technician_name = serializers.SerializerMethodField()
+    technician_phone = serializers.SerializerMethodField()
+    assignment_status = serializers.SerializerMethodField()
+    acceptance_status = serializers.SerializerMethodField()
+    inspection_status = serializers.SerializerMethodField()
+    diagnosis_status = serializers.SerializerMethodField()
+    estimation_status = serializers.SerializerMethodField()
+    customer_approval_status = serializers.SerializerMethodField()
+    diagnostic_fee = serializers.SerializerMethodField()
+    quotation_total = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ServiceRequest
+        fields = (
+            "id", "booking_id", "request_id", "customer_name", "customer_phone", "email",
+            "address", "preferred_date", "preferred_time", "created_at", "updated_at",
+            "overall_status", "overall_status_display",
+            "technician_name", "technician_phone",
+            "assignment_status", "acceptance_status",
+            "inspection_status", "diagnosis_status",
+            "estimation_status", "customer_approval_status",
+            "diagnostic_fee", "quotation_total", "total_amount",
+        )
+
+    def get_technician_name(self, obj):
+        if obj.technician_name:
+            return obj.technician_name
+        if getattr(obj, "assigned_employee", None):
+            emp = obj.assigned_employee
+            return getattr(emp, "full_name", "") or (emp.user.get_full_name() if getattr(emp, "user", None) else "")
+        return ""
+
+    def get_technician_phone(self, obj):
+        if obj.technician_phone:
+            return obj.technician_phone
+        if getattr(obj, "assigned_employee", None):
+            emp = obj.assigned_employee
+            return getattr(emp, "phone", "") or (emp.user.phone if getattr(emp, "user", None) and hasattr(emp.user, "phone") else "")
+        return ""
+
+    def get_assignment_status(self, obj):
+        name = self.get_technician_name(obj)
+        if name or getattr(obj, "assigned_employee_id", None) or getattr(obj, "workforce_job_id", None):
+            return "Assigned"
+        if obj.status in [ServiceRequest.Status.UNASSIGNED, ServiceRequest.Status.NEW_REQUEST, ServiceRequest.Status.CONFIRMED]:
+            return "Waiting for Technician Assignment"
+        return obj.get_status_display()
+
+    def get_acceptance_status(self, obj):
+        if obj.status in ["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]:
+            return "Accepted"
+        if obj.status in ["assigned"]:
+            return "Pending Acceptance"
+        if obj.status in ["rejected", "cancelled"]:
+            return "Declined / Cancelled"
+        return "Pending"
+
+    def get_inspection_status(self, obj):
+        if hasattr(obj, "estimation") and obj.estimation:
+            if hasattr(obj.estimation, "inspection") and obj.estimation.inspection:
+                return obj.estimation.inspection.status
+            return obj.estimation.status
+        if hasattr(obj, "customer_inspection") and obj.customer_inspection:
+            return obj.customer_inspection.status
+        return "NOT_STARTED"
+
+    def get_diagnosis_status(self, obj):
+        if hasattr(obj, "estimation") and obj.estimation:
+            if hasattr(obj.estimation, "inspection") and obj.estimation.inspection and obj.estimation.inspection.diagnosis:
+                return obj.estimation.inspection.diagnosis
+            if obj.estimation.customer_symptom:
+                return obj.estimation.customer_symptom
+        return "Pending Diagnosis"
+
+    def get_estimation_status(self, obj):
+        if hasattr(obj, "estimation") and obj.estimation:
+            latest_quote = obj.estimation.quotations.order_by("-version", "-id").first()
+            if latest_quote:
+                return latest_quote.status
+            return obj.estimation.status
+        return "NOT_SUBMITTED"
+
+    def get_customer_approval_status(self, obj):
+        if hasattr(obj, "estimation") and obj.estimation:
+            latest_quote = obj.estimation.quotations.order_by("-version", "-id").first()
+            if latest_quote:
+                if latest_quote.status in [EstimationQuotation.Status.APPROVED, "APPROVED", "CUSTOMER_APPROVED"]:
+                    return "APPROVED"
+                if latest_quote.status in [EstimationQuotation.Status.REJECTED, "REJECTED", "CUSTOMER_REJECTED"]:
+                    return "REJECTED"
+                if latest_quote.status in [EstimationQuotation.Status.ADMIN_APPROVED, EstimationQuotation.Status.SENT, "ADMIN_APPROVED", "SENT"]:
+                    return "PENDING"
+                return latest_quote.status
+        return "NONE"
+
+    def get_diagnostic_fee(self, obj):
+        if hasattr(obj, "customer_inspection") and obj.customer_inspection:
+            return float(obj.customer_inspection.diagnostic_fee_snapshot)
+        if hasattr(obj, "estimation") and obj.estimation and hasattr(obj.estimation, "fee") and obj.estimation.fee:
+            return float(obj.estimation.fee.amount)
+        return 199.0
+
+    def get_quotation_total(self, obj):
+        if hasattr(obj, "estimation") and obj.estimation:
+            latest_quote = obj.estimation.quotations.order_by("-version", "-id").first()
+            if latest_quote:
+                return float(latest_quote.total_amount)
+        return float(obj.total_amount or 0)
+
+
+class AdminACInspectionDetailSerializer(serializers.ModelSerializer):
+    """
+    Complete 9-section view of AC Inspection Booking for Customer Admin.
+    1. Customer: Name, Phone, Email, Address
+    2. Booking: ID, Service, Date, Time, Quantity, Status
+    3. Inspection: Name, Fee, Status, Created time, Rate Snapshot
+    4. Technician: Technician details, Assignment status, Acceptance status, Current job status
+    5. Diagnosis: Problem/Symptom, Technician notes, Diagnosis, Inspection result, Findings
+    6. Evidence: Inspection photos & captions
+    7. Estimation: Repair items, Quantity, Unit price, Labour, Inspection fee, Total
+    8. Approval: Admin approval status, Admin notes, Customer approval status, Timestamps
+    9. Final: Repair status, Testing status, Completion status
+    """
+    customer_section = serializers.SerializerMethodField()
+    booking_section = serializers.SerializerMethodField()
+    inspection_section = serializers.SerializerMethodField()
+    technician_section = serializers.SerializerMethodField()
+    diagnosis_section = serializers.SerializerMethodField()
+    evidence_section = serializers.SerializerMethodField()
+    estimation_section = serializers.SerializerMethodField()
+    approval_section = serializers.SerializerMethodField()
+    final_section = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ServiceRequest
+        fields = (
+            "id", "request_id", "status",
+            "customer_section",
+            "booking_section",
+            "inspection_section",
+            "technician_section",
+            "diagnosis_section",
+            "evidence_section",
+            "estimation_section",
+            "approval_section",
+            "final_section",
+        )
+
+    def get_customer_section(self, obj):
+        return {
+            "name": obj.customer_name or (obj.customer.get_full_name() if obj.customer else ""),
+            "phone": obj.phone or "",
+            "email": obj.email or "",
+            "address": obj.address or "",
+            "latitude": float(obj.latitude) if obj.latitude is not None else None,
+            "longitude": float(obj.longitude) if obj.longitude is not None else None,
+        }
+
+    def get_booking_section(self, obj):
+        qty = 1
+        if hasattr(obj, "customer_inspection") and obj.customer_inspection:
+            qty = obj.customer_inspection.quantity
+        elif hasattr(obj, "estimation") and obj.estimation:
+            qty = obj.estimation.ac_quantity
+        return {
+            "booking_id": obj.request_id,
+            "id": obj.id,
+            "service": "AC Inspection & Diagnostic Visit",
+            "service_category": obj.service_category,
+            "service_category_display": obj.get_service_category_display(),
+            "date": str(obj.preferred_date) if obj.preferred_date else "",
+            "time": str(obj.preferred_time) if obj.preferred_time else "",
+            "quantity": qty,
+            "status": obj.status,
+            "status_display": obj.get_status_display(),
+            "created_at": obj.created_at.isoformat() if obj.created_at else None,
+        }
+
+    def get_inspection_section(self, obj):
+        from service_requests.services.customer_inspection_service import CustomerInspectionService
+        ci_snapshot = CustomerInspectionService.get_booking_inspection_snapshot(obj)
+        ci_model = getattr(obj, "customer_inspection", None)
+        return {
+            "inspection_name": ci_snapshot.get("inspection_name") if ci_snapshot else "AC Inspection & Diagnostic Visit",
+            "diagnostic_fee": float(ci_snapshot.get("diagnostic_fee", 199.0)) if ci_snapshot else 199.0,
+            "currency": ci_snapshot.get("currency", "INR") if ci_snapshot else "INR",
+            "inspection_status": ci_model.status if ci_model else "BOOKED",
+            "quantity": ci_snapshot.get("quantity", 1) if ci_snapshot else 1,
+            "created_at": ci_snapshot.get("created_at") if ci_snapshot else (obj.created_at.isoformat() if obj.created_at else None),
+            "rate_card_snapshot": ci_snapshot,
+        }
+
+    def get_technician_section(self, obj):
+        name = obj.technician_name
+        phone = obj.technician_phone
+        photo = obj.technician_photo
+        rating = float(obj.technician_rating) if obj.technician_rating else None
+        if not name and getattr(obj, "assigned_employee", None):
+            emp = obj.assigned_employee
+            name = getattr(emp, "full_name", "") or (emp.user.get_full_name() if getattr(emp, "user", None) else "")
+            phone = getattr(emp, "phone", "") or phone
+            photo = getattr(emp, "photo", "") or photo
+
+        assignment_status = "Waiting for Technician Assignment"
+        if name or getattr(obj, "assigned_employee_id", None) or getattr(obj, "workforce_job_id", None):
+            assignment_status = "Technician Assigned"
+
+        acceptance_status = "Pending"
+        if obj.status in ["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]:
+            acceptance_status = "Accepted"
+        elif obj.status == "assigned":
+            acceptance_status = "Waiting for Acceptance"
+        elif obj.status in ["rejected", "cancelled"]:
+            acceptance_status = "Declined"
+
+        current_job_status = obj.get_status_display()
+        if obj.status == "on_the_way":
+            current_job_status = "On The Way"
+        elif obj.status == "arrived":
+            current_job_status = "Arrived at Customer Location"
+        elif obj.status == "in_progress":
+            current_job_status = "Inspection In Progress"
+
+        return {
+            "technician": name or "None",
+            "phone": phone or "N/A",
+            "photo": photo or None,
+            "rating": rating,
+            "assignment_status": assignment_status,
+            "acceptance_status": acceptance_status,
+            "current_job_status": current_job_status,
+            "workforce_job_id": obj.workforce_job_id or obj.external_assignment_id or "",
+        }
+
+    def get_diagnosis_section(self, obj):
+        est = getattr(obj, "estimation", None)
+        inspection = getattr(est, "inspection", None) if est else None
+        problem = (est.customer_symptom if est else "") or obj.issue_title or ""
+        notes = (inspection.notes if inspection else "") or (est.customer_notes if est else "")
+        diagnosis = (inspection.diagnosis if inspection else "") or "Pending technician inspection"
+        result = inspection.status if inspection else "PENDING"
+        findings = []
+        if inspection:
+            for f in inspection.findings.all():
+                findings.append({
+                    "id": f.id,
+                    "title": f.title,
+                    "diagnosis": f.diagnosis,
+                    "severity": f.severity,
+                    "description": f.description,
+                    "recommended_action": f.recommended_action,
+                })
+
+        return {
+            "problem": problem,
+            "technician_notes": notes,
+            "inspection_result": result,
+            "diagnosis": diagnosis,
+            "ac_type": est.ac_type if est else "SPLIT",
+            "ac_brand": est.ac_brand if est else "",
+            "ac_capacity": est.ac_capacity if est else "",
+            "findings": findings,
+        }
+
+    def get_evidence_section(self, obj):
+        est = getattr(obj, "estimation", None)
+        inspection = getattr(est, "inspection", None) if est else None
+        photos = []
+        if inspection:
+            for p in inspection.photos.all():
+                photo_url = p.photo.url if p.photo else ""
+                photos.append({
+                    "id": p.id,
+                    "photo_url": photo_url,
+                    "caption": p.caption or "Inspection Evidence",
+                    "uploaded_at": p.uploaded_at.isoformat() if p.uploaded_at else None,
+                })
+        return {
+            "photos": photos,
+            "count": len(photos),
+        }
+
+    def get_estimation_section(self, obj):
+        est = getattr(obj, "estimation", None)
+        quote = est.quotations.order_by("-version", "-id").first() if est else None
+        fee_amount = 199.0
+        if hasattr(obj, "customer_inspection") and obj.customer_inspection:
+            fee_amount = float(obj.customer_inspection.diagnostic_fee_snapshot)
+        elif est and hasattr(est, "fee") and est.fee:
+            fee_amount = float(est.fee.amount)
+
+        if not quote:
+            return {
+                "has_quotation": False,
+                "inspection_fee": fee_amount,
+                "repair_items": [],
+                "subtotal": 0.0,
+                "labour": 0.0,
+                "total": fee_amount,
+                "status": "NOT_CREATED",
+            }
+
+        repair_items = []
+        labour_total = 0.0
+        for it in quote.items.all():
+            line_tot = float(it.line_total)
+            svc_type = "SPARE_PART"
+            if it.rate_item and getattr(it.rate_item, "service_type", None):
+                svc_type = it.rate_item.service_type
+            if "LABOUR" in svc_type.upper() or "LABOR" in svc_type.upper():
+                labour_total += line_tot
+
+            repair_items.append({
+                "id": it.id,
+                "name": it.item_name_snapshot or it.service_name,
+                "category": it.category_name_snapshot or "",
+                "description": it.description or "",
+                "quantity": it.quantity,
+                "unit": it.unit,
+                "unit_price": float(it.unit_price_snapshot or it.unit_price),
+                "line_total": line_tot,
+                "tax_amount": float(it.tax_amount),
+                "service_type": svc_type,
+            })
+
+        return {
+            "has_quotation": True,
+            "quotation_id": quote.id,
+            "quote_ref": quote.quote_ref,
+            "version": quote.version,
+            "status": quote.status,
+            "status_display": quote.get_status_display(),
+            "repair_items": repair_items,
+            "labour": labour_total,
+            "inspection_fee": fee_amount,
+            "subtotal": float(quote.subtotal),
+            "tax_amount": float(quote.tax_amount),
+            "discount_amount": float(quote.discount_amount),
+            "total": float(quote.total_amount),
+            "currency": quote.currency or "INR",
+            "notes": quote.notes or "",
+            "admin_notes": quote.admin_notes or "",
+            "created_at": quote.created_at.isoformat() if quote.created_at else None,
+        }
+
+    def get_approval_section(self, obj):
+        est = getattr(obj, "estimation", None)
+        quote = est.quotations.order_by("-version", "-id").first() if est else None
+        admin_status = "PENDING_REVIEW"
+        admin_notes = ""
+        admin_reviewed_at = None
+        customer_status = "PENDING"
+        customer_approved_at = None
+        customer_rejected_at = None
+        rejection_reason = ""
+        rejection_note = ""
+
+        if quote:
+            if quote.status in [EstimationQuotation.Status.ADMIN_APPROVED, EstimationQuotation.Status.APPROVED, "ADMIN_APPROVED", "APPROVED", "CUSTOMER_APPROVED"]:
+                admin_status = "ADMIN_APPROVED"
+            elif quote.status == EstimationQuotation.Status.SENT_BACK_TO_TECHNICIAN:
+                admin_status = "SENT_BACK_TO_TECHNICIAN"
+            elif quote.status == EstimationQuotation.Status.SUBMITTED_FOR_REVIEW:
+                admin_status = "PENDING_ADMIN_REVIEW"
+
+            admin_notes = quote.admin_notes or ""
+            admin_reviewed_at = quote.admin_reviewed_at.isoformat() if quote.admin_reviewed_at else None
+
+            if quote.status in [EstimationQuotation.Status.APPROVED, "APPROVED", "CUSTOMER_APPROVED"]:
+                customer_status = "CUSTOMER_APPROVED"
+            elif quote.status in [EstimationQuotation.Status.REJECTED, "REJECTED", "CUSTOMER_REJECTED"]:
+                customer_status = "CUSTOMER_REJECTED"
+            elif quote.status in [EstimationQuotation.Status.ADMIN_APPROVED, EstimationQuotation.Status.SENT, "ADMIN_APPROVED", "SENT"]:
+                customer_status = "CUSTOMER_PENDING"
+            else:
+                customer_status = "NOT_PRESENTED"
+
+            customer_approved_at = quote.customer_approved_at.isoformat() if quote.customer_approved_at else None
+            customer_rejected_at = quote.customer_rejected_at.isoformat() if quote.customer_rejected_at else None
+            rejection_reason = quote.rejection_reason or ""
+            rejection_note = quote.rejection_note or ""
+
+        return {
+            "admin_approval_status": admin_status,
+            "admin_notes": admin_notes,
+            "admin_reviewed_at": admin_reviewed_at,
+            "customer_approval_status": customer_status,
+            "customer_approved_at": customer_approved_at,
+            "customer_rejected_at": customer_rejected_at,
+            "rejection_reason": rejection_reason,
+            "rejection_note": rejection_note,
+        }
+
+    def get_final_section(self, obj):
+        est = getattr(obj, "estimation", None)
+        quote = est.quotations.order_by("-version", "-id").first() if est else None
+        customer_rejected = quote and quote.status in [EstimationQuotation.Status.REJECTED, "REJECTED", "CUSTOMER_REJECTED"]
+
+        repair_status = "NOT_STARTED"
+        testing_status = "NOT_STARTED"
+        completion_status = "IN_PROGRESS"
+
+        if customer_rejected:
+            repair_status = "NO_REPAIR_CUSTOMER_REJECTED"
+            testing_status = "NOT_APPLICABLE"
+            completion_status = "INSPECTION_ONLY_CLOSED"
+        elif obj.status in [ServiceRequest.Status.COMPLETED, ServiceRequest.Status.CLOSED, ServiceRequest.Status.VERIFIED]:
+            repair_status = "COMPLETED"
+            testing_status = "PASSED"
+            completion_status = "COMPLETED"
+        elif est and est.status in [Estimation.Status.TESTING, "TESTING"]:
+            repair_status = "COMPLETED"
+            testing_status = "IN_PROGRESS"
+        elif est and est.status in [Estimation.Status.TECHNICIAN_REPAIR, "TECHNICIAN_REPAIR"]:
+            repair_status = "IN_PROGRESS"
+        elif est and est.status in [Estimation.Status.REPAIR_AUTHORIZED, "REPAIR_AUTHORIZED"]:
+            repair_status = "AUTHORIZED"
+
+        return {
+            "repair_status": repair_status,
+            "testing_status": testing_status,
+            "completion_status": completion_status,
+            "invoice_id": obj.invoice_id or "",
+            "payment_status": obj.payment_status or "PAID",
+        }
+

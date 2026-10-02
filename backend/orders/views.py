@@ -15,6 +15,7 @@ will call this independently of (never inside the same transaction as)
 service checkout, per the approved two-cart architecture.
 """
 import os
+from decimal import Decimal
 
 from django.db import transaction
 from rest_framework import status
@@ -27,7 +28,7 @@ from inventory.services.vegetable_stock_service import (
     reserve_stock_for_booking_items,
     InsufficientStockError,
 )
-from inventory.utils.unit_conversion import parse_pack_size_grams
+from inventory.utils.unit_conversion import parse_pack_size_grams, parse_pack_size
 
 from .models import Order, GroceryOrder, GroceryOrderItem, MarketplaceOrder
 from .serializers import (
@@ -37,6 +38,8 @@ from .serializers import (
     serialize_grocery_order,
     serialize_marketplace_order,
 )
+from vegetable_orders.models import VegetableOrder, VegetableOrderItem, GroceryCartPricingConfig
+from vegetable_orders.serializers import VegetableOrderSerializer, serialize_vegetable_order
 
 
 def _success(data=None, message="", status_code=200):
@@ -77,6 +80,7 @@ def _get_company(request):
 class GroceryCheckoutView(APIView):
     """
     POST /api/orders/grocery/checkout/
+    Checks out active daily essentials (vegetables) cart into a VegetableOrder.
     """
     permission_classes = [IsCustomer]
 
@@ -97,30 +101,77 @@ class GroceryCheckoutView(APIView):
             return _error("Unable to resolve operating company for checkout.", status.HTTP_400_BAD_REQUEST)
 
         cart_items = list(cart.items.all())
-        total_amount = sum((ci.unit_price_snapshot * ci.quantity for ci in cart_items))
+        items_subtotal = sum((ci.unit_price_snapshot * ci.quantity for ci in cart_items))
+
+        # Admin-configurable Quick commerce pricing rules (server-side single source of truth):
+        pricing_config = GroceryCartPricingConfig.get_active_config()
+        delivery_fee, small_cart_fee, handling_fee = pricing_config.calculate_fees(items_subtotal)
+        tip_amount = Decimal(str(serializer.validated_data.get("tip_amount") or 0))
+
+        total_amount = items_subtotal + delivery_fee + small_cart_fee + handling_fee + tip_amount
+        delivery_date = serializer.validated_data.get("delivery_date")
+        delivery_slot = serializer.validated_data.get("delivery_slot") or ""
 
         stock_request_items = []
+        variant_snapshots = []
         for ci in cart_items:
-            grams_per_pack = parse_pack_size_grams(ci.package.duration)
+            if ci.variant:
+                basis = ci.variant.unit_basis
+                item_unit = ci.variant.unit
+                units_per_pack = ci.variant.base_unit_deduction
+                var_obj = ci.variant
+                var_name = ci.variant.display_name
+                pack_val = ci.variant.pack_value
+            else:
+                stock_item = getattr(ci.package, "stock_item", None)
+                basis = getattr(stock_item, "unit_basis", "WEIGHT") if stock_item else "WEIGHT"
+                item_unit = getattr(stock_item, "unit", "g") if stock_item else "g"
+                pack_info = parse_pack_size(ci.package.duration, default_val=1 if basis == "COUNT" else 500, default_basis=basis)
+                units_per_pack = pack_info["base_units"]
+                var_obj = None
+                var_name = ci.package.duration or ""
+                pack_val = pack_info.get("value")
+
+            total_units = ci.quantity * units_per_pack
+            base_unit_str = "pcs" if basis == "COUNT" else "g"
             stock_request_items.append({
                 "product": ci.package,
-                "quantity": ci.quantity * grams_per_pack,
-                "unit": "g",
+                "quantity": total_units,
+                "unit": base_unit_str,
+                "unit_basis": basis,
+                "display_unit": item_unit,
+            })
+            variant_snapshots.append({
+                "variant": var_obj,
+                "variant_name": var_name,
+                "pack_value": pack_val,
             })
 
         try:
             with transaction.atomic():
-                order = GroceryOrder.objects.create(
+                order = VegetableOrder.objects.create(
                     customer=request.user,
+                    items_subtotal=items_subtotal,
+                    delivery_fee=delivery_fee,
+                    small_cart_fee=small_cart_fee,
+                    handling_fee=handling_fee,
+                    tip_amount=tip_amount,
                     total_amount=total_amount,
                     delivery_address=delivery_address,
+                    delivery_date=delivery_date,
+                    delivery_slot=delivery_slot,
                 )
                 reserve_stock_for_booking_items(stock_request_items, company, booking_ref=order.order_number)
 
-                GroceryOrderItem.objects.bulk_create([
-                    GroceryOrderItem(
+                VegetableOrderItem.objects.bulk_create([
+                    VegetableOrderItem(
                         order=order,
                         package=ci.package,
+                        variant=variant_snapshots[i]["variant"],
+                        variant_name_snapshot=variant_snapshots[i]["variant_name"],
+                        pack_value_snapshot=variant_snapshots[i]["pack_value"],
+                        unit_basis=stock_request_items[i]["unit_basis"],
+                        unit_label=stock_request_items[i]["display_unit"],
                         quantity_grams=stock_request_items[i]["quantity"],
                         unit_price_snapshot=ci.unit_price_snapshot,
                         line_amount=ci.unit_price_snapshot * ci.quantity,
@@ -137,27 +188,33 @@ class GroceryCheckoutView(APIView):
                 errors=[{"product_name": exc.product_name, "requested_grams": exc.requested_grams}],
             )
 
-        return _success(GroceryOrderSerializer(order).data, status_code=status.HTTP_201_CREATED)
+        return _success(VegetableOrderSerializer(order).data, status_code=status.HTTP_201_CREATED)
 
 
 class MyOrdersView(APIView):
     """
     GET /api/orders/my/
 
-    Phase 6: read-only merge of Order (services) and GroceryOrder (daily
-    essentials) for the current customer, normalized into a common shape
-    and sorted by date. No writes happen through this endpoint -- the two
-    tables stay independent on the write side per the approved architecture.
+    Phase 6: read-only merge of Order (services), VegetableOrder (vegetables),
+    and legacy/standalone GroceryOrder for the current customer, normalized into
+    a common shape and sorted by date.
     """
     permission_classes = [IsCustomer]
 
     def get(self, request):
+        # Read-only merge across order families:
+        # - Order: Service bookings
+        # - VegetableOrder: Dedicated vegetable produce orders
+        # - GroceryOrder: Kept as a safety net / backward-compatibility hook for any future grocery
+        #   orders built by the grocery team (currently returns 0 rows after the vegetable migration).
         service_orders = Order.objects.filter(customer=request.user).prefetch_related("items__service_request")
+        vegetable_orders = VegetableOrder.objects.filter(customer=request.user).prefetch_related("items__package")
         grocery_orders = GroceryOrder.objects.filter(customer=request.user).prefetch_related("items__package")
         marketplace_orders = MarketplaceOrder.objects.filter(customer=request.user).prefetch_related("items")
 
         merged = (
             [serialize_service_order(o) for o in service_orders]
+            + [serialize_vegetable_order(o) for o in vegetable_orders]
             + [serialize_grocery_order(o) for o in grocery_orders]
             + [serialize_marketplace_order(o) for o in marketplace_orders]
         )

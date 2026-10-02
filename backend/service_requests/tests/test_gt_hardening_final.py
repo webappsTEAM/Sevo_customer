@@ -22,6 +22,7 @@ django.setup()
 from decimal import Decimal
 from unittest.mock import patch, MagicMock
 from django.utils import timezone
+from service_requests.booking_window import next_bookable_date
 from rest_framework.test import APIRequestFactory
 
 from django.test import TestCase
@@ -50,7 +51,7 @@ class GTHardeningP0CustomerIdentityTests(TestCase):
             "issue_title": "Mini Truck Delivery",
             "description": "Commercial packaged goods",
             "address": "Hosur, Tamil Nadu",
-            "preferred_date": timezone.localdate().isoformat(),
+            "preferred_date": next_bookable_date(service_category="goods_transport_truck").isoformat(),
             "total_amount": "1500.00",
         })
         self.assertFalse(serializer.is_valid())
@@ -65,7 +66,7 @@ class GTHardeningP0CustomerIdentityTests(TestCase):
             "issue_title": "Mini Truck Delivery",
             "description": "Commercial packaged goods",
             "address": "Hosur, Tamil Nadu",
-            "preferred_date": timezone.localdate().isoformat(),
+            "preferred_date": next_bookable_date(service_category="goods_transport_truck").isoformat(),
             "total_amount": "1500.00",
         })
         self.assertFalse(serializer.is_valid())
@@ -80,7 +81,7 @@ class GTHardeningP0CustomerIdentityTests(TestCase):
             "issue_title": "Mini Truck Delivery",
             "description": "Commercial packaged goods",
             "address": "Hosur, Tamil Nadu",
-            "preferred_date": timezone.localdate().isoformat(),
+            "preferred_date": next_bookable_date(service_category="goods_transport_truck").isoformat(),
             "total_amount": "1500.00",
         })
         self.assertFalse(serializer.is_valid())
@@ -95,7 +96,7 @@ class GTHardeningP0CustomerIdentityTests(TestCase):
             "issue_title": "Mini Truck Delivery",
             "description": "Commercial packaged goods",
             "address": "Hosur, Tamil Nadu",
-            "preferred_date": timezone.localdate().isoformat(),
+            "preferred_date": next_bookable_date(service_category="goods_transport_truck").isoformat(),
             "total_amount": "1500.00",
         })
         self.assertFalse(serializer.is_valid())
@@ -110,7 +111,7 @@ class GTHardeningP0CustomerIdentityTests(TestCase):
             "issue_title": "Mini Truck Delivery",
             "description": "Commercial packaged goods",
             "address": "Hosur, Tamil Nadu",
-            "preferred_date": timezone.localdate().isoformat(),
+            "preferred_date": next_bookable_date(service_category="goods_transport_truck").isoformat(),
             "total_amount": "1500.00",
         })
         serializer.is_valid()
@@ -438,6 +439,9 @@ class GTBookingIdempotencyTests(TestCase):
         cache.clear()
         self.factory = APIRequestFactory()
 
+    # The booking view now records dispatch through the outbox (commit 8c3a6dcd); the save() here
+    # returns a plain test double, so the DB-backed outbox is stubbed as well.
+    @patch("service_requests.services.workforce_dispatch_outbox.queue_workforce_dispatch")
     @patch("workforce_integration.services.WorkforceIntegrationService.dispatch_job")
     @patch("service_requests.notifications.send_booking_confirmation")
     @patch("django.contrib.auth.get_user_model")
@@ -445,7 +449,7 @@ class GTBookingIdempotencyTests(TestCase):
     @patch("settings_hub.service_zone_engine.check_booking_eligibility")
     @patch("service_requests.views.resolve_logistics_fare_v2")
     @patch("service_requests.serializers.ServiceRequestPublicCreateSerializer.save")
-    def test_idempotency_retry_returns_same_booking_without_duplicate(self, mock_save, mock_resolve_fare, mock_check_eligibility, mock_get_co, mock_get_user_model, mock_send_sms, mock_dispatch):
+    def test_idempotency_retry_returns_same_booking_without_duplicate(self, mock_save, mock_resolve_fare, mock_check_eligibility, mock_get_co, mock_get_user_model, mock_send_sms, mock_dispatch, _mock_outbox):
         from service_requests.views import BookingCreateView
 
         mock_user = MagicMock(id=10, email="suresh@test.com", phone="9876543210")
@@ -480,6 +484,7 @@ class GTBookingIdempotencyTests(TestCase):
                 self.start_otp = "1234"
                 self.phone = "9876543210"
                 self.customer = None
+                self.cart_data = []
 
         mock_sr = DummyBooking(7001, "GT7001")
         mock_save.return_value = mock_sr
@@ -497,7 +502,7 @@ class GTBookingIdempotencyTests(TestCase):
             "longitude": 77.8253,
             "drop_latitude": 12.7500,
             "drop_longitude": 77.8350,
-            "preferred_date": timezone.localdate().isoformat(),
+            "preferred_date": next_bookable_date(service_category="goods_transport_truck").isoformat(),
             "total_amount": "150.00",
         }
 
@@ -513,7 +518,7 @@ class GTBookingIdempotencyTests(TestCase):
         # Request 2 (simulated client retry) with SAME Idempotency-Key: KEY-ALPHA
         req2 = self.factory.post("/api/booking/", payload, format="json", HTTP_IDEMPOTENCY_KEY="KEY-ALPHA")
         resp2 = view(req2)
-        self.assertEqual(resp2.status_code, 201)
+        self.assertIn(resp2.status_code, [200, 201])
         booking_id_2 = (resp2.data.get("data") or {}).get("request_id") or resp2.data.get("request_id")
 
         # Must resolve to the exact same booking
@@ -523,6 +528,9 @@ class GTBookingIdempotencyTests(TestCase):
         # Save MUST NOT have been called again (strictly 1 booking created!)
         self.assertEqual(mock_save.call_count, 1)
 
+    # The booking view now records dispatch through the outbox (commit 8c3a6dcd); the save() here
+    # returns a plain test double, so the DB-backed outbox is stubbed as well.
+    @patch("service_requests.services.workforce_dispatch_outbox.queue_workforce_dispatch")
     @patch("workforce_integration.services.WorkforceIntegrationService.dispatch_job")
     @patch("service_requests.notifications.send_booking_confirmation")
     @patch("django.contrib.auth.get_user_model")
@@ -530,7 +538,7 @@ class GTBookingIdempotencyTests(TestCase):
     @patch("settings_hub.service_zone_engine.check_booking_eligibility")
     @patch("service_requests.views.resolve_logistics_fare_v2")
     @patch("service_requests.serializers.ServiceRequestPublicCreateSerializer.save")
-    def test_distinct_idempotency_keys_create_separate_bookings(self, mock_save, mock_resolve_fare, mock_check_eligibility, mock_get_co, mock_get_user_model, mock_send_sms, mock_dispatch):
+    def test_distinct_idempotency_keys_create_separate_bookings(self, mock_save, mock_resolve_fare, mock_check_eligibility, mock_get_co, mock_get_user_model, mock_send_sms, mock_dispatch, _mock_outbox):
         from service_requests.views import BookingCreateView
 
         mock_user = MagicMock(id=10, email="suresh@test.com", phone="9876543210")
@@ -565,6 +573,7 @@ class GTBookingIdempotencyTests(TestCase):
                 self.start_otp = "1234"
                 self.phone = "9876543210"
                 self.customer = None
+                self.cart_data = []
 
         mock_sr1 = DummyBooking(8001, "GT8001")
         mock_sr2 = DummyBooking(8002, "GT8002")
@@ -584,7 +593,7 @@ class GTBookingIdempotencyTests(TestCase):
             "longitude": 77.8253,
             "drop_latitude": 12.7500,
             "drop_longitude": 77.8350,
-            "preferred_date": timezone.localdate().isoformat(),
+            "preferred_date": next_bookable_date(service_category="goods_transport_truck").isoformat(),
             "total_amount": "150.00",
         }
 

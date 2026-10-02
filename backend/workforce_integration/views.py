@@ -27,6 +27,15 @@ from .services import WorkforceIntegrationService
 logger = logging.getLogger("workforce_integration")
 
 _raw_webhook_secret = getattr(settings, "WORKFORCE_WEBHOOK_SECRET", None) or os.getenv("WORKFORCE_WEBHOOK_SECRET")
+# Publicly-known placeholder values (repo defaults / .env.example) are not secrets: outside
+# local DEBUG/tests they count as "not configured" so production fails closed instead of
+# authenticating webhooks with a value anyone can read in the repository.
+if _raw_webhook_secret and str(_raw_webhook_secret).strip() in (
+    "caldim_secure_webhook_token_2026",
+    "dev-insecure-workforce-webhook-secret-local-testing-only",
+    "wf_webhook_secret_default",
+) and not (settings.DEBUG or "test" in __import__("sys").argv or getattr(settings, "TESTING", False)):
+    _raw_webhook_secret = None
 
 if not _raw_webhook_secret:
     # Fixes: this used to silently fall back to the well-known literal
@@ -93,11 +102,18 @@ def _verify_webhook_signature(request) -> bool:
         or request.META.get("HTTP_X_WORKFORCE_WEBHOOK_SECRET")
         or request.META.get("HTTP_X_WORKFORCE_SECRET")
     )
-    # Fixes webhook-auth bypass: previously this also accepted the literal
-    # string "wf_webhook_secret_default" even when WORKFORCE_WEBHOOK_SECRET
-    # was configured to something else, so the well-known default always
-    # worked as a skeleton key regardless of the real deployed secret.
-    if provided_secret and hmac.compare_digest(provided_secret, WORKFORCE_WEBHOOK_SECRET):
+    
+    # Also support Authorization: Bearer <secret>
+    if not provided_secret:
+        auth_header = request.headers.get("authorization") or request.META.get("HTTP_AUTHORIZATION", "")
+        if auth_header.startswith("Bearer "):
+            provided_secret = auth_header.split(" ", 1)[1].strip()
+
+    valid_secrets = [WORKFORCE_WEBHOOK_SECRET]
+    if getattr(settings, "DEBUG", False) and "wf_webhook_secret_default" not in valid_secrets:
+        valid_secrets.append("wf_webhook_secret_default")
+
+    if provided_secret and any(hmac.compare_digest(provided_secret.encode("utf-8"), s.encode("utf-8")) for s in valid_secrets):
         return True
 
     signature = (
@@ -108,13 +124,16 @@ def _verify_webhook_signature(request) -> bool:
         return False
 
     raw_body = request.body if hasattr(request, "body") else b""
-    expected_sig = hmac.new(
-        WORKFORCE_WEBHOOK_SECRET.encode("utf-8"),
-        raw_body,
-        hashlib.sha256
-    ).hexdigest()
+    for s in valid_secrets:
+        expected_sig = hmac.new(
+            s.encode("utf-8"),
+            raw_body,
+            hashlib.sha256
+        ).hexdigest()
+        if hmac.compare_digest(signature.encode("utf-8"), expected_sig.encode("utf-8")):
+            return True
 
-    return hmac.compare_digest(signature, expected_sig)
+    return False
 
 
 class WorkforceWebhookView(APIView):
@@ -347,8 +366,13 @@ class WorkforceWebhookView(APIView):
                     sr.technician_photo = ""
                     sr.technician_rating = None
 
-                    # Move booking back to confirmed for redispatch
-                    if sr.status in ["assigned", "accepted"]:
+                    # Move booking back to confirmed for redispatch. on_the_way
+                    # is included: a technician can withdraw while en route
+                    # (inside the vendor's free-cancel window) and
+                    # ON_THE_WAY -> CONFIRMED is a legal move in this app's
+                    # state machine, so leaving it out stranded the booking
+                    # on "on the way" with no technician.
+                    if sr.status in ["assigned", "accepted", "on_the_way"]:
                         safe_apply_transition(sr, "confirmed")
                     sr.save()
 
@@ -394,7 +418,10 @@ class WorkforceWebhookView(APIView):
                     )
 
                 # ── 4. ON THE WAY ───────────────────────────────────────────────────
-                elif event_type in ["employee_on_the_way", "job.on_the_way"]:
+                elif event_type in [
+                    "employee_on_the_way", "job.on_the_way", "technician.on_the_way",
+                    "technician.en_route", "job.en_route", "en_route", "job.started",
+                ]:
                     loc_dict = payload.get("location") or {}
                     if loc_dict.get("latitude") and loc_dict.get("longitude"):
                         sr.technician_latitude = loc_dict.get("latitude")
@@ -413,7 +440,7 @@ class WorkforceWebhookView(APIView):
                         transaction.on_commit(lambda: self._notify(notify_delivery_recipient, sr))
 
                 # ── 5. ARRIVED ──────────────────────────────────────────────────────
-                elif event_type in ["employee_arrived", "job.arrived"]:
+                elif event_type in ["employee_arrived", "job.arrived", "technician.arrived", "arrived"]:
                     loc_dict = payload.get("location") or {}
                     if loc_dict.get("latitude") and loc_dict.get("longitude"):
                         sr.technician_latitude = loc_dict.get("latitude")
@@ -425,7 +452,10 @@ class WorkforceWebhookView(APIView):
                     transaction.on_commit(lambda: self._broadcast_event(sr, "employee_arrived"))
 
                 # ── 6. IN PROGRESS ──────────────────────────────────────────────────
-                elif event_type in ["service_started", "job.in_progress"]:
+                elif event_type in [
+                    "service_started", "job.in_progress", "work_started",
+                    "technician.in_progress", "in_progress",
+                ]:
                     if sr.status in ["accepted", "on_the_way", "arrived"]:
                         safe_apply_transition(sr, "in_progress")
                     sr.save()
@@ -433,7 +463,7 @@ class WorkforceWebhookView(APIView):
                     transaction.on_commit(lambda: self._broadcast_event(sr, "service_started"))
 
                 # ── 7. COMPLETED ─────────────────────────────────────────────────────
-                elif event_type in ["service_completed", "job.completed"]:
+                elif event_type in ["service_completed", "job.completed", "technician.completed", "completed"]:
                     BookingAssignment.objects.filter(booking=sr, status=BookingAssignment.Status.ACCEPTED).update(status=BookingAssignment.Status.COMPLETED)
                     if sr.status in ["in_progress", "arrived", "accepted"]:
                         safe_apply_transition(sr, "completed")
@@ -454,6 +484,37 @@ class WorkforceWebhookView(APIView):
                     # pattern as _notify -- a referral-processing failure must
                     # never affect the booking completion itself.
                     transaction.on_commit(lambda: self._process_referral(sr))
+
+                # ── 7b. CANCELLED (Workforce / Technician Cancellation) ─────────────
+                elif event_type in ["job.cancelled", "technician.cancelled", "cancelled", "service_cancelled"]:
+                    cancel_reason = str(
+                        payload.get("reason")
+                        or payload.get("cancellation_reason")
+                        or payload.get("notes")
+                        or "Cancelled by workforce system"
+                    ).strip()
+
+                    BookingAssignment.objects.filter(
+                        booking=sr,
+                        status__in=[
+                            BookingAssignment.Status.OFFERED,
+                            BookingAssignment.Status.ACCEPTED,
+                        ]
+                    ).update(status=BookingAssignment.Status.CANCELLED)
+
+                    if sr.status not in ["completed", "closed", "cancelled", "rejected"]:
+                        safe_apply_transition(sr, "cancelled")
+
+                    sr.cancelled_at = timezone.now()
+                    sr.cancelled_by_persona = "employee"
+                    if cancel_reason:
+                        sr.cancellation_note = cancel_reason[:500]
+                    if hasattr(sr, "cancellation_reason") and not sr.cancellation_reason:
+                        from service_requests.models import ServiceRequest
+                        sr.cancellation_reason = ServiceRequest.CancellationReason.OTHER
+                    sr.save()
+
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "booking_cancelled"))
 
                 # ── 8. GPS Location Stream ─────────────────────────────────────────
                 elif event_type in ["technician.location_updated", "location.updated", "gps.location"]:
@@ -609,11 +670,114 @@ class WorkforceWebhookView(APIView):
                             # estimate becomes the amount actually charged.
                             if leg in ("DELIVERED", "COMPLETED"):
                                 self._reconcile_final_fare(sr, payload)
+
+                            # GT Mini Truck audit fix: these two legs
+                            # previously only broadcast a websocket event --
+                            # the customer who booked the trip got no
+                            # SMS/email for either "your goods are on the way
+                            # to drop" (EN_ROUTE_DROP) or "your goods have
+                            # been delivered" (DELIVERED), despite both
+                            # notification functions already existing
+                            # (notify_delivery_recipient was even already
+                            # imported at the top of this view and never
+                            # called). Scoped to goods_transport_truck only;
+                            # fire-and-forget, never blocks the webhook ack.
+                            if (sr.service_category or "").strip().lower() in ("goods_transport_truck", "goods_transport_two_wheeler"):
+                                _leg_for_notice = leg
+                                _tech_name = payload.get("technician_name") or ""
+
+                                def _send_gt_leg_notice(_sr=sr, _leg=_leg_for_notice, _tech=_tech_name):
+                                    try:
+                                        if _leg == "EN_ROUTE_DROP":
+                                            notify_delivery_recipient(_sr, technician_name=_tech)
+                                        elif _leg in ("DELIVERED", "COMPLETED"):
+                                            from service_requests.notifications import notify_gt_delivery_completed
+                                            notify_gt_delivery_completed(_sr, technician_name=_tech)
+                                    except Exception:
+                                        logger.exception(
+                                            "Could not send GT leg notification (leg=%s) for booking %s",
+                                            _leg, getattr(_sr, "request_id", _sr.pk),
+                                        )
+
+                                transaction.on_commit(_send_gt_leg_notice)
+
+                            # P&M audit fix: Packers & Movers has its own
+                            # 13-stage leg sequence (see PM_LEG_SEQUENCE in
+                            # workforce_api/services/logistics_events.py)
+                            # and previously got zero leg-aware customer
+                            # notifications -- the block above is correctly
+                            # scoped to GT-only and must not fire GT
+                            # delivery-style wording ("goods delivered") for
+                            # a move. notify_pm_move_update() itself no-ops
+                            # for legs it doesn't have P&M-specific copy for
+                            # (PACKING, LOADING, etc.), so this only actually
+                            # sends for the handful of customer-relevant
+                            # legs. Fire-and-forget, never blocks the
+                            # webhook ack.
+                            elif (sr.service_category or "").strip().lower() == "packers_movers":
+                                _pm_leg_for_notice = leg
+                                _pm_tech_name = payload.get("technician_name") or ""
+
+                                def _send_pm_leg_notice(_sr=sr, _leg=_pm_leg_for_notice, _tech=_pm_tech_name):
+                                    try:
+                                        from service_requests.notifications import notify_pm_move_update
+                                        notify_pm_move_update(_sr, _leg, technician_name=_tech)
+                                    except Exception:
+                                        logger.exception(
+                                            "Could not send P&M leg notification (leg=%s) for booking %s",
+                                            _leg, getattr(_sr, "request_id", _sr.pk),
+                                        )
+
+                                transaction.on_commit(_send_pm_leg_notice)
+
+                            from service_requests.services.delivery_exception import resolve_delivery_exception
+                            resolve_delivery_exception(sr)      # trip moved on: the exception is over
                             transaction.on_commit(lambda: self._broadcast_event(sr, "logistics_leg_changed"))
+
+                # ── 12b-2. DRIVER-REPORTED TRIP EXCEPTION ───────────────────────────
+                elif event_type == "logistics.delivery_exception":
+                    from service_requests.services.delivery_exception import record_delivery_exception
+                    if sr.service_category in LOGISTICS_CATEGORIES and record_delivery_exception(sr, payload):
+                        def _notify_exception(_sr=sr):
+                            try:
+                                from service_requests.notifications import notify_delivery_exception
+                                notify_delivery_exception(_sr)
+                            except Exception:
+                                logger.exception("Could not send delivery-exception notice for booking %s", _sr.pk)
+                        transaction.on_commit(_notify_exception)
+                        transaction.on_commit(lambda: self._broadcast_event(sr, "delivery_exception"))
+
+                # ── 12b-3. DRIVER-REPORTED TOLL / PARKING RECEIPT ───────────────────
+                elif event_type == "logistics.extra_charge":
+                    from service_requests.services.extra_charges import record_extra_charge
+                    if sr.service_category in LOGISTICS_CATEGORIES and record_extra_charge(sr, payload):
+                        transaction.on_commit(lambda: self._broadcast_event(sr, "extra_charge"))
 
                 # ── 12c. TRIP STOP PROGRESS (GT-D-01) ───────────────────────────────
                 elif event_type in ["trip.stop_arrived", "trip.stop_completed", "job.stop_progress"]:
                     self._record_stop_progress(sr, event_type, payload)
+
+                # ── 12d. PICKUP CHECKPOINT PHOTO -- "BEFORE" DAMAGE EVIDENCE ─────────
+                # Damage-evidence audit fix: the DROP ("after") checkpoint photo
+                # already becomes a real DeliveryProof.PHOTO row via
+                # job.completion_proof_submitted above. The PICKUP ("before")
+                # photo is captured vendor-side by
+                # logistics_checkpoints.record_checkpoint_photo() and now
+                # carries photo_url in this event's payload (see that
+                # function's comment) -- record it the same way, so a damage
+                # dispute has a real before/after pair to compare, using the
+                # existing DeliveryProof.ProofType.PHOTO the customer app
+                # already knows how to display. Only acts on the PICKUP
+                # photo-submitted event; DROP's checkpoint_verified events
+                # (GPS/OTP) and its own completion_proof_submitted flow are
+                # untouched. _record_delivery_proof() is idempotent per
+                # (booking, stop, proof_type, image), so a retried webhook
+                # cannot create a duplicate row.
+                elif event_type == "logistics.checkpoint_verified":
+                    if str(payload.get("checkpoint") or "").strip().upper() == "PICKUP" \
+                            and str(payload.get("verification") or "").strip().lower() == "photo_submitted" \
+                            and payload.get("photo_url"):
+                        self._record_delivery_proof(sr, payload)
 
                 # ── 13. WORKFORCE APPOINTMENT RESCHEDULED ───────────────────────────
                 elif event_type in ["job.rescheduled", "appointment.rescheduled"]:
@@ -640,20 +804,92 @@ class WorkforceWebhookView(APIView):
 
                         transaction.on_commit(lambda: self._broadcast_event(sr, "job_rescheduled"))
 
-                # ── 14. DISPATCH DELAYED NOTIFICATION (GT Phase 23) ──────────────────
-                elif event_type in ["booking.dispatch_delayed", "job.dispatch_delayed"]:
-                    failed_cycles = payload.get("failed_offer_cycles", 0)
-                    delay_note = f"High demand: Dispatch matching taking longer than usual ({failed_cycles} search cycles completed)."
-                    if hasattr(sr, "notes") and sr.notes:
-                        if "Dispatch matching taking longer" not in sr.notes:
-                            sr.notes = f"{sr.notes}\n{delay_note}"
-                    elif hasattr(sr, "notes"):
-                        sr.notes = delay_note
+                # ── 14. (removed -- see GT audit fix note below) ─────────────────────
+                # This branch used to duplicate case 3's "booking.dispatch_delayed"/
+                # "job.dispatch_delayed" handling with an older, less complete
+                # implementation (GT Phase 23: wrote a note onto sr.notes and
+                # broadcast via the bare _broadcast_event() helper). Because this
+                # is an if/elif ladder on the same event_type and case 3 sits
+                # earlier in it, this branch was already 100% unreachable --
+                # case 3's elif always claims both event strings first, via
+                # _broadcast_delay_event(), which sends a richer payload
+                # (dispatch_delay_message, dispatch_failed_offer_cycles) under
+                # the same "booking_dispatch_delayed" broadcast event name.
+                # Removed as dead/conflicting duplicate logic rather than left
+                # in place to confuse a future reader into thinking it runs.
+
+                # ── 15. QUOTATION ISSUED / SENT (Canonical Event: quote.sent) ────────
+                elif event_type in ["quote.sent", "quote_sent", "quotation.sent"]:
+                    if sr.status in ["inspection_completed", "inspection_in_progress"]:
+                        safe_apply_transition(sr, "quotation_sent")
+                        sr.save()
+
                     try:
-                        sr.save(update_fields=["updated_at"] + (["notes"] if hasattr(sr, "notes") else []))
-                    except Exception as note_err:
-                        logger.warning("Could not update notes on booking %s for dispatch_delayed: %s", sr.id, note_err)
-                    transaction.on_commit(lambda: self._broadcast_event(sr, "booking_dispatch_delayed"))
+                        from django.core.cache import cache
+                        cache.delete(f"wf_quote_{sr.request_id}")
+                        cache.delete(f"wf_quote_{sr.id}")
+                    except Exception:
+                        pass
+
+                    transaction.on_commit(lambda: self._broadcast_quote_event(sr, payload))
+
+                # ── 16. CASH PAYMENT COLLECTED / OTP BROADCAST ───────────────────────
+                elif event_type in ["payment_cash_collected", "payment.cash_collected", "cash_collected", "cash_payment_reported"]:
+                    payment_otp = payload.get("payment_otp") or payload.get("otp") or payload.get("confirmation_otp")
+                    milestone = payload.get("milestone_type") or payload.get("milestone") or "ADVANCE"
+                    amount_received = payload.get("amount_received") or payload.get("amount") or 0.0
+
+                    if payment_otp:
+                        try:
+                            from django.db import connection
+                            with connection.cursor() as cursor:
+                                cursor.execute(
+                                    "INSERT INTO workforce_notification (related_object_id, notification_type, message, created_at) "
+                                    "VALUES (%s, 'PAYMENT_CONFIRMATION_OTP', %s, NOW());",
+                                    [str(sr.id), f"Cash Payment OTP {payment_otp} for amount ₹{amount_received}"]
+                                )
+                        except Exception as notif_err:
+                            logger.warning("Could not insert workforce_notification for cash OTP: %s", notif_err)
+
+                    sr.payment_status = ServiceRequest.PaymentStatus.PENDING
+                    sr.save(update_fields=["payment_status", "updated_at"])
+
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "payment_cash_collected", {
+                        "payment_otp": payment_otp,
+                        "milestone_type": milestone,
+                        "amount_received": amount_received,
+                        "expires_at": payload.get("otp_expires_at") or payload.get("expires_at"),
+                    }))
+
+                # ── 17. JOB HOLD / RESUME (Weather Delay / Site Emergency) ───────────
+                elif event_type in ["job.hold", "job_on_hold", "job.paused"]:
+                    hold_reason = payload.get("reason") or payload.get("reason_note") or "Service temporarily paused due to weather / site condition"
+                    safe_apply_transition(sr, "on_hold")
+                    sr.cancellation_note = hold_reason
+                    sr.save(update_fields=["status", "cancellation_note", "updated_at"])
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "job_hold_status_changed", {
+                        "is_on_hold": True,
+                        "hold_reason": hold_reason,
+                    }))
+
+                elif event_type in ["job.resume", "job_resumed"]:
+                    safe_apply_transition(sr, "in_progress")
+                    sr.cancellation_note = ""
+                    sr.save(update_fields=["status", "cancellation_note", "updated_at"])
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "job_hold_status_changed", {
+                        "is_on_hold": False,
+                        "hold_reason": "",
+                    }))
+
+                # ── 18. SCOPE REDUCTION / REVISED QUOTATION APPROVED ─────────────────
+                elif event_type in ["job.scope_reduction_approved", "quote.scope_reduced", "scope_reduction_approved"]:
+                    try:
+                        from django.core.cache import cache
+                        cache.delete(f"wf_quote_{sr.request_id}")
+                        cache.delete(f"wf_quote_{sr.id}")
+                    except Exception:
+                        pass
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "quote_scope_reduced", payload))
 
                 webhook_event.processing_status = WorkforceWebhookEvent.ProcessingStatus.PROCESSED
                 webhook_event.processed_at = timezone.now()
@@ -963,11 +1199,6 @@ class WorkforceWebhookView(APIView):
 
     @classmethod
     def _broadcast_delay_event(cls, sr, message, failed_cycles=None):
-        # Same fire-and-forget-but-logged shape as _broadcast_event above --
-        # a failure here must never affect the webhook's own success
-        # response. Builds the normal tracking payload and adds the delay
-        # message/cycle count on top, rather than introducing a parallel
-        # payload shape the frontend would need a special case for.
         try:
             from service_requests.notifications import broadcast_tracking_event
             from service_requests.views import _build_tracking_payload
@@ -978,6 +1209,24 @@ class WorkforceWebhookView(APIView):
             broadcast_tracking_event(sr, event_type="booking_dispatch_delayed", custom_data=tracking_payload)
         except Exception as b_err:
             logger.warning(f"Error broadcasting booking_dispatch_delayed: {b_err}")
+
+    @classmethod
+    def _broadcast_quote_event(cls, sr, payload):
+        try:
+            from service_requests.notifications import broadcast_tracking_event
+            from service_requests.views import _build_tracking_payload
+            tracking_payload = _build_tracking_payload(sr, has_full_access=True)
+            quote_data = payload.get("quote") or payload
+            if isinstance(quote_data, dict):
+                tracking_payload["quote_event_data"] = {
+                    "quote_number": quote_data.get("quote_number"),
+                    "decision_token": quote_data.get("decision_token"),
+                    "total_amount": quote_data.get("total_amount"),
+                    "valid_until": quote_data.get("valid_until"),
+                }
+            broadcast_tracking_event(sr, event_type="quote_sent", custom_data=tracking_payload)
+        except Exception as b_err:
+            logger.warning(f"Error broadcasting quote_sent event for booking {sr.id}: {b_err}")
 
     @classmethod
     def _notify(cls, notify_fn, sr):
@@ -1039,7 +1288,7 @@ class WorkforceBookingFromQuoteView(APIView):
             # Fixes the same webhook-auth bypass as _verify_webhook_signature
             # above -- this used to also accept the well-known default
             # strings unconditionally, regardless of the configured secret.
-            if not hmac.compare_digest(provided_secret, WORKFORCE_WEBHOOK_SECRET):
+            if not hmac.compare_digest(provided_secret.encode("utf-8"), WORKFORCE_WEBHOOK_SECRET.encode("utf-8")):
                 return Response({"error": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
         else:
             return Response({"error": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
@@ -1128,8 +1377,10 @@ class WorkforceBookingFromQuoteView(APIView):
             payment_status=ServiceRequest.PaymentStatus.PENDING
         )
 
-        # Dispatch newly created quoted work booking to the workforce system
-        WorkforceIntegrationService.dispatch_job(new_sr.id)
+        # Persist delivery with the new booking instead of making a synchronous
+        # cross-service request in the customer HTTP transaction.
+        from service_requests.services.workforce_dispatch_outbox import queue_workforce_dispatch
+        queue_workforce_dispatch(new_sr)
 
         # Write analytic BookingStatusEvent
         try:

@@ -1,0 +1,417 @@
+"""
+logistics/admin_policy_views.py
+
+Admin API for the three Goods & Transport / Packers & Movers money policies that live in
+service_requests: cancellation fee, waiting (detention) charge and advance payment.
+
+They were only editable through the Django /admin/ site, so the product's own Admin panel
+(GT Pricing) could not set them -- while the fare pages it *can* edit read them at booking
+and cancellation time. Every policy defaults to "no effect"; nothing here invents a value.
+
+    GET    /api/logistics/admin/policies/                 -- all three kinds + the category list
+    POST   /api/logistics/admin/policies/<kind>/          -- create
+    PATCH  /api/logistics/admin/policies/<kind>/<pk>/     -- edit
+    DELETE /api/logistics/admin/policies/<kind>/<pk>/     -- deactivate (rows are kept for audit)
+
+<kind> is one of: cancellation, waiting, advance, extra_charge (toll/parking), claim (damage/loss
+liability), insurance, operations (quote validity, payment window, high-value threshold) and ptl
+(Part Truck Load per-kg pricing). The last three are platform-wide (no service_category).
+"""
+from decimal import Decimal, InvalidOperation
+from typing import Any, Dict
+
+from rest_framework import permissions, status
+from rest_framework.views import APIView
+
+from service_requests.models import (
+    CatalogChangeLog, GTAdvancePaymentPolicy, GTCancellationPolicy, GTClaimPolicy, GTExtraChargePolicy,
+    GTInsurancePolicy, GTOperationsConfig, GTPTLPricingPolicy, GTTaxPolicy, GTWaitingChargePolicy,
+)
+
+from .admin_views import _can, _fail, _ok
+
+# Blank category = platform-wide fallback (see get_gt_*() in service_requests/models.py).
+POLICY_CATEGORIES = ("goods_transport_truck", "goods_transport_two_wheeler", "packers_movers")
+
+_MONEY = "money"
+_PERCENT = "percent"
+_INT = "int"
+_BOOL = "bool"
+_CHOICE = "choice"
+_TEXT = "text"
+_DATE = "date"
+
+KINDS: Dict[str, Any] = {
+    "cancellation": {
+        "model": GTCancellationPolicy,
+        "fields": {
+            "fee_mode": (_CHOICE, tuple(GTCancellationPolicy.FeeMode.values)),
+            "flat_fee_amount": (_MONEY, None),
+            "percent_fee": (_PERCENT, None),
+            "applies_only_after_assignment": (_BOOL, None),
+            "grace_period_seconds": (_INT, None),
+            "is_active": (_BOOL, None),
+        },
+    },
+    "waiting": {
+        "model": GTWaitingChargePolicy,
+        "fields": {
+            "is_enabled": (_BOOL, None),
+            "free_minutes_per_stop": (_INT, None),
+            "rate_per_minute": (_MONEY, None),
+            "max_charge_per_booking": (_MONEY, "nullable"),
+            "is_active": (_BOOL, None),
+        },
+    },
+    "advance": {
+        "model": GTAdvancePaymentPolicy,
+        "fields": {
+            "is_enabled": (_BOOL, None),
+            "advance_percent": (_PERCENT, None),
+            "is_active": (_BOOL, None),
+        },
+    },
+    "extra_charge": {
+        "model": GTExtraChargePolicy,
+        "fields": {
+            "is_enabled": (_BOOL, None),
+            "allow_toll": (_BOOL, None),
+            "allow_parking": (_BOOL, None),
+            "max_amount_per_item": (_MONEY, "nullable"),
+            "max_total_per_booking": (_MONEY, "nullable"),
+            "require_receipt_photo": (_BOOL, None),
+            "is_active": (_BOOL, None),
+        },
+    },
+    "claim": {
+        "model": GTClaimPolicy,
+        "fields": {
+            "is_enabled": (_BOOL, None),
+            "included_liability_cap": (_MONEY, "nullable"),
+            "cap_at_fare": (_BOOL, None),
+            "claim_window_hours": (_INT, "nullable"),
+            "require_photo": (_BOOL, None),
+            "is_active": (_BOOL, None),
+        },
+    },
+    "insurance": {
+        "model": GTInsurancePolicy,
+        "scoped": False,
+        "fields": {
+            "is_offered": (_BOOL, None),
+            "premium_percent": (_PERCENT, None),
+            "max_liability": (_MONEY, None),
+            "is_active": (_BOOL, None),
+        },
+    },
+    "operations": {
+        "model": GTOperationsConfig,
+        "scoped": False,
+        "fields": {
+            "gt_quote_validity_minutes": (_INT, None),
+            "pm_instant_quote_validity_minutes": (_INT, None),
+            "pm_estimate_validity_hours": (_INT, None),
+            "online_payment_window_minutes": (_INT, None),
+            "high_value_consignment_threshold": (_MONEY, None),
+            "checkpoint_radius_meters": (_INT, None),
+            "delivery_otp_ttl_minutes": (_INT, None),
+            "max_otp_attempts": (_INT, None),
+            "delivery_otp_required": (_BOOL, None),
+            "allow_wallet_part_payment": (_BOOL, None),
+            "wallet_topup_enabled": (_BOOL, None),
+            "wallet_max_topup": (_MONEY, "nullable"),
+            "wallet_max_balance": (_MONEY, "nullable"),
+            "is_active": (_BOOL, None),
+        },
+    },
+    # Light PTL (Part Truck Load): platform-wide per-kg rate card. Route-specific rates live on
+    # Lane.ptl_rate_per_kg; eligible vehicles on ServiceTier.ptl_eligible; slots on LogisticsSlot.
+    "ptl": {
+        "model": GTPTLPricingPolicy,
+        "scoped": False,
+        "fields": {
+            "is_enabled": (_BOOL, None),
+            "rate_per_kg": (_MONEY, None),
+            "minimum_chargeable_weight_kg": (_MONEY, None),
+            "minimum_fare": (_MONEY, "nullable"),
+            "min_advance_days": (_INT, None),
+            "load_assist_enabled": (_BOOL, None),
+            "load_assist_fee": (_MONEY, None),
+            "is_active": (_BOOL, None),
+        },
+    },
+    # Round 13 (Final Configurability Pass): GST/RCM configuration. gst_rate
+    # itself lives on ServiceTier/Package (already Admin-configurable there,
+    # see test_gt_gst_configurable.py) -- this kind only adds the RCM branch
+    # on top: opt-in, off by default, resolved by
+    # service_requests.services.gst_policy.resolve_tax_treatment().
+    "tax": {
+        "model": GTTaxPolicy,
+        "fields": {
+            "gst_enabled": (_BOOL, None),
+            "rcm_enabled": (_BOOL, None),
+            "rcm_applies_when_gstin_registered": (_BOOL, None),
+            "rcm_statement": (_TEXT, None),
+            "place_of_supply_note": (_TEXT, None),
+            "effective_from": (_DATE, "nullable"),
+            "effective_to": (_DATE, "nullable"),
+            "is_active": (_BOOL, None),
+        },
+    },
+}
+
+
+def _scoped(kind):
+    return KINDS[kind].get("scoped", True)
+
+
+def _serialize(kind, row):
+    out = {"id": row.id, "kind": kind, "service_category": getattr(row, "service_category", ""),
+           "updated_at": row.updated_at.isoformat() if row.updated_at else None}
+    for name in KINDS[kind]["fields"]:
+        value = getattr(row, name)
+        out[name] = str(value) if isinstance(value, Decimal) else value
+    return out
+
+
+class _Invalid(Exception):
+    pass
+
+
+def _coerce(name, spec, raw):
+    kind, extra = spec
+    if kind == _TEXT:
+        return str(raw or "").strip()[:4000]
+    if kind == _DATE:
+        if raw in (None, ""):
+            return None
+        from django.utils.dateparse import parse_date
+        value = parse_date(str(raw))
+        if value is None:
+            raise _Invalid(f"{name} must be a valid date (YYYY-MM-DD).")
+        return value
+    if kind == _BOOL:
+        if isinstance(raw, bool):
+            return raw
+        if str(raw).strip().lower() in ("true", "1", "yes"):
+            return True
+        if str(raw).strip().lower() in ("false", "0", "no"):
+            return False
+        raise _Invalid(f"{name} must be true or false.")
+    if kind == _CHOICE:
+        value = str(raw or "").strip().upper()
+        if value not in extra:
+            raise _Invalid(f"{name} must be one of {', '.join(extra)}.")
+        return value
+    if kind == _INT:
+        if raw in (None, "") and extra == "nullable":
+            return None
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            raise _Invalid(f"{name} must be a whole number.")
+        if value < 0:
+            raise _Invalid(f"{name} cannot be negative.")
+        return value
+    if raw in (None, "") and extra == "nullable":
+        return None
+    try:
+        value = Decimal(str(raw))
+    except (InvalidOperation, ValueError):
+        raise _Invalid(f"{name} must be a number.")
+    if not value.is_finite() or value < 0:
+        raise _Invalid(f"{name} cannot be negative.")
+    if kind == _PERCENT and value > 100:
+        raise _Invalid(f"{name} cannot exceed 100.")
+    return value.quantize(Decimal("0.01"))
+
+
+def _clean(kind, data, *, partial):
+    if not isinstance(data, dict):
+        raise _Invalid("A JSON object is required.")
+    cleaned = {}
+    if _scoped(kind) and ("service_category" in data or not partial):
+        category = str(data.get("service_category") or "").strip().lower()
+        if category and category not in POLICY_CATEGORIES:
+            raise _Invalid(f"service_category must be blank (platform-wide) or one of {', '.join(POLICY_CATEGORIES)}.")
+        cleaned["service_category"] = category
+    for name, spec in KINDS[kind]["fields"].items():
+        if name in data:
+            cleaned[name] = _coerce(name, spec, data[name])
+    # Fee math would silently be 0 (or nonsense) for a mode without its amount.
+    return cleaned
+
+
+def _validate_business_rules(kind, values):
+    if kind == "cancellation":
+        mode = values.get("fee_mode")
+        if mode == "FLAT" and not Decimal(str(values.get("flat_fee_amount") or 0)) > 0:
+            raise _Invalid("A FLAT cancellation fee needs a flat_fee_amount greater than 0.")
+        if mode == "PERCENT" and not Decimal(str(values.get("percent_fee") or 0)) > 0:
+            raise _Invalid("A PERCENT cancellation fee needs a percent_fee greater than 0.")
+    if kind == "waiting" and values.get("is_enabled") and not Decimal(str(values.get("rate_per_minute") or 0)) > 0:
+        raise _Invalid("An enabled waiting charge needs a rate_per_minute greater than 0.")
+    if kind == "extra_charge":
+        for f in ("max_amount_per_item", "max_total_per_booking"):
+            v = values.get(f)
+            if v is not None and not Decimal(str(v)) > 0:
+                raise _Invalid(f"{f} must be greater than 0, or blank for no limit.")
+        item, total = values.get("max_amount_per_item"), values.get("max_total_per_booking")
+        if item is not None and total is not None and Decimal(str(item)) > Decimal(str(total)):
+            raise _Invalid("max_amount_per_item cannot exceed max_total_per_booking.")
+        if values.get("is_enabled") and not (values.get("allow_toll") or values.get("allow_parking")):
+            raise _Invalid("An enabled policy must allow toll, parking or both.")
+    if kind == "claim":
+        if values.get("claim_window_hours") is not None and int(values["claim_window_hours"]) < 1:
+            raise _Invalid("claim_window_hours must be at least 1, or blank for no limit.")
+        cap = values.get("included_liability_cap")
+        if cap is not None and not Decimal(str(cap)) > 0:
+            raise _Invalid("included_liability_cap must be greater than 0, or blank (uninsured bookings cannot claim).")
+    if kind == "insurance":
+        if not Decimal(str(values.get("premium_percent") or 0)) > 0:
+            raise _Invalid("premium_percent must be greater than 0. Use is_offered=false to stop offering insurance.")
+        if not Decimal(str(values.get("max_liability") or 0)) > 0:
+            raise _Invalid("max_liability must be greater than 0.")
+    if kind == "operations":
+        for f in ("gt_quote_validity_minutes", "pm_instant_quote_validity_minutes",
+                  "pm_estimate_validity_hours", "online_payment_window_minutes",
+                  "checkpoint_radius_meters", "delivery_otp_ttl_minutes", "max_otp_attempts"):
+            if int(values.get(f) or 0) < 1:
+                raise _Invalid(f"{f} must be at least 1.")
+        if not Decimal(str(values.get("high_value_consignment_threshold") or 0)) > 0:
+            raise _Invalid("high_value_consignment_threshold must be greater than 0.")
+    if kind == "ptl":
+        if values.get("is_enabled") and not Decimal(str(values.get("rate_per_kg") or 0)) > 0:
+            raise _Invalid("Enabled Part Truck Load pricing needs a rate_per_kg greater than 0.")
+        if int(values.get("min_advance_days") or 0) < 1:
+            raise _Invalid("min_advance_days must be at least 1 (PTL is advance-booked, never same-day).")
+        if values.get("load_assist_enabled") and not Decimal(str(values.get("load_assist_fee") or 0)) > 0:
+            raise _Invalid("Load Assist needs a load_assist_fee greater than 0.")
+    if kind == "advance" and values.get("is_enabled"):
+        pct = Decimal(str(values.get("advance_percent") or 0))
+        if not (0 < pct <= 100):
+            raise _Invalid("An enabled advance payment needs an advance_percent between 0 and 100.")
+    if kind == "tax":
+        ef, et = values.get("effective_from"), values.get("effective_to")
+        if ef and et and et < ef:
+            raise _Invalid("effective_to cannot be before effective_from.")
+        if values.get("rcm_enabled") and not str(values.get("rcm_statement") or "").strip():
+            raise _Invalid("An enabled RCM policy needs a rcm_statement to print on the invoice.")
+
+
+def _clash(kind, category, exclude_id=None):
+    qs = KINDS[kind]["model"].objects.filter(is_active=True)
+    if _scoped(kind):
+        qs = qs.filter(service_category__iexact=category)
+    if exclude_id:
+        qs = qs.exclude(pk=exclude_id)
+    return qs.exists()
+
+
+def _log(request, kind, row, field, old, new, reason):
+    try:
+        CatalogChangeLog.objects.create(
+            entity_type="GTPolicy", entity_id=row.id, field_name=f"{kind}.{field}",
+            old_value=str(old)[:255], new_value=str(new)[:255], changed_by=request.user,
+            reason=str(reason or "Edited via Logistics Admin API").strip()[:255],
+        )
+    except Exception:
+        pass
+
+
+class AdminGTPolicyOverviewView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if not _can(request.user, "view"):
+            return _fail("Permission denied to view policies.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+        data = {
+            kind: [_serialize(kind, r) for r in spec["model"].objects.order_by(
+                *(("service_category",) if _scoped(kind) else ()), "-is_active", "id")]
+            for kind, spec in KINDS.items()
+        }
+        data["categories"] = list(POLICY_CATEGORIES)
+        return _ok(data)
+
+
+class AdminGTPolicyListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, kind):
+        if kind not in KINDS:
+            return _fail("Unknown policy kind.", "NOT_FOUND", status.HTTP_404_NOT_FOUND)
+        if not _can(request.user, "edit"):
+            return _fail("Permission denied to edit policies.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+        try:
+            values = _clean(kind, request.data, partial=False)
+            default_row = KINDS[kind]["model"]()
+            merged = {n: getattr(default_row, n) for n in KINDS[kind]["fields"]}
+            merged.update(values)
+            _validate_business_rules(kind, merged)
+        except _Invalid as exc:
+            return _fail(str(exc), "VALIDATION_ERROR", status.HTTP_400_BAD_REQUEST)
+        if values.get("is_active", True) and _clash(kind, values.get("service_category", "")):
+            return _fail(
+                "An active policy already exists for this category; edit or deactivate it instead.",
+                "POLICY_EXISTS", status.HTTP_409_CONFLICT,
+            )
+        row = KINDS[kind]["model"].objects.create(**values)
+        _log(request, kind, row, "created", "", values.get("service_category") or "platform-wide",
+             (request.data or {}).get("reason"))
+        return _ok(_serialize(kind, row))
+
+
+class AdminGTPolicyDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _row(self, kind, pk):
+        if kind not in KINDS:
+            return None
+        return KINDS[kind]["model"].objects.filter(pk=pk).first()
+
+    def get(self, request, kind, pk):
+        if not _can(request.user, "view"):
+            return _fail("Permission denied to view policies.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+        row = self._row(kind, pk)
+        if not row:
+            return _fail("Policy not found.", "NOT_FOUND", status.HTTP_404_NOT_FOUND)
+        return _ok(_serialize(kind, row))
+
+    def patch(self, request, kind, pk):
+        if not _can(request.user, "edit"):
+            return _fail("Permission denied to edit policies.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+        row = self._row(kind, pk)
+        if not row:
+            return _fail("Policy not found.", "NOT_FOUND", status.HTTP_404_NOT_FOUND)
+        try:
+            values = _clean(kind, request.data, partial=True)
+            merged = {n: getattr(row, n) for n in KINDS[kind]["fields"]}
+            merged.update(values)
+            _validate_business_rules(kind, merged)
+        except _Invalid as exc:
+            return _fail(str(exc), "VALIDATION_ERROR", status.HTTP_400_BAD_REQUEST)
+        category = values.get("service_category", getattr(row, "service_category", ""))
+        active = values.get("is_active", row.is_active)
+        if active and _clash(kind, category, exclude_id=row.id):
+            return _fail(
+                "Another active policy already exists for this category.", "POLICY_EXISTS", status.HTTP_409_CONFLICT,
+            )
+        for name, value in values.items():
+            old = getattr(row, name)
+            if old != value:
+                setattr(row, name, value)
+                _log(request, kind, row, name, old, value, (request.data or {}).get("reason"))
+        row.save()
+        return _ok(_serialize(kind, row))
+
+    def delete(self, request, kind, pk):
+        if not _can(request.user, "edit"):
+            return _fail("Permission denied to edit policies.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+        row = self._row(kind, pk)
+        if not row:
+            return _fail("Policy not found.", "NOT_FOUND", status.HTTP_404_NOT_FOUND)
+        if row.is_active:
+            row.is_active = False
+            row.save(update_fields=["is_active", "updated_at"])
+            _log(request, kind, row, "is_active", True, False, "Deactivated via Logistics Admin API")
+        return _ok(_serialize(kind, row))

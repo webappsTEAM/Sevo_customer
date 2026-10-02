@@ -1,15 +1,27 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react"
 import {
-  AlertTriangle, ArrowRight, Check, History, Info, Lock, Pencil,
-  RefreshCw, Search, ShieldCheck, Truck,
+  AlertTriangle, ArrowRight, History, Info, Lock,
+  RefreshCw, Search, ShieldCheck, Truck, Layers, Package, Home, Clock,
+  Navigation, HelpCircle, MapPinned, Receipt, ListChecks
 } from "lucide-react"
-import { Button, Input, Modal, Select, TextArea, formatDateTime } from "../../components/kit.jsx"
+import { Button, Input, Modal, Select, formatDateTime } from "../../components/kit.jsx"
 import { ToastBanner, useToast } from "./useToast.jsx"
 import {
   fetchAdminTierHistory,
   fetchAdminTiers,
   updateAdminTier,
 } from "../../../api/logisticsAdminService.js"
+import { GTCategoriesTab } from "./gt/GTCategoriesTab.jsx"
+import { GTItemsTab } from "./gt/GTItemsTab.jsx"
+import { GTPackersMoversTab } from "./gt/GTPackersMoversTab.jsx"
+import { GTSlotsTab } from "./gt/GTSlotsTab.jsx"
+import { GTLanesTab } from "./gt/GTLanesTab.jsx"
+import { GTFaqsTab } from "./gt/GTFaqsTab.jsx"
+import { GTPoliciesTab } from "./gt/GTPoliciesTab.jsx"
+import { GTRulesTab } from "./gt/GTRulesTab.jsx"
+import { GTCoverageTab } from "./GTCoverageTab.jsx"
+import { GTPackersMoversHelpersPanel } from "./GTPackersMoversHelpersPanel.jsx"
+
 
 /**
  * Goods & Transport rate card.
@@ -57,9 +69,19 @@ const PRICING_FIELDS = [
     hint: "Charged per stop beyond the standard two (one pickup, one drop).",
   },
   {
+    key: "max_additional_stops", label: "Max extra stops", short: "Max stops", unit: "stops",
+    kind: "int", nullable: false,
+    hint: "Most intermediate stops a customer may add on this vehicle (0-10). Enforced on quote and booking.",
+  },
+  {
     key: "surge_multiplier", label: "Surge multiplier", short: "Surge", unit: "x",
     kind: "money", nullable: false,
     hint: "Multiplies the whole computed fare. A fixed per-tier value between 0.01 and 5.00 — not a live demand engine.",
+  },
+  {
+    key: "gst_rate", label: "GST included", short: "GST incl.", unit: "%",
+    kind: "rate", nullable: true,
+    hint: "GST already inside the fare (the fare does not change). Invoices show this component. Set on the Catalog package.",
   },
   {
     key: "starting_price", label: "Starting price", short: "Starting price", unit: "₹",
@@ -68,19 +90,6 @@ const PRICING_FIELDS = [
   },
 ]
 
-const DESCRIPTIVE_FIELDS = [
-  { key: "name", label: "Tier name", kind: "text" },
-  { key: "capacity_label", label: "Capacity label", kind: "text", hint: "Shown on the booking card, e.g. the payload this vehicle carries." },
-  { key: "dimensions_label", label: "Dimensions label", kind: "text" },
-  { key: "description", label: "Description", kind: "textarea" },
-  { key: "order", label: "Display order", kind: "int", hint: "Lower numbers appear first on the booking page." },
-  {
-    key: "is_active", label: "Bookable", kind: "bool",
-    hint: "Turning this off hides the tier from new bookings. Jobs already booked on it are unaffected.",
-  },
-]
-
-const ALL_FIELDS = [...PRICING_FIELDS, ...DESCRIPTIVE_FIELDS]
 const PRICING_KEYS = new Set(PRICING_FIELDS.map((f) => f.key))
 
 function num(value) {
@@ -92,6 +101,10 @@ function num(value) {
 function formatValue(field, value) {
   if (field.kind === "bool") return value ? "Yes" : "No"
   if (value === null || value === undefined || value === "") return "Not set"
+  if (field.kind === "rate") {
+    const r = Number(value)
+    return Number.isNaN(r) || r <= 0 ? "None" : `${r.toFixed(2)}%`
+  }
   if (field.kind === "money" || field.kind === "int") {
     const n = Number(value)
     if (Number.isNaN(n)) return String(value)
@@ -106,68 +119,8 @@ function formatValue(field, value) {
   return String(value)
 }
 
-function formFromTier(tier) {
-  const form = {}
-  for (const field of ALL_FIELDS) {
-    const value = tier[field.key]
-    form[field.key] = field.kind === "bool"
-      ? Boolean(value)
-      : (value === null || value === undefined ? "" : String(value))
-  }
-  return form
-}
-
-/**
- * Which fields the form would actually change.
- *
- * Mirrors changed_fields() in logistics/pricing_admin.py: money fields are
- * compared numerically, so re-opening a form that renders 22.00 as "22" and
- * saving it is correctly seen as no change and writes no audit rows. This
- * comparison has to be at least as sensitive as the server's — a difference
- * this misses is a field the page never sends, which would look to the
- * operator like a silent failure to save.
- */
-function diffFields(tier, form) {
-  const out = []
-  for (const field of ALL_FIELDS) {
-    if (!(field.key in form)) continue
-    const before = tier[field.key]
-    const after = form[field.key]
-    if (field.kind === "money" || field.kind === "int") {
-      if (num(before) === num(after)) continue
-    } else if (field.kind === "bool") {
-      if (Boolean(before) === Boolean(after)) continue
-    } else if (String(before ?? "") === String(after ?? "")) {
-      continue
-    }
-    out.push({ field, before, after })
-  }
-  return out
-}
-
-/** Only the changed fields go on the wire — the server writes one audit row per field it receives. */
-function toPayload(diff) {
-  const payload = {}
-  for (const { field, after } of diff) {
-    if (field.kind === "bool") payload[field.key] = Boolean(after)
-    else if (field.kind === "int") payload[field.key] = after === "" ? 0 : Number(after)
-    else if (field.kind === "money") payload[field.key] = after === "" ? null : String(after)
-    else payload[field.key] = after ?? ""
-  }
-  return payload
-}
-
 const PRICE_LOCK_FALLBACK =
   "Rate changes apply to NEW quotes and bookings only. Jobs already booked keep the price they were quoted at, including any that are still in progress."
-
-function FieldError({ messages }) {
-  if (!messages || !messages.length) return null
-  return (
-    <div className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400">
-      {messages.join(" ")}
-    </div>
-  )
-}
 
 function ModePill({ distancePriced }) {
   return distancePriced ? (
@@ -182,6 +135,7 @@ function ModePill({ distancePriced }) {
 }
 
 export function GTPricingPage() {
+  const [activeTab, setActiveTab] = useState("tiers")
   const [tiers, setTiers] = useState([])
   const [meta, setMeta] = useState(null)
   const [notice, setNotice] = useState("")
@@ -193,14 +147,6 @@ export function GTPricingPage() {
   const [activeFilter, setActiveFilter] = useState("")
   const [searchInput, setSearchInput] = useState("")
   const [search, setSearch] = useState("")
-
-  const [editing, setEditing] = useState(null)
-  const [form, setForm] = useState({})
-  const [reason, setReason] = useState("")
-  const [stage, setStage] = useState("edit")
-  const [saving, setSaving] = useState(false)
-  const [fieldErrors, setFieldErrors] = useState({})
-  const [formError, setFormError] = useState(null)
 
   const [historyTier, setHistoryTier] = useState(null)
   const [historyRows, setHistoryRows] = useState([])
@@ -234,12 +180,7 @@ export function GTPricingPage() {
   // Goods & Transport unification, Phase 2: this screen is now read-only for
   // everyone, regardless of role -- pricing lives on Package (Catalog >
   // Packages) and the server rejects PATCHes here outright (see
-  // logistics/admin_views.py AdminServiceTierDetailView.patch). Forcing
-  // these false (instead of trusting meta.can_modify_price/can_edit) is
-  // what disables every input/button below that was already wired to them,
-  // without having to touch each one individually.
-  const canModifyPrice = false
-  const canEdit = false
+  // logistics/admin_views.py AdminServiceTierDetailView.patch).
   const priceLock = notice || PRICE_LOCK_FALLBACK
 
   // If the server ever grows a pricing field this screen does not render,
@@ -258,138 +199,6 @@ export function GTPricingPage() {
     { value: "", label: "All categories" },
     ...(meta?.categories || []).map((c) => ({ value: c.value, label: c.label })),
   ]), [meta])
-
-  const pendingDiff = useMemo(
-    () => (editing ? diffFields(editing, form) : []),
-    [editing, form],
-  )
-  const pricingDiff = useMemo(() => pendingDiff.filter((d) => PRICING_KEYS.has(d.field.key)), [pendingDiff])
-  const descriptiveDiff = useMemo(() => pendingDiff.filter((d) => !PRICING_KEYS.has(d.field.key)), [pendingDiff])
-
-  // Setting or clearing per_km_rate is not one rate among eight: it moves the
-  // whole tier between the flat starting price and the distance formula, and
-  // silently makes the other six rates live or inert. Called out on its own.
-  const modeChange = useMemo(() => {
-    const row = pendingDiff.find((d) => d.field.key === "per_km_rate")
-    if (!row) return null
-    const before = num(row.before)
-    const after = num(row.after)
-    if (before === null && after !== null) return "to_distance"
-    if (before !== null && after === null) return "to_flat"
-    return null
-  }, [pendingDiff])
-
-  const closeEditor = () => {
-    setEditing(null)
-    setForm({})
-    setReason("")
-    setStage("edit")
-    setFieldErrors({})
-    setFormError(null)
-  }
-
-  const openEditor = (tier) => {
-    setEditing(tier)
-    setForm(formFromTier(tier))
-    setReason("")
-    setStage("edit")
-    setFieldErrors({})
-    setFormError(null)
-  }
-
-  const setField = (key, value) => {
-    setForm((prev) => ({ ...prev, [key]: value }))
-    setFieldErrors((prev) => (prev[key] ? { ...prev, [key]: undefined } : prev))
-  }
-
-  /**
-   * Client-side checks are a courtesy, not the authority: they catch a blank
-   * required rate and a non-number before a round trip. Ranges (per-field
-   * minimums, the surge ceiling) are left to the model validators so there is
-   * exactly one place that decides what a legal rate is.
-   */
-  const review = () => {
-    const errors = {}
-    for (const field of PRICING_FIELDS) {
-      const raw = form[field.key]
-      if (raw === "" || raw === null || raw === undefined) {
-        if (!field.nullable) {
-          errors[field.key] = ["This rate is required. Enter 0 if this tier should not charge it."]
-        }
-        continue
-      }
-      if (Number.isNaN(Number(raw))) errors[field.key] = ["Enter a number."]
-    }
-    if (Object.keys(errors).length) {
-      setFieldErrors(errors)
-      setFormError({ message: "Some values need fixing before these changes can be reviewed." })
-      return
-    }
-    if (!pendingDiff.length) {
-      setFormError({ message: "Nothing has changed yet." })
-      return
-    }
-    if (pricingDiff.length && !reason.trim()) {
-      setFieldErrors({ reason: ["A reason is required when changing rates."] })
-      setFormError({ message: "A reason is required when changing rates. It is stored alongside the old and new values." })
-      return
-    }
-    setFieldErrors({})
-    setFormError(null)
-    setStage("confirm")
-  }
-
-  const adoptServerVersion = (current) => {
-    setEditing(current)
-    setForm(formFromTier(current))
-    setTiers((rows) => rows.map((row) => (row.id === current.id ? current : row)))
-    setFieldErrors({})
-    setFormError(null)
-    setStage("edit")
-  }
-
-  const save = async () => {
-    if (!editing) return
-    setSaving(true)
-    const res = await updateAdminTier(editing.id, toPayload(pendingDiff), {
-      reason: reason.trim(),
-      expectedUpdatedAt: editing.updated_at,
-    })
-    setSaving(false)
-
-    if (res.ok) {
-      const label = editing.name
-      const count = res.changed.length
-      closeEditor()
-      showToast(
-        count
-          ? `${label}: ${count} field${count === 1 ? "" : "s"} updated. Applies to new quotes only.`
-          : "No changes to save.",
-      )
-      load()
-      return
-    }
-
-    const err = res.error
-    setStage("edit")
-    setFormError(err)
-    const next = {}
-    if (err.errors && typeof err.errors === "object") {
-      for (const [key, value] of Object.entries(err.errors)) {
-        next[key] = Array.isArray(value) ? value.map(String) : [String(value)]
-      }
-    }
-    if (Array.isArray(err.fields)) {
-      for (const key of err.fields) {
-        if (next[key]) continue
-        next[key] = [err.code === "PRICING_FORBIDDEN"
-          ? "Your role is not allowed to change this rate."
-          : "This field needs a value."]
-      }
-    }
-    if (err.code === "REASON_REQUIRED") next.reason = [err.message]
-    setFieldErrors(next)
-  }
 
   const openHistory = async (tier) => {
     setHistoryTier(tier)
@@ -413,23 +222,176 @@ export function GTPricingPage() {
           </div>
           <div>
             <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-              Goods &amp; Transport Rate Card <span className="font-semibold text-slate-400 dark:text-slate-500">(read-only)</span>
+              Goods &amp; Transport Management Hub
             </h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              The live rates the fare engine reads for every Goods &amp; Transport quote.
+              Unified administration for vehicle tiers, cargo categories, inventory items, relocation pricing, and operating slots.
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
-            <Lock size={13} /> Reference only -- edit via Packages
-          </span>
-          <Button variant="ghost" onClick={load} disabled={loading}>
-            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-            <span className="ml-1.5">Refresh</span>
-          </Button>
-        </div>
+        {activeTab === "tiers" && (
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
+              <Lock size={13} /> Reference only -- edit via Packages
+            </span>
+            <Button variant="ghost" onClick={load} disabled={loading}>
+              <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+              <span className="ml-1.5">Refresh</span>
+            </Button>
+          </div>
+        )}
       </div>
+
+      {/* Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3 overflow-x-auto hide-scrollbar">
+        <button
+          type="button"
+          onClick={() => setActiveTab("tiers")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === "tiers"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+          }`}
+        >
+          <Truck size={15} />
+          Rate Cards &amp; Tiers
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("categories")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === "categories"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+          }`}
+        >
+          <Layers size={15} />
+          Goods Categories
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("items")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === "items"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+          }`}
+        >
+          <Package size={15} />
+          Cargo &amp; Inventory Items
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("pm_config")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === "pm_config"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+          }`}
+        >
+          <Home size={15} />
+          Packers &amp; Movers Settings
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("slots")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === "slots"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+          }`}
+        >
+          <Clock size={15} />
+          Operating Slots
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("lanes")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === "lanes"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+          }`}
+        >
+          <Navigation size={15} />
+          Lanes &amp; Routes
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("coverage")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === "coverage"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+          }`}
+        >
+          <MapPinned size={15} />
+          Service Coverage
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("faqs")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === "faqs"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+          }`}
+        >
+          <HelpCircle size={15} />
+          Platform FAQs
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("policies")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === "policies"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+          }`}
+        >
+          <Receipt size={15} />
+          Fees &amp; Policies
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("rules")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === "rules"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+          }`}
+        >
+          <ListChecks size={15} />
+          Rules, Add-ons &amp; Cities
+        </button>
+      </div>
+
+      {activeTab === "categories" && <GTCategoriesTab showToast={showToast} />}
+      {activeTab === "items" && <GTItemsTab showToast={showToast} />}
+      {activeTab === "pm_config" && (
+        <>
+          <GTPackersMoversTab showToast={showToast} />
+          <GTPackersMoversHelpersPanel showToast={showToast} />
+        </>
+      )}
+      {activeTab === "slots" && <GTSlotsTab showToast={showToast} />}
+      {activeTab === "lanes" && <GTLanesTab showToast={showToast} />}
+      {activeTab === "coverage" && <GTCoverageTab showToast={showToast} />}
+      {activeTab === "faqs" && <GTFaqsTab showToast={showToast} />}
+      {activeTab === "policies" && <GTPoliciesTab showToast={showToast} />}
+      {activeTab === "rules" && <GTRulesTab showToast={showToast} />}
+
+      {activeTab === "tiers" && (
+        <div className="space-y-5">
+
 
       <div className="flex items-start gap-2.5 rounded-2xl border border-indigo-100 dark:border-indigo-500/25 bg-indigo-50/60 dark:bg-indigo-500/10 px-4 py-3">
         <Info size={16} className="mt-0.5 shrink-0 text-indigo-600 dark:text-indigo-300" />
@@ -510,10 +472,26 @@ export function GTPricingPage() {
               {!loading && tiers.map((tier) => (
                 <tr key={tier.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
                   <td className="px-4 py-3 align-top">
-                    <div className="font-bold text-slate-900 dark:text-white">{tier.name}</div>
+                    <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <span>{tier.name}</span>
+                      {tier.is_dispatchable === false && (
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300"
+                          title={tier.dispatchability_warning || "Un-dispatchable: no compatible vendor fleet registered"}
+                        >
+                          <AlertTriangle size={11} className="text-amber-700" />
+                          Un-dispatchable
+                        </span>
+                      )}
+                    </div>
                     <div className="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-0.5">
                       {tier.slug} · {tier.city} · {tier.category_display}
                     </div>
+                    {tier.is_dispatchable === false && (
+                      <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-1">
+                        {tier.dispatchability_warning || "Commercial fleet for this vehicle class is not currently registered by vendor partners."}
+                      </p>
+                    )}
                   </td>
                   <td className="px-3 py-3 align-top"><ModePill distancePriced={tier.is_distance_priced} /></td>
                   {PRICING_FIELDS.map((field) => (
@@ -541,20 +519,31 @@ export function GTPricingPage() {
                   </td>
                   <td className="px-4 py-3 align-top">
                     <div className="flex items-center justify-end gap-1.5">
+                      {tier.category === "truck" && !["two_wheeler", "three_wheeler"].includes(tier.vehicle_class) && (
+                        <button
+                          type="button"
+                          title="Part Truck Load: allow this vehicle for per-kg, slot-booked part-load trips"
+                          onClick={async () => {
+                            const res = await updateAdminTier(tier.id, { ptl_eligible: !tier.ptl_eligible }, { reason: "PTL eligibility toggled" })
+                            if (res.ok) { showToast?.(`PTL ${tier.ptl_eligible ? "disabled" : "enabled"} for ${tier.name}.`, "success"); load() }
+                            else showToast?.(res.error?.message || "Could not update PTL eligibility.", "error")
+                          }}
+                          className={[
+                            "inline-flex items-center px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-colors cursor-pointer",
+                            tier.ptl_eligible
+                              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+                              : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800",
+                          ].join(" ")}
+                        >
+                          PTL {tier.ptl_eligible ? "on" : "off"}
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => openHistory(tier)}
                         className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                       >
                         <History size={13} /> History
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openEditor(tier)}
-                        disabled={!canModifyPrice && !canEdit}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-500/15 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        <Pencil size={13} /> {canModifyPrice ? "Edit rates" : canEdit ? "Edit details" : "View"}
                       </button>
                     </div>
                   </td>
@@ -564,250 +553,6 @@ export function GTPricingPage() {
           </table>
         </div>
       </div>
-
-      {editing && (
-        <Modal
-          title={stage === "confirm" ? "Confirm rate change" : `Edit ${editing.name}`}
-          onClose={saving ? () => {} : closeEditor}
-          maxWidth="max-w-3xl"
-        >
-          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 px-4 py-3 mb-5">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Affected tier</div>
-            <div className="font-extrabold text-slate-900 dark:text-white mt-0.5">{editing.name}</div>
-            <div className="text-[12px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">
-              {editing.category_display} · {editing.city} · <span className="font-mono">{editing.slug}</span>
-            </div>
-            <div className="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-1">
-              Last changed {editing.updated_at ? formatDateTime(editing.updated_at) : "—"}
-            </div>
-          </div>
-
-          {formError && (
-            <div className="flex items-start gap-2.5 rounded-2xl border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 px-4 py-3 mb-5">
-              <AlertTriangle size={16} className="mt-0.5 shrink-0 text-rose-600 dark:text-rose-300" />
-              <div className="text-[13px] font-semibold text-rose-800 dark:text-rose-200">
-                {formError.message}
-                {formError.code === "TIER_CHANGED_ELSEWHERE" && formError.current && (
-                  <div className="mt-2">
-                    <Button variant="danger" onClick={() => adoptServerVersion(formError.current)}>
-                      Load the current values
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {stage === "edit" && (
-            <div className="space-y-6">
-              <section>
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Rates</h4>
-                  {!canModifyPrice && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-300">
-                      <Lock size={12} /> Your role cannot change rates
-                    </span>
-                  )}
-                </div>
-                {!editing.is_distance_priced && (
-                  <p className="text-[12px] font-medium text-slate-500 dark:text-slate-400 mb-3">
-                    This tier is on flat pricing: only the starting price is charged. Setting a per-km rate switches
-                    it to the distance formula and makes the other rates take effect.
-                  </p>
-                )}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {PRICING_FIELDS.map((field) => (
-                    <div key={field.key}>
-                      <Input
-                        label={`${field.label} (${field.unit})`}
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        inputMode="decimal"
-                        value={form[field.key] ?? ""}
-                        placeholder={field.nullable ? "Not set" : "0.00"}
-                        disabled={!canModifyPrice || saving}
-                        hint={field.hint}
-                        onChange={(e) => setField(field.key, e.target.value)}
-                      />
-                      <FieldError messages={fieldErrors[field.key]} />
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <section>
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Details</h4>
-                  {!canEdit && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-300">
-                      <Lock size={12} /> Your role cannot change details
-                    </span>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {DESCRIPTIVE_FIELDS.map((field) => (
-                    <div key={field.key} className={field.kind === "textarea" ? "sm:col-span-2" : ""}>
-                      {field.kind === "textarea" ? (
-                        <TextArea
-                          label={field.label}
-                          value={form[field.key] ?? ""}
-                          disabled={!canEdit || saving}
-                          hint={field.hint}
-                          onChange={(e) => setField(field.key, e.target.value)}
-                        />
-                      ) : field.kind === "bool" ? (
-                        <label className="flex items-start gap-2.5 rounded-xl border border-slate-200 dark:border-slate-800 px-3.5 py-3 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            className="mt-0.5 h-4 w-4 rounded accent-indigo-600 cursor-pointer"
-                            checked={Boolean(form[field.key])}
-                            disabled={!canEdit || saving}
-                            onChange={(e) => setField(field.key, e.target.checked)}
-                          />
-                          <span>
-                            <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">{field.label}</span>
-                            {field.hint && <span className="block text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-0.5">{field.hint}</span>}
-                          </span>
-                        </label>
-                      ) : (
-                        <Input
-                          label={field.label}
-                          type={field.kind === "int" ? "number" : "text"}
-                          step={field.kind === "int" ? "1" : undefined}
-                          value={form[field.key] ?? ""}
-                          disabled={!canEdit || saving}
-                          hint={field.hint}
-                          onChange={(e) => setField(field.key, e.target.value)}
-                        />
-                      )}
-                      <FieldError messages={fieldErrors[field.key]} />
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <section>
-                <TextArea
-                  label="Reason for this change"
-                  value={reason}
-                  disabled={saving}
-                  placeholder="e.g. Diesel price revision approved for September"
-                  hint="Required whenever a rate changes. Stored in the pricing history with the old and new values."
-                  onChange={(e) => setReason(e.target.value)}
-                />
-                <FieldError messages={fieldErrors.reason} />
-              </section>
-
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                <div className="text-[12px] font-semibold text-slate-500 dark:text-slate-400">
-                  {pendingDiff.length === 0
-                    ? "No changes yet"
-                    : `${pendingDiff.length} change${pendingDiff.length === 1 ? "" : "s"} ready to review`}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" onClick={closeEditor} disabled={saving}>Cancel</Button>
-                  <Button onClick={review} disabled={saving || pendingDiff.length === 0}>
-                    Review changes <ArrowRight size={14} className="ml-1.5" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {stage === "confirm" && (
-            <div className="space-y-5">
-              {modeChange && (
-                <div className="flex items-start gap-2.5 rounded-2xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 px-4 py-3">
-                  <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-300" />
-                  <p className="text-[13px] font-semibold text-amber-900 dark:text-amber-200">
-                    {modeChange === "to_distance"
-                      ? "This switches the tier from flat pricing to the distance formula. The base fare, free km, loading and stop charges start applying to new quotes."
-                      : "This switches the tier back to flat pricing. New quotes will be charged the starting price, and the distance rates below stop applying."}
-                  </p>
-                </div>
-              )}
-
-              {pricingDiff.length > 0 && (
-                <section>
-                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
-                    Rate changes ({pricingDiff.length})
-                  </h4>
-                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-slate-50 dark:bg-slate-800/50 text-left">
-                          <th className="px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Rate</th>
-                          <th className="px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-right">Current</th>
-                          <th className="px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-right">New</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                        {pricingDiff.map(({ field, before, after }) => (
-                          <tr key={field.key}>
-                            <td className="px-4 py-2.5 font-semibold text-slate-700 dark:text-slate-200">{field.label}</td>
-                            <td className="px-4 py-2.5 text-right tabular-nums text-slate-500 dark:text-slate-400 line-through">
-                              {formatValue(field, before)}
-                            </td>
-                            <td className="px-4 py-2.5 text-right tabular-nums font-extrabold text-slate-900 dark:text-white">
-                              {formatValue(field, after)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
-              )}
-
-              {descriptiveDiff.length > 0 && (
-                <section>
-                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
-                    Detail changes ({descriptiveDiff.length})
-                  </h4>
-                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
-                    {descriptiveDiff.map(({ field, before, after }) => (
-                      <div key={field.key} className="px-4 py-2.5 text-sm">
-                        <div className="font-semibold text-slate-700 dark:text-slate-200">{field.label}</div>
-                        <div className="text-slate-500 dark:text-slate-400 mt-0.5 break-words">
-                          <span className="line-through">{formatValue(field, before) || "—"}</span>
-                          <ArrowRight size={12} className="inline mx-2" />
-                          <span className="font-bold text-slate-900 dark:text-white">{formatValue(field, after) || "—"}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {reason.trim() && (
-                <section>
-                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Reason recorded</h4>
-                  <p className="text-[13px] font-medium text-slate-700 dark:text-slate-300 rounded-2xl border border-slate-200 dark:border-slate-800 px-4 py-3">
-                    {reason.trim()}
-                  </p>
-                </section>
-              )}
-
-              <div className="flex items-start gap-2.5 rounded-2xl border border-indigo-100 dark:border-indigo-500/25 bg-indigo-50/60 dark:bg-indigo-500/10 px-4 py-3">
-                <Info size={16} className="mt-0.5 shrink-0 text-indigo-600 dark:text-indigo-300" />
-                <div className="text-[13px] font-medium text-indigo-900 dark:text-indigo-200">
-                  <span className="font-bold">These rates apply to new quotes and bookings only.</span>{" "}
-                  {priceLock}
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
-                <Button variant="ghost" onClick={() => setStage("edit")} disabled={saving}>Back</Button>
-                <Button onClick={save} disabled={saving}>
-                  <Check size={14} className="mr-1.5" />
-                  {saving ? "Saving…" : "Confirm and save"}
-                </Button>
-              </div>
-            </div>
-          )}
-        </Modal>
-      )}
 
       {historyTier && (
         <Modal
@@ -851,8 +596,11 @@ export function GTPricingPage() {
           )}
         </Modal>
       )}
+        </div>
+      )}
     </div>
   )
 }
+
 
 export default GTPricingPage

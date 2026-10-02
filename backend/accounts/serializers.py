@@ -162,19 +162,11 @@ class UserSerializer(serializers.ModelSerializer):
             try:
                 url = obj.avatar.url
                 if url:
-                    if 'demo.localhost' in url:
+                    if '/media/' in url:
                         idx = url.find('/media/')
-                        if idx != -1:
-                            return "http://localhost:8000" + url[idx:]
-                    request = self.context.get("request")
-                    if request:
-                        uri = request.build_absolute_uri(url)
-                        if 'demo.localhost' in uri:
-                            idx = uri.find('/media/')
-                            if idx != -1:
-                                return "http://localhost:8000" + uri[idx:]
-                        return uri
-                    return url
+                        return url[idx:]
+                    clean = str(obj.avatar.name).lstrip('/')
+                    return f"/media/{clean}"
             except Exception:
                 return None
         return None
@@ -226,15 +218,23 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
         return val_clean
 
     def update(self, instance, validated_data):
-        avatar_val = validated_data.pop('avatar', None)
-        if avatar_val:
-            if isinstance(avatar_val, str):
-                if '/media/' in avatar_val:
-                    instance.avatar.name = avatar_val.split('/media/')[-1]
+        if 'avatar' in validated_data:
+            avatar_val = validated_data.pop('avatar')
+            if avatar_val:
+                if isinstance(avatar_val, str):
+                    if '/media/' in avatar_val:
+                        instance.avatar.name = avatar_val.split('/media/')[-1]
+                    else:
+                        instance.avatar.name = avatar_val.lstrip('/')
                 else:
-                    instance.avatar.name = avatar_val
+                    instance.avatar = avatar_val
             else:
-                instance.avatar = avatar_val
+                if instance.avatar:
+                    try:
+                        instance.avatar.delete(save=False)
+                    except Exception:
+                        pass
+                instance.avatar = None
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)

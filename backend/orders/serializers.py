@@ -28,13 +28,16 @@ class GroceryOrderSerializer(serializers.ModelSerializer):
 
 class GroceryCheckoutSerializer(serializers.Serializer):
     delivery_address = serializers.CharField(allow_blank=False, trim_whitespace=True)
+    delivery_date = serializers.DateField(required=False, allow_null=True)
+    delivery_slot = serializers.CharField(required=False, allow_blank=True, default="")
+    tip_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
 
 
 class MarketplaceOrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = MarketplaceOrderItem
         fields = [
-            "id", "seller_product_id", "product_title", "product_sku",
+            "id", "seller_product_id", "basket_id", "basket_title", "product_title", "product_sku",
             "product_brand", "unit", "pack_size", "product_image",
             "quantity", "unit_price_snapshot", "mrp_snapshot", "line_amount",
         ]
@@ -74,6 +77,15 @@ class MarketplaceOrderSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class DeliverySlotField(serializers.Field):
+    """Permissive field accepting dictionary slot structure or plain string representation."""
+    def to_internal_value(self, data):
+        return data
+
+    def to_representation(self, value):
+        return value
+
+
 class MarketplaceCheckoutSerializer(serializers.Serializer):
     delivery_address = serializers.CharField(allow_blank=False, trim_whitespace=True)
     customer_name = serializers.CharField(required=False, allow_blank=True, default="")
@@ -82,9 +94,9 @@ class MarketplaceCheckoutSerializer(serializers.Serializer):
     payment_method = serializers.CharField(required=False, default="UPI")
     payment_transaction_id = serializers.CharField(required=False, allow_blank=True, default="")
     fulfilment_type = serializers.CharField(required=False, default="DELIVERY")
-    delivery_slot_id = serializers.IntegerField(required=False, allow_null=True, default=None)
-    delivery_slot_label = serializers.CharField(required=False, allow_blank=True, default="")
-    delivery_date = serializers.DateField(required=False, allow_null=True, default=None)
+    delivery_slot = DeliverySlotField(required=False, allow_null=True, default="")
+    delivery_slot_id = serializers.IntegerField(required=False, allow_null=True)
+    delivery_date = serializers.DateField(required=False, allow_null=True)
 
 
 # ─── Unified "My Orders" read view ──────────────────────────────────────────

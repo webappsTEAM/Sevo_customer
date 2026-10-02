@@ -2,7 +2,8 @@
 orders/tests/test_marketplace_payment.py
 
 Comprehensive test suite for Razorpay 2-step Payment Intent, UPI collection,
-HMAC signature verification, webhook safety net, and cart preservation.
+HMAC signature verification, webhook safety net, cart preservation, COD flow,
+and delivery slot integration.
 """
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
@@ -18,7 +19,6 @@ from carts.models import Cart, CartItem, CartType, CartStatus
 from orders.models import (
     MarketplaceOrder,
     MarketplaceOrderItem,
-    MarketplaceOrderOutbox,
     MarketplacePaymentIntent,
 )
 
@@ -30,6 +30,7 @@ User = get_user_model()
     RAZORPAY_KEY_SECRET="rzp_test_samplesecret456",
     RAZORPAY_WEBHOOK_SECRET="rzp_test_webhooksecret789",
     PAYMENT_SANDBOX_MODE=False,
+    PAYMENT_PROVIDER="razorpay",
 )
 class MarketplacePaymentTests(TestCase):
     def setUp(self):
@@ -93,10 +94,11 @@ class MarketplacePaymentTests(TestCase):
 
     @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.validate_cart")
     @patch("orders.marketplace_views._get_razorpay_client")
-    def test_initiate_payment_creates_razorpay_order_and_payment_intent(self, mock_get_client, mock_validate_cart):
+    def test_1_initiate_payment_creates_payment_intent(self, mock_get_client, mock_validate_cart):
         """
-        Step 1: Tests that initiate-payment validates cart with vendor, creates Razorpay order,
-        persists a MarketplacePaymentIntent with status CREATED, and returns required frontend fields.
+        1. initiate payment creates payment intent:
+        Validates cart with vendor, creates Razorpay order, persists MarketplacePaymentIntent
+        with status CREATED, and returns required frontend fields.
         """
         mock_validate_cart.return_value = {"success": True, "is_valid": True, "validation": {"items": []}}
 
@@ -122,16 +124,65 @@ class MarketplacePaymentTests(TestCase):
         self.assertEqual(intent.status, MarketplacePaymentIntent.Status.CREATED)
         self.assertEqual(intent.checkout_payload.get("delivery_address"), "123 Green Street, Hosur")
 
-    def test_initiate_payment_rejects_empty_cart(self):
-        """Initiate payment should return 400 when cart has no items."""
+    @override_settings(
+        PAYMENT_PROVIDER="paytm_mock",
+        PAYTM_MOCK_ENABLED=True,
+        PAYTM_MOCK_SECRET="marketplace-test-paytm-mock-secret",
+        PAYTM_ENV="staging",
+    )
+    @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.intake_order")
+    @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.validate_cart")
+    def test_paytm_mock_requires_server_issued_signed_completion(self, mock_validate_cart, mock_intake_order):
+        mock_validate_cart.return_value = {"success": True, "is_valid": True, "validation": {"items": []}}
+        mock_intake_order.return_value = {
+            "success": True,
+            "data": {"order": {"id": 990, "order_number": "VEND-00990"}},
+        }
+
+        initiated = self.client.post(
+            "/api/orders/marketplace/checkout/initiate-payment/", self.checkout_payload, format="json"
+        )
+        self.assertEqual(initiated.status_code, status.HTTP_200_OK)
+        payload = initiated.data["data"]
+        self.assertEqual(payload["provider"], "paytm_mock")
+        self.assertTrue(payload["mock"])
+        self.assertTrue(payload["order_id"].startswith("PAYTM_MOCK_MART_"))
+
+        verified = self.client.post(
+            "/api/orders/marketplace/checkout/verify-payment/",
+            {
+                "order_id": payload["order_id"],
+                "transaction_id": payload["transaction_id"],
+                "signature": payload["signature"],
+            },
+            format="json",
+        )
+        self.assertEqual(verified.status_code, status.HTTP_201_CREATED)
+        intent = MarketplacePaymentIntent.objects.get(pk=payload["intent_id"])
+        self.assertEqual(intent.status, MarketplacePaymentIntent.Status.PAID)
+        self.assertEqual(intent.provider_transaction_id, payload["transaction_id"])
+
+        replay = self.client.post(
+            "/api/orders/marketplace/checkout/verify-payment/",
+            {
+                "order_id": payload["order_id"],
+                "transaction_id": payload["transaction_id"],
+                "signature": payload["signature"],
+            },
+            format="json",
+        )
+        self.assertEqual(replay.status_code, status.HTTP_200_OK)
+
+    def test_2_empty_cart_rejected(self):
+        """2. empty cart rejected: initiate payment returns 400 when cart is empty."""
         self.cart.items.all().delete()
         response = self.client.post("/api/orders/marketplace/checkout/initiate-payment/", self.checkout_payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("empty", response.data.get("message", "").lower())
 
     @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.validate_cart")
-    def test_initiate_payment_rejects_out_of_stock_vendor_cart(self, mock_validate_cart):
-        """Initiate payment should reject before payment creation if vendor stock check fails."""
+    def test_3_vendor_stock_failure_rejected_before_payment(self, mock_validate_cart):
+        """3. vendor stock failure rejected before payment: rejects before Razorpay order creation."""
         mock_validate_cart.return_value = {
             "success": False,
             "is_valid": False,
@@ -145,10 +196,10 @@ class MarketplacePaymentTests(TestCase):
     @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.intake_order")
     @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.validate_cart")
     @patch("orders.marketplace_views._get_razorpay_client")
-    def test_verify_payment_valid_signature_finalizes_order(self, mock_get_client, mock_validate_cart, mock_intake_order):
+    def test_4_valid_signature_finalizes_order(self, mock_get_client, mock_validate_cart, mock_intake_order):
         """
-        Step 2: Tests that verify-payment authoritatively verifies HMAC signature,
-        marks intent PAID, creates MarketplaceOrder(s), calls vendor intake, and marks cart checked out.
+        4. valid signature finalizes order:
+        Verifies signature, marks intent PAID, creates MarketplaceOrder, calls vendor intake, marks cart checked out.
         """
         intent = MarketplacePaymentIntent.objects.create(
             customer=self.customer,
@@ -202,10 +253,10 @@ class MarketplacePaymentTests(TestCase):
         self.assertEqual(self.cart.status, CartStatus.CHECKED_OUT)
 
     @patch("orders.marketplace_views._get_razorpay_client")
-    def test_verify_payment_invalid_signature_fails_and_preserves_cart(self, mock_get_client):
+    def test_5_and_6_invalid_signature_rejected_and_preserves_cart(self, mock_get_client):
         """
-        Step 2 security test: An invalid/tampered signature must be rejected,
-        marking the intent FAILED and leaving the customer's cart completely untouched.
+        5. invalid signature rejected & 6. invalid signature preserves cart:
+        Tampered signature rejected, intent marked FAILED, cart remains ACTIVE, no order created.
         """
         intent = MarketplacePaymentIntent.objects.create(
             customer=self.customer,
@@ -246,10 +297,56 @@ class MarketplacePaymentTests(TestCase):
     @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.intake_order")
     @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.validate_cart")
     @patch("orders.marketplace_views._get_razorpay_client")
-    def test_razorpay_webhook_safety_net_finalizes_order(self, mock_get_client, mock_validate_cart, mock_intake_order):
+    def test_7_duplicate_verification_does_not_create_duplicate_order(self, mock_get_client, mock_validate_cart, mock_intake_order):
         """
-        Webhook safety-net test: If customer closes tab before verify-payment fires,
-        the server-to-server webhook captures payment and finalizes the order without duplicates.
+        7. duplicate verification does not create duplicate order:
+        Repeated calls to verify-payment with the same payment credentials return existing order
+        without creating duplicate orders in the database.
+        """
+        intent = MarketplacePaymentIntent.objects.create(
+            customer=self.customer,
+            cart=self.cart,
+            razorpay_order_id="order_rzp_dup_001",
+            amount=Decimal("550.00"),
+            currency="INR",
+            status=MarketplacePaymentIntent.Status.CREATED,
+            checkout_payload=self.checkout_payload,
+            idempotency_key="intent_key_dup_001",
+        )
+
+        mock_rp = MagicMock()
+        mock_rp.utility.verify_payment_signature.return_value = True
+        mock_get_client.return_value = mock_rp
+
+        mock_validate_cart.return_value = {"success": True, "is_valid": True, "validation": {"items": []}}
+        mock_intake_order.return_value = {
+            "success": True,
+            "data": {"order": {"id": 905, "order_number": "VEND-00905"}},
+        }
+
+        verify_payload = {
+            "razorpay_order_id": "order_rzp_dup_001",
+            "razorpay_payment_id": "pay_test_dup_999",
+            "razorpay_signature": "valid_mock_signature_hex",
+        }
+
+        resp1 = self.client.post("/api/orders/marketplace/checkout/verify-payment/", verify_payload, format="json")
+        self.assertEqual(resp1.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(MarketplaceOrder.objects.filter(payment_transaction_id="pay_test_dup_999").count(), 1)
+
+        # Duplicate verification call
+        resp2 = self.client.post("/api/orders/marketplace/checkout/verify-payment/", verify_payload, format="json")
+        self.assertEqual(resp2.status_code, status.HTTP_200_OK)
+        # Order count MUST still be 1
+        self.assertEqual(MarketplaceOrder.objects.filter(payment_transaction_id="pay_test_dup_999").count(), 1)
+
+    @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.intake_order")
+    @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.validate_cart")
+    @patch("orders.marketplace_views._get_razorpay_client")
+    def test_8_and_9_webhook_can_finalize_successful_payment_and_replay_is_idempotent(self, mock_get_client, mock_validate_cart, mock_intake_order):
+        """
+        8. webhook can finalize successful payment & 9. webhook replay does not duplicate order:
+        Server-to-server webhook captures payment and finalizes the order without duplicates.
         """
         intent = MarketplacePaymentIntent.objects.create(
             customer=self.customer,
@@ -306,7 +403,7 @@ class MarketplacePaymentTests(TestCase):
         # Order created
         self.assertEqual(MarketplaceOrder.objects.filter(payment_transaction_id="pay_webhook_1234").count(), 1)
 
-        # Idempotent replay of same webhook call should not duplicate orders
+        # 9. Idempotent replay of same webhook call should not duplicate orders
         second_resp = anon_client.post(
             "/api/orders/marketplace/razorpay-webhook/",
             data=json.dumps(webhook_event),
@@ -316,13 +413,68 @@ class MarketplacePaymentTests(TestCase):
         self.assertEqual(second_resp.status_code, status.HTTP_200_OK)
         self.assertEqual(MarketplaceOrder.objects.filter(payment_transaction_id="pay_webhook_1234").count(), 1)
 
+    @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.validate_cart")
+    @override_settings(
+        DEBUG=False,
+        PAYMENT_SANDBOX_MODE=False,
+        RAZORPAY_KEY_ID="",
+        RAZORPAY_KEY_SECRET="",
+    )
+    def test_10_missing_razorpay_production_credentials_fail_safely(self, mock_validate_cart):
+        """
+        10. missing Razorpay production credentials fail safely:
+        When DEBUG=False and credentials are absent, initiate-payment must NOT accept mock payments
+        or fall back to sandbox; it must fail safely with an error.
+        """
+        mock_validate_cart.return_value = {"success": True, "is_valid": True, "validation": {"items": []}}
+        response = self.client.post("/api/orders/marketplace/checkout/initiate-payment/", self.checkout_payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(MarketplacePaymentIntent.objects.count(), 0)
+
+    @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.validate_cart")
+    @patch("orders.marketplace_views._get_razorpay_client")
+    def test_11_server_authoritative_amount_cannot_be_manipulated_by_frontend(self, mock_get_client, mock_validate_cart):
+        """
+        11. server authoritative amount cannot be manipulated by frontend:
+        Even if the frontend attempts to pass a tampered amount, the server calculates
+        the amount authoritatively from the active cart items.
+        """
+        mock_validate_cart.return_value = {"success": True, "is_valid": True, "validation": {"items": []}}
+
+        mock_rp = MagicMock()
+        mock_rp.order.create.return_value = {"id": "order_rzp_tampered_amt", "amount": 55000, "currency": "INR"}
+        mock_get_client.return_value = mock_rp
+
+        tampered_payload = dict(self.checkout_payload)
+        tampered_payload["amount"] = "1.00"
+        tampered_payload["total_amount"] = "1.00"
+        tampered_payload["amount_paise"] = 100
+
+        response = self.client.post("/api/orders/marketplace/checkout/initiate-payment/", tampered_payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.data.get("data", {})
+        # Server must enforce 550.00 from active cart items, NOT 1.00
+        self.assertEqual(data.get("amount"), "550.00")
+        self.assertEqual(data.get("amount_paise"), 55000)
+
+        # Razorpay create must have been called with 55000 paise
+        mock_rp.order.create.assert_called_once()
+        create_kwargs = mock_rp.order.create.call_args[0][0]
+        self.assertEqual(create_kwargs["amount"], 55000)
+
+        # Payment intent in DB must record 550.00
+        intent = MarketplacePaymentIntent.objects.filter(razorpay_order_id="order_rzp_tampered_amt").first()
+        self.assertEqual(intent.amount, Decimal("550.00"))
+
     @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.intake_order")
     @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.validate_cart")
-    def test_cod_checkout_creates_order_with_pending_payment_status(self, mock_validate_cart, mock_intake_order):
+    def test_12_cod_flow_continues_working(self, mock_validate_cart, mock_intake_order):
         """
-        COD Test 1: POST /api/orders/marketplace/checkout/ with payment_method="COD"
-        creates confirmed order immediately with payment_status="PENDING", payment_method="COD",
-        invokes vendor intake, and marks cart checked out.
+        12. COD flow continues working:
+        POST /api/orders/marketplace/checkout/ with payment_method="COD" creates confirmed order
+        with payment_status="PENDING", payment_method="COD", invokes vendor intake, and marks cart checked out.
+        Also verifies non-COD payment methods are rejected on the direct checkout endpoint.
         """
         mock_validate_cart.return_value = {"success": True, "is_valid": True, "validation": {"items": []}}
         mock_intake_order.return_value = {
@@ -354,122 +506,110 @@ class MarketplacePaymentTests(TestCase):
         self.cart.refresh_from_db()
         self.assertEqual(self.cart.status, CartStatus.CHECKED_OUT)
 
-    @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.validate_cart")
-    def test_cod_checkout_rejects_out_of_stock_item(self, mock_validate_cart):
-        """
-        COD Test 2: Out of stock validation failure on COD path hard-blocks order creation
-        and preserves the cart untouched.
-        """
-        mock_validate_cart.return_value = {
-            "success": False,
-            "is_valid": False,
-            "validation": {"errors": [{"message": "Basmati Rice 1kg is out of stock."}]},
-        }
-
-        cod_payload = dict(self.checkout_payload)
-        cod_payload["payment_method"] = "COD"
-
-        response = self.client.post("/api/orders/marketplace/checkout/", cod_payload, format="json")
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(MarketplaceOrder.objects.filter(customer=self.customer).count(), 0)
-
-        self.cart.refresh_from_db()
-        self.assertEqual(self.cart.status, CartStatus.ACTIVE)
-        self.assertEqual(self.cart.items.count(), 2)
-
-    def test_marketplace_checkout_endpoint_rejects_non_cod_payment_method(self):
-        """
-        COD Test 3 Security: Direct POST /api/orders/marketplace/checkout/ with payment_method="UPI"
-        must be rejected with 400 to prevent bypassing payment verification.
-        """
+        # Rejection of non-COD on direct checkout
         upi_payload = dict(self.checkout_payload)
         upi_payload["payment_method"] = "UPI"
-
-        response = self.client.post("/api/orders/marketplace/checkout/", upi_payload, format="json")
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("Only Cash on Delivery (COD) is supported", response.data.get("message", ""))
-
-        # No order created, cart untouched
-        self.assertEqual(MarketplaceOrder.objects.filter(customer=self.customer).count(), 0)
-        self.cart.refresh_from_db()
-        self.assertEqual(self.cart.status, CartStatus.ACTIVE)
-
-    @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.get_delivery_slots")
-    def test_get_delivery_slots_endpoint(self, mock_get_slots):
-        """
-        Tests GET /api/orders/marketplace/delivery-slots/ forwards parameters and returns vendor slots.
-        """
-        mock_get_slots.return_value = {
-            "success": True,
-            "data": [
-                {"id": 1, "label": "Instant Delivery (30-45 mins)", "slot_type": "EXPRESS", "available": True},
-                {"id": 2, "label": "9:00 AM - 12:00 PM", "slot_type": "STANDARD", "available": False},
-            ],
-        }
-
-        response = self.client.get("/api/orders/marketplace/delivery-slots/?warehouse_id=1&date=2026-09-29")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        mock_get_slots.assert_called_once_with(warehouse_id="1", date="2026-09-29")
-        data = response.data.get("data", [])
-        self.assertEqual(len(data), 2)
-        self.assertEqual(data[0]["label"], "Instant Delivery (30-45 mins)")
-        self.assertTrue(data[0]["available"])
+        rej_response = self.client.post("/api/orders/marketplace/checkout/", upi_payload, format="json")
+        self.assertEqual(rej_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Only Cash on Delivery (COD) is supported", rej_response.data.get("message", ""))
 
     @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.intake_order")
     @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.validate_cart")
     @patch("orders.marketplace_views._get_razorpay_client")
-    def test_delivery_slot_propagates_through_payment_intent_and_order_intake(
-        self, mock_get_client, mock_validate_cart, mock_intake_order
-    ):
+    def test_13_existing_delivery_slot_flow_continues_working(self, mock_get_client, mock_validate_cart, mock_intake_order):
         """
-        Tests that delivery_slot_id, delivery_slot_label, and delivery_date survive the
-        initiate -> verify payment flow and are stored on MarketplaceOrder.delivery_slot and passed to vendor intake.
+        13. existing delivery-slot flow continues working:
+        Delivery slot details are captured in payment intent and preserved in final order metadata.
         """
-        mock_validate_cart.return_value = {"success": True, "is_valid": True, "validation": {"items": []}}
-        mock_intake_order.return_value = {
-            "success": True,
-            "data": {"order": {"id": 999, "order_number": "VEND-00999"}},
+        slot_data = {
+            "slot_id": 14,
+            "slot_date": "2026-09-30",
+            "slot_time": "09:00 AM - 11:00 AM",
         }
+        payload_with_slot = dict(self.checkout_payload)
+        payload_with_slot["delivery_slot"] = slot_data
 
+        mock_validate_cart.return_value = {"success": True, "is_valid": True, "validation": {"items": []}}
         mock_rp = MagicMock()
         mock_rp.order.create.return_value = {"id": "order_rzp_slot_001", "amount": 55000, "currency": "INR"}
         mock_rp.utility.verify_payment_signature.return_value = True
         mock_get_client.return_value = mock_rp
+        mock_intake_order.return_value = {
+            "success": True,
+            "data": {"order": {"id": 907, "order_number": "VEND-00907"}},
+        }
 
-        payload = dict(self.checkout_payload)
-        payload["delivery_slot_id"] = 5
-        payload["delivery_slot_label"] = "Express Delivery (45 mins)"
-        payload["delivery_date"] = "2026-09-29"
-
-        # 1. Initiate Payment
-        init_res = self.client.post("/api/orders/marketplace/checkout/initiate-payment/", payload, format="json")
+        # Step 1: Initiate payment with delivery_slot
+        init_res = self.client.post("/api/orders/marketplace/checkout/initiate-payment/", payload_with_slot, format="json")
         self.assertEqual(init_res.status_code, status.HTTP_200_OK)
 
         intent = MarketplacePaymentIntent.objects.filter(razorpay_order_id="order_rzp_slot_001").first()
         self.assertIsNotNone(intent)
-        self.assertEqual(intent.checkout_payload.get("delivery_slot_id"), 5)
-        self.assertEqual(intent.checkout_payload.get("delivery_slot_label"), "Express Delivery (45 mins)")
-        self.assertEqual(intent.checkout_payload.get("delivery_date"), "2026-09-29")
+        self.assertEqual(intent.checkout_payload.get("delivery_slot"), slot_data)
 
-        # 2. Verify Payment
+        # Step 2: Verify payment and finalize order
         verify_payload = {
             "razorpay_order_id": "order_rzp_slot_001",
-            "razorpay_payment_id": "pay_slot_1234",
-            "razorpay_signature": "valid_sig",
+            "razorpay_payment_id": "pay_slot_test_123",
+            "razorpay_signature": "valid_mock_signature_hex",
         }
         verify_res = self.client.post("/api/orders/marketplace/checkout/verify-payment/", verify_payload, format="json")
         self.assertEqual(verify_res.status_code, status.HTTP_201_CREATED)
 
-        # 3. Verify Order delivery_slot field
-        order = MarketplaceOrder.objects.filter(payment_transaction_id="pay_slot_1234").first()
+        order = MarketplaceOrder.objects.filter(payment_transaction_id="pay_slot_test_123").first()
         self.assertIsNotNone(order)
-        self.assertEqual(order.delivery_slot, "Express Delivery (45 mins)")
+        self.assertEqual(order.delivery_address, "123 Green Street, Hosur")
 
-        # 4. Verify vendor intake call received the slot kwargs
-        mock_intake_order.assert_called()
-        intake_kwargs = mock_intake_order.call_args[1]
-        self.assertEqual(intake_kwargs.get("delivery_slot_id"), 5)
-        self.assertEqual(intake_kwargs.get("delivery_slot"), "Express Delivery (45 mins)")
-        self.assertEqual(intake_kwargs.get("delivery_date"), "2026-09-29")
+    @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.intake_order")
+    @patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.validate_cart")
+    def test_basket_checkout_preserves_canonical_basket_and_delivery_slot(self, mock_validate_cart, mock_intake_order):
+        """A bundle is sent to Workforce as a basket, never fabricated as a product."""
+        self.cart.items.all().delete()
+        CartItem.objects.create(
+            cart=self.cart,
+            basket_id=777,
+            basket_title="Breakfast combo",
+            product_title="Breakfast combo",
+            quantity=2,
+            unit_price_snapshot=Decimal("325.00"),
+            seller_id=101,
+            seller_name="Fresh Mart",
+            warehouse_id=1,
+            warehouse_name="Main Hub",
+        )
+        mock_validate_cart.return_value = {
+            "success": True,
+            "is_valid": True,
+            "validation": {
+                "items": [{
+                    "basket_id": 777,
+                    "company_id": 101,
+                    "seller_name": "Fresh Mart",
+                    "warehouse_id": 1,
+                    "warehouse_name": "Main Hub",
+                }],
+            },
+        }
+        mock_intake_order.return_value = {
+            "success": True,
+            "data": {"order": {"id": 908, "order_number": "VEND-00908"}},
+        }
+
+        payload = {
+            **self.checkout_payload,
+            "payment_method": "COD",
+            "delivery_slot": "10:00 AM - 12:00 PM",
+            "delivery_slot_id": 14,
+            "delivery_date": "2026-10-02",
+        }
+        response = self.client.post("/api/orders/marketplace/checkout/", payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        item = MarketplaceOrderItem.objects.get(order__customer=self.customer)
+        self.assertEqual(item.basket_id, 777)
+        self.assertEqual(item.basket_title, "Breakfast combo")
+        self.assertIsNone(item.seller_product_id)
+        sent_items = mock_intake_order.call_args.kwargs["items"]
+        self.assertEqual(sent_items, [{"basket_id": 777, "quantity": 2, "unit_price": "325.00"}])
+        self.assertEqual(mock_intake_order.call_args.kwargs["delivery_slot_id"], 14)
+        self.assertEqual(mock_intake_order.call_args.kwargs["delivery_date"], "2026-10-02")

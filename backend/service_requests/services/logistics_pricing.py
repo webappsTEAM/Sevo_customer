@@ -106,6 +106,18 @@ class LogisticsCatalogMismatchError(UnresolvedLogisticsFareError):
     pass
 
 
+class TooManyStopsError(UnresolvedLogisticsFareError):
+    """The route has more intermediate stops than the tier allows."""
+
+    def __init__(self, allowed, requested):
+        self.allowed = allowed
+        self.requested = requested
+        super().__init__(
+            f"This vehicle allows up to {allowed} intermediate stop(s); "
+            f"the route has {requested}."
+        )
+
+
 def expected_tier_category(service_category):
     """The catalogue category a booking of `service_category` must use."""
     return SERVICE_CATEGORY_TO_TIER_CATEGORY.get((service_category or "").strip())
@@ -151,6 +163,15 @@ def assert_catalog_matches_category(service_category, *, tier=None, lane=None):
             raise LogisticsCatalogMismatchError(
                 f"The selected {label} is no longer available."
             )
+        # Round 13: optional effective-date window (ServiceTier.effective_from/
+        # effective_to). Lane and any object without is_effective() are exempt
+        # (getattr default True), so this only ever restricts a tier that an
+        # admin actually scheduled.
+        is_effective = getattr(obj, "is_effective", None)
+        if callable(is_effective) and not is_effective():
+            raise LogisticsCatalogMismatchError(
+                f"The selected {label} is not currently available (outside its effective dates)."
+            )
 
 _PAISE = Decimal("0.01")
 
@@ -158,6 +179,30 @@ _PAISE = Decimal("0.01")
 def _money(value):
     """Quantise to 2dp with half-up rounding -- money, never float."""
     return Decimal(value).quantize(_PAISE, rounding=ROUND_HALF_UP)
+
+
+def _gst_rate_str(tier):
+    """The tier's admin-configured GST rate (percent, e.g. 18.00) as a 2dp string, or None when unset/zero."""
+    rate = getattr(tier, "gst_rate", None)
+    try:
+        rate = Decimal(str(rate)) if rate is not None else None
+    except Exception:
+        return None
+    if rate is None or rate <= 0:
+        return None
+    return str(rate.quantize(Decimal("0.01")))
+
+
+def _gst_included(total, tier):
+    """
+    The GST component of a GST-inclusive `total` (total - total / (1 + rate)); 0.00 when the tier
+    has no GST rate. Informational only: it never changes the fare.
+    """
+    rate = _gst_rate_str(tier)
+    if rate is None:
+        return Decimal("0.00")
+    total = Decimal(str(total))
+    return _money(total - total / (Decimal("1") + Decimal(rate) / Decimal("100")))
 
 
 def resolve_logistics_fare(*, service_category, logistics_tier, logistics_lane, submitted_amount):
@@ -225,12 +270,58 @@ class LogisticsFareBreakdown(dict):
         free_km             Decimal -- the allowance this quote used
         distance_source     str -- "google_maps" | "straight_line_estimate"
         currency            str
+        vehicle_class       str -- ServiceTier.VehicleClass at quote time
+                            (two_wheeler/three_wheeler/truck/pickup/heavy_truck)
+        weight_class        str -- ServiceTier.WeightClass at quote time
+                            (light/heavy, blank where not applicable)
 
     The four `rate_*`/`free_km` keys exist so that reconciliation can
     re-price a delivered trip entirely from the quote, without reading the
     tier again. A tier's rates are administrator-editable; a booking's
     are not.
+
+    GT audit Update 14: vehicle_class/weight_class exist for the same
+    reason -- the purchased tier's vehicle classification must not be
+    reconstructed later from the (mutable, admin-editable) ServiceTier row,
+    since that could change after the booking was made. Snapshotting it
+    here, alongside the rate fields that already follow this rule, is what
+    lets the Vendor-side dispatch engine (automatic_dispatch.py) validate
+    the ACTUAL purchased requirement instead of only the coarse
+    service_category string it used before this fix.
     """
+
+
+def tier_display_starting_fare(tier):
+    """
+    The lowest fare a customer can actually be quoted on this tier -- what a
+    "Starting from" card should say.
+
+    A distance-priced tier (per_km_rate set) is quoted by quote_logistics_fare
+    from base_fare (falling back to starting_price), loading/unloading and the
+    surge multiplier, then floored at minimum_fare. starting_price is only a
+    mirror of the Package base price and is NOT what that formula reads once
+    base_fare is set, so showing it can advertise a fare no quote will ever
+    produce. This runs the same steps for a zero-chargeable-km, standard
+    two-stop, no-cargo trip -- the cheapest booking that exists.
+
+    A flat tier (per_km_rate unset) is priced straight off starting_price by
+    resolve_logistics_fare, so that value is already the truth.
+    """
+    if getattr(tier, "per_km_rate", None) is None:
+        return _money(tier.starting_price)
+    base_fare = getattr(tier, "base_fare", None)
+    if base_fare is None:
+        base_fare = tier.starting_price
+    subtotal = _money(base_fare) + _money(getattr(tier, "loading_unloading_charge", 0) or 0)
+    surge = getattr(tier, "surge_multiplier", None)
+    surge = _money(surge) if surge is not None else Decimal("1.00")
+    if surge <= 0:
+        surge = Decimal("1.00")
+    total = _money(subtotal * surge)
+    minimum_fare = getattr(tier, "minimum_fare", None)
+    if minimum_fare is not None and total < _money(minimum_fare):
+        total = _money(minimum_fare)
+    return total
 
 
 def quote_logistics_fare(
@@ -243,10 +334,13 @@ def quote_logistics_fare(
     stop_count=STANDARD_STOP_COUNT,
     cargo_summary=None,
     waypoints=None,
+    loading_help=True,
+    service_category=None,
+    customer_gstin=None,
 ):
     """
     Compute a real, itemised, distance-based fare for one goods-transport
-    booking, per CALTRACK_PHASE_14 H.1. Supports multi-stop ordered routes
+    booking, per sevo_PHASE_14 H.1. Supports multi-stop ordered routes
     via waypoints=[(lat, lng), ...].
     """
     if tier is None:
@@ -291,8 +385,14 @@ def quote_logistics_fare(
             "duration_seconds": total_duration,
             "source": overall_source,
         }
-        if stop_count == STANDARD_STOP_COUNT or stop_count < len(points):
-            stop_count = len(points)
+        # Bug found: this only corrected stop_count UP to match the actual
+        # routed waypoints (points, built from the real `waypoints` argument
+        # a few lines above -- the authoritative list once we're in this
+        # multi-stop branch), never down. A caller-supplied stop_count
+        # greater than the real waypoint count stayed inflated, so
+        # additional_stop_charge below could bill for stops that were never
+        # actually routed. points is authoritative here; always sync to it.
+        stop_count = len(points)
     else:
         route = get_route_eta(pickup_lat, pickup_lng, drop_lat, drop_lng)
         if route is None:
@@ -310,13 +410,18 @@ def quote_logistics_fare(
     base_fare = _money(base_fare)
 
     distance_charge = _money(chargeable_km * _money(per_km_rate))
-    loading = _money(getattr(tier, "loading_unloading_charge", 0) or 0)
+    # Loading / unloading help is an optional, separately charged add-on (Porter's
+    # "Load Assist"); the tier's admin-set charge applies only when it is requested.
+    loading = _money(getattr(tier, "loading_unloading_charge", 0) or 0) if loading_help else Decimal("0.00")
 
     try:
         stops = int(stop_count)
     except (TypeError, ValueError):
         stops = STANDARD_STOP_COUNT
     additional_stops = max(0, stops - STANDARD_STOP_COUNT)
+    max_extra = getattr(tier, "max_additional_stops", None)
+    if max_extra is not None and additional_stops > int(max_extra):
+        raise TooManyStopsError(int(max_extra), additional_stops)
     per_stop = _money(getattr(tier, "additional_stop_charge", 0) or 0)
     stop_charge = _money(per_stop * additional_stops)
 
@@ -344,6 +449,33 @@ def quote_logistics_fare(
             total = minimum_fare
             minimum_applied = True
 
+    # Round 13 (Final Configurability Pass): GST/RCM configuration branch.
+    # Resolved only when a caller supplies service_category (every current
+    # caller may now do so; callers that don't are completely unaffected --
+    # resolve_tax_treatment(None, ...) is defined to return the exact
+    # no-RCM, gst_enabled=True default, so this is purely additive).
+    from .gst_policy import resolve_tax_treatment
+
+    _tax = resolve_tax_treatment(service_category, customer_gstin)
+    gst_rate_str = _gst_rate_str(tier) if _tax["gst_enabled"] else None
+    gst_included_amt = _gst_included(total, tier) if _tax["gst_enabled"] else Decimal("0.00")
+    rcm_applicable = bool(_tax["rcm_applicable"]) and gst_included_amt > 0
+    rcm_statement = _tax["rcm_statement"] if rcm_applicable else ""
+    taxable_value = total
+    if rcm_applicable:
+        # RCM: the supplier does not charge GST -- the recipient
+        # self-assesses and pays it directly to the tax authority. The
+        # previously GST-inclusive `total` therefore has its GST component
+        # removed from what the customer is actually charged; the invoice
+        # states the RCM statement in place of a charged GST line. This is
+        # the standard, universally-true RCM treatment (not a Porter value),
+        # and is only reached when an Admin has explicitly turned rcm_enabled
+        # on for this scope -- see GTTaxPolicy.
+        total = _money(total - gst_included_amt)
+        taxable_value = total
+        gst_included_amt = Decimal("0.00")
+        gst_rate_str = None
+
     source = route.get("source")
     is_authoritative = (source == "google_maps")
     is_estimate = not is_authoritative
@@ -354,7 +486,9 @@ def quote_logistics_fare(
 
     now = timezone.now()
     created_at = now.isoformat()
-    expires_at = (now + timedelta(minutes=15)).isoformat()
+    from .gt_operations import ops
+    _validity = int(ops("gt_quote_validity_minutes"))
+    expires_at = (now + timedelta(minutes=_validity)).isoformat()
     quote_id = f"gtq_{uuid.uuid4().hex[:16]}"
 
     # Canonicalize waypoints for cryptographic quote binding
@@ -396,6 +530,8 @@ def quote_logistics_fare(
         "tier_id": getattr(tier, "id", None),
         "tier_name": getattr(tier, "name", ""),
         "tier_slug": getattr(tier, "slug", ""),
+        "vehicle_class": getattr(tier, "vehicle_class", "") or "",
+        "weight_class": getattr(tier, "weight_class", "") or "",
         "pickup_lat": float(pickup_lat) if pickup_lat is not None else None,
         "pickup_lng": float(pickup_lng) if pickup_lng is not None else None,
         "drop_lat": float(drop_lat) if drop_lat is not None else None,
@@ -406,14 +542,11 @@ def quote_logistics_fare(
         "distance_km": str(distance_km),
         "chargeable_km": str(chargeable_km),
         "stops": stops,
+        "loading_help": bool(loading_help),
         "cargo_hash": cargo_hash_str,
     }
-    try:
-        cache.set(f"gt_quote_{quote_id}", cached_data, timeout=900)
-    except Exception as cache_err:
-        logger.warning("Could not cache logistics quote %s: %s", quote_id, cache_err)
 
-    return LogisticsFareBreakdown(
+    breakdown = LogisticsFareBreakdown(
         quote_id=quote_id,
         quote_hash=quote_hash,
         created_at=created_at,
@@ -421,6 +554,8 @@ def quote_logistics_fare(
         expires_at=expires_at,
         tier_id=getattr(tier, "id", None),
         tier_name=getattr(tier, "name", ""),
+        vehicle_class=getattr(tier, "vehicle_class", "") or "",
+        weight_class=getattr(tier, "weight_class", "") or "",
         pickup_lat=str(pickup_lat) if pickup_lat is not None else None,
         pickup_lng=str(pickup_lng) if pickup_lng is not None else None,
         drop_lat=str(drop_lat) if drop_lat is not None else None,
@@ -431,6 +566,7 @@ def quote_logistics_fare(
         chargeable_km=chargeable_km,
         distance_charge=distance_charge,
         loading_unloading=loading,
+        loading_help=bool(loading_help),
         stops=stops,
         additional_stops=additional_stops,
         additional_stop_charge=stop_charge,
@@ -446,12 +582,199 @@ def quote_logistics_fare(
         rate_additional_stop=per_stop,
         rate_minimum_fare=_money(minimum_fare) if minimum_fare is not None else None,
         free_km=free_km,
+        # GST INCLUDED in `total` (admin-configured per tier, blank/0 = none). Snapshotted like
+        # the other rates so a later admin change never alters an existing booking's invoice.
+        gst_rate=gst_rate_str,
+        gst_included=gst_included_amt,
+        rcm_applicable=rcm_applicable,
+        rcm_statement=rcm_statement,
+        taxable_value=taxable_value,
         distance_source=source,
         is_authoritative=is_authoritative,
         is_estimate=is_estimate,
         estimate_notice=estimate_notice,
         currency=getattr(tier, "currency", "INR") or "INR",
     )
+    cached_data["breakdown"] = dict(breakdown)
+    try:
+        cache.set(f"gt_quote_{quote_id}", cached_data, timeout=max(_validity * 60, 60))
+    except Exception as cache_err:
+        logger.warning("Could not cache logistics quote %s: %s", quote_id, cache_err)
+
+    return breakdown
+
+
+# GT audit Update 18 -- which vehicle classes a booking can actually be
+# fulfilled with.
+#
+# Mirrored here rather than imported: the Vendor app is a separate Django
+# project sharing only a database, exactly as with the rank tables in its
+# automatic_dispatch.py. This set is the Customer-side statement of the
+# Vendor's _EMPLOYEE_VEHICLE_TYPE_RANK keys -- the vehicle types a
+# technician can actually have on file.
+#
+# ServiceTier.VehicleClass also offers "heavy_truck", and Vendor's
+# Vehicle.VehicleType has no member that satisfies it: no rank, no
+# equivalence, nothing. A heavy_truck booking would be accepted, charged,
+# and then never dispatchable to anyone. Inventing a mapping (equating it
+# with "truck", say) would mean a customer who paid for a heavy truck gets
+# a smaller vehicle, which is the precise failure the compatibility work
+# exists to prevent. So it is refused at booking time instead.
+#
+# If a heavy-truck fleet is onboarded later, the fix is to add the vehicle
+# type on the Vendor side and add it here -- not to widen an equivalence.
+DISPATCHABLE_VEHICLE_CLASSES = {
+    "two_wheeler",
+    "three_wheeler",
+    "pickup",
+    "truck",
+}
+
+# The goods-transport categories whose compatibility is decided by vehicle
+# CLASS. Packers & Movers is deliberately absent: its tiers are relocation
+# packages (1BHK, Villa) that legitimately carry no vehicle_class, and its
+# compatibility runs on payload_kg instead -- see packers_movers_pricing.
+_CLASS_CLASSIFIED_CATEGORIES = {
+    "goods_transport_truck",
+    "goods_transport_two_wheeler",
+    "goods_transport",
+}
+
+
+def assert_gt_booking_is_classifiable(service_category, tier):
+    """
+    GT audit Update 18 -- a new goods-transport booking must know which
+    vehicle it needs before it can be taken.
+
+    Two ways a booking could previously reach the Vendor side with nothing
+    to dispatch against:
+
+      1. Lane-only. A Lane models a route and a fare; it has no tier, no
+         vehicle and no class. A booking carrying only a lane left the
+         Vendor's Gate 3 with no vehicle_class to enforce, so the
+         fine-grained compatibility check skipped and any vehicle in the
+         coarse category bucket could take the job. Resolving a lane to
+         "some" tier would be inventing a vehicle the customer never chose,
+         so the booking is refused instead and the customer picks a vehicle.
+
+      2. A tier whose vehicle_class is blank, or is a class no vendor
+         vehicle can satisfy (see DISPATCHABLE_VEHICLE_CLASSES).
+
+    Fails CLOSED in both cases, and only for NEW bookings -- this runs in
+    the booking-time fare resolver, so bookings already in the database are
+    untouched and keep their existing backward-compatible handling on the
+    Vendor side.
+    """
+    if service_category not in _CLASS_CLASSIFIED_CATEGORIES:
+        return
+
+    if tier is None:
+        raise UnresolvedLogisticsFareError(
+            "Please choose a vehicle for this trip. A goods-transport booking "
+            "has to record which vehicle class it needs before it can be "
+            "assigned to a driver."
+        )
+
+    vehicle_class = str(getattr(tier, "vehicle_class", "") or "").strip().lower()
+    if not vehicle_class:
+        raise UnresolvedLogisticsFareError(
+            f"The selected vehicle ('{getattr(tier, 'name', '')}') has no vehicle "
+            "classification configured, so this booking could not be matched to a "
+            "driver. Please choose another vehicle or contact support."
+        )
+
+    if vehicle_class not in DISPATCHABLE_VEHICLE_CLASSES:
+        raise UnresolvedLogisticsFareError(
+            f"'{getattr(tier, 'name', '') or vehicle_class}' is not available for "
+            "booking right now -- no driver currently operates a vehicle of this "
+            "class, so the trip could not be fulfilled. Please choose another "
+            "vehicle."
+        )
+
+
+def classification_only_snapshot(*, service_category, tier, total, source):
+    """
+    GT audit Update 16 -- the classification-only fare snapshot.
+
+    quote_logistics_fare() returns a full LogisticsFareBreakdown, which
+    since Update 14 carries the purchased tier's vehicle_class/weight_class
+    so the Vendor dispatch engine can validate the ACTUAL purchased
+    requirement instead of only the coarse service_category string.
+
+    But two live goods-transport paths never reach that function and
+    previously returned a bare fare with NO breakdown at all:
+
+      1. a distance-priced tier whose route could not be measured (no
+         coordinates, or the routing provider returned nothing) where a
+         configured Lane fare exists, and
+      2. a goods-transport tier that is not distance-priced at all
+         (per_km_rate unset), plus the bare "goods_transport" slug, which
+         resolve through the flat lane/tier lookup at the bottom of
+         resolve_logistics_fare_v2().
+
+    A booking made through either path was written to the database with an
+    empty fare_breakdown, so the Vendor side's fine-grained Gate 3 check
+    found no vehicle_class key and -- by its documented
+    do-not-strand-legacy-bookings rule -- silently skipped, leaving only
+    the coarse category check. That made the Update 14/15 fix bypassable by
+    booking a configured route rather than a measured trip.
+
+    This returns the SAME immutable classification keys the full breakdown
+    carries, for the flat-priced paths, WITHOUT inventing any pricing: the
+    total is the fare the existing resolvers already decided, and the
+    classification is copied off the tier that was actually purchased, at
+    purchase time.
+
+    Returns None when no ServiceTier is in scope (a lane-only booking).
+    There is no vehicle classification anywhere in the system for such a
+    booking -- Lane models a route and a fare, not a vehicle -- so this
+    fabricates nothing; see the audit notes for that residual.
+    """
+    if service_category not in LOGISTICS_CATEGORIES:
+        return None
+    if tier is None:
+        return None
+    vehicle_class = getattr(tier, "vehicle_class", "") or ""
+    weight_class = getattr(tier, "weight_class", "") or ""
+    if not vehicle_class:
+        # The tier exists but carries no classification. Returning a
+        # snapshot with an empty vehicle_class would be indistinguishable
+        # from "absent" to the Vendor gate, so return None and let the
+        # pre-existing coarse check stand, exactly as before this fix --
+        # never a fabricated class.
+        return None
+    return LogisticsFareBreakdown(
+        total=total,
+        vehicle_class=vehicle_class,
+        weight_class=weight_class,
+        tier_id=getattr(tier, "id", None),
+        capacity_label=getattr(tier, "capacity_label", "") or "",
+        pricing_mode=source,
+        distance_source=source,
+        currency=getattr(tier, "currency", "INR") or "INR",
+    )
+
+
+def _apply_pm_addons(base_total, breakdown, cart_data, city):
+    """Adds Porter-parity P&M add-ons (rope pulling, appliance install/uninstall, electrician,
+    carpenter, labour-only) on top of a verified P&M quote/fare. Server-priced only -- the
+    client's cart_data carries only codes and quantities, never a price."""
+    from .pm_addons import price_pm_addons
+    total_cft = 0
+    if isinstance(breakdown, dict):
+        total_cft = (breakdown.get("inventory_summary") or {}).get("effective_cft") or (breakdown.get("inventory_summary") or {}).get("total_cft") or 0
+    addon_total, addon_items, addon_error = price_pm_addons(cart_data, city, total_cft)
+    if addon_error:
+        raise UnresolvedLogisticsFareError(addon_error)
+    if addon_items and isinstance(breakdown, dict):
+        breakdown = dict(breakdown)
+        breakdown["pm_addons"] = addon_items
+        breakdown["pm_addons_total"] = str(addon_total)
+        if isinstance(breakdown.get("pricing"), dict):
+            breakdown["pricing"] = dict(breakdown["pricing"])
+            breakdown["pricing"]["pm_addons"] = addon_items
+            breakdown["pricing"]["pm_addons_total"] = str(addon_total)
+    return _money(base_total + addon_total), breakdown
 
 
 def resolve_logistics_fare_v2(
@@ -467,9 +790,19 @@ def resolve_logistics_fare_v2(
     stop_count=STANDARD_STOP_COUNT,
     cart_data=None,
     waypoints=None,
+    move_date=None,
+    move_time=None,
+    booking_mode=None,
+    declared_weight_kg=None,
+    load_assist=None,
+    request_cargo=None,
 ):
     """
     GT-B-01. Returns (fare, breakdown_or_None).
+
+    booking_mode="ptl" routes a goods_transport_truck booking to the Light PTL
+    per-kg pricer (services/ptl_pricing.py), the same way packers_movers has
+    its own branch below. Any other value keeps today's Spot behaviour.
     """
     if service_category not in LOGISTICS_CATEGORIES:
         return submitted_amount, None
@@ -477,6 +810,28 @@ def resolve_logistics_fare_v2(
     assert_catalog_matches_category(
         service_category, tier=logistics_tier, lane=logistics_lane
     )
+    # Update 18: refuse a new goods-transport booking that could not be
+    # dispatched to anyone. Runs before any pricing so a refused booking
+    # never produces a fare, and before the flat paths too, which is where
+    # the lane-only case lives.
+    assert_gt_booking_is_classifiable(service_category, logistics_tier)
+
+    if str(booking_mode or "").strip().lower() == "ptl":
+        from .ptl_pricing import resolve_ptl_fare
+        return resolve_ptl_fare(
+            service_category=service_category,
+            logistics_tier=logistics_tier,
+            logistics_lane=logistics_lane,
+            submitted_amount=submitted_amount,
+            pickup_lat=pickup_lat,
+            pickup_lng=pickup_lng,
+            drop_lat=drop_lat,
+            drop_lng=drop_lng,
+            cart_data=cart_data,
+            declared_weight_kg=declared_weight_kg,
+            load_assist=load_assist,
+            waypoints=waypoints,
+        )
 
     if service_category in DISTANCE_PRICED_CATEGORIES:
         submitted_quote_id = None
@@ -514,6 +869,26 @@ def resolve_logistics_fare_v2(
                 target_city = getattr(logistics_tier, "city", None)
                 cargo_summary = resolve_cargo_payload(cargo_items=raw_items, goods_category_slug=goods_type, city=target_city)
 
+        # E2E-QA 2026-10-01: cargo sent as top-level booking fields (not wrapped in cart_data) was
+        # never validated, so an over-capacity load, an unknown category or unknown items booked fine
+        # while the quote endpoint rejected the same input. Resolve it with the same resolver.
+        if cargo_summary is None and request_cargo:
+            _rc_items = request_cargo.get("cargo_items") or request_cargo.get("items") or None
+            _rc_cat = request_cargo.get("goods_category_id") or request_cargo.get("goods_category") or request_cargo.get("goods_type")
+            _rc_wt = request_cargo.get("declared_weight_kg")
+            _rc_cft = request_cargo.get("declared_cft")
+            if _rc_items or _rc_cat or _rc_wt is not None or _rc_cft:
+                from .cargo_fitment import resolve_cargo_payload
+                _cid = int(_rc_cat) if isinstance(_rc_cat, int) and not isinstance(_rc_cat, bool) else (int(_rc_cat) if isinstance(_rc_cat, str) and _rc_cat.isascii() and _rc_cat.isdigit() and len(_rc_cat) <= 18 else None)
+                cargo_summary = resolve_cargo_payload(
+                    cargo_items=_rc_items,
+                    goods_category_id=_cid,
+                    goods_category_slug=(str(_rc_cat) if _cid is None and _rc_cat else None),
+                    declared_weight_kg=_rc_wt,
+                    declared_cft=_rc_cft,
+                    city=getattr(logistics_tier, "city", None),
+                )
+
         if submitted_expires_at:
             try:
                 exp_dt = timezone.datetime.fromisoformat(str(submitted_expires_at))
@@ -526,11 +901,20 @@ def resolve_logistics_fare_v2(
             except (ValueError, TypeError):
                 raise UnresolvedLogisticsFareError("Submitted quote expiry timestamp is invalid or malformed.")
 
+        cached_quote = None
         if submitted_quote_id:
             cached_quote = cache.get(f"gt_quote_{submitted_quote_id}")
             if not cached_quote:
-                raise UnresolvedLogisticsFareError(
-                    f"Logistics quote '{submitted_quote_id}' has expired or is invalid. Please calculate a fresh quote."
+                has_coords = None not in (pickup_lat, pickup_lng, drop_lat, drop_lng)
+                if not (has_coords and logistics_tier is not None):
+                    raise UnresolvedLogisticsFareError(
+                        f"Logistics quote '{submitted_quote_id}' has expired or is invalid. Please calculate a fresh quote."
+                    )
+                logger.info(
+                    "Logistics quote '%s' not found in cache (evicted or server reloaded); "
+                    "re-verifying authoritatively with tier #%s and coordinates.",
+                    submitted_quote_id,
+                    getattr(logistics_tier, "id", None),
                 )
 
             if cached_quote:
@@ -588,9 +972,19 @@ def resolve_logistics_fare_v2(
                     )
 
                 # 4. Stop Count Verification
-                if cached_quote.get("stops") is not None and stop_count != cached_quote.get("stops"):
+                # A quote's `stops` counts the whole route (pickup + every
+                # intermediate stop + drop). The booking request only lists the
+                # intermediate stops, so when it carries any, the count to
+                # compare is derived from them; comparing the caller's default
+                # (2) rejected every legitimate multi-stop booking that carried
+                # its own quote. The waypoint list itself was already verified
+                # against the quote above.
+                request_stops = (
+                    STANDARD_STOP_COUNT + len(curr_canonical_wp) if curr_canonical_wp else stop_count
+                )
+                if cached_quote.get("stops") is not None and request_stops != cached_quote.get("stops"):
                     raise UnresolvedLogisticsFareError(
-                        f"Quote stop count mismatch: quote was generated for {cached_quote.get('stops')} stops, but request has {stop_count}. Please recalculate fare."
+                        f"Quote stop count mismatch: quote was generated for {cached_quote.get('stops')} stops, but request has {request_stops}. Please recalculate fare."
                     )
 
                 # 5. Cargo Identity & Quantities Verification (binding server-authoritative GoodsItem attributes)
@@ -640,6 +1034,46 @@ def resolve_logistics_fare_v2(
         if cargo_summary and cargo_summary.get("has_prohibited", False):
             raise UnresolvedLogisticsFareError(cargo_summary.get("prohibited_reason") or "Prohibited cargo cannot be transported.")
 
+        # Server-side fitment gate (same rule the quote endpoint applies): the booked vehicle must be able to carry the cargo.
+        if cargo_summary and logistics_tier is not None:
+            from .cargo_fitment import evaluate_vehicle_fitment
+            _is_fit, _fit_reason = evaluate_vehicle_fitment(logistics_tier, cargo_summary)
+            if not _is_fit:
+                raise UnresolvedLogisticsFareError(f"CARGO_DOES_NOT_FIT: {_fit_reason}")
+
+        if submitted_quote_id and cached_quote:
+            # Verified quote price lock: use the authoritative locked quote snapshot
+            if cached_quote.get("breakdown") and isinstance(cached_quote["breakdown"], dict):
+                locked_breakdown = LogisticsFareBreakdown(cached_quote["breakdown"])
+            else:
+                locked_breakdown = LogisticsFareBreakdown(
+                    quote_id=submitted_quote_id,
+                    quote_hash=cached_quote.get("quote_hash"),
+                    created_at=cached_quote.get("created_at"),
+                    quoted_at=cached_quote.get("created_at"),
+                    expires_at=cached_quote.get("expires_at"),
+                    tier_id=cached_quote.get("tier_id") or getattr(logistics_tier, "id", None),
+                    tier_name=cached_quote.get("tier_name") or getattr(logistics_tier, "name", ""),
+                    vehicle_class=cached_quote.get("vehicle_class") or getattr(logistics_tier, "vehicle_class", ""),
+                    weight_class=cached_quote.get("weight_class") or getattr(logistics_tier, "weight_class", ""),
+                    pickup_lat=str(pickup_lat) if pickup_lat is not None else None,
+                    pickup_lng=str(pickup_lng) if pickup_lng is not None else None,
+                    drop_lat=str(drop_lat) if drop_lat is not None else None,
+                    drop_lng=str(drop_lng) if drop_lng is not None else None,
+                    total=_money(cached_quote["total"]),
+                    distance_km=_money(cached_quote.get("distance_km", "0")),
+                    chargeable_km=_money(cached_quote.get("chargeable_km", "0")),
+                    stops=cached_quote.get("stops", stop_count),
+                    currency=getattr(logistics_tier, "currency", "INR") or "INR",
+                    is_authoritative=cached_quote.get("is_authoritative", True),
+                    is_estimate=cached_quote.get("is_estimate", False),
+                    distance_source=cached_quote.get("distance_source", "google_maps"),
+                )
+            if not locked_breakdown.get("is_cargo_fit", True):
+                reason = locked_breakdown.get("cargo_fit_reason") or "Selected vehicle cannot safely carry this cargo."
+                raise UnresolvedLogisticsFareError(f"VEHICLE_CAPACITY_EXCEEDED: {reason}")
+            return _money(cached_quote["total"]), locked_breakdown
+
         breakdown = quote_logistics_fare(
             tier=logistics_tier,
             pickup_lat=pickup_lat,
@@ -649,11 +1083,22 @@ def resolve_logistics_fare_v2(
             stop_count=stop_count,
             cargo_summary=cargo_summary,
             waypoints=extracted_waypoints,
+            service_category=service_category,
         )
         if breakdown is not None:
             if not breakdown.get("is_cargo_fit", True):
                 reason = breakdown.get("cargo_fit_reason") or "Selected vehicle cannot safely carry this cargo."
                 raise UnresolvedLogisticsFareError(f"VEHICLE_CAPACITY_EXCEEDED: {reason}")
+            if submitted_quote_id and submitted_amount is not None:
+                try:
+                    sub_dec = _money(submitted_amount)
+                    calc_dec = _money(breakdown["total"])
+                    if sub_dec != calc_dec:
+                        raise UnresolvedLogisticsFareError(
+                            f"Quote total mismatch: submitted amount ({sub_dec}) does not match authoritative calculated total ({calc_dec}). Please calculate a fresh quote."
+                        )
+                except (InvalidOperation, TypeError):
+                    raise UnresolvedLogisticsFareError(f"Invalid submitted amount format: '{submitted_amount}'.")
             if submitted_quote_id:
                 breakdown["quote_id"] = submitted_quote_id
             if submitted_expires_at:
@@ -666,7 +1111,15 @@ def resolve_logistics_fare_v2(
         # 3. For distance-priced tiers, never fall back to starting_price as a final payable fare.
         if getattr(logistics_tier, "per_km_rate", None) is not None:
             if logistics_lane is not None:
-                return logistics_lane.fare, None
+                # Update 16: the fare is the lane's, unchanged, but the
+                # booking still records WHICH vehicle class was purchased so
+                # Vendor dispatch can enforce it.
+                return logistics_lane.fare, classification_only_snapshot(
+                    service_category=service_category,
+                    tier=logistics_tier,
+                    total=logistics_lane.fare,
+                    source="configured_lane_fare",
+                )
             raise UnresolvedLogisticsFareError(
                 f"Coordinates required to calculate authoritative distance-based fare for '{service_category}'."
             )
@@ -749,7 +1202,17 @@ def resolve_logistics_fare_v2(
                         f"Selected tier #{tier_id} belongs to '{tier_obj.city}', but city '{city}' was requested."
                     )
 
+        # Stops between pickup and drop, from the booking's own stop list (PICKUP/DROP rows excluded).
+        pm_extra_stops = 0
+        if isinstance(waypoints, list):
+            pm_extra_stops = sum(
+                1 for w in waypoints
+                if isinstance(w, dict) and str(w.get("stop_type", "WAYPOINT")).upper() not in ("PICKUP", "DROP")
+                and str(w.get("address") or "").strip()
+            )
+
         current_req = {
+            "extra_stops": pm_extra_stops,
             "tier_id": tier_id,
             "city": city,
             "pickup_lat": pickup_lat,
@@ -765,13 +1228,18 @@ def resolve_logistics_fare_v2(
             "drop_floor": drop_floor,
             "drop_has_lift": drop_has_lift,
             "relocation_type": relocation_type,
+            "move_date": move_date,
+            "move_time": move_time,
         }
 
         if quote_id:
             from .packers_movers_pricing import verify_packers_movers_quote
+            # submitted_total is checked below, AFTER add-ons are priced in -- add-ons are not
+            # part of the signed quote, so comparing the client's total (which includes them)
+            # against the quote-only total here would reject every add-on booking.
             is_valid, cached_quote, err_msg = verify_packers_movers_quote(
                 quote_id,
-                submitted_total=submitted_amount,
+                submitted_total=None,
                 current_request=current_req,
             )
             if not is_valid:
@@ -781,7 +1249,16 @@ def resolve_logistics_fare_v2(
                     raise UnresolvedLogisticsFareError(
                         f"Quote tier mismatch: quote was generated for tier #{cached_quote.get('tier_id')}, but tier #{tier_id} was requested."
                     )
-                return _money(cached_quote["total"]), cached_quote
+                final_amount, final_breakdown = _apply_pm_addons(_money(cached_quote["total"]), cached_quote, cart_data, city)
+                if submitted_amount is not None:
+                    try:
+                        if _money(submitted_amount) != final_amount:
+                            raise UnresolvedLogisticsFareError(
+                                f"Submitted total \u20b9{_money(submitted_amount)} does not match verified server total \u20b9{final_amount} (quote + add-ons)."
+                            )
+                    except (InvalidOperation, TypeError):
+                        raise UnresolvedLogisticsFareError(f"Invalid total amount format: '{submitted_amount}'.")
+                return final_amount, final_breakdown
 
         # P1-7: If quote_id is absent, we must have a selected ServiceTier to recompute.
         # Silently auto-selecting a different vehicle or proceeding without a tier is prohibited.
@@ -811,12 +1288,15 @@ def resolve_logistics_fare_v2(
                 relocation_type=relocation_type,
                 city=city,
                 service_tier_id=tier_id,
+                extra_stops=pm_extra_stops,
+                move_date=move_date,
+                move_time=move_time,
             )
             if not computed_quote.get("is_authoritative", False) or computed_quote.get("is_estimate", False):
                 survey_status = computed_quote.get("survey_status") or "SURVEY_REQUIRED"
                 reason = computed_quote.get("estimate_notice") or computed_quote.get("review_reason") or "Pre-move survey required."
                 raise UnresolvedLogisticsFareError(f"Packers & Movers booking requires survey/review ({survey_status}: {reason}) and cannot be finalized as an instant booking.")
-            
+
             # P1-7: Verify that the resulting quote tier equals the booking tier
             computed_tier_id = computed_quote.get("tier_id")
             if tier_id and computed_tier_id and str(computed_tier_id) != str(tier_id):
@@ -830,16 +1310,25 @@ def resolve_logistics_fare_v2(
                 )
             if computed_quote.get("total") is None:
                 raise UnresolvedLogisticsFareError("Packers & Movers booking cannot be finalized without an authoritative fare.")
-            return _money(computed_quote["total"]), computed_quote
+            return _apply_pm_addons(_money(computed_quote["total"]), computed_quote, cart_data, city)
 
     # Fall through to the original flat resolver rather than duplicating
     # its lane-beats-tier ordering and its
     # "raise rather than trust the client" guarantee in two places. That
     # function stays the single definition of flat logistics pricing and
     # keeps its own test coverage.
-    return resolve_logistics_fare(
+    flat_fare = resolve_logistics_fare(
         service_category=service_category,
         logistics_tier=logistics_tier,
         logistics_lane=logistics_lane,
         submitted_amount=submitted_amount,
-    ), None
+    )
+    # Update 16: same reasoning as the lane branch above -- a flat-priced
+    # goods-transport booking must still snapshot the purchased vehicle
+    # class, or the Vendor-side compatibility gate has nothing to enforce.
+    return flat_fare, classification_only_snapshot(
+        service_category=service_category,
+        tier=logistics_tier,
+        total=flat_fare,
+        source="flat_tier_or_lane_fare",
+    )

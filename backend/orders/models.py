@@ -437,18 +437,17 @@ class MarketplaceOrder(models.Model):
 
 class MarketplaceOrderItem(models.Model):
     """
-    Line item for MarketplaceOrder snapshotting product or basket details at checkout time.
-    Exactly one of seller_product_id or basket_id must be set per item.
+    Line item for MarketplaceOrder snapshotting product details at checkout time.
     """
 
     order = models.ForeignKey(MarketplaceOrder, on_delete=models.CASCADE, related_name="items")
 
-    # Individual product (set for regular product items; null for basket items)
+    # A marketplace line is either a seller product or a published Seller Hub
+    # basket.  These IDs belong to Workforce; Customer stores only an immutable
+    # checkout snapshot and never expands or owns vendor inventory.
     seller_product_id = models.IntegerField(null=True, blank=True, db_index=True)
-    # Basket/combo-offer (set for basket items; null for regular product items)
     basket_id = models.IntegerField(null=True, blank=True, db_index=True)
     basket_title = models.CharField(max_length=255, blank=True, default="")
-
     product_title = models.CharField(max_length=255, blank=True, default="")
     product_sku = models.CharField(max_length=100, blank=True, default="")
     product_brand = models.CharField(max_length=150, blank=True, default="")
@@ -469,8 +468,7 @@ class MarketplaceOrderItem(models.Model):
         ordering = ["id"]
 
     def __str__(self):
-        label = self.basket_title or self.product_title or f"Item #{self.id}"
-        return f"MarketplaceOrderItem #{self.id} ({label}) of {self.order.order_number}"
+        return f"MarketplaceOrderItem #{self.id} ({self.basket_title or self.product_title}) of {self.order.order_number}"
 
 
 class MarketplaceOrderOutbox(models.Model):
@@ -567,12 +565,18 @@ class MarketplacePaymentIntent(models.Model):
         help_text="The marketplace cart this intent was created against.",
     )
     razorpay_order_id = models.CharField(max_length=100, unique=True, db_index=True)
+    # Generic fields let Paytm coexist with historic Razorpay intents without
+    # reusing Razorpay-labelled columns for a different provider.
+    provider = models.CharField(max_length=32, default="razorpay", db_index=True)
+    provider_order_id = models.CharField(max_length=128, blank=True, default="", db_index=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2, help_text="Authoritative amount in INR.")
     currency = models.CharField(max_length=10, default="INR")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.CREATED, db_index=True)
     checkout_payload = models.JSONField(default=dict, blank=True, help_text="Snapshot of validated checkout fields.")
     razorpay_payment_id = models.CharField(max_length=100, blank=True, default="")
     razorpay_signature = models.CharField(max_length=255, blank=True, default="")
+    provider_transaction_id = models.CharField(max_length=128, blank=True, default="", db_index=True)
+    provider_signature = models.CharField(max_length=512, blank=True, default="")
     idempotency_key = models.CharField(max_length=128, blank=True, default="", db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -582,6 +586,6 @@ class MarketplacePaymentIntent(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"PaymentIntent {self.razorpay_order_id} ({self.status}) - ₹{self.amount}"
+        return f"PaymentIntent {self.provider_order_id or self.razorpay_order_id} ({self.status}) - ₹{self.amount}"
 
 

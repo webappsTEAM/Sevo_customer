@@ -13,7 +13,7 @@ Guarantees:
 """
 
 import logging
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Dict, Any, List, Optional, Tuple
 from django.db.models import Q
 
@@ -44,6 +44,7 @@ def resolve_cargo_payload(
     declared_weight_kg: Optional[Any] = None,
     strict: bool = False,
     city: Optional[str] = None,
+    declared_cft: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """
     Resolves client cargo inputs into authoritative server-side cargo attributes.
@@ -67,7 +68,7 @@ def resolve_cargo_payload(
     category_obj = None
     if goods_category_id is not None:
         try:
-            category_obj = GoodsCategory.objects.filter(id=int(goods_category_id)).first()
+            category_obj = GoodsCategory.objects.filter(id=goods_category_id).first()
         except (ValueError, TypeError):
             category_obj = None
         if not category_obj:
@@ -77,7 +78,7 @@ def resolve_cargo_payload(
                 "field": "goods_category_id",
             })
     elif goods_category_slug:
-        slug_clean = str(goods_category_slug).strip()
+        slug_clean = goods_category_slug.strip()
         category_obj = GoodsCategory.objects.filter(
             Q(slug__iexact=slug_clean) | Q(name__iexact=slug_clean)
         ).first()
@@ -120,14 +121,25 @@ def resolve_cargo_payload(
             city = cargo_items["city"]
         cargo_items = cargo_items.get("items") or cargo_items.get("cargo_items") or []
 
+    # GT_CARGO_ITEMS_TYPE: a non-list value (e.g. the string "chairs") used to be silently treated as "no
+    # cargo declared" and the booking went through; reject it instead of dropping what the customer sent.
+    if cargo_items and not isinstance(cargo_items, list):
+        validation_errors.append({
+            "error": "Invalid cargo format: cargo_items must be a list of item objects.",
+            "code": "INVALID_CARGO_ENTRY",
+            "entry": str(cargo_items)[:80],
+        })
+
     # 2. Bulk load cargo items to prevent N+1 queries
     if cargo_items and isinstance(cargo_items, list):
         item_ids = []
         item_slugs = []
+        item_names = []
         for entry in cargo_items:
             if isinstance(entry, dict):
                 iid = entry.get("goods_item_id") or entry.get("goods_item") or entry.get("item_id") or entry.get("id")
                 islug = entry.get("item_slug") or entry.get("slug")
+                iname = entry.get("name") or entry.get("item_name")
                 if iid:
                     try:
                         item_ids.append(int(iid))
@@ -135,19 +147,25 @@ def resolve_cargo_payload(
                         pass
                 if islug:
                     item_slugs.append(str(islug).strip())
+                if iname:
+                    item_names.append(str(iname).strip())
 
         q_filter = Q()
         if item_ids:
             q_filter |= Q(id__in=item_ids)
         if item_slugs:
             q_filter |= Q(slug__in=item_slugs)
+        if item_names:
+            q_filter |= Q(name__in=item_names)
 
         items_by_id = {}
         items_by_slug = {}
+        items_by_name = {}
         if q_filter:
             for item_row in GoodsItem.objects.filter(q_filter).select_related("category"):
                 items_by_id[item_row.id] = item_row
                 items_by_slug[item_row.slug] = item_row
+                items_by_name[item_row.name.strip().lower()] = item_row
 
         # 3. Validate and resolve each item
         total_items_count = 0
@@ -162,7 +180,8 @@ def resolve_cargo_payload(
 
             iid = entry.get("goods_item_id") or entry.get("goods_item") or entry.get("item_id") or entry.get("id")
             islug = entry.get("item_slug") or entry.get("slug")
-            identifier = islug or iid or "unknown"
+            iname = entry.get("name") or entry.get("item_name")
+            identifier = islug or iid or iname or "unknown"
 
             # Strict quantity validation
             if "quantity" not in entry and "qty" not in entry:
@@ -242,6 +261,8 @@ def resolve_cargo_payload(
                     item = None
             if not item and islug:
                 item = items_by_slug.get(str(islug).strip())
+            if not item and iname:
+                item = items_by_name.get(str(iname).strip().lower())
 
             if not item:
                 validation_errors.append({
@@ -259,8 +280,8 @@ def resolve_cargo_payload(
                 })
                 continue
 
-            if getattr(item, "is_prohibited", False):
-                prohibited_item_names.append(item.name)
+            if getattr(item, "is_prohibited", False) or bool(entry.get("is_hazardous")) or bool(entry.get("is_prohibited")):
+                prohibited_item_names.append(item.name if item else str(identifier))
 
             # Category consistency notice
             if category_obj and item.category_id != category_obj.id:
@@ -330,6 +351,11 @@ def resolve_cargo_payload(
     if declared_weight_kg is not None:
         try:
             parsed_declared_weight = Decimal(str(declared_weight_kg))
+            # NaN / +-Infinity / out-of-range exponents parse as Decimals but crash
+            # money arithmetic later (unhandled 500 on public endpoints).
+            if not parsed_declared_weight.is_finite():
+                raise ValueError("non-finite declared weight")
+            _money(parsed_declared_weight)  # raises if not representable
             if parsed_declared_weight < Decimal("0.00"):
                 validation_errors.append({
                     "error": f"Declared weight cannot be negative (received {declared_weight_kg}).",
@@ -339,16 +365,39 @@ def resolve_cargo_payload(
                 if parsed_declared_weight > final_weight_kg:
                     final_weight_kg = parsed_declared_weight
         except Exception:
+            parsed_declared_weight = None  # never echo a non-representable value back
             validation_errors.append({
                 "error": f"Invalid declared weight format '{declared_weight_kg}'.",
                 "code": "INVALID_DECLARED_WEIGHT",
+            })
+
+    # 4b. Declared volume (cubic feet) -- the customer's own estimate for goods that are not in the catalog
+    # (unlisted/mixed/approximate cargo). Like declared weight it can only RAISE the evaluated volume,
+    # never lower what the catalog items already account for. A low weight must not hide a bulky load.
+    if declared_cft is not None and str(declared_cft).strip() != "":
+        try:
+            _dc = Decimal(str(declared_cft))
+            if not _dc.is_finite():
+                raise ValueError
+            _money(_dc)
+            if _dc < Decimal("0.00"):
+                validation_errors.append({
+                    "error": f"Declared volume cannot be negative (received {declared_cft}).",
+                    "code": "INVALID_DECLARED_VOLUME",
+                })
+            elif _dc > total_cft:
+                total_cft = _dc
+        except (InvalidOperation, ValueError, ArithmeticError):
+            validation_errors.append({
+                "error": f"Invalid declared volume format '{declared_cft}'.",
+                "code": "INVALID_DECLARED_VOLUME",
             })
 
     # 5. Two-Wheeler Compatibility Check
     is_2w_compatible = category_allows_2w and (not has_2w_incompatible_item)
     tw_query = ServiceTier.objects.filter(is_active=True, category="two_wheeler")
     if city:
-        tw_tier = tw_query.filter(city__iexact=str(city).strip()).first()
+        tw_tier = tw_query.filter(city__iexact=city.strip()).first()
     else:
         tw_tier = tw_query.first()
 

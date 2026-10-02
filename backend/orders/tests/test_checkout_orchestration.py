@@ -20,6 +20,7 @@ from service_requests.models import CatalogCategory, Service, Package, ServiceRe
 from inventory.services import vegetable_stock_service
 from carts.models import Cart, CartType, CartStatus
 from orders.models import GroceryOrder
+from vegetable_orders.models import VegetableOrder
 
 User = get_user_model()
 
@@ -60,16 +61,18 @@ class CheckoutOrchestrationTests(TestCase):
             base_price=Decimal("150.00"), status="ACTIVE",
         )
 
+        from datetime import timedelta
         self.service_payload = {
             "customer_name": "Ravi Kumar",
             "phone": "9876533333",
             "service_category": "electrician",
             "issue_title": "Fan Repair",
             "address": "123 Market St, Hosur",
-            "latitude": 12.9716,
-            "longitude": 77.5946,
-            "preferred_date": timezone.localdate().strftime("%Y-%m-%d"),
-            "time_slot": "slot_10_00_am_to_12_00_pm",
+            "latitude": 12.7409,
+            "longitude": 77.8253,
+            "preferred_date": (timezone.localdate() + timedelta(days=1)).strftime("%Y-%m-%d"),
+            "preferred_time": "10:00 AM",
+            "time_slot": "10:00 AM - 12:00 PM",
             "cart_data": [{"id": "electrician-fan-repair", "name": "Fan Repair", "quantity": 1}],
         }
 
@@ -138,7 +141,7 @@ class CheckoutOrchestrationTests(TestCase):
 
         # Grocery leg reports its own failure, does not raise, nothing persisted.
         self.assertFalse(res.data["data"]["grocery_order"]["success"])
-        self.assertFalse(GroceryOrder.objects.exists())
+        self.assertFalse(VegetableOrder.objects.exists())
 
         # Grocery cart is untouched -- still ACTIVE with its item, so the
         # customer can retry the grocery leg on its own.
@@ -162,7 +165,7 @@ class CheckoutOrchestrationTests(TestCase):
         self.assertTrue(res.data["data"]["service_order"]["success"])
         self.assertTrue(res.data["data"]["grocery_order"]["success"])
         self.assertTrue(ServiceRequest.objects.filter(customer_name="Ravi Kumar").exists())
-        self.assertTrue(GroceryOrder.objects.filter(customer=self.customer).exists())
+        self.assertTrue(VegetableOrder.objects.filter(customer=self.customer).exists())
 
     def test_unauthenticated_rejected(self):
         anon = APIClient()

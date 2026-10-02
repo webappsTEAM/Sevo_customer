@@ -1,5 +1,5 @@
-import { lazy, Suspense } from "react"
-import { Navigate, Outlet, Route, Routes } from "react-router-dom"
+import { lazy, Suspense, useEffect, Component } from "react"
+import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom"
 import { useAuth } from "../state/auth/useAuth.js"
 import { useRole } from "../state/auth/useRole.js"
 import { isSuperAdmin, can as canAccess } from "../auth/authorization.js"
@@ -8,7 +8,94 @@ import { AppShell } from "./shell/AppShell.jsx"
 import { SessionToast } from "./components/SessionToast.jsx"
 import { GlobalEditModeToggle } from "./components/GlobalEditModeToggle.jsx"
 import { MobileBottomNav } from "./components/common/MobileBottomNav.jsx"
+import { AIChatWidget } from "./components/ai/AIChatWidget.jsx"
 import { LoginPage } from "./pages/LoginPage.jsx"
+
+
+// ── App-level ErrorBoundary — prevents blank screen on uncaught render errors ──
+// Without this, any runtime TypeError during render (e.g. null?.field in
+// LandingPage, AuthProvider, or any route page) unmounts the entire React
+// tree → the user sees a blank white page with no way to recover.
+class AppErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error }
+  }
+
+  componentDidCatch(error, info) {
+    // Log to console so developers can diagnose; never expose raw error to user.
+    console.error("[AppErrorBoundary] Uncaught render error:", error, info?.componentStack)
+  }
+
+  handleReload = () => {
+    this.setState({ hasError: false, error: null })
+    // Navigate to home as a safe fallback
+    window.location.href = "/home"
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          minHeight: "100vh", display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          background: "#f8fafc", padding: "2rem", textAlign: "center",
+          fontFamily: "system-ui, sans-serif"
+        }}>
+          <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>⚠️</div>
+          <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#0f172a", marginBottom: "0.5rem" }}>
+            Something went wrong
+          </h1>
+          <p style={{ color: "#64748b", marginBottom: "1.5rem", maxWidth: 400 }}>
+            The page encountered an unexpected error. Please tap the button below to go home.
+          </p>
+          <button
+            onClick={this.handleReload}
+            style={{
+              background: "#059669", color: "#fff", border: "none",
+              borderRadius: "8px", padding: "0.75rem 1.5rem",
+              fontSize: "1rem", fontWeight: 600, cursor: "pointer"
+            }}
+          >
+            Go to Home
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+// Bridge inside iframe: broadcasts route changes to parent window (Homepage Customizer preview)
+function PreviewNavigationBridge() {
+  const location = useLocation()
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.parent && window.parent !== window) {
+      const params = new URLSearchParams(location.search)
+      const cat = params.get("category")
+      const openModal = params.get("openModal")
+      let screen = "home"
+      if (openModal === "pillars") screen = "pillars"
+      else if (cat === "home_pest_control") screen = "subcategories"
+      else if (cat === "kitchen_cleaning") screen = "kitchen"
+      else if (cat) screen = "category"
+
+      window.parent.postMessage({
+        type: "PREVIEW_ROUTE_CHANGE",
+        pathname: location.pathname,
+        search: location.search,
+        screen: screen,
+      }, "*")
+    }
+  }, [location])
+
+  return null
+}
 
 // Lazy-loaded Pages
 const OrganizationSignupPage = lazy(() =>
@@ -67,6 +154,28 @@ const VegetableStockAdminPage = lazy(() =>
   import("./pages/inventory/VegetableStockAdminPage.jsx").then(m => ({ default: m.VegetableStockAdminPage || m.default }))
 )
 
+const VegetableAdminHomePage = lazy(() =>
+  import("./pages/vegetables/VegetableAdminHomePage.jsx").then(m => ({ default: m.default || m.VegetableAdminHomePage }))
+)
+const VegetableAdminOrdersPage = lazy(() =>
+  import("./pages/vegetables/VegetableAdminOrdersPage.jsx").then(m => ({ default: m.default || m.VegetableAdminOrdersPage }))
+)
+const VegetableAdminReturnsPage = lazy(() =>
+  import("./pages/vegetables/VegetableAdminReturnsPage.jsx").then(m => ({ default: m.default || m.VegetableAdminReturnsPage }))
+)
+const VegetableAdminClaimsPage = lazy(() =>
+  import("./pages/vegetables/VegetableAdminClaimsPage.jsx").then(m => ({ default: m.default || m.VegetableAdminClaimsPage }))
+)
+const VegetableAdminCatalogUploadsPage = lazy(() =>
+  import("./pages/vegetables/VegetableAdminCatalogUploadsPage.jsx").then(m => ({ default: m.default || m.VegetableAdminCatalogUploadsPage }))
+)
+const VegetableAdminCategoriesApprovalPage = lazy(() =>
+  import("./pages/vegetables/VegetableAdminCategoriesApprovalPage.jsx").then(m => ({ default: m.default || m.VegetableAdminCategoriesApprovalPage }))
+)
+const VegetableAdminCategoriesPage = lazy(() =>
+  import("./pages/vegetables/VegetableAdminCategoriesPage.jsx").then(m => ({ default: m.default || m.VegetableAdminCategoriesPage }))
+)
+
 const CatalogDashboardPage = lazy(() =>
   import("./pages/catalog/CatalogDashboardPage.jsx").then(m => ({ default: m.CatalogDashboardPage || m.default }))
 )
@@ -91,6 +200,9 @@ const CatalogVendorApprovalsPage = lazy(() =>
 const PaintingRateCardPage = lazy(() =>
   import("./pages/catalog/PaintingRateCardPage.jsx").then(m => ({ default: m.PaintingRateCardPage || m.default }))
 )
+const ACInspectionRateCardPage = lazy(() =>
+  import("./pages/catalog/ACInspectionRateCardPage.jsx").then(m => ({ default: m.ACInspectionRateCardPage || m.default }))
+)
 const GTPricingPage = lazy(() =>
   import("./pages/catalog/GTPricingPage.jsx").then(m => ({ default: m.GTPricingPage || m.default }))
 )
@@ -99,6 +211,9 @@ const AdminRecipesPage = lazy(() =>
 )
 const AdminRecommendationsPage = lazy(() =>
   import("./pages/catalog/AdminRecommendationsPage.jsx").then(m => ({ default: m.AdminRecommendationsPage || m.default }))
+)
+const TimeSlotManagementPage = lazy(() =>
+  import("./pages/TimeSlotManagementPage.jsx").then(m => ({ default: m.TimeSlotManagementPage || m.default }))
 )
 
 const CustomersDashboardPage = lazy(() => import("./pages/CustomersDashboardPage.jsx").then(m => ({ default: m.CustomersDashboardPage })))
@@ -119,6 +234,10 @@ const ReferralsPage = lazy(() =>
 
 const ServiceRequestsPage = lazy(() =>
   import("./pages/ServiceRequestsPage.jsx").then(m => ({ default: m.ServiceRequestsPage || m.default }))
+)
+
+const ACInspectionBookingsPage = lazy(() =>
+  import("./pages/ACInspectionBookingsPage.jsx").then(m => ({ default: m.ACInspectionBookingsPage || m.default }))
 )
 
 const FeedbackManagementPage = lazy(() =>
@@ -142,6 +261,9 @@ const MarketplacePage = lazy(() =>
 )
 const MiniTruckBookingHosurPage = lazy(() =>
   import("./pages/MiniTruckBookingHosurPage.jsx").then(m => ({ default: m.MiniTruckBookingHosurPage || m.default }))
+)
+const PTLBookingPage = lazy(() =>
+  import("./pages/PTLBookingPage.jsx").then(m => ({ default: m.PTLBookingPage || m.default }))
 )
 const TwoWheelerBookingHosurPage = lazy(() =>
   import("./pages/TwoWheelerBookingHosurPage.jsx").then(m => ({ default: m.TwoWheelerBookingHosurPage || m.default }))
@@ -250,7 +372,7 @@ function RequireCareAgentOrAdmin() {
   return <Outlet />
 }
 
-const ONBOARDING_DISMISSED_KEY = "caltrack.onboarding.dismissed"
+const ONBOARDING_DISMISSED_KEY = "sevo.onboarding.dismissed"
 
 export function App() {
   const { isReady, user } = useAuth()
@@ -306,7 +428,8 @@ export function App() {
     )
 
   return (
-    <>
+    <AppErrorBoundary>
+      <PreviewNavigationBridge />
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route
@@ -380,16 +503,22 @@ export function App() {
           <Route path={routes.truck_booking_hosur} element={<MiniTruckBookingHosurPage />} />
           <Route path={routes.logistics_booking} element={<LogisticsBookingPage />} />
           <Route path="/trucks/hosur" element={<MiniTruckBookingHosurPage />} />
+          <Route path="/trucks/:city" element={<LogisticsBookingPage />} />
           <Route path="/trucks" element={<MiniTruckBookingHosurPage />} />
           <Route path="/booking/trucks" element={<MiniTruckBookingHosurPage />} />
+          <Route path="/part-truck-load" element={<PTLBookingPage />} />
+          <Route path="/part-truck-load/:city" element={<PTLBookingPage />} />
           <Route path={routes.two_wheeler_booking_hosur} element={<TwoWheelerBookingHosurPage />} />
           <Route path="/two-wheelers/hosur" element={<TwoWheelerBookingHosurPage />} />
+          <Route path="/two-wheelers/:city" element={<LogisticsBookingPage />} />
           <Route path="/two-wheelers" element={<TwoWheelerBookingHosurPage />} />
           <Route path="/booking/two-wheelers" element={<TwoWheelerBookingHosurPage />} />
           <Route path={routes.packers_movers_booking_hosur} element={<PackersMoversBookingHosurPage />} />
           <Route path="/packers-and-movers/hosur" element={<PackersMoversBookingHosurPage />} />
+          <Route path="/packers-and-movers/:city" element={<LogisticsBookingPage />} />
           <Route path="/packers-and-movers" element={<PackersMoversBookingHosurPage />} />
           <Route path="/packers-movers/hosur" element={<Navigate to="/packers-and-movers/hosur" replace />} />
+          <Route path="/packers-movers/:city" element={<LogisticsBookingPage />} />
           <Route path="/packers-movers" element={<Navigate to="/packers-and-movers" replace />} />
           <Route path="/booking/packers-and-movers" element={<PackersMoversBookingHosurPage />} />
           <Route path="/goods" element={<Navigate to="/home" state={{ openGoodsModal: true }} replace />} />
@@ -475,8 +604,6 @@ export function App() {
               element={
                 user?.role === "customer" ? (
                   <Navigate to={routes.landing} replace />
-                ) : isSuperAdmin(user) ? (
-                  <Navigate to="/platform/dashboard" replace />
                 ) : user?.role === "support" || (user?.isCareAgent && user?.role !== "admin" && user?.role !== "manager") ? (
                   <Navigate to="/support/tickets" replace />
                 ) : (
@@ -522,7 +649,10 @@ export function App() {
               <Route path={routes.catalog_change_log} element={<RequireModule module="catalog"><CatalogChangeLogPage /></RequireModule>} />
               <Route path={routes.catalog_vendor_approvals} element={<RequireModule module="catalog"><CatalogVendorApprovalsPage /></RequireModule>} />
               <Route path={routes.catalog_painting_rates} element={<RequireModule module="catalog"><PaintingRateCardPage /></RequireModule>} />
+              <Route path={routes.catalog_ac_inspection_rates} element={<RequireModule module="catalog"><ACInspectionRateCardPage /></RequireModule>} />
               <Route path={routes.catalog_gt_pricing} element={<RequireModule module="catalog"><GTPricingPage /></RequireModule>} />
+              <Route path={routes.time_slot_management} element={<RequireModule module="time_slots"><TimeSlotManagementPage /></RequireModule>} />
+              <Route path="/admin/time-slots" element={<RequireModule module="time_slots"><TimeSlotManagementPage /></RequireModule>} />
               <Route path={routes.marketing_coupons} element={<RequireModule module="marketing"><CouponsPage /></RequireModule>} />
               <Route path={routes.marketing_offers} element={<RequireModule module="marketing"><OffersPage /></RequireModule>} />
               <Route path={routes.marketing_referrals} element={<RequireModule module="marketing"><ReferralsPage /></RequireModule>} />
@@ -530,6 +660,13 @@ export function App() {
               <Route path={routes.admin_feedback} element={<RequireModule module="reviews"><FeedbackManagementPage /></RequireModule>} />
               <Route path={routes.inventory_vegetables} element={<RequireModule module="inventory"><VegetableStockAdminPage /></RequireModule>} />
               <Route path="/admin/vegetable-stock" element={<RequireModule module="inventory"><VegetableStockAdminPage /></RequireModule>} />
+              <Route path={routes.vegetable_admin_home} element={<RequireModule module="inventory"><VegetableAdminHomePage /></RequireModule>} />
+              <Route path={routes.vegetable_admin_orders} element={<RequireModule module="inventory"><VegetableAdminOrdersPage /></RequireModule>} />
+              <Route path={routes.vegetable_admin_returns} element={<RequireModule module="inventory"><VegetableAdminReturnsPage /></RequireModule>} />
+              <Route path={routes.vegetable_admin_claims} element={<RequireModule module="inventory"><VegetableAdminClaimsPage /></RequireModule>} />
+              <Route path={routes.vegetable_admin_catalog_uploads} element={<RequireModule module="inventory"><VegetableAdminCatalogUploadsPage /></RequireModule>} />
+              <Route path={routes.vegetable_admin_categories_approval} element={<RequireModule module="inventory"><VegetableAdminCategoriesApprovalPage /></RequireModule>} />
+              <Route path={routes.vegetable_admin_categories} element={<RequireModule module="inventory"><VegetableAdminCategoriesPage /></RequireModule>} />
             </Route>
 
             {/* Homepage Builder edits Customer Web content that is public to
@@ -549,6 +686,8 @@ export function App() {
               <Route path={routes.customers_payments} element={<CustomersPaymentsPage />} />
               <Route path={routes.customers_merges} element={<CustomerMergesPage />} />
               <Route path="/customers/bookings" element={<ServiceRequestsPage />} />
+              <Route path={routes.admin_ac_inspections} element={<ACInspectionBookingsPage />} />
+              <Route path="/customers/ac-inspections" element={<ACInspectionBookingsPage />} />
               <Route path="/customers/reschedules" element={<ServiceRequestsPage />} />
               <Route path="/customers/refunds" element={<ServiceRequestsPage />} />
               <Route path="/customers/documents" element={<ServiceRequestsPage />} />
@@ -569,6 +708,7 @@ export function App() {
               <Route path={routes.settings_developer} element={<SettingsPage section="developer" />} />
               <Route path={routes.settings_billing} element={<SettingsPage section="billing" />} />
               <Route path={routes.settings_invoices} element={<SettingsPage section="invoices" />} />
+              <Route path={routes.settings_pricing} element={<SettingsPage section="pricing" />} />
             </Route>
           </Route>
 
@@ -581,8 +721,10 @@ export function App() {
           instead of each page needing to wire in its own toggle bar. Renders
           nothing for anyone who isn't a Super Admin. */}
       <GlobalEditModeToggle />
+      {/* Centralized AI Assistant Widget */}
+      <AIChatWidget />
       {/* App-Wide Shared Mobile Bottom Navigation with safe area support */}
       <MobileBottomNav />
-    </>
+    </AppErrorBoundary>
   )
 }

@@ -1,5 +1,8 @@
 from django.contrib import admin
-from service_requests.models import Service, Package, AddOn, CatalogCategory, ServiceRequest
+from service_requests.models import (
+    Service, Package, AddOn, CatalogCategory, ServiceRequest,
+    GTCancellationPolicy, GTWaitingChargePolicy, GTExtraChargePolicy, GTInsurancePolicy, GTClaimPolicy, GTOperationsConfig, GTAdvancePaymentPolicy,
+)
 
 
 @admin.register(Package)
@@ -28,3 +31,85 @@ class ServiceRequestAdmin(admin.ModelAdmin):
     list_display = ('request_id', 'customer_name', 'phone', 'service_category', 'status', 'payment_status', 'created_at')
     list_filter = ('status', 'payment_status', 'service_category')
     search_fields = ('request_id', 'customer_name', 'phone')
+
+
+# GT Porter-parity fix (this session, 2026-09-23): admin surface for
+# GTCancellationPolicy (see its docstring in models.py). Every field defaults
+# to "no fee" -- this registration only lets an admin who has actually made
+# the underlying business decision configure it; it changes nothing by
+# itself.
+@admin.register(GTCancellationPolicy)
+class GTCancellationPolicyAdmin(admin.ModelAdmin):
+    list_display = ('service_category', 'fee_mode', 'flat_fee_amount', 'percent_fee', 'applies_only_after_assignment', 'grace_period_seconds', 'is_active', 'updated_at')
+    list_filter = ('fee_mode', 'is_active')
+    search_fields = ('service_category',)
+
+
+# GT Mini Truck audit fix (this session): GTWaitingChargePolicy is the model
+# fare_reconciliation.py's reconcile_booking_fare() actually bills against
+# (see get_gt_waiting_charge() in models.py) -- it was defined and wired into
+# billing but never registered anywhere an admin could reach it, not even
+# here in the Django admin, so there was no way to configure it short of a
+# direct DB write. Every field defaults to disabled/zero (is_enabled=False),
+# so registering this changes nothing until an admin actually sets real
+# values.
+@admin.register(GTWaitingChargePolicy)
+class GTWaitingChargePolicyAdmin(admin.ModelAdmin):
+    list_display = ('service_category', 'is_enabled', 'free_minutes_per_stop', 'rate_per_minute', 'max_charge_per_booking', 'is_active', 'updated_at')
+    list_filter = ('is_enabled', 'is_active')
+    search_fields = ('service_category',)
+
+
+# P&M audit fix (advance/deposit before a scheduled move): admin surface for
+# GTAdvancePaymentPolicy (see its docstring in models.py). is_enabled
+# defaults to False -- registering this changes nothing until an admin
+# actually turns it on with a real advance_percent.
+@admin.register(GTAdvancePaymentPolicy)
+class GTAdvancePaymentPolicyAdmin(admin.ModelAdmin):
+    list_display = ('service_category', 'is_enabled', 'advance_percent', 'is_active', 'updated_at')
+    list_filter = ('is_enabled', 'is_active')
+    search_fields = ('service_category',)
+
+
+@admin.register(GTExtraChargePolicy)
+class GTExtraChargePolicyAdmin(admin.ModelAdmin):
+    list_display = ('service_category', 'is_enabled', 'allow_toll', 'allow_parking', 'max_amount_per_item', 'max_total_per_booking', 'require_receipt_photo', 'is_active', 'updated_at')
+    list_filter = ('is_enabled', 'is_active')
+    search_fields = ('service_category',)
+
+
+@admin.register(GTInsurancePolicy)
+class GTInsurancePolicyAdmin(admin.ModelAdmin):
+    list_display = ('is_offered', 'premium_percent', 'max_liability', 'is_active', 'updated_at')
+
+
+@admin.register(GTClaimPolicy)
+class GTClaimPolicyAdmin(admin.ModelAdmin):
+    list_display = ('service_category', 'is_enabled', 'included_liability_cap', 'cap_at_fare', 'claim_window_hours', 'require_photo', 'is_active')
+    list_filter = ('is_enabled', 'is_active')
+
+
+@admin.register(GTOperationsConfig)
+class GTOperationsConfigAdmin(admin.ModelAdmin):
+    list_display = ('gt_quote_validity_minutes', 'pm_instant_quote_validity_minutes', 'pm_estimate_validity_hours',
+                    'online_payment_window_minutes', 'high_value_consignment_threshold', 'checkpoint_radius_meters', 'delivery_otp_ttl_minutes', 'max_otp_attempts', 'delivery_otp_required', 'allow_wallet_part_payment', 'wallet_topup_enabled', 'wallet_max_topup', 'wallet_max_balance', 'is_active', 'updated_at')
+
+
+from service_requests.models import GTPTLPricingPolicy  # noqa: E402
+
+
+@admin.register(GTPTLPricingPolicy)
+class GTPTLPricingPolicyAdmin(admin.ModelAdmin):
+    list_display = ('is_enabled', 'rate_per_kg', 'minimum_chargeable_weight_kg', 'minimum_fare',
+                    'min_advance_days', 'load_assist_enabled', 'load_assist_fee', 'is_active', 'updated_at')
+
+
+from service_requests.models import WalletTopUp  # noqa: E402
+
+
+@admin.register(WalletTopUp)
+class WalletTopUpAdmin(admin.ModelAdmin):
+    list_display = ('order_id', 'customer', 'amount', 'status', 'gateway', 'created_at')
+    list_filter = ('status', 'gateway')
+    search_fields = ('order_id', 'payment_id', 'customer__email', 'customer__phone')
+    readonly_fields = ('order_id', 'payment_id', 'customer', 'amount', 'gateway', 'created_at', 'updated_at')

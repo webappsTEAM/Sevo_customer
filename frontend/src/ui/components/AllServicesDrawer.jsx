@@ -64,7 +64,7 @@ function resolveRealCategory(localCat, realCategories) {
 // actually expands, rather than one big upfront fetch of everything --
 // this panel is meant to be a quick glance-and-drill directory, not a
 // full catalog dump.
-export function AllServicesDrawer({ isOpen, onClose, navigate: navigateProp, user }) {
+export function AllServicesDrawer({ isOpen, onClose, navigate: navigateProp, user, categories: propCategories }) {
   const [realCategories, setRealCategories] = useState([])
   const [categoriesLoaded, setCategoriesLoaded] = useState(false)
   const [expandedCats, setExpandedCats] = useState(() => new Set())
@@ -131,22 +131,29 @@ export function AllServicesDrawer({ isOpen, onClose, navigate: navigateProp, use
     }
   }
 
-  const onCategoryClick = (localCat) => {
-    const real = resolveRealCategory(localCat, realCategories)
+  const displayCategories = (Array.isArray(propCategories) && propCategories.length > 0) ? propCategories : CATEGORIES
+
+  const onCategoryClick = (cat) => {
+    if (cat.link) {
+      navigateProp(cat.link)
+      onClose()
+      return
+    }
+    const real = resolveRealCategory(cat, realCategories)
     if (!real) {
       // Nothing in the live catalog matches this local category card yet --
       // same behaviour as before: go straight to its page rather than
       // opening onto an empty list.
-      goTo(localCat.id)
+      goTo(cat.id)
       return
     }
     setExpandedCats((prev) => {
       const next = new Set(prev)
-      if (next.has(localCat.id)) next.delete(localCat.id)
-      else next.add(localCat.id)
+      if (next.has(cat.id)) next.delete(cat.id)
+      else next.add(cat.id)
       return next
     })
-    if (!expandedCats.has(localCat.id)) loadSubServices(real)
+    if (!expandedCats.has(cat.id)) loadSubServices(real)
   }
 
   const onServiceClick = (service) => {
@@ -194,24 +201,28 @@ export function AllServicesDrawer({ isOpen, onClose, navigate: navigateProp, use
               Browse Categories
             </span>
           </div>
-          {CATEGORIES.map((cat) => {
+          {displayCategories.map((cat) => {
             const Icon = CATEGORY_ICONS[cat.id] || LayoutGrid
             const isExpanded = expandedCats.has(cat.id)
             const real = resolveRealCategory(cat, realCategories)
-            const canExpand = categoriesLoaded && Boolean(real)
+            const canExpand = categoriesLoaded && Boolean(real) && !cat.link
             const subServices = real ? subServicesByCat[real.id] : undefined
             const subServicesLoading = subServices === "loading"
             const subServiceRows = Array.isArray(subServices) ? subServices : []
 
             return (
-              <div key={cat.id} className="border-b border-[var(--sevo-border,#f1f5f9)]">
+              <div key={cat.id || cat.name} className="border-b border-[var(--sevo-border,#f1f5f9)]">
                 <button
                   type="button"
                   onClick={() => onCategoryClick(cat)}
                   className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-[var(--sevo-surface-raised,#f8fafc)] transition-colors cursor-pointer text-left"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-[var(--sevo-primary-light,#f0fdfa)] text-[var(--sevo-primary,#0f766e)] flex items-center justify-center shrink-0">
-                    <Icon className="w-4 h-4" />
+                  <div className="w-8 h-8 rounded-lg bg-[var(--sevo-primary-light,#f0fdfa)] text-[var(--sevo-primary,#0f766e)] flex items-center justify-center shrink-0 overflow-hidden">
+                    {cat.image ? (
+                      <img src={cat.image} alt={cat.name} className="w-full h-full object-cover rounded-lg" />
+                    ) : (
+                      <Icon className="w-4 h-4" />
+                    )}
                   </div>
                   <span className="flex-1 text-sm font-bold text-[var(--sevo-text-primary,#0f172a)] truncate">
                     {cat.name}

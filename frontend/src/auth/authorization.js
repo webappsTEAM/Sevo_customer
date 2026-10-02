@@ -1,5 +1,5 @@
 /**
- * Centralized Frontend Authorization Service for CalTrack.
+ * Centralized Frontend Authorization Service for sevo.
  *
  * Principles:
  * 1. isSuperAdmin(user) grants universal unrestricted access across all modules.
@@ -10,14 +10,10 @@
 export function isSuperAdmin(user) {
   if (!user) return false
   const role = String(user.role || "").toLowerCase()
-  if (role === "super_admin" || role === "superadmin") {
+  if (role === "super_admin" || role === "superadmin" || role === "platform_admin") {
     return true
   }
-  if (user.is_super_admin === true || user.isSuperAdmin === true) {
-    return true
-  }
-  // Only evaluate is_superuser if role is not explicitly set to a standard administrative/staff role
-  if (user.is_superuser && !["admin", "manager", "support", "catalog", "finance", "customer", "employee"].includes(role)) {
+  if (user.is_super_admin === true || user.isSuperAdmin === true || user.is_superuser === true) {
     return true
   }
   return false

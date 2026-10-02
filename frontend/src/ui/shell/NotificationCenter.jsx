@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Bell, CheckSquare, Clock, ArrowRight, CalendarDays, Banknote, AlertCircle, LogIn, X } from "lucide-react"
+import { Bell, CheckSquare, Clock, ArrowRight, CalendarDays, Banknote, AlertCircle, LogIn, X, Wrench, Headphones, MessageSquare } from "lucide-react"
 
-import { apiRequest, unwrapResults } from "../../api/client.js"
+import { apiRequest } from "../../api/client.js"
 import { useAuth } from "../../state/auth/useAuth.js"
 import { useRole } from "../../state/auth/useRole.js"
 import { routes } from "../routes.js"
@@ -28,159 +28,13 @@ function parseISODate(value) {
   return Number.isFinite(d.getTime()) ? d : null
 }
 
-function buildNotifications({ tasks, leaves, shifts, payroll, timesheet, sos, isAdmin }) {
-  const now = new Date()
-  const out = []
-
-  const taskItems = Array.isArray(tasks) ? tasks : unwrapResults(tasks)
-  const actionable = taskItems.filter((t) => t && t.status !== "completed" && t.status !== "cancelled")
-  const todayISO = new Date().toISOString().slice(0, 10)
-  const overdue = actionable.filter((t) => t.due_date && t.due_date < todayISO)
-  const dueSoon = actionable
-    .filter((t) => t.due_date && t.due_date >= todayISO)
-    .sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)))
-
-  if (overdue.length) {
-    const top = overdue.sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)))[0]
-    out.push({
-      id: `tasks:overdue:${top.id}`,
-      kind: "task",
-      when: parseISODate(top.due_date),
-      to: routes.tasks,
-      icon: { bg: "#FEF2F2", fg: "#EF4444", el: <AlertCircle size={16} /> },
-      body: (
-        <span>
-          Overdue: <span style={{ fontWeight: 800 }}>{top.title}</span>
-          {overdue.length > 1 ? ` (+${overdue.length - 1} more)` : ""}
-        </span>
-      ),
-    })
-  } else if (dueSoon.length) {
-    const top = dueSoon[0]
-    out.push({
-      id: `tasks:due:${top.id}`,
-      kind: "task",
-      when: parseISODate(top.due_date),
-      to: routes.tasks,
-      icon: { bg: "#EFF0FE", fg: "#5D5FEF", el: <CheckSquare size={16} /> },
-      body: (
-        <span>
-          Task due soon: <span style={{ fontWeight: 800 }}>{top.title}</span> ({top.due_date})
-        </span>
-      ),
-    })
-  }
-
-  const leaveItems = Array.isArray(leaves) ? leaves : unwrapResults(leaves)
-  if (isAdmin) {
-    const pending = leaveItems.filter((l) => l && l.status === "pending").slice(0, 3)
-    for (const l of pending) {
-      out.push({
-        id: `leave:pending:${l.id}`,
-        kind: "leave",
-        when: parseISODate(l.start_date),
-        to: routes.leaves,
-        icon: { bg: "#FFFBEB", fg: "#D97706", el: <CalendarDays size={16} /> },
-        body: (
-          <span>
-            Leave pending: <span style={{ fontWeight: 800 }}>{l.employee_name || "Employee"}</span> ({l.start_date} → {l.end_date})
-          </span>
-        ),
-      })
-    }
-  } else {
-    const pending = leaveItems.filter((l) => l && l.status === "pending").sort((a, b) => (b.id ?? 0) - (a.id ?? 0))[0]
-    if (pending) {
-      out.push({
-        id: `leave:my:pending:${pending.id}`,
-        kind: "leave",
-        when: parseISODate(pending.start_date),
-        to: routes.leaves,
-        icon: { bg: "#FFFBEB", fg: "#D97706", el: <CalendarDays size={16} /> },
-        body: (
-          <span>
-            Your leave request is pending ({pending.start_date} → {pending.end_date})
-          </span>
-        ),
-      })
-    }
-  }
-
-  const shiftItems = Array.isArray(shifts) ? shifts : unwrapResults(shifts)
-  const nextShift = shiftItems
-    .map((s) => ({
-      ...s,
-      start: parseISODate(s.shift_start),
-      end: parseISODate(s.shift_end),
-    }))
-    .filter((s) => s.start && s.start.getTime() >= now.getTime())
-    .sort((a, b) => a.start.getTime() - b.start.getTime())[0]
-
-  if (nextShift) {
-    out.push({
-      id: `shift:next:${nextShift.id}`,
-      kind: "shift",
-      when: nextShift.start,
-      to: routes.scheduling,
-      icon: { bg: "#EFF0FE", fg: "#5D5FEF", el: <Clock size={16} /> },
-      body: (
-        <span>
-          Next shift: <span style={{ fontWeight: 800 }}>{nextShift.title || "Shift"}</span> ({nextShift.shift_start})
-        </span>
-      ),
-    })
-  }
-
-  const payrollItems = Array.isArray(payroll) ? payroll : unwrapResults(payroll)
-  const latestPayroll = payrollItems?.[0]
-  if (latestPayroll?.period?.end_date && latestPayroll?.net_pay) {
-    out.push({
-      id: `payroll:latest:${latestPayroll.id}`,
-      kind: "payroll",
-      when: parseISODate(latestPayroll.period.end_date),
-      to: routes.payroll,
-      icon: { bg: "#ECFDF5", fg: "#10B981", el: <Banknote size={16} /> },
-      body: (
-        <span>
-          Payroll posted: <span style={{ fontWeight: 800 }}>${latestPayroll.net_pay}</span> (period ending {latestPayroll.period.end_date})
-        </span>
-      ),
-    })
-  }
-
-  if (timesheet?.totals?.hours != null) {
-    out.push({
-      id: `timesheet:range:${timesheet?.range?.start || ""}:${timesheet?.range?.end || ""}`,
-      kind: "timesheet",
-      when: parseISODate(timesheet?.range?.end),
-      to: routes.time,
-      icon: { bg: "#EFF0FE", fg: "#5D5FEF", el: <Clock size={16} /> },
-      body: (
-        <span>
-          Timesheet total: <span style={{ fontWeight: 800 }}>{timesheet.totals.hours}</span> hours
-        </span>
-      ),
-    })
-  }
-
-  const sosItems = Array.isArray(sos) ? sos : unwrapResults(sos)
-  for (const s of sosItems) {
-    out.push({
-      id: `sos:active:${s.id}`,
-      kind: "sos",
-      when: parseISODate(s.timestamp),
-      to: routes.live_locations,
-      icon: { bg: "#FEF2F2", fg: "#E94560", el: <AlertCircle size={16} /> },
-      body: (
-        <span>
-          <span style={{ color: "#E94560", fontWeight: 900 }}>🆘 SOS ALERT:</span>{" "}
-          <span style={{ fontWeight: 800 }}>{s.employee_name}</span> needs assistance!
-        </span>
-      ),
-    })
-  }
-
-  return out.filter(Boolean)
+function extractList(res) {
+  if (!res) return []
+  if (Array.isArray(res)) return res
+  if (Array.isArray(res.data)) return res.data
+  if (Array.isArray(res.results)) return res.results
+  if (Array.isArray(res.data?.results)) return res.data.results
+  return []
 }
 
 export function NotificationCenter() {
@@ -273,29 +127,30 @@ export function NotificationCenter() {
       return next
     })
   }
-  const role = user?.role
 
   const load = useCallback(async () => {
-    if (!role || role === 'customer') return
+    if (!user) return
+    if (user.role === 'customer') return
     if (loadingRef.current) return  // skip if a load is already in-flight
     loadingRef.current = true
     setLoading(true)
     setError("")
     try {
-      // Core CalServices notifications: Pending complaints and new service requests
-      let srRes = null;
-      if (role === 'admin' || role === 'super_admin' || user?.is_staff || user?.is_superuser) {
-        try { srRes = await apiRequest("/admin/service-requests/") } catch(e) {}
+      // Core SEVO notifications: Pending complaints and new service requests
+      let srRes = null
+      let careRes = null
+      const isAdminUser = user.role === 'admin' || user.role === 'manager' || user.role === 'super_admin' || user.is_staff || user.is_superuser
+      if (isAdminUser) {
+        try { srRes = await apiRequest("/admin/service-requests/?page_size=50") } catch(e) {}
+        try { careRes = await apiRequest("/customer-care/tickets/?page_size=50") } catch(e) {}
       }
-      let careRes = null;
-      try { careRes = await apiRequest("/customer-care/tickets/") } catch(e) {}
 
-      const srs = Array.isArray(srRes?.data) ? srRes.data : Array.isArray(srRes?.results) ? srRes.results : []
-      const tickets = Array.isArray(careRes?.data) ? careRes.data : Array.isArray(careRes?.results) ? careRes.results : []
+      const srs = extractList(srRes)
+      const tickets = extractList(careRes)
 
       const next = []
       // Add unassigned / new service requests
-      srs.filter(sr => sr.status === "confirmed" || sr.status === "NEW_REQUEST").slice(0, 5).forEach(sr => {
+      srs.filter(sr => sr && (sr.status === "confirmed" || sr.status === "NEW_REQUEST" || sr.dispatch_status === "UNASSIGNED")).slice(0, 10).forEach(sr => {
         next.push({
           id: `sr:new:${sr.id}`,
           kind: "service_request",
@@ -312,7 +167,7 @@ export function NotificationCenter() {
       })
 
       // Add open customer care tickets
-      tickets.filter(t => t.status === "OPEN" || t.status === "WAITING_AGENT").slice(0, 5).forEach(t => {
+      tickets.filter(t => t && (t.status === "OPEN" || t.status === "WAITING_AGENT")).slice(0, 10).forEach(t => {
         next.push({
           id: `ticket:open:${t.id}`,
           kind: "care_ticket",
@@ -327,34 +182,23 @@ export function NotificationCenter() {
           )
         })
       })
-      
-      // Trigger emergency audio chime if new active SOS alerts arrive
-      if (Array.isArray(sos) && sos.length > 0) {
-        try {
-          const ctx = new (window.AudioContext || window.webkitAudioContext)()
-          const osc = ctx.createOscillator()
-          const gain = ctx.createGain()
-          osc.type = 'sawtooth'
-          osc.frequency.setValueAtTime(880, ctx.currentTime)
-          osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.4)
-          gain.gain.setValueAtTime(0.3, ctx.currentTime)
-          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4)
-          osc.connect(gain)
-          gain.connect(ctx.destination)
-          osc.start()
-          osc.stop(ctx.currentTime + 0.4)
-        } catch(e) {}
-      }
+
+      next.sort((a, b) => {
+        const timeA = a.when instanceof Date ? a.when.getTime() : 0
+        const timeB = b.when instanceof Date ? b.when.getTime() : 0
+        return timeB - timeA
+      })
 
       setItems(next)
-    } catch {
+    } catch (e) {
+      console.error("Failed to load notifications", e)
       setError("Failed to load notifications.")
       setItems([])
     } finally {
       loadingRef.current = false
       setLoading(false)
     }
-  }, [role])
+  }, [user])
 
   useEffect(() => {
     load()
@@ -530,17 +374,16 @@ export function NotificationCenter() {
           </div>
 
           <div style={{ padding: "12px 20px", background: "var(--surface2)", borderTop: "1px solid var(--stroke)", textAlign: "center" }}>
-             <button
-               type="button"
-               onClick={() => {
-                 setOpen(false)
-                 if (displayedItems[0]?.to) navigate(displayedItems[0].to)
-                 else navigate(routes.dashboard)
-               }}
-               style={{ background: "none", border: "none", fontSize: 12, fontWeight: 800, color: "var(--muted)", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
-             >
-               VIEW ALL <ArrowRight size={14} />
-             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                navigate(routes.service_requests || "/customers/bookings")
+              }}
+              style={{ background: "none", border: "none", fontSize: 12, fontWeight: 800, color: "var(--muted)", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
+            >
+              VIEW ALL <ArrowRight size={14} />
+            </button>
           </div>
         </div>
       )}

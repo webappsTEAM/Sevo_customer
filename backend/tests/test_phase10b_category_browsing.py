@@ -12,7 +12,7 @@ from unittest.mock import patch, MagicMock
 from decimal import Decimal
 import requests
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.core.cache import cache
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -20,6 +20,7 @@ from rest_framework.test import APIClient
 from workforce_integration.marketplace_client import MarketplaceIntegrationClient
 
 
+@override_settings(SECURE_SSL_REDIRECT=False)
 class Phase10BCategoryBrowsingTests(TestCase):
     @classmethod
     def setUpClass(cls):
@@ -628,3 +629,38 @@ class Phase10BCategoryBrowsingTests(TestCase):
                     "SEVO_E2E_SQLITE_PATH is ignored because DEBUG is False and IS_TESTING is False."
                 )
 
+
+
+class HttpsRedirectSecurityTests(TestCase):
+    """
+    Explicit verification of production HTTPS redirection policy.
+    Validates that when SECURE_SSL_REDIRECT is active, standard HTTP
+    traffic is immediately redirected with 301 Moved Permanently.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        from django.db import connection
+        engine = connection.settings_dict.get("ENGINE", "")
+        if "sqlite3" not in engine:
+            raise RuntimeError(
+                f"FATAL: Test ran against non-sqlite engine: {engine}. Tests are restricted to temporary SQLite only."
+            )
+
+    @override_settings(SECURE_SSL_REDIRECT=True)
+    def test_22_http_requests_redirected_to_https_when_ssl_redirect_enabled(self):
+        """Unencrypted HTTP request must receive HTTP 301 to https:// when SECURE_SSL_REDIRECT=True."""
+        client = APIClient()
+        resp = client.get("/api/marketplace/categories/")
+        self.assertEqual(resp.status_code, status.HTTP_301_MOVED_PERMANENTLY)
+        self.assertTrue(resp["Location"].startswith("https://"))
+
+    @override_settings(SECURE_SSL_REDIRECT=False)
+    def test_23_internal_test_requests_not_redirected_when_ssl_redirect_disabled(self):
+        """Internal scoped test client avoids 301 redirects when SECURE_SSL_REDIRECT=False."""
+        client = APIClient()
+        with patch("workforce_integration.marketplace_client.MarketplaceIntegrationClient.get_categories") as mock_get:
+            mock_get.return_value = {"success": True, "data": []}
+            resp = client.get("/api/marketplace/categories/")
+            self.assertNotEqual(resp.status_code, status.HTTP_301_MOVED_PERMANENTLY)

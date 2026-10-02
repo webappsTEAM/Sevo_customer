@@ -311,6 +311,30 @@ class ServiceZone(models.Model):
 
     zone_type = models.CharField(max_length=10, choices=ZONE_TYPE_CHOICES, default="circle")
 
+    # Coverage lifecycle. Only ACTIVE zones gate (allow) bookings; COMING_SOON
+    # and PAUSED zones stay visible to admins (and COMING_SOON can be surfaced
+    # to customers as "launching soon" messaging) but never count as coverage.
+    # `is_active` is kept as the derived, indexed flag every existing query in
+    # service_zone_engine / views_service_zones / MapPickerScreen already
+    # filters on -- save() keeps the two in lockstep so no caller can see a
+    # zone that is "active" by one field and "paused" by the other.
+    STATUS_ACTIVE = "active"
+    STATUS_COMING_SOON = "coming_soon"
+    STATUS_PAUSED = "paused"
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_COMING_SOON, "Coming Soon"),
+        (STATUS_PAUSED, "Paused"),
+    ]
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE, db_index=True,
+    )
+
+    # Optional vehicle-class restriction (values of
+    # logistics.ServiceTier.VehicleClass -- the Customer app's own GT vehicle
+    # taxonomy; no parallel list). Empty list = every vehicle class allowed.
+    vehicle_classes = models.JSONField(default=list, blank=True)
+
     # Circle zone fields
     center_lat = models.FloatField(null=True, blank=True)
     center_lng = models.FloatField(null=True, blank=True)
@@ -330,6 +354,25 @@ class ServiceZone(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.zone_type})"
+
+    def save(self, *args, **kwargs):
+        # Legacy callers (the Locations > Service Areas panel, older tests)
+        # only toggle is_active. An "active" status with is_active=False means
+        # someone switched the zone off through that path -> treat as PAUSED.
+        if self.status == self.STATUS_ACTIVE and self.is_active is False:
+            self.status = self.STATUS_PAUSED
+        self.is_active = self.status == self.STATUS_ACTIVE
+        if self.vehicle_classes is None:
+            self.vehicle_classes = []
+        super().save(*args, **kwargs)
+
+    def allows_vehicle_class(self, vehicle_class):
+        """True when this zone has no vehicle restriction, no class was asked
+        for, or the class is explicitly listed."""
+        allowed = [str(v).strip().lower() for v in (self.vehicle_classes or []) if str(v).strip()]
+        if not allowed or not vehicle_class:
+            return True
+        return str(vehicle_class).strip().lower() in allowed
 
     # ── Geometry helpers (no GeoDjango) ────────────────────────────────────
 
@@ -408,6 +451,81 @@ class ServiceZoneService(models.Model):
     def __str__(self):
         status = "✓" if self.is_available else "✗"
         return f"{self.zone.name} — {self.service_slug} {status}"
+class PricingConfig(models.Model):
+    """
+    Admin-configurable pricing used across the customer mobile app's
+    checkout and cart screens. Added 2026-10-01 per explicit request
+    ("The Tax fixing Platform fee and free delivery cost should be fix
+    by the admin not the hard coded... please be give access to customer
+    admin to fix those inside setting module that should be change
+    dynamically") — these values used to be hardcoded directly in the
+    Flutter app (checkout_screen.dart, cart_notifier.dart) with no way to
+    change them without shipping a new app build. Single-row singleton
+    keyed by `key="default"`, same pattern as HomePageConfig above.
+
+    Served publicly (no auth) via PricingConfigAPIView.GET so the mobile
+    app can read the live values; editable only by admin/manager/finance
+    roles with the `pricing:edit` Global RBAC action via PUT.
+    """
+    key = models.CharField(max_length=50, unique=True, default="default")
+
+    # Home-service booking (checkout_screen.dart)
+    platform_fee = models.DecimalField(
+        max_digits=10, decimal_places=2, default="49.00",
+        help_text="Flat platform/service fee added to every home-service booking.",
+    )
+    gst_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default="5.00",
+        help_text="GST percentage applied to the service subtotal.",
+    )
+    min_advance_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default="20.00",
+        help_text="Minimum advance payment as a percentage of the booking total.",
+    )
+    min_advance_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default="149.00",
+        help_text="Minimum advance payment amount in rupees, whichever is higher.",
+    )
+
+    # Grocery / vegetable cart (grocery_cart_screen.dart, cart_notifier.dart)
+    delivery_fee = models.DecimalField(
+        max_digits=10, decimal_places=2, default="15.00",
+        help_text="Delivery fee charged on grocery orders below the free-delivery threshold.",
+    )
+    free_delivery_threshold = models.DecimalField(
+        max_digits=10, decimal_places=2, default="200.00",
+        help_text="Grocery cart subtotal at or above which delivery is free.",
+    )
+    handling_fee = models.DecimalField(
+        max_digits=10, decimal_places=2, default="2.00",
+        help_text="Flat handling & packaging fee charged on every grocery order.",
+    )
+    small_cart_fee = models.DecimalField(
+        max_digits=10, decimal_places=2, default="5.00",
+        help_text="Extra fee charged on grocery orders below the small-cart threshold.",
+    )
+    small_cart_threshold = models.DecimalField(
+        max_digits=10, decimal_places=2, default="100.00",
+        help_text="Grocery cart subtotal below which the small-cart fee applies.",
+    )
+
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="pricing_configs",
+    )
+
+    class Meta:
+        verbose_name = "Pricing Config"
+        verbose_name_plural = "Pricing Config"
+
+    def __str__(self):
+        return f"PricingConfig ({self.key}) - {self.updated_at.strftime('%Y-%m-%d %H:%M')}"
+
+
 class City(models.Model):
     """
     GT-B-06: registry of cities the platform operates in (or plans to).

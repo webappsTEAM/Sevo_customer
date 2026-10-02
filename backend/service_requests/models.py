@@ -1,10 +1,19 @@
 import uuid
+import datetime
 from decimal import Decimal
 
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models, transaction, IntegrityError
 from django.utils import timezone
+import inspect
+
+
+def _make_check_constraint(expr, name):
+    if "condition" in inspect.signature(models.CheckConstraint.__init__).parameters:
+        return models.CheckConstraint(condition=expr, name=name)
+    return models.CheckConstraint(check=expr, name=name)
+
 
 
 # ── Category prefix mapping for unique human-readable Service Request IDs ────
@@ -67,7 +76,7 @@ def is_mason_category(value) -> bool:
     return str(value).strip().lower() in MASON_CATEGORY_ALIASES
 
 
-def _generate_request_id(category_or_slug=None):
+def _generate_request_id(category_or_slug=None, skip=0):
     """
     Generate category-prefixed unique ID (e.g. HM0001, AC0001, PL0001, EL0001).
     Guarantees global uniqueness across all ServiceRequests.
@@ -88,6 +97,9 @@ def _generate_request_id(category_or_slug=None):
 
     last = ServiceRequest.objects.filter(request_id__startswith=prefix).order_by("-id").first()
     num = (last.id + 1) if last and last.id else (ServiceRequest.objects.count() + 1)
+    # `skip` > 0 only on a retry after a unique-id collision with a concurrent booking: every racing
+    # request would otherwise recompute the very same next number and keep colliding.
+    num += max(0, int(skip))
     req_id = f"{prefix}{str(num).zfill(4)}"
     while ServiceRequest.objects.filter(request_id=req_id).exists():
         num += 1
@@ -280,6 +292,10 @@ class ServiceRequest(models.Model):
     photo            = models.ImageField(upload_to="service_requests/photos/", null=True, blank=True)
     total_amount     = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     cart_data        = models.JSONField(default=list, blank=True)
+    catalog_service_id = models.CharField(max_length=100, blank=True, default="")
+    package_display  = models.JSONField(default=dict, blank=True)
+    package_id       = models.CharField(max_length=100, blank=True, default="")
+    package_version  = models.CharField(max_length=50, blank=True, default="1.0")
 
     # Goods Transport (truck/two-wheeler) + Packers & Movers — optional, only
     # populated when service_category is one of the logistics categories.
@@ -312,7 +328,7 @@ class ServiceRequest(models.Model):
     # estimate -- see services/logistics_pricing.quote_logistics_fare).
     #
     # Stored rather than recomputed because it is the *quote the customer
-    # was given*, locked at booking per CALTRACK_PHASE_14 H.1. Rates can
+    # was given*, locked at booking per sevo_PHASE_14 H.1. Rates can
     # change afterwards, so recomputing later would silently produce a
     # different number and there would be no record of what was actually
     # agreed. This is also the "estimated" half that final-fare
@@ -356,14 +372,41 @@ class ServiceRequest(models.Model):
     # INSURANCE_MAX_LIABILITY) -- what "a stated liability cap" in the
     # finding refers to.
     insurance_opted_in = models.BooleanField(default=False)
+    # Customer's own GSTIN, when they are GST-registered and want it on the
+    # invoice (Porter's customer terms: registered customers intimate it at
+    # booking). Optional; validated for format only -- never used to change a fare.
+    customer_gstin = models.CharField(max_length=15, blank=True, default="")
+    # Added 2026-09-30: the live database already had a NOT NULL
+    # "eway_bill_number" column (same drift class as customer_gstin's crash)
+    # before any Django model field or migration for it existed -- migration
+    # 0102 registered that state only (SeparateDatabaseAndState). Migration
+    # 0116 then properly re-adds the field at its real max_length=50 (see
+    # the field below); the max_length=20 placeholder that used to live here
+    # was dead code superseded by that field and has been removed.
     insurance_premium = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     insurance_liability_cap = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    # Gap 1 (Round 8 verification vs Porter public GT docs): Porter's own
+    # customer terms put e-way-bill responsibility on the CONSIGNOR under
+    # Indian GST law (movement above the statutory value/distance
+    # threshold) -- Porter publishes no e-way-bill *product* feature of its
+    # own, just that TOS statement. So this is a record/attach field, not a
+    # generation or government-API integration: the customer (or Admin)
+    # attaches the e-way-bill number/document they already generated
+    # elsewhere. See GTOperationsConfig.eway_bill_required_above for the
+    # admin-configurable "warn if missing above this declared value"
+    # threshold used at booking/dispatch time.
+    eway_bill_number = models.CharField(max_length=50, blank=True, default="")
+    eway_bill_document = models.FileField(upload_to="service_requests/eway_bills/", null=True, blank=True)
     # GT-B-03: logistics-only sub-phase, independent of Status -- see the
     # LogisticsLeg docstring above. History is append-only, one entry per
     # set_logistics_leg() call: {"leg": ..., "at": iso8601, "by": user_id}.
     logistics_leg = models.CharField(max_length=20, choices=LogisticsLeg.choices, blank=True, default="")
     logistics_leg_updated_at = models.DateTimeField(null=True, blank=True)
     logistics_leg_history = models.JSONField(default=list, blank=True)
+    # Driver-reported trip exception (receiver unavailable ...): {type,label,notes,leg,status,reported_at}.
+    delivery_exception = models.JSONField(default=dict, blank=True)
+    # Driver-reported toll / parking pass-throughs (see services/extra_charges.py).
+    extra_charges = models.JSONField(default=list, blank=True)
     # GT-B-03 (completing it): the three fields above shipped, but nothing
     # in either backend ever wrote them -- the model comment referred to a
     # set_logistics_leg() that did not exist, so logistics_leg was
@@ -375,6 +418,15 @@ class ServiceRequest(models.Model):
     LEG_SEQUENCE = [
         "EN_ROUTE_PICKUP", "LOADING", "EN_ROUTE_DROP", "UNLOADING", "DELIVERED",
     ]
+    PM_LEG_SEQUENCE = [
+        "ASSIGNED", "TEAM_EN_ROUTE", "ARRIVED_PICKUP", "PACKING", "DISMANTLING",
+        "LOADING", "IN_TRANSIT", "ARRIVED_DROP", "UNLOADING", "REASSEMBLY",
+        "UNPACKING", "DELIVERED", "COMPLETED",
+    ]
+    PM_SPECIFIC_LEGS = {
+        "ASSIGNED", "TEAM_EN_ROUTE", "ARRIVED_PICKUP", "PACKING", "DISMANTLING",
+        "IN_TRANSIT", "ARRIVED_DROP", "REASSEMBLY", "UNPACKING", "COMPLETED",
+    }
 
     def set_logistics_leg(self, leg, actor=None, save=True):
         """
@@ -404,33 +456,80 @@ class ServiceRequest(models.Model):
             raise ValueError(
                 f"{leg!r} is not a valid logistics leg. Expected one of: {sorted(valid)}"
             )
-        if self.logistics_leg == leg:
-            return False
-        if self.logistics_leg:
-            try:
-                if self.LEG_SEQUENCE.index(leg) < self.LEG_SEQUENCE.index(self.logistics_leg):
-                    return False
-            except ValueError:
-                # A leg outside the ordered sequence: fall through and apply
-                # it rather than silently dropping a legitimate value.
-                pass
+        if save and self.pk:
+            with transaction.atomic():  # type: ignore[attr-defined]
+                locked = ServiceRequest.objects.select_for_update().filter(pk=self.pk).first()
+                target = locked if locked is not None else self
 
-        now = timezone.now()
-        history = list(self.logistics_leg_history or [])
-        history.append({
-            "leg": leg,
-            "at": now.isoformat(),
-            "by": getattr(actor, "id", None),
-        })
-        self.logistics_leg = leg
-        self.logistics_leg_updated_at = now
-        self.logistics_leg_history = history
-        if save:
-            self.save(update_fields=[
-                "logistics_leg", "logistics_leg_updated_at",
-                "logistics_leg_history", "updated_at",
-            ])
-        return True
+                if target.logistics_leg == leg:
+                    self.logistics_leg = target.logistics_leg
+                    self.logistics_leg_updated_at = target.logistics_leg_updated_at
+                    self.logistics_leg_history = target.logistics_leg_history
+                    return False
+
+                if target.logistics_leg:
+                    cat = (target.service_category or "").strip().lower()
+                    if cat == "packers_movers" or target.logistics_leg in self.PM_SPECIFIC_LEGS or leg in self.PM_SPECIFIC_LEGS:
+                        seq = self.PM_LEG_SEQUENCE
+                    else:
+                        seq = self.LEG_SEQUENCE
+                    try:
+                        if seq.index(leg) < seq.index(target.logistics_leg):
+                            return False
+                    except ValueError:
+                        pass
+
+                now = timezone.now()
+                history = list(target.logistics_leg_history or [])
+                if not any(h.get("leg") == leg for h in history):
+                    history.append({
+                        "leg": leg,
+                        "at": now.isoformat(),
+                        "by": getattr(actor, "id", None),
+                    })
+                target.logistics_leg = leg
+                target.logistics_leg_updated_at = now
+                target.logistics_leg_history = history
+                target.save(update_fields=[
+                    "logistics_leg", "logistics_leg_updated_at",
+                    "logistics_leg_history", "updated_at",
+                ])
+                self.logistics_leg = target.logistics_leg
+                self.logistics_leg_updated_at = target.logistics_leg_updated_at
+                self.logistics_leg_history = target.logistics_leg_history
+                return True
+        else:
+            if self.logistics_leg == leg:
+                return False
+            if self.logistics_leg:
+                cat = (self.service_category or "").strip().lower()
+                if cat == "packers_movers" or self.logistics_leg in self.PM_SPECIFIC_LEGS or leg in self.PM_SPECIFIC_LEGS:
+                    seq = self.PM_LEG_SEQUENCE
+                else:
+                    seq = self.LEG_SEQUENCE
+                try:
+                    if seq.index(leg) < seq.index(self.logistics_leg):
+                        return False
+                except ValueError:
+                    pass
+
+            now = timezone.now()
+            history = list(self.logistics_leg_history or [])
+            if not any(h.get("leg") == leg for h in history):
+                history.append({
+                    "leg": leg,
+                    "at": now.isoformat(),
+                    "by": getattr(actor, "id", None),
+                })
+            self.logistics_leg = leg
+            self.logistics_leg_updated_at = now
+            self.logistics_leg_history = history
+            if save:
+                self.save(update_fields=[
+                    "logistics_leg", "logistics_leg_updated_at",
+                    "logistics_leg_history", "updated_at",
+                ])
+            return True
 
     logistics_tier   = models.ForeignKey(
         "logistics.ServiceTier",
@@ -443,6 +542,22 @@ class ServiceRequest(models.Model):
         on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name="service_requests",
+    )
+    # Light PTL: same goods_transport_truck category and pipeline (payment, tracking,
+    # cancellation, invoice), marked by booking mode. db_default so rows the Vendor app
+    # inserts through its mirror model (which does not declare these columns) stay valid.
+    class LogisticsBookingMode(models.TextChoices):
+        SPOT = "spot", "Spot"
+        PTL = "ptl", "Part Truck Load"
+
+    logistics_booking_mode = models.CharField(
+        max_length=10, choices=LogisticsBookingMode.choices,
+        default=LogisticsBookingMode.SPOT, db_default=LogisticsBookingMode.SPOT,
+        blank=True, db_index=True,
+    )
+    ptl_declared_weight_kg = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True,
+        help_text="Customer-declared cargo weight for a PTL booking (priced per kg).",
     )
 
     # Payment workflow
@@ -494,10 +609,16 @@ class ServiceRequest(models.Model):
     parent_request = models.ForeignKey("self", on_delete=models.SET_NULL,
                                        null=True, blank=True,
                                        related_name="child_requests")
-    request_kind   = models.CharField(max_length=30, default="standard", db_index=True,
+    request_kind   = models.CharField(max_length=50, default="standard", db_index=True,
                                       choices=[("standard", "Standard"),
                                                ("inspection", "Inspection"),
-                                               ("quoted_work", "Quoted Work")])
+                                               ("quoted_work", "Quoted Work"),
+                                               ("ESTIMATION", "Estimation / Site Consultation"),
+                                               ("DIRECT", "Direct Standard Job"),
+                                               ("WORK", "Actual Work Execution Job")])
+    catalog_service_id = models.CharField(max_length=100, blank=True, default="", db_index=True,
+                                          help_text="Catalog service ID or package slug")
+    catalog_mapping_status = models.CharField(max_length=50, blank=True, default="UNMAPPED", db_index=True)
     quote_number   = models.CharField(max_length=100, blank=True, null=True, unique=True, db_index=True)
 
     # Coupon snapshot fields
@@ -543,10 +664,32 @@ class ServiceRequest(models.Model):
         db_index=True,
         help_text="Client-supplied idempotency key to prevent duplicate bookings",
     )
+    class DispatchStatus(models.TextChoices):
+        PENDING       = "PENDING",       "Pending"
+        DISPATCHED    = "DISPATCHED",    "Dispatched"
+        PENDING_RETRY = "PENDING_RETRY", "Pending Retry"
+        FAILED        = "FAILED",        "Failed"
+
     vendor_id = models.CharField(max_length=100, blank=True, default="", help_text="Opaque vendor identifier")
     vendor_name = models.CharField(max_length=255, blank=True, default="", help_text="Vendor display name snapshot")
     vendor_confirmed_at = models.DateTimeField(null=True, blank=True)
 
+    # External Workforce Dispatch Tracking
+    dispatch_status = models.CharField(
+        max_length=30,
+        choices=DispatchStatus.choices,
+        default=DispatchStatus.PENDING,
+        db_index=True,
+        help_text="Current dispatch state to external workforce system",
+    )
+    dispatch_attempts = models.PositiveIntegerField(default=0, help_text="Number of dispatch attempts")
+    last_dispatch_error = models.TextField(blank=True, default="", help_text="Last recorded dispatch error message")
+    last_dispatched_at = models.DateTimeField(null=True, blank=True, help_text="Timestamp of latest dispatch attempt")
+
+    # Delay tracking
+    is_delayed = models.BooleanField(default=False)
+    delay_reason = models.CharField(max_length=255, blank=True, default="")
+    delay_reported_at = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -558,6 +701,7 @@ class ServiceRequest(models.Model):
             models.Index(fields=["company", "payment_status", "created_at"]),
             models.Index(fields=["customer", "created_at"]),
             models.Index(fields=["phone"]),
+            models.Index(fields=["dispatch_status", "created_at"], name="service_req_disp_stat_idx"),
             models.Index(fields=["job_type", "status"], name="service_req_job_typ_6bd73d_idx"),
             models.Index(fields=["job_type", "created_at"], name="service_req_job_typ_4f9cb8_idx"),
         ]
@@ -613,16 +757,18 @@ class ServiceRequest(models.Model):
         # under concurrent load). Retry with a freshly generated id a bounded
         # number of times inside a savepoint, so one collision doesn't also
         # abort whatever outer transaction the caller may be in.
-        _max_attempts = 5
+        _max_attempts = 8
         for _attempt in range(1, _max_attempts + 1):
             try:
-                with transaction.atomic():
+                with transaction.atomic():  # type: ignore[attr-defined]
                     super().save(*args, **kwargs)
                 break
             except IntegrityError:
                 if not _request_id_was_generated or _attempt == _max_attempts:
                     raise
-                self.request_id = _generate_request_id(self.service_category)
+                import random
+                self.request_id = _generate_request_id(
+                    self.service_category, skip=random.randint(1, 5 * _attempt * _attempt))
 
         if is_new or old_status != self.status:
             from service_requests.state_machine import record_transition
@@ -652,6 +798,23 @@ class ServiceRequest(models.Model):
             ]:
                 return False
         return True
+
+    def get_service_category_display(self):
+        cat = str(self.service_category or "").strip()
+        display_map = {
+            "hvac": "AC Inspection & Repair",
+            "plumbing": "Plumbing",
+            "electrical": "Electrical",
+            "cleaning": "Cleaning",
+            "painting": "Painting & Waterproofing",
+            "carpentry": "Carpentry",
+            "appliance_repair": "Appliance Repair",
+            "pest_control": "Pest Control",
+            "packers_movers": "Packers & Movers",
+        }
+        if cat in display_map:
+            return display_map[cat]
+        return cat.replace("_", " ").title()
 
     def __str__(self):
         return f"{self.request_id} — {self.issue_title}"
@@ -1011,7 +1174,7 @@ class Package(models.Model):
     icon           = models.CharField(max_length=100, blank=True, default="")
     gst_rate       = models.DecimalField(max_digits=5, decimal_places=2, default=18.00, help_text="GST percentage (e.g. 18.00)")
     platform_fee   = models.DecimalField(max_digits=10, decimal_places=2, default=29.00, help_text="Platform / Convenience Fee in INR (e.g. 29.00)")
-    stock_item     = models.OneToOneField("inventory.InventoryItem", on_delete=models.SET_NULL, null=True, blank=True, related_name="vegetable_package")
+    stock_item     = models.OneToOneField("inventory.Vegetable", on_delete=models.SET_NULL, null=True, blank=True, related_name="vegetable_package")
     custom_packs   = models.JSONField(default=list, blank=True)
     customization  = models.JSONField(default=dict, blank=True)
 
@@ -1058,6 +1221,12 @@ class Package(models.Model):
         help_text="Goods & Transport only: display dimensions (e.g. '6ft x 5ft'). Mirrors ServiceTier.dimensions_label -- "
                    "the one ServiceTier display field with no other Package equivalent (capacity is covered by the Tag field).",
     )
+    gt_max_weight_kg = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Goods & Transport only: maximum cargo weight (kg) this vehicle tier can carry. "
+                   "Mirrors ServiceTier.max_weight_kg -- used for cargo fitment checks, PTL eligibility "
+                   "and dispatch/vehicle-compatibility. Blank leaves the tier's existing capacity untouched.",
+    )
     gt_base_fare = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True,
         help_text="Goods & Transport only: fixed component of the distance fare. Mirrors ServiceTier.base_fare.",
@@ -1093,6 +1262,15 @@ class Package(models.Model):
         max_digits=10, decimal_places=2, null=True, blank=True,
         help_text="Goods & Transport only: floor applied after everything else. Mirrors ServiceTier.minimum_fare.",
     )
+    gt_gst_rate = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0.00")), MaxValueValidator(Decimal("100.00"))],
+        help_text=(
+            "Goods & Transport only: GST percentage already INCLUDED in the fare (18.00 = 18%). The fare does not "
+            "change; invoices show the GST component. Enter 0 to remove GST; blank leaves the tier unchanged. "
+            "Mirrors ServiceTier.gst_rate."
+        ),
+    )
 
     created_at     = models.DateTimeField(auto_now_add=True)
     updated_at     = models.DateTimeField(auto_now=True)
@@ -1102,6 +1280,90 @@ class Package(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class PackageVariant(models.Model):
+    """
+    A specific pack size, weight, or quantity option for a sellable Package / Vegetable.
+    Enables multi-variant products (e.g. 500g, 1kg, 2kg, 1pc, 4pcs) sharing a master inventory pool.
+    """
+    package = models.ForeignKey(Package, on_delete=models.CASCADE, related_name="variants")
+    vegetable = models.ForeignKey("inventory.Vegetable", on_delete=models.CASCADE, null=True, blank=True, related_name="variants")
+
+    name = models.CharField(max_length=120, blank=True)
+    pack_value = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("1.00"))
+    unit = models.CharField(max_length=20, default="kg")
+    unit_basis = models.CharField(max_length=20, choices=[("WEIGHT", "Weight"), ("COUNT", "Count")], default="WEIGHT")
+
+    base_price = models.DecimalField(max_digits=10, decimal_places=2)  # Selling price
+    mrp = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
+    sku = models.CharField(max_length=100, blank=True, null=True)
+    is_default = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    sort_order = models.IntegerField(default=0)
+
+    # Vendor catalog workflow fields
+    status = models.CharField(
+        max_length=20,
+        choices=[("PENDING", "Pending"), ("APPROVED", "Approved"), ("REJECTED", "Rejected")],
+        default="APPROVED",
+        db_index=True
+    )
+    source = models.CharField(
+        max_length=20,
+        choices=[("DIRECT", "Direct"), ("REQUEST", "Request")],
+        default="DIRECT",
+        db_index=True
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='requested_package_variants'
+    )
+    requested_at = models.DateTimeField(default=timezone.now)
+    rejection_reason = models.TextField(blank=True, default="")
+    is_resubmission = models.BooleanField(default=False)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='reviewed_package_variants'
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["sort_order", "pack_value", "id"]
+
+    @property
+    def base_unit_deduction(self):
+        from inventory.utils.unit_conversion import to_base_units
+        return to_base_units(self.pack_value, self.unit, self.unit_basis)
+
+    @property
+    def display_name(self):
+        if self.name:
+            return self.name
+        val_str = f"{self.pack_value:g}" if self.pack_value else "1"
+        return f"{val_str} {self.unit}".strip()
+
+    def save(self, *args, **kwargs):
+        from inventory.utils.unit_conversion import unit_basis_for_unit
+        if self.unit:
+            self.unit_basis = unit_basis_for_unit(self.unit)
+        if not self.name:
+            val_str = f"{self.pack_value:g}" if self.pack_value else "1"
+            self.name = f"{val_str} {self.unit}".strip()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.package.name} - {self.display_name} (₹{self.base_price})"
 
 
 class AddOn(models.Model):
@@ -1190,6 +1452,11 @@ class CatalogChangeLog(models.Model):
         # the `logistics` app, which is precisely the case a soft reference
         # handles and a ForeignKey would not.
         SERVICE_TIER = "SERVICE_TIER", "Goods & Transport Tier"
+        # GT tax/RCM policy (Round 13, Final Configurability Pass). Same
+        # reasoning as SERVICE_TIER above: this soft reference already spans
+        # unrelated tables, so GTTaxPolicy (below) reuses it rather than a
+        # bespoke audit model.
+        TAX_POLICY = "TAX_POLICY", "GT Tax / RCM Policy"
 
     class Action(models.TextChoices):
         CREATE        = "CREATE",        "Created"
@@ -1326,7 +1593,7 @@ class RescheduleRequest(models.Model):
 
     # Proposed new date & slot
     new_date              = models.DateField()
-    new_time_slot         = models.CharField(max_length=20, choices=TimeSlotChoices.choices, default=TimeSlotChoices.SLOT_09_10)
+    new_time_slot         = models.CharField(max_length=100, blank=True, default="09:00 - 10:00")
 
     reason                = models.CharField(max_length=50, choices=RescheduleReason.choices, default=RescheduleReason.SCHEDULE_CONFLICT)
     additional_notes      = models.TextField(blank=True, default="")
@@ -1537,6 +1804,423 @@ class RefundEvidence(models.Model):
     def __str__(self):
         return f"RefundEvidence({self.pk}) for {self.refund_request.refund_id}"
 
+
+# GT Porter-parity fix (this session, 2026-09-23): Porter is publicly known to
+# sometimes charge a cancellation fee once a partner/technician has already
+# been assigned and is en route -- SEVO currently has NO such concept
+# anywhere (grepped for cancellation_fee/CancellationFee/cancel_fee across
+# views.py, models.py, and every service module: zero hits before this).
+# CustomerBookingCancelView (views.py) unconditionally creates a FULL-amount
+# RefundRequest for any paid, not-yet-OTP-verified cancellation, regardless
+# of how far dispatch had progressed.
+#
+# THIS SESSION DELIBERATELY DOES NOT INVENT A FEE AMOUNT, PERCENTAGE, OR
+# THRESHOLD -- Porter's exact numbers are not public information, and the
+# task's own instructions are explicit: do not invent undocumented values.
+# What this model does is make the *rule* configurable through SEVO's own
+# admin (matching the "business values come from DB/admin, not hardcoded
+# constants" requirement) with every field defaulting to "no fee charged" --
+# so wiring this in changes NOTHING about current behavior until an admin
+# (a human, with the actual business context) fills in real numbers.
+#
+# EXACT DECISION REQUIRED FROM THE BUSINESS BEFORE THIS HAS ANY EFFECT:
+#   1. Should a fee apply once a technician/vehicle is ASSIGNED but before
+#      pickup? (fee_mode stays NONE until this is answered.)
+#   2. If yes: a flat rupee amount, or a percentage of the fare? How much?
+#   3. Should there be a grace period after assignment where cancellation is
+#      still free (Porter-style "cancel within N seconds/minutes, no fee")?
+#   4. Does the fee apply per service category (goods_transport vs
+#      packers_movers) or platform-wide?
+# Until someone with product/business authority answers these, fee_mode
+# stays NONE and CustomerBookingCancelView's behavior is unchanged.
+class GTCancellationPolicy(models.Model):
+    class FeeMode(models.TextChoices):
+        NONE    = "NONE",    "No cancellation fee (current behavior, default)"
+        FLAT    = "FLAT",    "Flat rupee amount"
+        PERCENT = "PERCENT", "Percentage of the booking's total_amount"
+
+    service_category = models.CharField(
+        max_length=100, blank=True, default="",
+        help_text="Empty/blank applies platform-wide to all GT bookings "
+                   "(goods_transport, packers_movers, etc). Set a specific "
+                   "category to override for just that category.",
+    )
+    fee_mode = models.CharField(
+        max_length=10, choices=FeeMode.choices, default=FeeMode.NONE,
+        help_text="NONE (default) preserves today's behavior exactly: full "
+                   "refund request, no fee, regardless of dispatch progress.",
+    )
+    flat_fee_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text="Used when fee_mode=FLAT. Rupees deducted from the refund "
+                   "amount if the fee applies.",
+    )
+    percent_fee = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0,
+        help_text="Used when fee_mode=PERCENT. Percentage (0-100) of "
+                   "total_amount deducted from the refund amount if the fee "
+                   "applies.",
+    )
+    applies_only_after_assignment = models.BooleanField(
+        default=True,
+        help_text="If True (recommended, matches Porter's publicly observed "
+                   "behavior), the fee never applies while the booking is "
+                   "still searching for a technician/vehicle -- only once "
+                   "one has been assigned. If False, the fee applies to any "
+                   "cancellation of a paid booking regardless of dispatch "
+                   "state.",
+    )
+    grace_period_seconds = models.PositiveIntegerField(
+        default=0,
+        help_text="Cancellations within this many seconds of assignment are "
+                   "still free, even if applies_only_after_assignment "
+                   "would otherwise charge a fee. 0 disables the grace "
+                   "period.",
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "GT Cancellation Fee Policy"
+        verbose_name_plural = "GT Cancellation Fee Policies"
+
+    def __str__(self):
+        scope = self.service_category or "platform-wide"
+        return f"GTCancellationPolicy({scope}, {self.fee_mode})"
+
+    def fee_for(self, service_request):
+        """Returns the Decimal fee amount for this booking's cancellation,
+        or Decimal('0') if no fee applies. Never raises -- an unconfigured
+        or misconfigured policy must never block a cancellation."""
+        from decimal import Decimal
+        if not self.is_active or self.fee_mode == self.FeeMode.NONE:
+            return Decimal("0")
+        if self.applies_only_after_assignment:
+            # ServiceRequest itself carries no assignment timestamp: a driver's acceptance is
+            # recorded on BookingAssignment.accepted_at. (Reading only booking.accepted_at made
+            # "fee once a driver is assigned" permanently inert -- it always resolved to 0.)
+            assigned_at = getattr(service_request, "accepted_at", None) or getattr(service_request, "assigned_at", None)
+            if not assigned_at:
+                try:
+                    latest = (
+                        service_request.assignments.filter(accepted_at__isnull=False)
+                        .order_by("-accepted_at").first()
+                    )
+                    assigned_at = latest.accepted_at if latest else None
+                except Exception:
+                    assigned_at = None
+            if not assigned_at:
+                return Decimal("0")
+            if self.grace_period_seconds:
+                import django.utils.timezone as tz
+                elapsed = (tz.now() - assigned_at).total_seconds()
+                if elapsed < self.grace_period_seconds:
+                    return Decimal("0")
+        total = getattr(service_request, "total_amount", None) or Decimal("0")
+        if self.fee_mode == self.FeeMode.FLAT:
+            fee = Decimal(str(self.flat_fee_amount))
+        else:
+            fee = (Decimal(str(total)) * Decimal(str(self.percent_fee)) / Decimal("100"))
+        return min(fee, Decimal(str(total)))
+
+
+def get_gt_cancellation_fee(service_request):
+    """Looks up the applicable GTCancellationPolicy for a booking's service
+    category (falling back to the platform-wide, blank-category policy) and
+    returns the Decimal fee to deduct from its refund, or Decimal('0') if
+    none is configured. Safe to call unconditionally: no policy rows exist
+    until an admin creates one, so this returns 0 today for every booking --
+    see the GTCancellationPolicy docstring above for the exact business
+    decision still required before this can charge anything."""
+    from decimal import Decimal
+    category = str(getattr(service_request, "service_category", "") or "").strip().lower()
+    policy = (
+        GTCancellationPolicy.objects.filter(service_category__iexact=category, is_active=True).first()
+        or GTCancellationPolicy.objects.filter(service_category="", is_active=True).first()
+    )
+    if not policy:
+        return Decimal("0")
+    return policy.fee_for(service_request)
+
+
+# GT Porter-vs-SEVO gap pass (2026-09-23): Porter publicly bills "extra
+# waiting charges" when a customer keeps the driver/crew waiting beyond a
+# free window at pickup/drop (a widely-observed feature of Porter's fare
+# breakdown; the exact free-minutes allowance and per-minute rate are not
+# published anywhere this session could verify, so they are NOT invented
+# here). Grepped the whole backend for waiting_charge/WAITING_CHARGE/
+# wait_charge before this: zero hits anywhere. TripStop (above) already
+# has arrived_at/completed_at per stop -- the dwell-time data this needs
+# already exists, so this is the same "safely derivable using existing
+# architecture" case as GTCancellationPolicy, not a new architecture.
+#
+# Mirrors that same pattern exactly: every field defaults to "no charge",
+# so wiring this in changes NOTHING about current behavior until an admin
+# fills in real numbers.
+#
+# EXACT DECISION REQUIRED FROM THE BUSINESS BEFORE THIS HAS ANY EFFECT:
+#   1. How many free minutes of waiting are allowed per stop before a
+#      charge applies?
+#   2. What is the per-minute (or per-block-of-N-minutes) rate charged
+#      after that, and does it apply per stop or once per trip?
+#   3. Does this apply platform-wide or only to specific GT categories
+#      (goods_transport_truck / goods_transport_two_wheeler /
+#      packers_movers)?
+#   4. Is there a cap on the total waiting charge per booking?
+# Until someone with product/business authority answers these,
+# free_minutes stays at its default (unlimited/no charge) and no booking
+# is charged anything extra for waiting time.
+class GTWaitingChargePolicy(models.Model):
+    service_category = models.CharField(
+        max_length=100, blank=True, default="",
+        help_text="Empty/blank applies platform-wide to all GT bookings. "
+                   "Set a specific category to override for just that "
+                   "category.",
+    )
+    is_enabled = models.BooleanField(
+        default=False,
+        help_text="False (default) preserves today's behavior exactly: no "
+                   "waiting charge is ever computed or applied.",
+    )
+    free_minutes_per_stop = models.PositiveIntegerField(
+        default=0,
+        help_text="Minutes of dwell time (completed_at - arrived_at) "
+                   "allowed per stop before a charge applies. 0 with "
+                   "is_enabled=True would charge from the first minute -- "
+                   "leave is_enabled=False until a real value is set.",
+    )
+    rate_per_minute = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text="Rupees charged per minute of waiting beyond "
+                   "free_minutes_per_stop, at each stop.",
+    )
+    max_charge_per_booking = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Optional cap on the total waiting charge across all "
+                   "stops in one booking. Blank = no cap.",
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "GT Waiting Charge Policy"
+        verbose_name_plural = "GT Waiting Charge Policies"
+
+    def __str__(self):
+        scope = self.service_category or "platform-wide"
+        return f"GTWaitingChargePolicy({scope}, enabled={self.is_enabled})"
+
+    def charge_for(self, service_request):
+        """Returns the Decimal total waiting charge for this booking, or
+        Decimal('0') if disabled/unconfigured. Never raises -- a stop still
+        in progress (completed_at is None) is simply skipped, not charged
+        for partial/ongoing waiting.
+
+        Dwell time is measured per TripStop (arrived_at -> completed_at)
+        when the booking has TripStop rows -- the multi-stop route case
+        (GT-B-05), where every stop including pickup/drop is a TripStop.
+
+        GT audit fix: the common single-pickup/single-drop Mini Truck
+        booking has NO TripStop rows at all -- those are only created for
+        multi-stop routes -- so the loop below never ran for an ordinary
+        booking and this policy silently charged nothing regardless of how
+        long the driver actually waited. For that case (goods_transport_truck
+        with no TripStop rows), fall back to the same append-only
+        logistics_leg_history the Vendor app's own waiting-charge
+        computation (services/waiting_charges.py) uses: dwell at pickup is
+        the time between entering LOADING and leaving for EN_ROUTE_DROP;
+        dwell at drop is the time between entering UNLOADING and reaching
+        DELIVERED. Scoped to the distance-priced GT categories
+        (goods_transport_truck, goods_transport_two_wheeler) -- P&M
+        bookings are unaffected (P&M always has TripStop rows for its
+        multi-stop moves, so it never reaches this fallback)."""
+        from decimal import Decimal
+        if not self.is_active or not self.is_enabled:
+            return Decimal("0")
+        total_minutes_billable = 0
+        stops = list(service_request.trip_stops.all())
+        if stops:
+            for stop in stops:
+                if not stop.arrived_at or not stop.completed_at:
+                    continue
+                dwell_seconds = (stop.completed_at - stop.arrived_at).total_seconds()
+                if dwell_seconds <= 0:
+                    continue
+                dwell_minutes = int(dwell_seconds // 60)
+                billable = max(0, dwell_minutes - self.free_minutes_per_stop)
+                total_minutes_billable += billable
+        elif str(getattr(service_request, "service_category", "") or "").strip().lower() in ("goods_transport_truck", "goods_transport_two_wheeler"):
+            # GT audit fix: this fallback is driven purely by
+            # logistics_leg_history, which both distance-priced GT
+            # categories write via the identical LEG_SEQUENCE
+            # (EN_ROUTE_PICKUP -> LOADING -> EN_ROUTE_DROP -> UNLOADING ->
+            # DELIVERED) -- Two Wheeler bookings have zero TripStop rows
+            # just like Mini Truck, so without this they silently billed
+            # zero waiting/detention charge. P&M is unaffected: it always
+            # has TripStop rows and never reaches this branch.
+            total_minutes_billable = self._gt_leg_history_billable_minutes(service_request)
+        charge = Decimal(str(total_minutes_billable)) * Decimal(str(self.rate_per_minute))
+        if self.max_charge_per_booking is not None:
+            charge = min(charge, Decimal(str(self.max_charge_per_booking)))
+        return charge
+
+    def _gt_leg_history_billable_minutes(self, service_request):
+        """goods_transport_truck fallback for charge_for() when the booking
+        has no TripStop rows: dwell time from logistics_leg_history, the
+        same append-only {"leg", "at", "by"} entries
+        workforce_api/services/logistics_events.py writes on the Vendor
+        side. Two windows only, matching the real GT leg sequence
+        (EN_ROUTE_PICKUP -> LOADING -> EN_ROUTE_DROP -> UNLOADING ->
+        DELIVERED): loading dwell (LOADING -> EN_ROUTE_DROP) and unloading
+        dwell (UNLOADING -> DELIVERED)."""
+        import math
+        from datetime import datetime
+
+        history = list(getattr(service_request, "logistics_leg_history", None) or [])
+
+        def _parse(ts):
+            if isinstance(ts, datetime):
+                return ts
+            if not ts:
+                return None
+            try:
+                return datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+            except ValueError:
+                return None
+
+        def _first_at(legs):
+            found = [
+                _parse(h.get("at"))
+                for h in history
+                if isinstance(h, dict) and h.get("leg") in legs
+            ]
+            found = [t for t in found if t is not None]
+            return min(found) if found else None
+
+        def _dwell_minutes(start_legs, end_legs):
+            start = _first_at(start_legs)
+            end = _first_at(end_legs)
+            if start is None or end is None or end <= start:
+                return 0
+            return math.ceil((end - start).total_seconds() / 60)
+
+        loading_minutes = _dwell_minutes(("LOADING",), ("EN_ROUTE_DROP",))
+        unloading_minutes = _dwell_minutes(("UNLOADING",), ("DELIVERED",))
+        billable = max(0, loading_minutes - self.free_minutes_per_stop)
+        billable += max(0, unloading_minutes - self.free_minutes_per_stop)
+        return billable
+
+
+def get_gt_waiting_charge(service_request):
+    """Looks up the applicable GTWaitingChargePolicy for a booking's
+    service category (falling back to the platform-wide, blank-category
+    policy) and returns the Decimal waiting charge, or Decimal('0') if
+    none is configured/enabled. Safe to call unconditionally: no policy
+    rows exist until an admin creates one, and is_enabled defaults to
+    False, so this returns 0 today for every booking -- see the
+    GTWaitingChargePolicy docstring above for the exact business decision
+    still required before this can charge anything."""
+    from decimal import Decimal
+    category = str(getattr(service_request, "service_category", "") or "").strip().lower()
+    policy = (
+        GTWaitingChargePolicy.objects.filter(service_category__iexact=category, is_active=True).first()
+        or GTWaitingChargePolicy.objects.filter(service_category="", is_active=True).first()
+    )
+    if not policy:
+        return Decimal("0")
+    return policy.charge_for(service_request)
+
+
+# P&M audit fix (advance/deposit before a scheduled move): Porter's own
+# packers-and-movers flow collects a booking-confirmation payment (a
+# deposit) with the balance due at delivery, rather than the flat
+# pay-on-completion flow GT reuses for P&M today (source: Porter's public
+# packers-and-movers pages -- the exact percentage Porter charges is not
+# invented here). SEVO already has this EXACT shape working today for
+# quoted Home Services work (PaintingQuote.advance_amount, enforced in
+# PaymentOrderCreateView._amount_due()) -- this is the same
+# category-scoped, admin-configurable, defaults-to-no-op policy pattern as
+# GTCancellationPolicy/GTWaitingChargePolicy directly above, not a new
+# architecture. Wiring is in payment_views.py._amount_due().
+#
+# EXACT DECISION REQUIRED FROM THE BUSINESS BEFORE THIS HAS ANY EFFECT:
+#   1. What percentage (or flat amount) should be collected as the advance
+#      for packers_movers (or platform-wide)?
+#   2. Should the advance be non-refundable past a certain point (this
+#      model does not touch refund/cancellation logic at all -- see
+#      GTCancellationPolicy for that, which is intentionally separate)?
+# Until someone with product/business authority sets is_enabled=True and a
+# real advance_percent, this stays a no-op and every booking keeps paying
+# the full amount at once, exactly like today.
+class GTAdvancePaymentPolicy(models.Model):
+    service_category = models.CharField(
+        max_length=100, blank=True, default="",
+        help_text="Empty/blank applies platform-wide to all GT bookings "
+                   "(goods_transport, packers_movers, etc). Set a specific "
+                   "category to override for just that category.",
+    )
+    is_enabled = models.BooleanField(
+        default=False,
+        help_text="False (default) preserves today's behavior exactly: the "
+                   "full booking amount is due whenever a payment order is "
+                   "first created, with no partial-advance option.",
+    )
+    advance_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0,
+        help_text="Percentage (0-100) of total_amount due upfront when a "
+                   "payment order is first created for this booking; the "
+                   "remainder is due before/at completion, same as the "
+                   "existing PaintingQuote advance/balance pattern. Only "
+                   "used when is_enabled=True.",
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "GT Advance Payment Policy"
+        verbose_name_plural = "GT Advance Payment Policies"
+
+    def __str__(self):
+        scope = self.service_category or "platform-wide"
+        return f"GTAdvancePaymentPolicy({scope}, {'ON' if self.is_enabled else 'off'} {self.advance_percent}%)"
+
+    def advance_due_for(self, total):
+        """Returns the Decimal advance amount for a booking with this
+        total, or Decimal('0') if this policy doesn't apply (disabled,
+        inactive, or 0%). Never raises."""
+        from decimal import Decimal
+        if not self.is_active or not self.is_enabled:
+            return Decimal("0")
+        pct = Decimal(str(self.advance_percent or 0))
+        if pct <= 0:
+            return Decimal("0")
+        total = Decimal(str(total or 0))
+        return min((total * pct / Decimal("100")), total)
+
+
+def get_gt_advance_due(service_request, total=None):
+    """Looks up the applicable GTAdvancePaymentPolicy for a booking's
+    service category (falling back to the platform-wide, blank-category
+    policy) and returns the Decimal advance amount due, or Decimal('0') if
+    none is configured/enabled. Safe to call unconditionally: no policy
+    rows exist until an admin creates one, and is_enabled defaults to
+    False, so this returns 0 today for every booking -- see the
+    GTAdvancePaymentPolicy docstring above for the exact business decision
+    still required before this changes anything."""
+    from decimal import Decimal
+    category = str(getattr(service_request, "service_category", "") or "").strip().lower()
+    policy = (
+        GTAdvancePaymentPolicy.objects.filter(service_category__iexact=category, is_active=True).first()
+        or GTAdvancePaymentPolicy.objects.filter(service_category="", is_active=True).first()
+    )
+    if not policy:
+        return Decimal("0")
+    if total is None:
+        total = getattr(service_request, "total_amount", None) or Decimal("0")
+    return policy.advance_due_for(total)
 
 
 # ─── Slice 4: Complaint ───────────────────────────────────────────────────────
@@ -1963,6 +2647,13 @@ class Payment(models.Model):
     razorpay_payment_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
     razorpay_signature = models.CharField(max_length=255, blank=True, null=True)
 
+    # Provider-neutral identifiers are authoritative for new gateways.  The
+    # Razorpay-named fields remain for historic transactions and a safe staged
+    # migration; new Paytm payments never have to masquerade as Razorpay rows.
+    provider_order_id = models.CharField(max_length=128, blank=True, null=True, db_index=True)
+    provider_transaction_id = models.CharField(max_length=128, blank=True, null=True, db_index=True)
+    provider_signature = models.CharField(max_length=512, blank=True, null=True)
+
     amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     currency = models.CharField(max_length=10, default="INR")
     status = models.CharField(
@@ -2041,6 +2732,7 @@ class WalletTransaction(models.Model):
         BOOKING_DEBIT = "BOOKING_DEBIT", "Applied to Booking Payment"
         ADJUSTMENT    = "ADJUSTMENT",    "Manual Adjustment"
         REVERSAL      = "REVERSAL",      "Reversal"
+        TOPUP         = "TOPUP",         "Wallet Recharge"
 
     wallet = models.ForeignKey(
         CustomerWallet,
@@ -2740,6 +3432,170 @@ class TechnicianLocation(models.Model):
     def __str__(self):
         return f"Loc for {self.booking.request_id} ({self.latitude}, {self.longitude}) at {self.created_at}"
 
+
+# ==============================================================================
+# AC INSPECTION RATE CARD & SPARE PARTS MODELS (POSTGRESQL SINGLE SOURCE OF TRUTH)
+# ==============================================================================
+
+class ACInspectionRateCategory(models.Model):
+    """
+    Relational category for AC spare parts and repair services.
+    PostgreSQL is the single source of truth (no hardcoded category list).
+    """
+    name = models.CharField(max_length=150)
+    slug = models.SlugField(max_length=100, unique=True, db_index=True)
+    description = models.TextField(blank=True, default="")
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["display_order", "id"]
+        verbose_name = "AC Inspection Rate Category"
+        verbose_name_plural = "AC Inspection Rate Categories"
+
+    def __str__(self):
+        return f"{self.name} ({self.slug})"
+
+
+class ACInspectionRateItem(models.Model):
+    """
+    Individual spare part or repair service item stored in PostgreSQL.
+    Validated DecimalField for money, units, service types, and display ordering.
+    """
+    SERVICE_TYPE_CHOICES = [
+        ("SPARE_PART", "Spare Part"),
+        ("LABOR", "Labor / Service"),
+        ("REPAIR", "Repair"),
+        ("INSTALLATION", "Installation"),
+        ("ADJUSTMENT", "Adjustment / Maintenance"),
+    ]
+
+    category = models.ForeignKey(
+        ACInspectionRateCategory,
+        on_delete=models.PROTECT,
+        related_name="items",
+        help_text="Category this rate item belongs to"
+    )
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True, default="")
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    unit = models.CharField(max_length=50, blank=True, default="per piece")
+    service_type = models.CharField(max_length=50, blank=True, default="SPARE_PART", choices=SERVICE_TYPE_CHOICES)
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["display_order", "id"]
+        verbose_name = "AC Inspection Rate Item"
+        verbose_name_plural = "AC Inspection Rate Items"
+        constraints = [
+            _make_check_constraint(
+                models.Q(price__gte=Decimal("0.00")),
+                name="check_ac_rate_item_price_gte_0"
+            )
+        ]
+        indexes = [
+            models.Index(fields=["category", "is_active"]),
+            models.Index(fields=["is_active", "display_order"]),
+        ]
+
+    def __str__(self):
+        return f"[{self.category.name}] {self.name} (₹{self.price})"
+
+
+class ACInspectionConfiguration(models.Model):
+    """
+    Authoritative configuration for AC Inspection & Diagnostic fees and service details.
+    """
+    diagnostic_fee = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("199.00"),
+        help_text="Authoritative doorstep inspection fee"
+    )
+    currency = models.CharField(max_length=10, default="INR")
+    is_active = models.BooleanField(default=True)
+    title = models.CharField(
+        max_length=255,
+        default="AC Inspection & Diagnostic Visit",
+        blank=True,
+        help_text="Customer-facing service title"
+    )
+    subtitle = models.TextField(
+        default="Not sure about the fault? Certified technician visits with diagnostic instruments, inspects cooling, gas pressure & electricals, and provides an itemized quotation before repair.",
+        blank=True,
+        help_text="Customer-facing description of the diagnostic visit"
+    )
+    image = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        help_text="Storage path or URL to the inspection service image"
+    )
+    badges = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="JSON list of service highlight badges"
+    )
+    includes = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="JSON list of diagnostic inspection check points"
+    )
+    ready = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="JSON list of customer preparation instructions"
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "AC Inspection Configuration"
+        verbose_name_plural = "AC Inspection Configurations"
+
+    @classmethod
+    def get_solo(cls):
+        default_badges = [
+            "₹199 Diagnostic Fee",
+            "Adjustable Against Repair",
+            "Pay at Doorstep",
+        ]
+        default_includes = [
+            "Comprehensive 21-point system & safety diagnostics",
+            "Cooling delta temp scan & gas pressure test",
+            "Compressor load & capacitor electrical scan",
+            "Itemized quotation before any repair work",
+        ]
+        default_ready = [
+            "Continuous power supply and remote control available for testing",
+            "Clear access to indoor and outdoor AC units",
+            "Area below indoor unit cleared of electronics & valuables",
+            "Outdoor unit safely accessible via balcony, terrace, or window",
+        ]
+        obj, _ = cls.objects.get_or_create(
+            id=1,
+            defaults={
+                "diagnostic_fee": Decimal("199.00"),
+                "currency": "INR",
+                "is_active": True,
+                "title": "AC Inspection & Diagnostic Visit",
+                "subtitle": "Not sure about the fault? Certified technician visits with diagnostic instruments, inspects cooling, gas pressure & electricals, and provides an itemized quotation before repair.",
+                "image": "",
+                "badges": default_badges,
+                "includes": default_includes,
+                "ready": default_ready,
+            }
+        )
+        return obj
+
+    def __str__(self):
+        return f"AC Inspection Fee: {self.currency} {self.diagnostic_fee}"
+
+
 # ==============================================================================
 # AC INSPECTION / ESTIMATION SYSTEM MODELS (PHASE 2)
 # ==============================================================================
@@ -2750,19 +3606,27 @@ class Estimation(models.Model):
     Maintains a 1:1 relationship with ServiceRequest (the authoritative job).
     """
     class Status(models.TextChoices):
-        REQUESTED              = "REQUESTED",              "Requested"
-        VENDOR_CONFIRMED       = "VENDOR_CONFIRMED",       "Vendor Confirmed"
-        TECHNICIAN_ASSIGNED    = "TECHNICIAN_ASSIGNED",    "Technician Assigned"
-        TECHNICIAN_ON_THE_WAY  = "TECHNICIAN_ON_THE_WAY",  "Technician On The Way"
-        TECHNICIAN_ARRIVED     = "TECHNICIAN_ARRIVED",     "Technician Arrived"
-        INSPECTION_IN_PROGRESS = "INSPECTION_IN_PROGRESS", "Inspection In Progress"
-        INSPECTION_COMPLETED   = "INSPECTION_COMPLETED",   "Inspection Completed"
-        QUOTATION_SENT         = "QUOTATION_SENT",         "Quotation Sent"
-        CUSTOMER_APPROVED      = "CUSTOMER_APPROVED",      "Customer Approved"
-        CUSTOMER_REJECTED      = "CUSTOMER_REJECTED",      "Customer Rejected"
-        CONVERTED_TO_SERVICE   = "CONVERTED_TO_SERVICE",   "Converted to Service"
-        CLOSED                 = "CLOSED",                 "Closed"
-        CANCELLED              = "CANCELLED",              "Cancelled"
+        REQUESTED               = "REQUESTED",               "Requested"
+        VENDOR_CONFIRMED        = "VENDOR_CONFIRMED",        "Vendor Confirmed"
+        TECHNICIAN_ASSIGNED     = "TECHNICIAN_ASSIGNED",     "Technician Assigned"
+        TECHNICIAN_ON_THE_WAY   = "TECHNICIAN_ON_THE_WAY",   "Technician On The Way"
+        TECHNICIAN_ARRIVED      = "TECHNICIAN_ARRIVED",      "Technician Arrived"
+        INSPECTION_IN_PROGRESS  = "INSPECTION_IN_PROGRESS",  "Inspection In Progress"
+        INSPECTION_COMPLETED    = "INSPECTION_COMPLETED",    "Inspection Completed"
+        ESTIMATION_SUBMITTED    = "ESTIMATION_SUBMITTED",    "Estimation Submitted"
+        ADMIN_APPROVED          = "ADMIN_APPROVED",          "Admin Approved"
+        SENT_BACK_TO_TECHNICIAN = "SENT_BACK_TO_TECHNICIAN", "Sent Back to Technician"
+        CUSTOMER_PENDING        = "CUSTOMER_PENDING",        "Customer Pending"
+        QUOTATION_SENT          = "QUOTATION_SENT",          "Quotation Sent"
+        CUSTOMER_APPROVED       = "CUSTOMER_APPROVED",       "Customer Approved"
+        CUSTOMER_REJECTED       = "CUSTOMER_REJECTED",       "Customer Rejected"
+        REPAIR_AUTHORIZED       = "REPAIR_AUTHORIZED",       "Repair Authorized"
+        TECHNICIAN_REPAIR       = "TECHNICIAN_REPAIR",       "Technician Repair"
+        TESTING                 = "TESTING",                 "Testing"
+        CONVERTED_TO_SERVICE    = "CONVERTED_TO_SERVICE",    "Converted to Service"
+        COMPLETED               = "COMPLETED",               "Completed"
+        CLOSED                  = "CLOSED",                  "Closed"
+        CANCELLED               = "CANCELLED",               "Cancelled"
 
     service_request = models.OneToOneField(
         ServiceRequest,
@@ -2794,8 +3658,8 @@ class Estimation(models.Model):
     class Meta:
         ordering = ["-created_at"]
         constraints = [
-            models.CheckConstraint(
-                condition=models.Q(ac_quantity__gte=1),
+            _make_check_constraint(
+                models.Q(ac_quantity__gte=1),
                 name="check_estimation_ac_quantity_gte_1"
             )
         ]
@@ -2858,8 +3722,8 @@ class EstimationFee(models.Model):
     class Meta:
         ordering = ["-created_at"]
         constraints = [
-            models.CheckConstraint(
-                condition=models.Q(amount__gte=Decimal("0.00")),
+            _make_check_constraint(
+                models.Q(amount__gte=Decimal("0.00")),
                 name="check_estimation_fee_amount_gte_0"
             )
         ]
@@ -3007,13 +3871,16 @@ class EstimationQuotation(models.Model):
     Supports concurrency-safe versioning (V1, V2, etc.) per Estimation.
     """
     class Status(models.TextChoices):
-        DRAFT      = "DRAFT",      "Draft"
-        SENT       = "SENT",       "Sent to Customer"
-        APPROVED   = "APPROVED",   "Approved"
-        REJECTED   = "REJECTED",   "Rejected"
-        SUPERSEDED = "SUPERSEDED", "Superseded"
-        EXPIRED    = "EXPIRED",    "Expired"
-        CANCELLED  = "CANCELLED",  "Cancelled"
+        DRAFT                   = "DRAFT",                   "Draft"
+        SUBMITTED_FOR_REVIEW    = "SUBMITTED_FOR_REVIEW",    "Submitted for Review"
+        ADMIN_APPROVED          = "ADMIN_APPROVED",          "Admin Approved"
+        SENT_BACK_TO_TECHNICIAN = "SENT_BACK_TO_TECHNICIAN", "Sent Back to Technician"
+        SENT                    = "SENT",                    "Sent to Customer"
+        APPROVED                = "APPROVED",                "Approved"
+        REJECTED                = "REJECTED",                "Rejected"
+        SUPERSEDED              = "SUPERSEDED",              "Superseded"
+        EXPIRED                 = "EXPIRED",                 "Expired"
+        CANCELLED               = "CANCELLED",               "Cancelled"
 
     class RejectionReason(models.TextChoices):
         PRICE_TOO_HIGH    = "PRICE_TOO_HIGH",    "Price Too High"
@@ -3029,7 +3896,7 @@ class EstimationQuotation(models.Model):
     version = models.PositiveSmallIntegerField(default=1)
     quote_ref = models.CharField(max_length=100, unique=True, db_index=True)
     status = models.CharField(
-        max_length=20,
+        max_length=30,
         choices=Status.choices,
         default=Status.DRAFT,
         db_index=True
@@ -3043,6 +3910,15 @@ class EstimationQuotation(models.Model):
     currency = models.CharField(max_length=10, default="INR")
     notes = models.TextField(blank=True, default="")
     valid_until = models.DateField(null=True, blank=True)
+    admin_notes = models.TextField(blank=True, default="", help_text="Review comments or send-back instructions from admin")
+    admin_reviewed_at = models.DateTimeField(null=True, blank=True)
+    admin_reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="reviewed_quotations"
+    )
     customer_approved_at = models.DateTimeField(null=True, blank=True)
     customer_rejected_at = models.DateTimeField(null=True, blank=True)
     rejection_reason = models.CharField(
@@ -3062,24 +3938,24 @@ class EstimationQuotation(models.Model):
                 fields=["estimation", "version"],
                 name="unique_estimation_quotation_version"
             ),
-            models.CheckConstraint(
-                condition=models.Q(subtotal__gte=Decimal("0.00")),
+            _make_check_constraint(
+                models.Q(subtotal__gte=Decimal("0.00")),
                 name="check_quotation_subtotal_gte_0"
             ),
-            models.CheckConstraint(
-                condition=models.Q(tax_amount__gte=Decimal("0.00")),
+            _make_check_constraint(
+                models.Q(tax_amount__gte=Decimal("0.00")),
                 name="check_quotation_tax_gte_0"
             ),
-            models.CheckConstraint(
-                condition=models.Q(discount_amount__gte=Decimal("0.00")),
+            _make_check_constraint(
+                models.Q(discount_amount__gte=Decimal("0.00")),
                 name="check_quotation_discount_gte_0"
             ),
-            models.CheckConstraint(
-                condition=models.Q(total_amount__gte=Decimal("0.00")),
+            _make_check_constraint(
+                models.Q(total_amount__gte=Decimal("0.00")),
                 name="check_quotation_total_gte_0"
             ),
-            models.CheckConstraint(
-                condition=models.Q(version__gte=1),
+            _make_check_constraint(
+                models.Q(version__gte=1),
                 name="check_quotation_version_gte_1"
             ),
         ]
@@ -3110,12 +3986,24 @@ class EstimationQuotationItem(models.Model):
         blank=True,
         related_name="quotation_items"
     )
+    rate_item = models.ForeignKey(
+        "ACInspectionRateItem",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="quotation_snapshots",
+        help_text="Reference to original AC rate item if quoted from rate card",
+    )
     catalog_service_id = models.CharField(max_length=100, blank=True, default="", help_text="Catalog service or package ID")
     service_name = models.CharField(max_length=255, help_text="Snapshot of service name")
+    category_name_snapshot = models.CharField(max_length=255, blank=True, default="", help_text="Immutable snapshot of category name at quote creation")
+    item_name_snapshot = models.CharField(max_length=255, blank=True, default="", help_text="Immutable snapshot of part/service name at quote creation")
     description = models.TextField(blank=True, default="")
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("1.00"))
     unit = models.CharField(max_length=50, blank=True, default="job")
     unit_price = models.DecimalField(max_digits=12, decimal_places=2)
+    unit_price_snapshot = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, help_text="Immutable snapshot of unit price")
+    selected_at = models.DateTimeField(null=True, blank=True, help_text="Timestamp when technician selected this item")
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"))
     tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
@@ -3126,24 +4014,24 @@ class EstimationQuotationItem(models.Model):
     class Meta:
         ordering = ["sort_order", "id"]
         constraints = [
-            models.CheckConstraint(
-                condition=models.Q(quantity__gt=Decimal("0.00")),
+            _make_check_constraint(
+                models.Q(quantity__gt=Decimal("0.00")),
                 name="check_quote_item_quantity_gt_0"
             ),
-            models.CheckConstraint(
-                condition=models.Q(unit_price__gte=Decimal("0.00")),
+            _make_check_constraint(
+                models.Q(unit_price__gte=Decimal("0.00")),
                 name="check_quote_item_unit_price_gte_0"
             ),
-            models.CheckConstraint(
-                condition=models.Q(tax_amount__gte=Decimal("0.00")),
+            _make_check_constraint(
+                models.Q(tax_amount__gte=Decimal("0.00")),
                 name="check_quote_item_tax_gte_0"
             ),
-            models.CheckConstraint(
-                condition=models.Q(discount_amount__gte=Decimal("0.00")),
+            _make_check_constraint(
+                models.Q(discount_amount__gte=Decimal("0.00")),
                 name="check_quote_item_discount_gte_0"
             ),
-            models.CheckConstraint(
-                condition=models.Q(line_total__gte=Decimal("0.00")),
+            _make_check_constraint(
+                models.Q(line_total__gte=Decimal("0.00")),
                 name="check_quote_item_line_total_gte_0"
             ),
         ]
@@ -3193,3 +4081,661 @@ class EventOutbox(models.Model):
 
     def __str__(self):
         return f"Event {self.event_type} [{self.status}] on {self.aggregate_type}:{self.aggregate_id}"
+
+
+class CustomerInspection(models.Model):
+    """
+    Booking-specific customer inspection record.
+    1:1 relationship with ServiceRequest (service_request_id).
+    Common/unified model generic across service categories (AC, TV, Electrical, etc.).
+    Holds authoritative immutable snapshot of diagnostic fee and name at booking time.
+    """
+    class Status(models.TextChoices):
+        BOOKED      = "BOOKED",      "Booked"
+        ASSIGNED    = "ASSIGNED",    "Assigned"
+        IN_PROGRESS = "IN_PROGRESS", "In Progress"
+        COMPLETED   = "COMPLETED",   "Completed"
+        CANCELLED   = "CANCELLED",   "Cancelled"
+
+    service_request = models.OneToOneField(
+        "ServiceRequest",
+        on_delete=models.CASCADE,
+        related_name="customer_inspection",
+        db_index=True,
+        help_text="The parent booking this inspection belongs to",
+    )
+    inspection_configuration = models.ForeignKey(
+        "ACInspectionConfiguration",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="customer_inspections",
+        db_index=True,
+        help_text="Reference to the master configuration used at booking time",
+    )
+    inspection_name_snapshot = models.CharField(
+        max_length=200,
+        default="AC Inspection & Diagnostic Visit",
+        help_text="Authoritative immutable snapshot of inspection title at booking time",
+    )
+    diagnostic_fee_snapshot = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("199.00"),
+        help_text="Authoritative diagnostic fee snapshot captured at booking confirmation",
+    )
+    currency = models.CharField(max_length=10, default="INR")
+    quantity = models.PositiveIntegerField(default=1)
+    status = models.CharField(
+        max_length=30,
+        choices=Status.choices,
+        default=Status.BOOKED,
+        db_index=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["service_request"]),
+            models.Index(fields=["inspection_configuration"]),
+            models.Index(fields=["status"]),
+        ]
+
+    def __str__(self):
+        return f"CustomerInspection #{self.id} for SR #{self.service_request_id} ({self.status}) - Fee: ₹{self.diagnostic_fee_snapshot}"
+
+
+class CustomerInspectionRateSnapshot(models.Model):
+    """
+    Relational rate-card item snapshot created at the moment of customer booking confirmation.
+    Contains individual relational rows for all active master rate-card items.
+    Allows vendor and technician applications to query the exact historical rate-card snapshot.
+    """
+    customer_inspection = models.ForeignKey(
+        CustomerInspection,
+        on_delete=models.CASCADE,
+        related_name="rate_snapshots",
+        db_index=True,
+    )
+    rate_item = models.ForeignKey(
+        "ACInspectionRateItem",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="customer_snapshots",
+        db_index=True,
+    )
+    category_name_snapshot = models.CharField(max_length=150)
+    item_name_snapshot = models.CharField(max_length=200)
+    description_snapshot = models.TextField(blank=True, default="")
+    price_snapshot = models.DecimalField(max_digits=10, decimal_places=2)
+    unit_snapshot = models.CharField(max_length=50, default="fixed")
+    service_type_snapshot = models.CharField(max_length=50, default="SPARE_PART")
+    display_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["display_order", "id"]
+        indexes = [
+            models.Index(fields=["customer_inspection"]),
+            models.Index(fields=["rate_item"]),
+        ]
+
+    def __str__(self):
+        return f"RateSnapshot #{self.id}: {self.item_name_snapshot} @ ₹{self.price_snapshot} (Inspection #{self.customer_inspection_id})"
+
+
+# ── Service-wise Time Slot Management Models ─────────────────────────────────
+
+class ServiceTimeSlotConfig(models.Model):
+    """
+    Master time slot configuration for a bookable Service.
+    Controls default hours, slot duration, capacity, and active status.
+    """
+    service = models.OneToOneField(
+        "Service",
+        on_delete=models.CASCADE,
+        related_name="time_slot_config"
+    )
+    default_start_time = models.TimeField(default=datetime.time(9, 0))
+    default_end_time = models.TimeField(default=datetime.time(18, 0))
+    slot_duration_minutes = models.PositiveIntegerField(default=30)
+    slot_capacity = models.PositiveIntegerField(default=1)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "service_time_slot_config"
+        ordering = ["service_id"]
+
+    def __str__(self):
+        return f"TimeSlotConfig for {self.service.name} ({self.default_start_time.strftime('%H:%M')} - {self.default_end_time.strftime('%H:%M')}, {self.slot_duration_minutes}m)"
+
+
+class ServiceWeeklySchedule(models.Model):
+    """
+    Day-of-week schedule override for a Service (0=Monday ... 6=Sunday).
+    Can mark days open or closed, with custom operating hours and capacity.
+    """
+    DAY_CHOICES = [
+        (0, "Monday"),
+        (1, "Tuesday"),
+        (2, "Wednesday"),
+        (3, "Thursday"),
+        (4, "Friday"),
+        (5, "Saturday"),
+        (6, "Sunday"),
+    ]
+
+    service = models.ForeignKey(
+        "Service",
+        on_delete=models.CASCADE,
+        related_name="weekly_schedules"
+    )
+    day_of_week = models.PositiveSmallIntegerField(choices=DAY_CHOICES)
+    start_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
+    is_open = models.BooleanField(default=True)
+    slot_capacity = models.PositiveIntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "service_weekly_schedule"
+        unique_together = [("service", "day_of_week")]
+        ordering = ["service_id", "day_of_week"]
+
+    def __str__(self):
+        day_name = dict(self.DAY_CHOICES).get(self.day_of_week, str(self.day_of_week))
+        status = "Open" if self.is_open else "Closed"
+        return f"{self.service.name} / {day_name}: {status}"
+
+
+class ServiceDateOverride(models.Model):
+    """
+    Calendar date override for a Service (e.g. holiday, festival, special hours).
+    Has highest schedule precedence after is_active.
+    """
+    service = models.ForeignKey(
+        "Service",
+        on_delete=models.CASCADE,
+        related_name="date_overrides"
+    )
+    date = models.DateField(db_index=True)
+    start_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
+    is_closed = models.BooleanField(default=False)
+    reason = models.CharField(max_length=255, blank=True, default="")
+    slot_capacity = models.PositiveIntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "service_date_override"
+        unique_together = [("service", "date")]
+        ordering = ["date", "start_time"]
+
+    def __str__(self):
+        status = "Closed" if self.is_closed else "Open"
+        reason_txt = f" ({self.reason})" if self.reason else ""
+        return f"{self.service.name} on {self.date}: {status}{reason_txt}"
+
+
+class GTExtraChargePolicy(models.Model):
+    """
+    Admin control for toll / parking pass-throughs a driver reports with a receipt.
+    is_enabled defaults to False: with no enabled policy no extra charge is ever accepted or billed.
+    The customer pays the actual receipt amount, bounded by the caps below.
+    """
+    service_category = models.CharField(
+        max_length=100, blank=True, default="",
+        help_text="Blank applies to all GT bookings; a category value overrides it.",
+    )
+    is_enabled = models.BooleanField(default=False)
+    allow_toll = models.BooleanField(default=True)
+    allow_parking = models.BooleanField(default=True)
+    max_amount_per_item = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Largest single toll/parking receipt accepted. Blank = no limit.",
+    )
+    max_total_per_booking = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Cap on the total pass-through billed per booking. Blank = no limit.",
+    )
+    require_receipt_photo = models.BooleanField(
+        default=False,
+        help_text="When on, a receipt photo must be uploaded by the driver; a typed reference alone is refused.",
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "GT Extra Charge (Toll/Parking) Policy"
+        verbose_name_plural = "GT Extra Charge (Toll/Parking) Policies"
+
+    def __str__(self):
+        return f"GTExtraChargePolicy({self.service_category or 'platform-wide'}, enabled={self.is_enabled})"
+
+
+def get_gt_extra_charge_policy(category):
+    cat = str(category or "").strip().lower()
+    qs = GTExtraChargePolicy.objects.filter(is_active=True, is_enabled=True)
+    return qs.filter(service_category__iexact=cat).first() or qs.filter(service_category="").first()
+
+
+class GTInsurancePolicy(models.Model):
+    """
+    Admin override for transit-insurance terms. With no active row the INSURANCE_RATE /
+    INSURANCE_MAX_LIABILITY settings apply exactly as before; an active row replaces them.
+    Set is_offered=False to stop offering insurance without a deploy.
+
+    Gap 5 (Round 8 verification): Porter offers NO goods-in-transit insurance product at
+    all -- it is explicitly out of scope for Porter, and Porter's own terms tell customers
+    to self-insure. This model is a SEVO-ONLY optional value-add with no Porter equivalent
+    to match. Do not read a future gap report's "insurance doesn't match Porter" as a real
+    finding -- there is nothing on Porter's side to match against.
+    """
+    is_offered = models.BooleanField(default=True)
+    premium_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default=2,
+        help_text="Premium as a percentage of the declared value (2 = 2%).",
+    )
+    max_liability = models.DecimalField(
+        max_digits=12, decimal_places=2, default=500000,
+        help_text="Highest declared value / liability cap.",
+    )
+    is_active = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "GT Insurance Policy"
+        verbose_name_plural = "GT Insurance Policy"
+
+    def __str__(self):
+        return f"GTInsurancePolicy(offered={self.is_offered}, rate={self.premium_percent}%)"
+
+
+class GTClaimPolicy(models.Model):
+    """
+    Admin control for goods damage/loss claims on goods-transport and packers-and-movers bookings.
+    With no enabled row the behaviour is unchanged: only insurance-opted-in bookings can claim, with
+    no time limit. An enabled row adds Porter-style included liability for every completed booking
+    (capped at the lower of the fare and included_liability_cap) and an optional claim window.
+    """
+    service_category = models.CharField(
+        max_length=100, blank=True, default="",
+        help_text="Blank applies to all GT bookings; a category value overrides it.",
+    )
+    applies_to_ptl = models.BooleanField(
+        default=False,
+        help_text=(
+            "Scope this policy to Part Truck Load bookings specifically. PTL bookings share "
+            "service_category='goods_transport_truck' with ordinary Spot truck bookings, so this "
+            "flag is the only way to give PTL its own claim cap/window distinct from Spot truck "
+            "(Porter-documented PTL cap ~Rs 1,000 / 72h window vs Rs 5,000 / 24h for Spot truck). "
+            "A row with this on is only ever matched for a booking whose logistics_booking_mode "
+            "is 'ptl'; non-PTL bookings always skip it."))
+    is_enabled = models.BooleanField(default=False)
+    included_liability_cap = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Rupee cap of the liability that comes with every booking, without paid insurance. Blank = uninsured bookings cannot claim.",
+    )
+    cap_at_fare = models.BooleanField(
+        default=True, help_text="Also limit the included liability to the booking's fare (lower of the two).",
+    )
+    claim_window_hours = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Claims must be filed within this many hours of delivery. Blank = no limit.",
+    )
+    require_photo = models.BooleanField(default=False, help_text="Require at least one damage photo.")
+    is_active = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "GT Claim Policy"
+        verbose_name_plural = "GT Claim Policies"
+
+    def __str__(self):
+        return f"GTClaimPolicy({self.service_category or 'platform-wide'}, enabled={self.is_enabled})"
+
+
+class GTOperationsConfig(models.Model):
+    """
+    Platform-wide operational limits for Goods & Transport that used to live in settings / code.
+    The defaults equal the previous hard-coded values, so an untouched install behaves exactly as
+    before. Only the latest active row is used.
+    """
+    gt_quote_validity_minutes = models.PositiveIntegerField(
+        default=15, help_text="How long a Mini Truck / Two Wheeler fare quote stays valid.")
+    pm_instant_quote_validity_minutes = models.PositiveIntegerField(
+        default=30, help_text="How long a price-locked Packers & Movers instant quote stays valid.")
+    pm_estimate_validity_hours = models.PositiveIntegerField(
+        default=48, help_text="How long a non-binding Packers & Movers survey estimate stays valid.")
+    online_payment_window_minutes = models.PositiveIntegerField(
+        default=30, help_text="An unpaid online / wallet booking is cancelled after this many minutes.")
+    wallet_topup_enabled = models.BooleanField(
+        default=False, help_text="Let customers add money to their SEVO wallet online.")
+    wallet_max_topup = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True, help_text="Largest single wallet recharge. Blank = no per-recharge limit.")
+    wallet_max_balance = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True, help_text="A recharge may not take the wallet above this balance. Blank = no cap.")
+    allow_wallet_part_payment = models.BooleanField(
+        default=False, help_text="Let a customer whose wallet cannot cover a prepaid booking spend what it holds and pay the rest online (wallet + card split).")
+    high_value_consignment_threshold = models.DecimalField(
+        max_digits=12, decimal_places=2, default=25000,
+        help_text="Declared value at or above which a named receiver is mandatory.")
+    checkpoint_radius_meters = models.PositiveIntegerField(
+        default=250, help_text="How close (metres) a driver must be to the pickup / drop to verify arrival.")
+    delivery_otp_ttl_minutes = models.PositiveIntegerField(
+        default=30, help_text="How long a delivery OTP stays valid before it must be resent.")
+    max_otp_attempts = models.PositiveIntegerField(
+        default=5, help_text="Wrong delivery-OTP entries allowed before the driver is locked out.")
+    delivery_otp_required = models.BooleanField(
+        default=True, help_text="Require the customer's delivery OTP before a trip can be completed.")
+    # Gap 1: Porter has no e-way-bill product of its own -- Indian GST law puts the
+    # e-way-bill obligation on the consignor above this declared-value threshold, and
+    # Porter's TOS just says so. SEVO WARNS (never hard-blocks, matching Porter's own
+    # lack of enforcement) if eway_bill_number/document are missing above this value.
+    # SEVO business default: Rs 50,000 (the commonly cited intra-state e-way-bill
+    # threshold under Indian GST rules) -- not a Porter-documented number, admin-editable.
+    eway_bill_required_above = models.DecimalField(
+        max_digits=12, decimal_places=2, default=50000,
+        help_text="Declared value at/above which a missing e-way-bill number/document "
+                   "triggers a warning at booking/dispatch (never a hard block).")
+    is_active = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "GT Operations Config"
+        verbose_name_plural = "GT Operations Config"
+
+    def __str__(self):
+        return "GTOperationsConfig"
+
+
+class GTPTLPricingPolicy(models.Model):
+    """
+    Light PTL (Part Truck Load): advance-booked, slot-based, per-kg goods transport on
+    ptl_eligible (4-wheeler+) vehicle tiers. Platform-wide; only the latest active row is used.
+    A route-specific rate can override rate_per_kg through Lane.ptl_rate_per_kg.
+
+    is_enabled defaults to False: with no enabled row every PTL booking/quote is refused, so
+    nothing changes for existing Spot / P&M bookings until ops configures a real rate.
+
+    Loading/unloading is the CUSTOMER's responsibility on PTL. Load Assist is an optional paid
+    add-on that is OFF by default. Only its config + pricing hook exist today: when enabled the
+    fee is priced into the quote and the booking is flagged (fare_breakdown["load_assist"]), but
+    the driver-side assisted-loading workflow is NOT implemented yet -- see
+    service_requests/services/ptl_pricing.py before enabling it.
+    """
+    is_enabled = models.BooleanField(
+        default=False, help_text="Accept Part Truck Load quotes and bookings.")
+    rate_per_kg = models.DecimalField(
+        max_digits=8, decimal_places=2, default=0,
+        validators=[MinValueValidator(Decimal("0.00"))],
+        help_text="Rupees per chargeable kg (GST inclusive at the tier's GST rate).")
+    minimum_chargeable_weight_kg = models.DecimalField(
+        max_digits=8, decimal_places=2, default=0,
+        validators=[MinValueValidator(Decimal("0.00"))],
+        help_text="Declared weight below this is charged as this weight. 0 = no minimum.")
+    minimum_fare = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0.00"))],
+        help_text="Floor on the freight charge. Blank = no floor.")
+    min_advance_days = models.PositiveIntegerField(
+        default=1, help_text="PTL is advance-booked: the pickup date must be at least this many days ahead (1 = no same-day).")
+    load_assist_enabled = models.BooleanField(
+        default=False,
+        help_text="Offer paid driver-assisted loading. Pricing hook only; the driver-side assist workflow is not built yet.")
+    load_assist_fee = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        validators=[MinValueValidator(Decimal("0.00"))],
+        help_text="Flat Load Assist fee per booking, when offered.")
+    ptl_cumulative_weight_cap_kg = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True, default=Decimal("3000.00"),
+        validators=[MinValueValidator(Decimal("0.01"))],
+        help_text=(
+            "Porter-documented (porter.in/part-load-service): a Part Truck Load consignment's "
+            "declared weight may not exceed this, independent of the vehicle tier's own capacity. "
+            "Default 3000 kg is Porter's published figure; read here as a per-consignment cap "
+            "(Porter's wording does not distinguish per-consignment vs cumulative-across-bookings; "
+            "per-consignment is the safer, more literal reading -- see ptl_pricing.py). Blank = no cap."))
+    ptl_declared_value_risk_rate_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal("2.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+        help_text=(
+            "Porter-documented (porter.in/part-load-service): optional 'accepted risk' declared-value "
+            "charge, as a percent of the declared consignment value. Only applied when the customer "
+            "declares a value AND opts into the risk charge for this PTL booking -- never automatic. "
+            "Set to 0 to disable the option entirely."))
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "GT Part Truck Load (PTL) Pricing Policy"
+        verbose_name_plural = "GT Part Truck Load (PTL) Pricing Policy"
+
+    def __str__(self):
+        return f"GTPTLPricingPolicy(enabled={self.is_enabled}, rate={self.rate_per_kg}/kg)"
+
+
+def get_gt_ptl_policy():
+    return GTPTLPricingPolicy.objects.filter(is_active=True).order_by("-updated_at", "-id").first()
+
+
+class GTTaxPolicy(models.Model):
+    """
+    GST / RCM (Reverse Charge Mechanism) configuration for Goods & Transport,
+    added in Round 13 (Final Configurability Pass) to close the RCM gap
+    Round 11/12 documented as a genuine, deferred architectural item.
+
+    Scope of what this model IS:
+      - A configuration surface. Every field is Admin/DB-editable and every
+        default is the safe, do-nothing default (RCM off), so registering
+        this model changes no existing booking's behavior until an Admin
+        makes an explicit decision.
+      - The GST *rate itself* is NOT duplicated here -- it already exists,
+        Admin-configurable, per vehicle tier / package (ServiceTier.gst_rate
+        / Package.gt_gst_rate, verified working end-to-end including on
+        invoices in test_gt_gst_configurable.py). This model only adds the
+        RCM branch on top of that existing, working GST-rate mechanism.
+      - A "specified person" classification kept DELIBERATELY simple, per
+        the round's brief: whether RCM applies is Admin-configured as "RCM
+        applies when the customer has supplied a GSTIN" -- not an invented
+        legal classification of business types. Determining the *complete*
+        legal test for who counts as a "specified person" recipient under
+        Indian GST law for a Goods Transport Agency is exactly the kind of
+        tax-compliance decision this model is built to hold, once decided,
+        without ever having tried to guess it here.
+
+    Scope of what this model is NOT:
+      - It does NOT split CGST/SGST vs IGST by place of supply. That is a
+        materially larger, separate undertaking (which state each party is
+        registered/located in, intra-state vs inter-state rules) and is
+        left as a documented external/legal decision -- see
+        rcm_statement's help_text and the Round 13 report section for this.
+      - It does NOT decide which GT service categories are or are not
+        actually subject to RCM under real Indian tax law. That is exactly
+        rcm_enabled: an Admin opt-in, defaulted off, per scope.
+
+    Resolution mirrors GTClaimPolicy / GTCancellationPolicy: an
+    Admin-scoped row for this service_category wins if present and
+    currently effective; otherwise the platform-wide (blank service_category)
+    row; otherwise no policy at all (today's flat-GST, no-RCM behavior).
+    """
+    service_category = models.CharField(
+        max_length=100, blank=True, default="",
+        help_text=(
+            "Blank applies platform-wide to all GT bookings (goods_transport, "
+            "goods_transport_truck, goods_transport_two_wheeler, packers_movers, etc). "
+            "Set a specific category to scope this policy -- e.g. by service, package "
+            "or vehicle/service mode, since SEVO's service_category values already "
+            "distinguish those (truck vs two-wheeler vs packers & movers)."
+        ),
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Inactive rows are never resolved, same convention as every other GT policy model.",
+    )
+    gst_enabled = models.BooleanField(
+        default=True,
+        help_text=(
+            "Master GST switch for bookings this policy scopes. True (default) keeps "
+            "today's behavior: GST is shown per whatever rate is configured on the "
+            "vehicle tier/package (blank/0 there already means 'no GST'). Set False "
+            "here to force-suppress the GST line for this scope regardless of the "
+            "tier/package rate -- e.g. while a GST-registration decision is pending."
+        ),
+    )
+    rcm_enabled = models.BooleanField(
+        default=False,
+        help_text=(
+            "Reverse Charge Mechanism opt-in for this scope. Off by default -- the safe, "
+            "do-nothing setting. An Admin who has confirmed (outside this system) that "
+            "RCM genuinely applies to this GT service turns this on; nothing in SEVO "
+            "decides that for them."
+        ),
+    )
+    rcm_applies_when_gstin_registered = models.BooleanField(
+        default=True,
+        help_text=(
+            "The simple, configuration-only 'specified person' classification the round's "
+            "brief calls for: when RCM is enabled for this scope, an order is treated as "
+            "RCM-applicable if the customer has supplied a GSTIN (ServiceRequest.customer_gstin "
+            "is non-blank). This is NOT a complete legal classification of which recipient "
+            "categories actually qualify as a 'specified person' under GST law -- it is the "
+            "safely-representable-as-configuration proxy the brief asked for. A more precise "
+            "classification (by recipient business type) remains an external/legal decision; "
+            "if SEVO ever needs one, it is a new field on top of this, not a replacement of it."
+        ),
+    )
+    rcm_statement = models.TextField(
+        default=(
+            "Tax payable on reverse charge basis. GST on this consignment is not charged "
+            "by the supplier and is to be self-assessed and paid by the recipient under "
+            "the applicable reverse charge provisions."
+        ),
+        help_text=(
+            "Exact wording printed on an invoice when RCM applies to that booking, in place "
+            "of a charged GST line. This is the standard, universally-true statement GST law "
+            "requires on an RCM invoice, not a Porter-specific or invented value -- Admin-editable "
+            "so Finance/Legal can adjust the exact wording without a code change."
+        ),
+    )
+    # CGST/SGST vs IGST place-of-supply splitting is intentionally NOT modeled
+    # here -- see the class docstring and the Round 13 report. This field
+    # exists only so that decision, once made, has an obvious place to attach
+    # a reason/reference without another migration.
+    place_of_supply_note = models.TextField(
+        blank=True, default="",
+        help_text=(
+            "Not used by any calculation. Free-text space to record a future CGST/SGST vs "
+            "IGST place-of-supply decision once Legal/Finance makes one -- deliberately NOT "
+            "wired to any logic this round; see Round 13 report."
+        ),
+    )
+    effective_from = models.DateField(
+        null=True, blank=True,
+        help_text="This policy applies only to bookings quoted on/after this date. Blank = no start restriction.",
+    )
+    effective_to = models.DateField(
+        null=True, blank=True,
+        help_text="This policy applies only to bookings quoted on/before this date (inclusive). Blank = no end restriction.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "GT Tax / RCM Policy"
+        verbose_name_plural = "GT Tax / RCM Policies"
+        ordering = ["-updated_at", "-id"]
+
+    def __str__(self):
+        return f"GTTaxPolicy({self.service_category or 'platform-wide'}, rcm={self.rcm_enabled})"
+
+    def is_effective(self, as_of=None):
+        import datetime as _dt
+        today = as_of or _dt.date.today()
+        if self.effective_from and today < self.effective_from:
+            return False
+        if self.effective_to and today > self.effective_to:
+            return False
+        return True
+
+
+def get_active_gt_tax_policy(service_category, as_of=None):
+    """
+    Resolve the GTTaxPolicy that applies to `service_category` right now (or
+    at `as_of`): the most-recently-updated active, currently-effective row
+    scoped to that exact category, falling back to the platform-wide
+    (blank service_category) row, or None if neither exists -- meaning
+    today's unmodified, no-RCM, tier/package-rate-driven GST behavior.
+    """
+    qs = GTTaxPolicy.objects.filter(is_active=True)
+    candidates = [p for p in qs if p.is_effective(as_of)]
+    for p in candidates:
+        if p.service_category == (service_category or ""):
+            return p
+    for p in candidates:
+        if not p.service_category:
+            return p
+    return None
+
+
+class WalletTopUp(models.Model):
+    """A customer's online recharge of their SEVO wallet. One row per gateway order; the wallet is
+    credited exactly once, when the order is verified (idempotent on repeat verification)."""
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        PAID = "PAID", "Paid"
+        FAILED = "FAILED", "Failed"
+
+    customer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="wallet_topups")
+    order_id = models.CharField(max_length=100, unique=True)
+    payment_id = models.CharField(max_length=100, blank=True, default="")
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True)
+    gateway = models.CharField(max_length=50, default="razorpay")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "service_requests_wallet_topup"
+        ordering = ["-created_at"]
+
+
+class ConsultationPricingConfig(models.Model):
+    """Database-backed consultation pricing for categories that require a visit."""
+
+    service_category = models.CharField(max_length=100, unique=True, db_index=True)
+    free_radius_km = models.DecimalField(max_digits=6, decimal_places=2, default=15.0)
+    standard_fee = models.DecimalField(max_digits=10, decimal_places=2, default=300.0)
+    is_active = models.BooleanField(default=True)
+    description = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.service_category
+
+
+class VendorWarehouse(models.Model):
+    """A vendor-owned warehouse or dispatch origin used by marketplace operations."""
+
+    vendor = models.ForeignKey("companies.Company", on_delete=models.CASCADE, related_name="warehouses")
+    name = models.CharField(max_length=255, default="Main Warehouse")
+    address = models.TextField(blank=True, default="")
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, default=12.7409)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, default=77.8253)
+    is_primary = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.vendor_id}: {self.name}"

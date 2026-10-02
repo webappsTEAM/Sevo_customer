@@ -2,6 +2,7 @@ import io
 import os
 import shutil
 from pathlib import Path
+from unittest.mock import Mock, patch
 from PIL import Image, ImageDraw
 
 from django.test import TestCase, override_settings
@@ -181,10 +182,118 @@ class SupabaseStorageServiceTestCase(TestCase):
             SupabaseStorageService.get_public_url("mockups/ants_control.jpg"),
             "/mockups/ants_control.jpg"
         )
-        # Storage path
-        storage_url = SupabaseStorageService.get_public_url("catalog/packages/abc123.webp")
+        # Storage path -- get_public_url() falls back to a local /media/ URL
+        # whenever SUPABASE_URL isn't configured (correct behavior, and the
+        # default in this test environment: SUPABASE_URL is "" per
+        # quicktims/settings.py). To exercise the actual Supabase-backed
+        # branch (which is what asserts the "admin-media" bucket name), a
+        # non-empty SUPABASE_URL must be configured for the duration of this
+        # check, same as a real environment with Supabase actually wired up.
+        with override_settings(SUPABASE_URL="https://example.supabase.co", SUPABASE_SERVICE_ROLE_KEY="test-service-role-key"):
+            storage_url = SupabaseStorageService.get_public_url("catalog/packages/abc123.webp")
         self.assertIn("admin-media", storage_url)
         self.assertTrue(storage_url.endswith("catalog/packages/abc123.webp"))
+
+    def test_r2_public_url_resolution(self):
+        with patch.dict(
+            os.environ,
+            {
+                "MEDIA_STORAGE_PROVIDER": "r2",
+                "R2_PUBLIC_BASE_URL": "https://media.sevo.co.in",
+            },
+        ):
+            storage_url = SupabaseStorageService.get_public_url(
+                "catalog/packages/abc123.webp"
+            )
+
+        self.assertEqual(
+            storage_url,
+            "https://media.sevo.co.in/catalog/packages/abc123.webp",
+        )
+
+    def test_r2_upload_uses_scoped_bucket_and_canonical_url(self):
+        fake_client = Mock()
+        r2_env = {
+            "MEDIA_STORAGE_PROVIDER": "r2",
+            "R2_ENDPOINT_URL": "https://account-id.r2.cloudflarestorage.com",
+            "R2_ACCESS_KEY_ID": "test-access-key",
+            "R2_SECRET_ACCESS_KEY": "test-secret-key",
+            "R2_PUBLIC_BUCKET": "sevo-public-media-prod",
+            "R2_PUBLIC_BASE_URL": "https://media.sevo.co.in",
+            "ENABLE_LOCAL_STORAGE_FALLBACK": "0",
+        }
+        with patch.dict(os.environ, r2_env), patch.object(
+            SupabaseStorageService, "_get_r2_client", return_value=fake_client
+        ):
+            success, public_url, error = SupabaseStorageService.upload_file(
+                b"webp-bytes",
+                "catalog/packages/abc123.webp",
+                content_type="image/webp",
+            )
+
+        self.assertTrue(success)
+        self.assertIsNone(error)
+        self.assertEqual(
+            public_url,
+            "https://media.sevo.co.in/catalog/packages/abc123.webp",
+        )
+        fake_client.put_object.assert_called_once_with(
+            Bucket="sevo-public-media-prod",
+            Key="catalog/packages/abc123.webp",
+            Body=b"webp-bytes",
+            ContentType="image/webp",
+            CacheControl="public, max-age=31536000, immutable",
+        )
+
+    def test_r2_delete_extracts_object_key_from_public_url(self):
+        fake_client = Mock()
+        r2_env = {
+            "MEDIA_STORAGE_PROVIDER": "r2",
+            "R2_ENDPOINT_URL": "https://account-id.r2.cloudflarestorage.com",
+            "R2_ACCESS_KEY_ID": "test-access-key",
+            "R2_SECRET_ACCESS_KEY": "test-secret-key",
+            "R2_PUBLIC_BUCKET": "sevo-public-media-prod",
+            "R2_PUBLIC_BASE_URL": "https://media.sevo.co.in",
+            "ENABLE_LOCAL_STORAGE_FALLBACK": "0",
+        }
+        with patch.dict(os.environ, r2_env), patch.object(
+            SupabaseStorageService, "_get_r2_client", return_value=fake_client
+        ):
+            deleted = SupabaseStorageService.delete_file(
+                "https://media.sevo.co.in/catalog/packages/abc123.webp"
+            )
+
+        self.assertTrue(deleted)
+        fake_client.delete_object.assert_called_once_with(
+            Bucket="sevo-public-media-prod",
+            Key="catalog/packages/abc123.webp",
+        )
+
+    def test_r2_missing_credentials_fail_closed_without_local_fallback(self):
+        with patch.dict(
+            os.environ,
+            {
+                "MEDIA_STORAGE_PROVIDER": "r2",
+                "R2_ENDPOINT_URL": "",
+                "R2_ACCESS_KEY_ID": "",
+                "R2_SECRET_ACCESS_KEY": "",
+                "R2_PUBLIC_BUCKET": "sevo-public-media-prod",
+                "R2_PUBLIC_BASE_URL": "https://media.sevo.co.in",
+                "ENABLE_LOCAL_STORAGE_FALLBACK": "0",
+            },
+        ):
+            success, public_url, error = SupabaseStorageService.upload_file(
+                b"webp-bytes", "catalog/packages/abc123.webp"
+            )
+
+        self.assertFalse(success)
+        self.assertEqual(public_url, "")
+        self.assertEqual(error, "Cloudflare R2 credentials are missing or invalid.")
+        self.assertFalse(
+            SupabaseStorageService.delete_file(
+                "https://media.sevo.co.in/catalog/packages/abc123.webp"
+            )
+        )
 
 
 class ImageUploadEndpointTestCase(TestCase):
@@ -196,7 +305,7 @@ class ImageUploadEndpointTestCase(TestCase):
         self.client = APIClient()
         self.user = User.objects.create_user(
             username="admin_test_user",
-            email="admin_test@caltrack.com",
+            email="admin_test@sevo.com",
             password="TestPassword@123",
             role="admin",
             is_staff=True,
@@ -267,7 +376,7 @@ class ImageUploadEndpointTestCase(TestCase):
         """Non-admin user is rejected with 403 Forbidden."""
         customer_user = User.objects.create_user(
             username="regular_customer",
-            email="cust@caltrack.com",
+            email="cust@sevo.com",
             password="Password@123",
             role="customer",
             is_staff=False,
@@ -424,7 +533,7 @@ class ImagePipelineSizeAndQualityMatrixTestCase(TestCase):
 
         admin_user = User.objects.create_user(
             username="pkg_admin_tester",
-            email="pkg_admin@caltrack.com",
+            email="pkg_admin@sevo.com",
             password="Password@123",
             role="admin",
             is_staff=True,

@@ -120,13 +120,13 @@ def match_catalog_item(item_name: str, goods_item_id: Optional[int] = None) -> D
 
     if goods_item_id is not None:
         try:
-            db_item = GoodsItem.objects.filter(id=int(goods_item_id), is_active=True).select_related("category").first()
+            db_item = GoodsItem.objects.filter(id=goods_item_id, is_active=True).select_related("category").first()
             if db_item:
                 return _format_db_goods_item(db_item)
         except (ValueError, TypeError) as e:
             logger.debug("Invalid goods_item_id '%s': %s", goods_item_id, e)
 
-    key = str(item_name or "").strip()
+    key = (item_name or "").strip()
     if not key:
         return {
             "goods_item_id": None,
@@ -369,6 +369,8 @@ def _tier_to_vehicle_dict(tier) -> Dict[str, Any]:
         "tier_id": tier.id,
         "minimum_fare": tier.minimum_fare,
         "surge_multiplier": getattr(tier, "surge_multiplier", None) or Decimal("1.00"),
+        # Admin-configured per-stop charge (ServiceTier.additional_stop_charge); 0 = stops are free.
+        "additional_stop_charge": getattr(tier, "additional_stop_charge", None) or Decimal("0.00"),
         "has_incomplete_rates": has_incomplete_rates,
         "is_custom": False,
     }
@@ -393,7 +395,7 @@ def recommend_vehicle_for_volume(
         from logistics.models import ServiceTier
 
         if service_tier_id:
-            tier = ServiceTier.objects.filter(id=int(service_tier_id)).first()
+            tier = ServiceTier.objects.filter(id=service_tier_id).first()
             if not tier:
                 return None
             if not tier.is_active:
@@ -448,23 +450,47 @@ def compute_packers_movers_quote(
     drop_has_lift: bool = True,
     relocation_type: str = "Within City",
     service_tier_id: Optional[int] = None,
+    extra_stops: int = 0,
+    move_date: Any = None,
+    move_time: Any = None,
 ) -> Dict[str, Any]:
     """
     Server-authoritative calculation for a complete relocation booking.
+    `move_date` / `move_time` (the booked date and slot) select any Admin-configured
+    date/time surcharge rules; with none configured they change nothing.
+    `extra_stops` = stops between pickup and drop; each is charged the tier's admin-configured
+    additional_stop_charge (0 by default, so unconfigured tiers price exactly as before).
     Returns the comprehensive quotation breakdown dictionary.
     """
     from .routing import get_route_eta
+    from . import pm_surcharge
+    surcharge_amount = Decimal("0.00")
+    surcharge_lines: list = []
+    surcharge_rules = pm_surcharge.applicable_rules(city, move_date, move_time)
+    try:
+        stops_n = max(0, extra_stops or 0)
+    except (TypeError, ValueError):
+        stops_n = 0
+    stop_rate = Decimal("0.00")
+    stop_charge = Decimal("0.00")
     route = get_route_eta(pickup_lat, pickup_lng, drop_lat, drop_lng)
+    distance_km: Decimal = Decimal("0.00")
+    is_distance_estimated: bool = True
+    distance_source: str = "straight_line_estimate"
+
     route_dist = route.get("distance_km") if route else None
+    valid_distance: Optional[Decimal] = None
     if route is not None and route_dist is not None:
         try:
-            distance_km = _money(str(route_dist))
-            is_distance_estimated = bool(route.get("is_estimate", False) or not route.get("is_authoritative", True))
-            distance_source = route.get("source") or route.get("distance_source") or ("google_maps" if not is_distance_estimated else "route_estimate")
+            valid_distance = _money(str(route_dist))
         except (ValueError, TypeError):
-            route_dist = None
+            valid_distance = None
 
-    if route is None or route_dist is None:
+    if route is not None and valid_distance is not None:
+        distance_km = valid_distance
+        is_distance_estimated = bool(route.get("is_estimate", False) or not route.get("is_authoritative", True))
+        distance_source = str(route.get("source") or route.get("distance_source") or ("google_maps" if not is_distance_estimated else "route_estimate"))
+    else:
         # P0-3: Compute genuine straight-line Haversine distance from coordinates with 1.25 winding factor.
         # ZERO arbitrary / fake distances (5.0, 8.50, 10, etc.).
         if None in (pickup_lat, pickup_lng, drop_lat, drop_lng):
@@ -527,6 +553,9 @@ def compute_packers_movers_quote(
     city_config_missing = pm_conf is None
     has_unrecognized = bool(metrics.get("requires_review", False))
     has_incomplete_rates = bool(vehicle.get("has_incomplete_rates", False))
+    survey_status: str = "SURVEY_REQUIRED"
+    estimate_notice: Optional[str] = None
+    review_reason: Optional[str] = None
 
     if (no_vehicle_available or is_empty_inventory or has_incomplete_rates) and not has_unrecognized:
         # SEVO: Incomplete rates, no vehicle, or empty inventory must NEVER produce a fake or partially free ₹0 quote.
@@ -659,9 +688,14 @@ def compute_packers_movers_quote(
         if unpacking_required:
             unpacking_charge = _money(Decimal(str(effective_cft)) * unpacking_rate)
 
+        # 8b. Stops between pickup and drop, at the tier's admin-configured per-stop charge
+        stop_rate = _money(vehicle.get("additional_stop_charge") or Decimal("0.00"))
+        stop_charge = _money(stop_rate * stops_n)
+
         # 9. Subtotal & GST
         subtotal = _money(
             transport_total
+            + stop_charge
             + packing_charge
             + total_labor
             + dismantle_total
@@ -670,6 +704,9 @@ def compute_packers_movers_quote(
         surge = vehicle.get("surge_multiplier") or Decimal("1.00")
         if surge > 0 and surge != Decimal("1.00"):
             subtotal = _money(subtotal * surge)
+        # Peak-day / off-hours surcharge (Admin rules), before GST like every other fare component.
+        surcharge_amount, surcharge_lines = pm_surcharge.compute_surcharge(subtotal, surcharge_rules)
+        subtotal = _money(subtotal + surcharge_amount)
         gst = _money(subtotal * gst_percentage)
         total = _money(subtotal + gst)
         min_fare = vehicle.get("minimum_fare")
@@ -682,7 +719,7 @@ def compute_packers_movers_quote(
                 or ("between" in relocation_type.lower() and total_cft > (survey_cft_limit * 0.75))
             )
         )
-        requires_survey = bool(requires_volume_survey or is_distance_estimated)
+        requires_survey = requires_volume_survey or is_distance_estimated
 
         if is_distance_estimated:
             survey_status = "SURVEY_REQUIRED"
@@ -756,16 +793,24 @@ def compute_packers_movers_quote(
                 "Manual review or survey required before final pricing."
             )
             review_reason = estimate_notice
+        else:
+            survey_status = "MANUAL_REVIEW_REQUIRED"
+            estimate_notice = "Manual review or pre-move survey required before final pricing."
+            review_reason = estimate_notice
 
     # SEVO Part K: Differentiate Instant Bookable Price Lock vs Survey Estimate
     if is_authoritative and not is_estimate and survey_status == "INSTANT_ESTIMATE_APPROVED" and total is not None:
         # Price-locked instant-booking quote valid for 30 minutes
-        valid_until = timezone.now() + timedelta(minutes=30)
-        cache_timeout = 1800  # 30 mins
+        from .gt_operations import ops
+        _mins = int(ops("pm_instant_quote_validity_minutes"))
+        valid_until = timezone.now() + timedelta(minutes=_mins)
+        cache_timeout = _mins * 60
     else:
         # Non-binding relocation estimate valid for 48 hours for survey scheduling
-        valid_until = timezone.now() + timedelta(hours=48)
-        cache_timeout = 172800  # 48 hours
+        from .gt_operations import ops
+        _hours = int(ops("pm_estimate_validity_hours"))
+        valid_until = timezone.now() + timedelta(hours=_hours)
+        cache_timeout = _hours * 3600
 
     quote_id = f"PMQ-{timezone.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
 
@@ -866,9 +911,10 @@ def compute_packers_movers_quote(
         f"{vehicle.get('tier_id')}:{city.lower()}:"
         f"{round(float(pickup_lat), 5)},{round(float(pickup_lng), 5)}->"
         f"{round(float(drop_lat), 5)},{round(float(drop_lng), 5)}:"
-        f"{canonical_inv_str}:{packing_clean}:{bool(dismantling_required)}:{bool(unpacking_required)}:"
-        f"{int(pickup_floor)}:{bool(pickup_has_lift)}:{int(drop_floor)}:{bool(drop_has_lift)}:"
-        f"{relocation_type.lower()}:{pricing_config_fingerprint}:{str(total)}"
+        f"{canonical_inv_str}:{packing_clean}:{dismantling_required}:{unpacking_required}:"
+        f"{pickup_floor}:{pickup_has_lift}:{drop_floor}:{drop_has_lift}:"
+        f"{relocation_type.lower()}:{pricing_config_fingerprint}:{str(total)}:{stops_n}:"
+        f"{surcharge_amount}:{pm_surcharge.parse_move_date(move_date)}"
     )
     quote_hash = hashlib.sha256(raw_quote_str.encode("utf-8")).hexdigest()[:24]
 
@@ -888,13 +934,15 @@ def compute_packers_movers_quote(
         "total_cft": total_cft,
         "total_weight_kg": total_weight,
         "packing_tier": packing_clean,
-        "dismantling_required": bool(dismantling_required),
-        "unpacking_required": bool(unpacking_required),
-        "pickup_floor": int(pickup_floor),
-        "pickup_has_lift": bool(pickup_has_lift),
-        "drop_floor": int(drop_floor),
-        "drop_has_lift": bool(drop_has_lift),
-        "relocation_type": str(relocation_type),
+        "dismantling_required": dismantling_required,
+        "unpacking_required": unpacking_required,
+        "pickup_floor": pickup_floor,
+        "pickup_has_lift": pickup_has_lift,
+        "drop_floor": drop_floor,
+        "drop_has_lift": drop_has_lift,
+        "relocation_type": relocation_type,
+        "extra_stops": stops_n,
+        "date_surcharge": str(surcharge_amount),
         "distance_km": str(distance_km),
         "subtotal": str(subtotal) if subtotal is not None else None,
         "total": str(total) if total is not None else None,
@@ -913,7 +961,7 @@ def compute_packers_movers_quote(
         "tier_id": vehicle.get("tier_id"),
         "capacity_exceeded": capacity_exceeded,
         "requires_survey": requires_survey,
-        "requires_review": bool(has_unrecognized or is_empty_inventory),
+        "requires_review": has_unrecognized or is_empty_inventory,
         "survey_status": survey_status,
         "is_authoritative": is_authoritative,
         "is_estimate": is_estimate,
@@ -930,9 +978,14 @@ def compute_packers_movers_quote(
         "chargeable_km": chargeable_km,
         "distance_charge": distance_charge,
         "base_fare": base_fare,
-        "additional_stops": 0,
-        "additional_stop_charge": Decimal("0.00"),
-        "rate_additional_stop": Decimal("0.00"),
+        "additional_stops": stops_n,
+        "additional_stop_charge": stop_charge,
+        "rate_additional_stop": stop_rate,
+        "date_surcharge": surcharge_amount,
+        "date_surcharge_lines": surcharge_lines,
+        "surcharge_applied": pm_surcharge.rule_signature(surcharge_rules),
+        "move_date": str(pm_surcharge.parse_move_date(move_date) or ""),
+        "move_time": str(move_time or ""),
         "rate_per_km": per_km_rate,
         "free_km": free_km,
         "currency": "INR",
@@ -973,11 +1026,11 @@ def compute_packers_movers_quote(
         },
         # Floors & Access
         "access": {
-            "pickup_floor": int(pickup_floor),
-            "pickup_has_lift": bool(pickup_has_lift),
+            "pickup_floor": pickup_floor,
+            "pickup_has_lift": pickup_has_lift,
             "pickup_floor_charge": str(pickup_floor_charge) if pickup_floor_charge is not None else None,
-            "drop_floor": int(drop_floor),
-            "drop_has_lift": bool(drop_has_lift),
+            "drop_floor": drop_floor,
+            "drop_has_lift": drop_has_lift,
             "drop_floor_charge": str(drop_floor_charge) if drop_floor_charge is not None else None,
             "rate_per_floor_block": str(rate_per_floor_block) if rate_per_floor_block is not None else None,
         },
@@ -986,6 +1039,10 @@ def compute_packers_movers_quote(
             "transport_base_fare": str(base_fare) if base_fare is not None else None,
             "transport_distance_charge": str(distance_charge) if distance_charge is not None else None,
             "transport_total": str(transport_total) if transport_total is not None else None,
+            "additional_stops": stops_n,
+            "additional_stops_charge": str(stop_charge),
+            "date_surcharge": str(surcharge_amount),
+            "date_surcharge_lines": surcharge_lines,
             "packing_tier": packing_clean,
             "packing_label": packing_label,
             "packing_rate_per_cft": str(packing_rate_per_cft) if packing_rate_per_cft is not None else None,
@@ -993,9 +1050,9 @@ def compute_packers_movers_quote(
             "base_labor_charge": str(base_labor) if base_labor is not None else None,
             "floor_labor_charge": str(floor_labor_total) if floor_labor_total is not None else None,
             "labor_total": str(total_labor) if total_labor is not None else None,
-            "dismantling_required": bool(dismantling_required),
+            "dismantling_required": dismantling_required,
             "dismantling_charge": str(dismantle_total) if dismantle_total is not None else None,
-            "unpacking_required": bool(unpacking_required),
+            "unpacking_required": unpacking_required,
             "unpacking_charge": str(unpacking_charge) if unpacking_charge is not None else None,
             "subtotal": str(subtotal) if subtotal is not None else None,
             "gst_rate": f"{int(gst_percentage * 100)}%" if gst_percentage is not None else None,
@@ -1020,13 +1077,13 @@ def compute_packers_movers_quote(
     cached_data["inventory_str"] = canonical_inv_str
     cached_data["total_weight_kg"] = total_weight
     cached_data["packing_tier"] = packing_clean
-    cached_data["dismantling_required"] = bool(dismantling_required)
-    cached_data["unpacking_required"] = bool(unpacking_required)
-    cached_data["pickup_floor"] = int(pickup_floor)
-    cached_data["pickup_has_lift"] = bool(pickup_has_lift)
-    cached_data["drop_floor"] = int(drop_floor)
-    cached_data["drop_has_lift"] = bool(drop_has_lift)
-    cached_data["relocation_type"] = str(relocation_type)
+    cached_data["dismantling_required"] = dismantling_required
+    cached_data["unpacking_required"] = unpacking_required
+    cached_data["pickup_floor"] = pickup_floor
+    cached_data["pickup_has_lift"] = pickup_has_lift
+    cached_data["drop_floor"] = drop_floor
+    cached_data["drop_has_lift"] = drop_has_lift
+    cached_data["relocation_type"] = relocation_type
     cached_data["total"] = str(total) if total is not None else None
     cached_data["valid_until"] = valid_until.isoformat()
     cached_data["item_snapshots"] = item_snapshots
@@ -1051,6 +1108,14 @@ def verify_packers_movers_quote(
     """
     if not quote_id:
         return False, None, "Missing quote ID."
+
+    if ":" in quote_id and len(quote_id) > 50:
+        try:
+            unpacked = signing.loads(quote_id)
+            if isinstance(unpacked, dict) and unpacked.get("quote_id"):
+                quote_id = unpacked["quote_id"]
+        except Exception:
+            pass
 
     cache_key = f"pm_quote_{quote_id}"
     cached = cache.get(cache_key)
@@ -1195,6 +1260,37 @@ def verify_packers_movers_quote(
             return False, cached, "Quote route mismatch: drop coordinates do not match quoted route."
 
         # 4. Relocation type verification (mandatory - fail closed)
+        # Stops between pickup and drop are priced (when the tier charges for them), so the booking
+        # must carry the same number the quote was priced for. With no per-stop charge configured
+        # they do not affect the fare and are not enforced.
+        try:
+            _quoted_rate = Decimal(str(cached.get("rate_additional_stop") or "0"))
+        except Exception:
+            _quoted_rate = Decimal("0")
+        if _quoted_rate > 0:
+            try:
+                _req_stops = int(current_request.get("extra_stops") or 0)
+            except (TypeError, ValueError):
+                _req_stops = -1
+            if _req_stops != int(cached.get("additional_stops") or 0):
+                return False, cached, (
+                    f"Quote stop mismatch: quote was priced for {int(cached.get('additional_stops') or 0)} "
+                    f"stop(s) between pickup and drop, but {_req_stops} were submitted. Please recalculate the quote."
+                )
+
+        # Move date / slot: the surcharge rules that apply to the BOOKED date must be exactly the
+        # ones this quote was priced with, otherwise it is stale (e.g. quoted for a weekday, booked
+        # for a peak-day) and must be recalculated -- never silently under-charged.
+        if "move_date" in current_request:
+            from . import pm_surcharge as _pms
+            _expected = _pms.rule_signature(_pms.applicable_rules(
+                cached.get("city"), current_request.get("move_date"), current_request.get("move_time")))
+            if _expected != (cached.get("surcharge_applied") or []):
+                return False, cached, (
+                    "Quote date surcharge mismatch: the move date or time changed which surcharges apply "
+                    "since this quote was calculated. Please recalculate the quote."
+                )
+
         req_reloc = current_request.get("relocation_type")
         if not req_reloc:
             return False, cached, "Quote verification failed: missing relocation_type in booking request."

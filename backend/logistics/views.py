@@ -14,6 +14,7 @@ submits one) belongs in service_requests/services/, not here.
 import logging
 from decimal import Decimal, InvalidOperation
 
+from django.db.models import Q
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -21,8 +22,29 @@ from rest_framework.views import APIView
 
 from utils.responses import success_response
 
-from .models import Lane, ServiceArea, ServiceTier
-from .serializers import LaneSerializer, ServiceAreaSerializer, ServiceTierSerializer
+
+def _db_id_or_none(value):
+    """Positive database id from an int or an ASCII-digit string, else None.
+
+    str.isdigit() is True for e.g. '\u00b2' and int() then raises; a 5000-digit
+    string also raises. Both used to surface as HTTP 500 on public endpoints.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if 0 < value < 2**63 else None
+    if isinstance(value, str) and value.isascii() and value.isdigit() and len(value) <= 18:
+        n = int(value)
+        return n if n > 0 else None
+    return None
+
+from .models import GTFaq, Lane, ServiceArea, ServiceTier
+from .serializers import (
+    GTFaqSerializer,
+    LaneSerializer,
+    ServiceAreaSerializer,
+    ServiceTierSerializer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +64,26 @@ class ServiceTierListView(APIView):
             qs = qs.filter(city__iexact=city)
         if weight_class:
             qs = qs.filter(weight_class=weight_class)
+
+        # GT audit Update 18: never offer a vehicle class that no driver can
+        # actually operate. ServiceTier.VehicleClass includes "heavy_truck",
+        # which the Vendor app's Vehicle.VehicleType has no member for -- a
+        # customer could pick it, pay, and then wait for a dispatch that can
+        # never happen. The booking-time resolver refuses it as well
+        # (assert_gt_booking_is_classifiable); this keeps it off the picker so
+        # the customer never sees a vehicle they cannot have.
+        #
+        # Tiers with a BLANK vehicle_class are left alone on purpose: Packers
+        # & Movers tiers are relocation packages (1BHK, Villa) that carry no
+        # vehicle class by design and are matched on payload instead.
+        from service_requests.services.logistics_pricing import (
+            DISPATCHABLE_VEHICLE_CLASSES,
+        )
+
+        qs = qs.exclude(
+            ~Q(vehicle_class="") & ~Q(vehicle_class__in=DISPATCHABLE_VEHICLE_CLASSES)
+        )
+
         qs = qs.order_by("order", "id")
         data = ServiceTierSerializer(qs, many=True).data
         return success_response(data=data)
@@ -64,15 +106,27 @@ class LaneListView(APIView):
 
 
 class ServiceAreaListView(APIView):
-    """GET /api/logistics/areas/?city=hosur (category-agnostic — shared list)"""
+    """
+    GET /api/logistics/areas/?city=hosur&category=truck|two_wheeler|packers_movers
+
+    "Areas We Serve" is derived from real coverage (active ServiceZones that
+    the booking gate would accept for this city + service -- see
+    logistics.coverage), not from a free-standing list. Same row shape as
+    before (id, city, name, order). No coverage -> an empty list.
+    """
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
-        qs = ServiceArea.objects.filter(is_active=True)
-        city = request.query_params.get("city")
-        if city:
-            qs = qs.filter(city__iexact=city)
-        data = ServiceAreaSerializer(qs, many=True).data
+        from service_requests.views import _get_company
+        from .coverage import covered_area_zones
+
+        city = (request.query_params.get("city") or "").strip()
+        category = (request.query_params.get("category") or "").strip()
+        zones = covered_area_zones(company=_get_company(request), city_slug=city, category=category)
+        data = [
+            {"id": z.id, "city": city.lower(), "name": z.name, "order": i}
+            for i, z in enumerate(zones)
+        ]
         return success_response(data=data)
 
 
@@ -84,6 +138,128 @@ def _coord(value):
         return Decimal(str(value))
     except (InvalidOperation, ValueError, TypeError):
         return None
+
+
+def _route_coverage_for(request, category, tier, pickup_lat, pickup_lng, drop_lat, drop_lng, stops=None):
+    # Same company resolution as the booking endpoint, so quote-time and
+    # submit-time coverage can never disagree about which zones apply.
+    from service_requests.views import _get_company
+    from settings_hub.service_zone_engine import check_route_coverage
+
+    return check_route_coverage(
+        pickup_lat=pickup_lat,
+        pickup_lng=pickup_lng,
+        drop_lat=drop_lat,
+        drop_lng=drop_lng,
+        service_slug=category,
+        company=_get_company(request),
+        vehicle_class=tier.get_vehicle_class() if tier is not None else "",
+        vehicle_label=getattr(tier, "name", "") or "",
+        stops=stops,
+    )
+
+
+class PTLConfigView(APIView):
+    """
+    GET /api/logistics/ptl/config/?city=hosur
+
+    Light PTL (Part Truck Load) booking page data: whether PTL is offered, the admin rate
+    card, the ptl_eligible (4W+) vehicles and PTL-priced lanes for the city, and the fixed
+    customer-loads rule. Slots come from /api/logistics/slots/?category=ptl&city=...
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from service_requests.models import get_gt_ptl_policy
+        from service_requests.services.ptl_pricing import eligible_tiers
+
+        city = (request.query_params.get("city") or "").strip()
+        policy = get_gt_ptl_policy()
+        enabled = bool(policy and policy.is_enabled and policy.rate_per_kg and policy.rate_per_kg > 0)
+        lanes = Lane.objects.filter(is_active=True, category="truck", ptl_rate_per_kg__isnull=False)
+        if city:
+            lanes = lanes.filter(city__iexact=city)
+        tiers = list(eligible_tiers(city)) if enabled else []
+        return Response({
+            "success": True,
+            "enabled": enabled,
+            "rate_per_kg": str(policy.rate_per_kg) if enabled else None,
+            "minimum_chargeable_weight_kg": str(policy.minimum_chargeable_weight_kg) if enabled else None,
+            "minimum_fare": str(policy.minimum_fare) if enabled and policy.minimum_fare is not None else None,
+            "min_advance_days": policy.min_advance_days if enabled else None,
+            "load_assist_offered": bool(enabled and policy.load_assist_enabled),
+            "load_assist_fee": str(policy.load_assist_fee) if enabled and policy.load_assist_enabled else None,
+            "loading_responsibility": "customer",
+            "loading_notice": (
+                "Part Truck Load is priced per kg. You load the goods at pickup and unload them at drop; "
+                "the driver does not load or unload."
+            ),
+            "tiers": ServiceTierSerializer(tiers, many=True).data,
+            "lanes": [
+                {**LaneSerializer(l).data, "ptl_rate_per_kg": str(l.ptl_rate_per_kg)} for l in (lanes if enabled else [])
+            ],
+        })
+
+
+class PTLQuoteView(APIView):
+    """
+    POST /api/logistics/ptl/quote/
+    Body: tier_id, lane_id?, declared_weight_kg, pickup_latitude/longitude,
+          drop_latitude/longitude, load_assist?
+    Returns the server-authoritative per-kg quote (quote_id, quote_hash, expires_at, total).
+    The booking must echo quote_id/quote_hash/expires_at in cart_data and the same total.
+    """
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "logistics_quote"
+
+    def post(self, request):
+        from service_requests.services.ptl_pricing import PTLError, PTL_SERVICE_CATEGORY, compute_ptl_quote, _truthy
+
+        data = request.data if isinstance(request.data, dict) else {}
+        try:
+            tier = ServiceTier.objects.filter(id=int(data.get("tier_id")), is_active=True).first()
+        except (TypeError, ValueError):
+            tier = None
+        lane = None
+        if data.get("lane_id") not in (None, ""):
+            try:
+                lane = Lane.objects.filter(id=int(data.get("lane_id"))).first()
+            except (TypeError, ValueError):
+                lane = None
+            if lane is None:
+                return Response({"success": False, "error_code": "PTL_LANE_INVALID",
+                                 "message": "The selected route was not found."}, status=status.HTTP_400_BAD_REQUEST)
+
+        def _f(*keys):
+            for k in keys:
+                v = data.get(k)
+                if v not in (None, ""):
+                    try:
+                        return Decimal(str(v))
+                    except (InvalidOperation, ValueError):
+                        return None
+            return None
+
+        p_lat, p_lng = _f("pickup_latitude", "pickup_lat"), _f("pickup_longitude", "pickup_lng")
+        d_lat, d_lng = _f("drop_latitude", "drop_lat"), _f("drop_longitude", "drop_lng")
+        try:
+            if tier is not None and None not in (p_lat, p_lng, d_lat, d_lng):
+                coverage = _route_coverage_for(request, PTL_SERVICE_CATEGORY, tier, p_lat, p_lng, d_lat, d_lng)
+                if not coverage.allowed:
+                    return Response({"success": False, "error_code": coverage.error_code,
+                                     "failed_point": coverage.failed_point, "message": coverage.message},
+                                    status=status.HTTP_400_BAD_REQUEST)
+            quote = compute_ptl_quote(
+                tier=tier, lane=lane, declared_weight_kg=data.get("declared_weight_kg"),
+                pickup_lat=p_lat, pickup_lng=p_lng, drop_lat=d_lat, drop_lng=d_lng,
+                load_assist=_truthy(data.get("load_assist")),
+            )
+        except PTLError as e:
+            return Response({"success": False, "error_code": e.code, "message": str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        from service_requests.views import _jsonable_fare_breakdown
+        return Response({"success": True, "quote": _jsonable_fare_breakdown(quote)})
 
 
 class LogisticsQuoteView(APIView):
@@ -116,7 +292,7 @@ class LogisticsQuoteView(APIView):
     real billed Google Distance Matrix call.
 
     Packers & Movers is deliberately NOT quotable here: its pricing is
-    survey/volume/crew-driven (CALTRACK_PHASE_14 H.2), so a distance
+    survey/volume/crew-driven (sevo_PHASE_14 H.2), so a distance
     quote would be actively wrong rather than merely approximate. That
     flow keeps its existing tier price.
     """
@@ -128,10 +304,15 @@ class LogisticsQuoteView(APIView):
         from service_requests.services.logistics_pricing import (
             DISTANCE_PRICED_CATEGORIES, LogisticsCatalogMismatchError,
             assert_catalog_matches_category, quote_logistics_fare,
+            TooManyStopsError,
         )
 
         data = request.data if isinstance(request.data, dict) else {}
-        tier = ServiceTier.objects.filter(id=data.get("tier_id"), is_active=True).first()
+        try:
+            _tier_id = int(data.get("tier_id"))
+        except (TypeError, ValueError):
+            _tier_id = None      # a non-numeric tier id is "no such tier", not a server error
+        tier = ServiceTier.objects.filter(id=_tier_id, is_active=True).first() if _tier_id is not None else None
         if tier is None:
             return Response(
                 {
@@ -202,23 +383,51 @@ class LogisticsQuoteView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Service Coverage gate (admin-configured ServiceZones): refuse to
+        # quote a trip whose pickup or drop is outside ACTIVE coverage, so the
+        # customer sees the pickup/drop-specific reason in real time -- the
+        # same check the booking endpoint enforces at submit.
+        # Intermediate stops are part of the trip: each must be covered too.
+        coverage = _route_coverage_for(
+            request, category, tier, pickup_lat, pickup_lng, drop_lat, drop_lng,
+            stops=data.get("waypoints") or data.get("intermediate_stops"),
+        )
+        if not coverage.allowed:
+            return Response(
+                {
+                    "success": False,
+                    "error_code": coverage.error_code,
+                    "failed_point": coverage.failed_point,
+                    "failed_stop_index": coverage.failed_stop_index,
+                    "message": coverage.message,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         waypoints = data.get("waypoints") or data.get("intermediate_stops") or None
         try:
             stop_count = int(data.get("stop_count") or (len(waypoints) + 2 if (waypoints and isinstance(waypoints, list)) else 2))
         except (TypeError, ValueError):
             stop_count = 2
 
+        raw_loading_help = data.get("loading_help", True)
+        if isinstance(raw_loading_help, str):
+            loading_help = raw_loading_help.strip().lower() not in ("false", "0", "no", "")
+        else:
+            loading_help = bool(raw_loading_help) if raw_loading_help is not None else True
+
         # Cargo evaluation & Vehicle fitment enforcement (Porter-like safety protection)
         cargo_items = data.get("cargo_items") or data.get("items")
         goods_category = data.get("goods_category_id") or data.get("goods_category") or data.get("goods_type")
         declared_weight = data.get("declared_weight_kg") or data.get("weight_kg")
+        declared_cft = data.get("declared_cft")
         cargo_summary = None
 
-        if cargo_items or goods_category or declared_weight is not None:
+        if cargo_items or goods_category or declared_weight is not None or declared_cft:
             from service_requests.services.cargo_fitment import (
                 resolve_cargo_payload, evaluate_vehicle_fitment, recommend_vehicles_for_cargo
             )
-            category_id = int(goods_category) if isinstance(goods_category, int) or (isinstance(goods_category, str) and goods_category.isdigit()) else None
+            category_id = _db_id_or_none(goods_category)
             category_slug = str(goods_category) if category_id is None and goods_category else None
 
             cargo_summary = resolve_cargo_payload(
@@ -226,6 +435,7 @@ class LogisticsQuoteView(APIView):
                 goods_category_id=category_id,
                 goods_category_slug=category_slug,
                 declared_weight_kg=declared_weight,
+                declared_cft=declared_cft,
                 city=tier.city,
             )
 
@@ -260,7 +470,7 @@ class LogisticsQuoteView(APIView):
             is_fit, fit_reason = evaluate_vehicle_fitment(tier, cargo_summary)
             if not is_fit:
                 recommendations = recommend_vehicles_for_cargo(cargo_summary, city=tier.city or "Hosur")
-                err_code = "CARGO_INCOMPATIBLE" if "incompatible" in str(fit_reason).lower() else "VEHICLE_CAPACITY_EXCEEDED"
+                err_code = "CARGO_INCOMPATIBLE" if "incompatible" in fit_reason.lower() else "VEHICLE_CAPACITY_EXCEEDED"
                 return Response(
                     {
                         "success": False,
@@ -273,14 +483,31 @@ class LogisticsQuoteView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        breakdown = quote_logistics_fare(
-            tier=tier,
-            pickup_lat=pickup_lat, pickup_lng=pickup_lng,
-            drop_lat=drop_lat, drop_lng=drop_lng,
-            stop_count=stop_count,
-            cargo_summary=cargo_summary,
-            waypoints=waypoints,
-        )
+        try:
+            breakdown = quote_logistics_fare(
+                tier=tier,
+                pickup_lat=pickup_lat, pickup_lng=pickup_lng,
+                drop_lat=drop_lat, drop_lng=drop_lng,
+                stop_count=stop_count,
+                cargo_summary=cargo_summary,
+                waypoints=waypoints,
+                loading_help=loading_help,
+                # Round 13: GST/RCM configuration branch (off unless an
+                # Admin has configured a GTTaxPolicy with rcm_enabled=True
+                # for this category -- see gst_policy.resolve_tax_treatment).
+                service_category=category,
+                customer_gstin=data.get("customer_gstin"),
+            )
+        except TooManyStopsError as exc:
+            return Response(
+                {
+                    "success": False,
+                    "error_code": "MAX_STOPS_EXCEEDED",
+                    "message": str(exc),
+                    "max_additional_stops": exc.allowed,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         if breakdown is None:
             if getattr(tier, "per_km_rate", None) is not None:
@@ -303,7 +530,8 @@ class LogisticsQuoteView(APIView):
             now = timezone.now()
             quote_id = f"gtq_{uuid.uuid4().hex[:16]}"
             created_at = now.isoformat()
-            expires_at = (now + timedelta(minutes=15)).isoformat()
+            from service_requests.services.gt_operations import ops
+            expires_at = (now + timedelta(minutes=int(ops("gt_quote_validity_minutes")))).isoformat()
             return success_response(data={
                 "quotable": True,
                 "quote_id": quote_id,
@@ -361,8 +589,8 @@ class GoodsItemListView(APIView):
         qs = GoodsItem.objects.filter(is_active=True)
         cat = request.query_params.get("category")
         if cat:
-            if cat.isdigit():
-                qs = qs.filter(category_id=int(cat))
+            if _db_id_or_none(cat) is not None:
+                qs = qs.filter(category_id=_db_id_or_none(cat))
             else:
                 qs = qs.filter(category__slug__iexact=cat)
         qs = qs.order_by("category", "order", "name")
@@ -387,9 +615,10 @@ class CargoFitmentEvaluationView(APIView):
         cargo_items = data.get("cargo_items") or data.get("items") or []
         goods_category = data.get("goods_category_id") or data.get("goods_category") or data.get("goods_type")
         declared_weight = data.get("declared_weight_kg") or data.get("weight_kg")
+        declared_cft = data.get("declared_cft")
         city = str(data.get("city") or "Hosur").strip()
 
-        category_id = int(goods_category) if isinstance(goods_category, int) or (isinstance(goods_category, str) and goods_category.isdigit()) else None
+        category_id = _db_id_or_none(goods_category)
         category_slug = str(goods_category) if category_id is None and goods_category else None
 
         cargo_summary = resolve_cargo_payload(
@@ -397,6 +626,7 @@ class CargoFitmentEvaluationView(APIView):
             goods_category_id=category_id,
             goods_category_slug=category_slug,
             declared_weight_kg=declared_weight,
+            declared_cft=declared_cft,
             city=city,
         )
 
@@ -422,10 +652,22 @@ class PackersMoversQuoteView(APIView):
 
         data = request.data if isinstance(request.data, dict) else {}
 
+        # Bug found: both the pickup and drop fallbacks read the same bare
+        # "latitude"/"longitude" keys. A caller that omits drop_latitude/
+        # drop_longitude but sends a generic latitude/longitude (e.g. the
+        # single-address shape older callers used) would silently get drop
+        # coordinates identical to pickup instead of the intended
+        # COORDINATES_REQUIRED rejection. The current frontend
+        # (fetchPackersMoversQuote in logisticsService.js) always sends
+        # explicit pickup_latitude/drop_latitude, so this was latent, not
+        # yet triggered -- but it's a landmine for any future caller of this
+        # shared endpoint. The bare latitude/longitude fallback only makes
+        # sense for pickup (the historical single-address shape); drop must
+        # require its own explicit fields.
         pickup_lat = _coord(data.get("pickup_latitude") or data.get("pickup_lat") or data.get("latitude"))
         pickup_lng = _coord(data.get("pickup_longitude") or data.get("pickup_lng") or data.get("longitude"))
-        drop_lat = _coord(data.get("drop_latitude") or data.get("drop_lat") or data.get("latitude"))
-        drop_lng = _coord(data.get("drop_longitude") or data.get("drop_lng") or data.get("longitude"))
+        drop_lat = _coord(data.get("drop_latitude") or data.get("drop_lat"))
+        drop_lng = _coord(data.get("drop_longitude") or data.get("drop_lng"))
 
         if None in (pickup_lat, pickup_lng, drop_lat, drop_lng):
             return Response(
@@ -510,6 +752,11 @@ class PackersMoversQuoteView(APIView):
 
         relocation_type = str(data.get("relocation_type") or "Within City").strip()
         city = str(data.get("city") or "Hosur").strip()
+        # Stops between pickup and drop (priced at the tier's admin-configured per-stop charge).
+        try:
+            extra_stops = max(0, int(data.get("extra_stops") or 0))
+        except (TypeError, ValueError):
+            extra_stops = 0
 
         selected_tier_id = data.get("selected_tier_id") or data.get("service_tier_id") or data.get("tier_id")
         if selected_tier_id is not None:
@@ -565,6 +812,9 @@ class PackersMoversQuoteView(APIView):
                 drop_has_lift=drop_has_lift,
                 relocation_type=relocation_type,
                 service_tier_id=selected_tier_id,
+                extra_stops=extra_stops,
+                move_date=data.get("move_date") or data.get("preferred_date"),
+                move_time=data.get("move_time") or data.get("preferred_time"),
             )
         except Exception as e:
             logger.exception("Error computing Packers & Movers quote: %s", e)
@@ -614,6 +864,31 @@ class PackersMoversQuoteView(APIView):
         })
 
 
+class PackersMoversAddOnsView(APIView):
+    """
+    GET /api/logistics/packers-movers/addons/?city=Hosur
+
+    Server-priced Porter-parity P&M add-on catalogue (rope pulling, appliance
+    install/uninstall, electrician, carpenter, labour-only) for the booking wizard to display
+    and let the customer select; the actual charge is always recomputed server-side at booking
+    time from this same table (see service_requests/services/pm_addons.py).
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from .models import PMAddOnService
+        from django.db.models import Q
+        city = (request.query_params.get("city") or "").strip()
+        qs = PMAddOnService.objects.filter(is_active=True)
+        if city:
+            qs = qs.filter(Q(city="") | Q(city__iexact=city))
+        return success_response(data=[{
+            "code": a.code, "name": a.name, "description": a.description,
+            "pricing_mode": a.pricing_mode, "unit_price": str(a.unit_price),
+            "max_quantity": a.max_quantity, "is_labour_only": a.is_labour_only,
+        } for a in qs])
+
+
 class PackersMoversInventoryView(APIView):
     """
     GET /api/logistics/packers-movers/inventory/
@@ -636,11 +911,13 @@ class PackersMoversInventoryView(APIView):
                 "slug": cat.slug,
                 "icon": cat.icon,
                 "description": cat.description,
+                "info_banner": cat.info_banner or f"What we pack in {cat.name}",
                 "items": [
                     {
                         "id": it.id,
                         "name": it.name,
                         "slug": it.slug,
+                        "subcategory": it.subcategory or "",
                         "cft": float(it.default_cft) if (it.default_cft is not None and it.default_cft > 0 and it.default_weight_kg is not None and it.default_weight_kg > 0) else None,
                         "weight_kg": float(it.default_weight_kg) if (it.default_cft is not None and it.default_cft > 0 and it.default_weight_kg is not None and it.default_weight_kg > 0) else None,
                         "configured": bool(it.default_cft is not None and it.default_cft > 0 and it.default_weight_kg is not None and it.default_weight_kg > 0),
@@ -653,7 +930,17 @@ class PackersMoversInventoryView(APIView):
             }
             categories_data.append(cat_payload)
 
-        return success_response(data={"categories": categories_data})
+        # Admin-configured helper limit (PackersMoversConfig.max_helpers) so
+        # the booking page can offer 0..max_helpers extra helpers.
+        from .models import PackersMoversConfig
+        city = (request.query_params.get("city") or "Hosur").strip()
+        pm_cfg = (
+            PackersMoversConfig.objects.filter(city__iexact=city, is_active=True).first()
+            or PackersMoversConfig.objects.filter(is_active=True).first()
+        )
+        max_helpers = pm_cfg.max_helpers if pm_cfg else 2
+
+        return success_response(data={"categories": categories_data, "max_helpers": max_helpers})
 
 
 class LogisticsSlotAvailabilityView(APIView):
@@ -688,34 +975,126 @@ class LogisticsSlotAvailabilityView(APIView):
         else:
             target_date = now.date()
 
-        SLOT_DEFS = [
-            ("Morning", ["6AM-7AM", "7AM-8AM", "8AM-9AM", "9AM-10AM", "10AM-11AM", "11AM-12PM"]),
-            ("Afternoon", ["12PM-1PM", "1PM-2PM", "2PM-3PM", "3PM-4PM", "4PM-5PM"]),
-            ("Evening", ["5PM-6PM", "6PM-7PM", "7PM-8PM", "8PM-9PM", "9PM-10PM"]),
-        ]
+        city = (request.query_params.get("city") or "").strip().lower()
+
+        from logistics.models import LogisticsSlot
+        from service_requests.models import ServiceRequest
+
+        db_slots = list(
+            LogisticsSlot.objects.filter(is_active=True)
+            .filter(Q(category="") | Q(category__iexact=category) | Q(category__iexact=category.replace("goods_transport_", "")))
+            .filter(Q(city="") | Q(city__iexact=city))
+            .order_by("order", "start_time")
+        )
+
+        is_ptl = category.strip().lower() == "ptl"
+        ptl_date_err = None
+        if is_ptl:
+            # Light PTL runs only on admin-configured slots: no fallback grid, and a blank-city
+            # query sees only all-city slots (same rule as the booking-time check).
+            from service_requests.services.ptl_pricing import PTLError, get_policy, ptl_slots
+            db_slots = list(ptl_slots(city))
+            try:
+                _earliest = now.date() + datetime.timedelta(days=int(get_policy().min_advance_days or 0))
+                if target_date < _earliest:
+                    ptl_date_err = f"Part Truck Load is booked in advance. The earliest pickup date is {_earliest.isoformat()}."
+            except PTLError as _e:
+                ptl_date_err = str(_e)
+
+        groups_map = {}
+        if db_slots or is_ptl:
+            for s in db_slots:
+                groups_map.setdefault(s.group, []).append({
+                    "id": s.id,
+                    "slot": s.slot_label,
+                    "label": s.slot_label,
+                    "start_time": s.start_time.isoformat() if s.start_time else None,
+                    "end_time": s.end_time.isoformat() if s.end_time else None,
+                    "capacity": s.capacity,
+                })
+        else:
+            is_pm = ("packer" in category.lower() or "mover" in category.lower())
+            if is_pm:
+                fallback_defs = [
+                    ("Morning", ["07:00 AM - 08:00 AM", "08:00 AM - 09:00 AM", "09:00 AM - 10:00 AM", "10:00 AM - 11:00 AM", "11:00 AM - 12:00 PM"]),
+                    ("Afternoon", ["12:00 PM - 01:00 PM", "01:00 PM - 02:00 PM", "02:00 PM - 03:00 PM", "03:00 PM - 04:00 PM"]),
+                    ("Evening", ["04:00 PM - 05:00 PM", "05:00 PM - 06:00 PM", "06:00 PM - 07:00 PM"]),
+                ]
+            else:
+                fallback_defs = [
+                    ("Morning", ["06:00 AM - 07:00 AM", "07:00 AM - 08:00 AM", "08:00 AM - 09:00 AM", "09:00 AM - 10:00 AM", "10:00 AM - 11:00 AM", "11:00 AM - 12:00 PM"]),
+                    ("Afternoon", ["12:00 PM - 01:00 PM", "01:00 PM - 02:00 PM", "02:00 PM - 03:00 PM", "03:00 PM - 04:00 PM", "04:00 PM - 05:00 PM"]),
+                    ("Evening", ["05:00 PM - 06:00 PM", "06:00 PM - 07:00 PM", "07:00 PM - 08:00 PM", "08:00 PM - 09:00 PM", "09:00 PM - 10:00 PM"]),
+                ]
+            for g_name, s_labels in fallback_defs:
+                groups_map[g_name] = [
+                    {"id": None, "slot": lbl, "label": lbl, "start_time": None, "end_time": None, "capacity": 10}
+                    for lbl in s_labels
+                ]
 
         same_day_closed = (target_date == now.date()) and is_same_day_closed(now, category)
 
         groups = []
-        for group_name, slots in SLOT_DEFS:
+        for group_name, slots in groups_map.items():
             group_slots = []
-            for slot_label in slots:
+            for item in slots:
+                slot_label = item["slot"]
                 err = validate_booking_slot(
                     preferred_date=target_date,
                     preferred_time=slot_label,
                     now=now,
                     service_category=category,
                 )
+                
+                if is_ptl and not err:
+                    err = ptl_date_err
+                # Check concurrent capacity
+                cap = item.get("capacity") or 10
+                if not err and cap > 0:
+                    if is_ptl:
+                        from service_requests.services.ptl_pricing import PTL_MODE, SLOT_OCCUPYING_STATUSES
+                        booked_count = ServiceRequest.objects.filter(
+                            logistics_booking_mode=PTL_MODE, preferred_date=target_date,
+                            preferred_time__iexact=slot_label, status__in=SLOT_OCCUPYING_STATUSES,
+                        ).count()
+                    else:
+                        booked_count = ServiceRequest.objects.filter(
+                        preferred_date=target_date,
+                        preferred_time=slot_label,
+                        status__in=["new_request", "assigned", "accepted", "in_progress", "scheduled", "confirmed", "unassigned"]
+                        ).count()
+                    if booked_count >= cap:
+                        err = f"Slot is fully booked ({booked_count}/{cap} bookings filled)."
+
                 is_avail = (err is None)
                 group_slots.append({
+                    "id": item.get("id"),
                     "slot": slot_label,
                     "label": slot_label,
+                    "start_time": item.get("start_time"),
+                    "end_time": item.get("end_time"),
+                    "capacity": cap,
                     "is_available": is_avail,
                     "reason": err if not is_avail else None,
                 })
             groups.append({
                 "group": group_name,
+                "category": group_name,
                 "slots": group_slots,
+            })
+
+        # Compute server-authoritative upcoming 7 bookable dates
+        start_date = next_bookable_date(now, category)
+        upcoming_dates = []
+        for i in range(7):
+            d = start_date + datetime.timedelta(days=i)
+            day_name = "Today" if d == now.date() else ("Tomorrow" if d == now.date() + datetime.timedelta(days=1) else d.strftime("%a"))
+            upcoming_dates.append({
+                "id": f"date_{d.isoformat()}",
+                "date": d.isoformat(),
+                "label": day_name,
+                "value": d.strftime("%d %b"),
+                "is_today": (d == now.date()),
             })
 
         return Response({
@@ -727,7 +1106,31 @@ class LogisticsSlotAvailabilityView(APIView):
             "cutoff_label": cutoff_label(category),
             "min_lead_minutes": get_min_lead_minutes(),
             "next_bookable_date": next_bookable_date(now, category).isoformat(),
+            "upcoming_dates": upcoming_dates,
             "groups": groups,
         })
+
+
+class GTFaqListView(APIView):
+    """
+    GET /api/logistics/faqs/?category=truck&city=hosur
+    Returns active FAQs matching category (or blank/platform-wide) and city (or blank/all).
+    Public catalog endpoint with AllowAny.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        category = (request.query_params.get("category") or "").strip().lower()
+        city = (request.query_params.get("city") or "").strip().lower()
+
+        qs = GTFaq.objects.filter(is_active=True)
+        if category:
+            qs = qs.filter(Q(category__iexact=category) | Q(category=""))
+        if city:
+            qs = qs.filter(Q(city__iexact=city) | Q(city=""))
+
+        serializer = GTFaqSerializer(qs, many=True)
+        return success_response(data=serializer.data, message="FAQs fetched successfully")
+
 
 

@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useMemo, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Wrench,
   ShieldCheck,
@@ -10,15 +10,20 @@ import {
   Calendar,
   Clock,
   ArrowLeft,
+  ArrowRight,
   AlertCircle,
   Loader2,
 } from "lucide-react";
 
 import { routes } from "../routes.js";
 import { useAuth } from "../../state/auth/useAuth.js";
+import { extractApiErrorMessage, apiRequest } from "../../api/client.js";
+import { getCustomerSelectedAddress, getCustomerCoordinates } from "../../utils/customerLocationStorage.js";
 import { estimationRepository } from "../../services/estimation/estimationRepository.js";
 import {
   ESTIMATION_FEE,
+  getDynamicEstimationFee,
+  setDynamicEstimationFee,
   ESTIMATION_TITLE,
   ESTIMATION_SUBTITLE,
   ESTIMATION_DESCRIPTION,
@@ -28,7 +33,10 @@ import { ACInspectionSummaryModal } from "../components/estimation/ACInspectionS
 
 function todayDateString() {
   const d = new Date();
-  return d.toISOString().slice(0, 10);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 const TIME_SLOTS = [
@@ -37,6 +45,44 @@ const TIME_SLOTS = [
   "02:00 PM - 04:00 PM",
   "04:00 PM - 06:00 PM",
 ];
+
+function parseSlotMinutes(slot) {
+  const match = slot.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  if (!match) return 0;
+  let hour = parseInt(match[1], 10);
+  const min = parseInt(match[2], 10);
+  const ampm = match[3].toUpperCase();
+  if (ampm === "PM" && hour < 12) hour += 12;
+  if (ampm === "AM" && hour === 12) hour = 0;
+  return hour * 60 + min;
+}
+
+function getAvailableSlots(dateStr) {
+  const isToday = dateStr === todayDateString();
+  if (!isToday) return TIME_SLOTS;
+
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+  return TIME_SLOTS.filter((slot) => {
+    const slotMinutes = parseSlotMinutes(slot);
+    return slotMinutes >= currentMinutes + 30;
+  });
+}
+
+function getDefaultBookingDateTime() {
+  const todayStr = todayDateString();
+  const todaySlots = getAvailableSlots(todayStr);
+  if (todaySlots.length > 0) {
+    return { date: todayStr, time: todaySlots[0] };
+  }
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const year = tomorrow.getFullYear();
+  const month = String(tomorrow.getMonth() + 1).padStart(2, "0");
+  const day = String(tomorrow.getDate()).padStart(2, "0");
+  return { date: `${year}-${month}-${day}`, time: TIME_SLOTS[0] };
+}
 
 /**
  * ACInspectionBookingPage.jsx
@@ -49,6 +95,7 @@ const TIME_SLOTS = [
  */
 export function ACInspectionBookingPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth?.() || {};
 
   const [acDetails, setAcDetails] = useState({ type: "Split", brand: "LG", capacity: "1.5 Ton", quantity: 1 });
@@ -58,28 +105,143 @@ export function ACInspectionBookingPage() {
   const [photoPreview, setPhotoPreview] = useState(null);
 
   const [contact, setContact] = useState({
-    name: user?.name || user?.full_name || "",
+    name: user?.name || user?.full_name || user?.username || "",
     phone: user?.phone || "",
     email: user?.email || "",
   });
   const [address, setAddress] = useState("");
   const [landmark, setLandmark] = useState("");
-  const [selectedDate, setSelectedDate] = useState(todayDateString());
-  const [selectedTime, setSelectedTime] = useState(TIME_SLOTS[0]);
+  const [coords, setCoords] = useState(null);
+
+  const defaultDateTime = useMemo(() => getDefaultBookingDateTime(), []);
+  const [selectedDate, setSelectedDate] = useState(defaultDateTime.date);
+  const [selectedTime, setSelectedTime] = useState(defaultDateTime.time);
+
+  const availableSlots = useMemo(() => getAvailableSlots(selectedDate), [selectedDate]);
+
+  // Dynamic server slot state connected to Time Slot Management
+  const [serverSlots, setServerSlots] = useState(null);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [isDateClosed, setIsDateClosed] = useState(false);
+  const [closedReason, setClosedReason] = useState("");
+
+  useEffect(() => {
+    if (!selectedDate) return;
+    let isCancelled = false;
+    setSlotsLoading(true);
+
+    apiRequest(`/services/resolve/time-slots/?date=${selectedDate}&service=ac-service-cleaning&category=ac-appliance`)
+      .then((res) => {
+        if (isCancelled) return;
+        if (res?.success && res.data) {
+          if (!res.data.is_open) {
+            setIsDateClosed(true);
+            setClosedReason(res.data.reason || "AC diagnostic visits are closed on this date.");
+            setServerSlots([]);
+            setSelectedTime("");
+          } else {
+            setIsDateClosed(false);
+            setClosedReason("");
+            const avail = (res.data.all_slots || [])
+              .filter((s) => s.available)
+              .map((s) => s.time || s.value);
+            setServerSlots(avail);
+            if (avail.length > 0) {
+              if (!selectedTime || !avail.includes(selectedTime)) {
+                setSelectedTime(avail[0]);
+              }
+            } else {
+              setSelectedTime("");
+            }
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not load dynamic AC slots, falling back to defaults", err);
+      })
+      .finally(() => {
+        if (!isCancelled) setSlotsLoading(false);
+      });
+
+    return () => { isCancelled = true; };
+  }, [selectedDate]);
+
+  const effectiveSlots = serverSlots !== null ? serverSlots : availableSlots;
+
+  function handleDateChange(newDate) {
+    setSelectedDate(newDate);
+    const slots = getAvailableSlots(newDate);
+    if (!slots.includes(selectedTime)) {
+      setSelectedTime(slots[0] || TIME_SLOTS[0]);
+    }
+  }
+
+  useEffect(() => {
+    try {
+      const savedAddr = getCustomerSelectedAddress(user?.id);
+      if (savedAddr) {
+        if (!address) {
+          setAddress(savedAddr.formatted_address || savedAddr.address_line1 || savedAddr.address || "");
+        }
+        if (!landmark && savedAddr.landmark) {
+          setLandmark(savedAddr.landmark);
+        }
+        if (savedAddr.latitude && savedAddr.longitude) {
+          setCoords({ lat: parseFloat(savedAddr.latitude), lng: parseFloat(savedAddr.longitude) });
+        }
+      } else {
+        const savedCoords = getCustomerCoordinates(user?.id);
+        if (savedCoords?.lat != null && savedCoords?.lng != null) {
+          setCoords({ lat: parseFloat(savedCoords.lat), lng: parseFloat(savedCoords.lng) });
+        }
+      }
+    } catch (_) {}
+  }, [user?.id]);
 
   const [showSummary, setShowSummary] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [inspectionConfig, setInspectionConfig] = useState(null);
+  const [dynamicFee, setDynamicFee] = useState(() => getDynamicEstimationFee() || 199);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadDynamicConfig() {
+      try {
+        const res = await apiRequest("/service-requests/ac-inspection/rate-card/");
+        if (isMounted && res?.data) {
+          setInspectionConfig(res.data);
+          if (res.data.diagnostic_fee != null) {
+            const loadedFee = Number(res.data.diagnostic_fee);
+            setDynamicFee(loadedFee);
+            setDynamicEstimationFee(loadedFee);
+          }
+        }
+      } catch (err) {
+        console.warn("[ACInspectionBookingPage] Failed to fetch dynamic config:", err);
+      }
+    }
+    loadDynamicConfig();
+    return () => { isMounted = false; };
+  }, []);
 
   const formData = useMemo(
     () => ({ phone: contact.phone, address, landmark, flat_house_no: "" }),
     [contact.phone, address, landmark]
   );
 
+  const trimmedEmail = contact.email.trim();
+  const isSlotValid = !isDateClosed && effectiveSlots.length > 0 && Boolean(selectedTime);
+
+  const isInspectionEnabled = inspectionConfig?.is_active !== false;
+
   const canReview =
+    isInspectionEnabled &&
     contact.name.trim().length > 1 &&
     /^\d{10}$/.test(contact.phone.trim()) &&
-    address.trim().length > 4;
+    address.trim().length > 4 &&
+    isEmailValid &&
+    isSlotValid;
 
   function handlePhotoChange(file) {
     setPhotoFile(file);
@@ -94,12 +256,16 @@ export function ACInspectionBookingPage() {
     setIsSubmitting(true);
     setErrorMsg("");
     try {
+      const validEmail = isEmailValid ? trimmedEmail : "";
       const result = await estimationRepository.createEstimationBooking({
+        userId: user?.id,
         customer_name: contact.name,
         phone: contact.phone,
-        email: contact.email,
-        address,
+        email: validEmail,
+        address: address || "Hosur Center",
         landmark,
+        latitude: coords?.lat != null ? coords.lat : 12.7409,
+        longitude: coords?.lng != null ? coords.lng : 77.8253,
         preferred_date: selectedDate,
         preferred_time: selectedTime,
         paymentMethod: "COD",
@@ -107,7 +273,7 @@ export function ACInspectionBookingPage() {
         customerReportedIssue,
         notes,
         photos: photoFile ? [photoFile] : [],
-        estimationFee: ESTIMATION_FEE,
+        estimationFee: dynamicFee,
       });
 
       if (result?.success && result?.data) {
@@ -118,13 +284,60 @@ export function ACInspectionBookingPage() {
         setErrorMsg("Could not create your inspection booking. Please try again.");
       }
     } catch (err) {
-      console.error("[ACInspectionBookingPage] createEstimationBooking failed:", err);
-      const serverMsg =
-        err?.body?.message || err?.body?.detail || (typeof err?.body === "string" ? err.body : null);
-      setErrorMsg(serverMsg || "Something went wrong while booking your inspection. Please try again.");
+      console.error("[ACInspectionBookingPage] createEstimationBooking failed:", err, "Response body:", err?.body);
+      const serverMsg = extractApiErrorMessage(err, "Something went wrong while booking your inspection. Please try again.");
+      setErrorMsg(serverMsg);
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  function handleProceedToCommonCheckout() {
+    const inspectionCartId = "serv-hvac-ac-inspection";
+    const qty = Math.max(1, Number(acDetails.quantity) || 1);
+    const itemDesc = `${acDetails.type} (${acDetails.brand}) • ${qty} Unit${qty > 1 ? 's' : ''}`;
+
+    const inspectionCartItem = {
+      id: inspectionCartId,
+      db_id: inspectionCartId,
+      name: inspectionConfig?.title || "AC Inspection & Diagnostic Visit",
+      price: dynamicFee,
+      quantity: qty,
+      duration: "45 mins",
+      image: inspectionConfig?.image || "media/catalog/packages/appliance_cleaning_thumb.webp",
+      ac_brand: acDetails.brand,
+      ac_type: (acDetails.type || "").toUpperCase().includes("WINDOW") ? "WINDOW" : "SPLIT",
+      ac_type_label: acDetails.type || "Split AC",
+      ac_capacity: acDetails.capacity || "1.5_TON",
+      ac_quantity: qty,
+      customer_symptom: customerReportedIssue || notes || "AC Inspection requested",
+      ac_notes: notes || "",
+      ac_images: photoPreview ? [photoPreview] : [],
+      primaryFile: photoFile,
+      primaryPreview: photoPreview,
+      description: itemDesc,
+      categoryName: "AC & Appliances",
+      category_id: "acappliance",
+      categorySlug: "acappliance",
+      jobType: "ESTIMATION",
+    };
+
+    try {
+      localStorage.setItem("calservices_customer_cart", JSON.stringify([inspectionCartItem]));
+      window.dispatchEvent(new CustomEvent("calservices_cart_updated"));
+    } catch (_) {}
+
+    navigate(routes.booking_checkout, {
+      state: {
+        category: { id: "acappliance", name: "AC & Appliances", slug: "acappliance" },
+        cart: [inspectionCartItem],
+        jobType: "ESTIMATION",
+        address: address || undefined,
+        latitude: coords?.lat || undefined,
+        longitude: coords?.lng || undefined,
+        landmark: landmark || undefined,
+      }
+    });
   }
 
   return (
@@ -133,11 +346,31 @@ export function ACInspectionBookingPage() {
         {/* Back + Header */}
         <button
           type="button"
-          onClick={() => navigate(routes.landing)}
+          onClick={() => {
+            const isPreview = searchParams.get("preview") === "true" || (typeof window !== "undefined" && window.parent !== window);
+            const isEdit = searchParams.get("edit") === "true";
+            if (window.history.length > 1) {
+              navigate(-1);
+            } else {
+              const query = isPreview ? `?preview=true${isEdit ? "&edit=true" : ""}` : "";
+              navigate(`${routes.landing}${query}`);
+            }
+          }}
           className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 mb-4 cursor-pointer"
         >
           <ArrowLeft size={14} /> Back to Home
         </button>
+
+        {/* Disabled Notice */}
+        {!isInspectionEnabled && (
+          <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold flex items-center gap-3 mb-5 shadow-xs">
+            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+            <div>
+              <span className="font-bold">AC Inspection is Currently Unavailable: </span>
+              <span>This diagnostic service is temporarily offline and cannot be booked right now. Please check back later.</span>
+            </div>
+          </div>
+        )}
 
         <div className="bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-6 mb-5 flex items-start gap-4 shadow-xs">
           <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
@@ -145,16 +378,25 @@ export function ACInspectionBookingPage() {
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">{ESTIMATION_TITLE}</h1>
+              <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
+                {inspectionConfig?.title || ESTIMATION_TITLE}
+              </h1>
               <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2.5 py-1 rounded-full">
-                {ESTIMATION_SUBTITLE}
+                {inspectionConfig?.subtitle ? "Diagnostic Visit" : ESTIMATION_SUBTITLE}
               </span>
+              {!isInspectionEnabled && (
+                <span className="text-[10px] font-black uppercase tracking-wider text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-full">
+                  Offline
+                </span>
+              )}
             </div>
-            <p className="text-xs text-slate-500 font-medium mt-1">{ESTIMATION_DESCRIPTION}</p>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              {inspectionConfig?.subtitle || ESTIMATION_DESCRIPTION}
+            </p>
           </div>
           <div className="text-right shrink-0">
             <div className="text-[10px] text-slate-400 font-bold uppercase">Inspection Fee</div>
-            <div className="text-lg font-black text-emerald-700">₹{ESTIMATION_FEE}</div>
+            <div className="text-lg font-black text-emerald-700">₹{dynamicFee}</div>
           </div>
         </div>
 
@@ -170,6 +412,31 @@ export function ACInspectionBookingPage() {
           photoPreview={photoPreview}
           onPhotoChange={handlePhotoChange}
         />
+
+        {/* Quick Transition to Common Services Booking Checkout */}
+        <div className="bg-emerald-50/90 border border-emerald-200 rounded-2xl p-4 mt-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-left shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+              <MapPin size={16} />
+            </div>
+            <div>
+              <div className="text-xs font-black text-emerald-900">
+                Want to book via the Common Services Workflow?
+              </div>
+              <div className="text-[11px] text-emerald-700 font-medium">
+                Use your saved addresses, interactive GPS map picker, and standard slots.
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleProceedToCommonCheckout}
+            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1 shrink-0"
+          >
+            <span>Continue to Checkout</span>
+            <ArrowRight size={13} />
+          </button>
+        </div>
 
         {/* Step 2: Contact & Address */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs space-y-4 mt-5 text-left">
@@ -217,15 +484,20 @@ export function ACInspectionBookingPage() {
           </div>
 
           <div>
-            <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block mb-1.5">
-              <Mail size={11} className="inline -mt-0.5 mr-1" /> Email (Optional)
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">
+                <Mail size={11} className="inline -mt-0.5 mr-1" /> Email (Optional)
+              </label>
+              {!isEmailValid && (
+                <span className="text-[10px] font-bold text-rose-600">Please enter a valid email or leave blank</span>
+              )}
+            </div>
             <input
               type="email"
               value={contact.email}
               onChange={(e) => setContact((c) => ({ ...c, email: e.target.value }))}
-              placeholder="you@example.com"
-              className="w-full h-11 bg-slate-50 border border-slate-200/90 rounded-xl px-3.5 text-xs font-bold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-all"
+              placeholder="you@example.com (optional)"
+              className={`w-full h-11 bg-slate-50 border ${!isEmailValid ? "border-rose-400 focus:border-rose-500" : "border-slate-200/90 focus:border-emerald-500"} rounded-xl px-3.5 text-xs font-bold text-slate-800 outline-none focus:bg-white transition-all`}
             />
           </div>
 
@@ -264,27 +536,45 @@ export function ACInspectionBookingPage() {
                 type="date"
                 min={todayDateString()}
                 value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
+                onChange={(e) => handleDateChange(e.target.value)}
                 className="w-full h-11 bg-slate-50 border border-slate-200/90 rounded-xl px-3.5 text-xs font-bold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-all"
               />
             </div>
             <div>
-              <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block mb-1.5">
-                <Clock size={11} className="inline -mt-0.5 mr-1" /> Preferred Slot
+              <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block mb-1.5 flex items-center justify-between">
+                <span><Clock size={11} className="inline -mt-0.5 mr-1" /> Preferred Slot</span>
+                {slotsLoading && <span className="text-[10px] text-slate-400 font-semibold normal-case">Checking live slots...</span>}
               </label>
               <select
                 value={selectedTime}
+                disabled={isDateClosed || effectiveSlots.length === 0}
                 onChange={(e) => setSelectedTime(e.target.value)}
-                className="w-full h-11 bg-slate-50 border border-slate-200/90 rounded-xl px-3.5 text-xs font-bold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-all"
+                className="w-full h-11 bg-slate-50 border border-slate-200/90 rounded-xl px-3.5 text-xs font-bold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-all disabled:opacity-50"
               >
-                {TIME_SLOTS.map((slot) => (
-                  <option key={slot} value={slot}>
-                    {slot}
+                {effectiveSlots.length > 0 ? (
+                  effectiveSlots.map((slot) => (
+                    <option key={slot} value={slot}>
+                      {slot}
+                    </option>
+                  ))
+                ) : (
+                  <option value="" disabled>
+                    {isDateClosed ? "Service closed on this date" : "No slots available on this date"}
                   </option>
-                ))}
+                )}
               </select>
             </div>
           </div>
+          {isDateClosed && (
+            <p className="text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200/70 rounded-xl px-3 py-2 mt-2">
+              {closedReason || "AC diagnostic visits are not available on this date. Please pick another date above."}
+            </p>
+          )}
+          {!isDateClosed && effectiveSlots.length === 0 && (
+            <p className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200/70 rounded-xl px-3 py-2 mt-2">
+              All technician visit slots for this date have closed or are full. Please select tomorrow or a later date above.
+            </p>
+          )}
         </div>
 
         {errorMsg && (
@@ -295,27 +585,44 @@ export function ACInspectionBookingPage() {
         )}
 
         {/* CTA */}
-        <div className="mt-6 flex items-center justify-between gap-4 bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs">
+        <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs">
           <div className="flex items-center gap-2 text-[11px] text-slate-500 font-semibold">
             <ShieldCheck size={15} className="text-emerald-600 shrink-0" />
-            <span>Pay only the ₹{ESTIMATION_FEE} inspection fee. No surprise charges.</span>
+            <span>Pay only the ₹{dynamicFee} inspection fee. No surprise charges.</span>
           </div>
-          <button
-            type="button"
-            disabled={!canReview}
-            onClick={() => setShowSummary(true)}
-            className="shrink-0 py-3 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-black text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md shadow-emerald-600/25"
-          >
-            Review Booking
-          </button>
+          <div className="flex items-center gap-2.5 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={handleProceedToCommonCheckout}
+              className="flex-1 sm:flex-initial py-3 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs uppercase tracking-wider transition-all cursor-pointer shadow-sm flex items-center justify-center gap-1.5"
+            >
+              <span>Common Checkout</span>
+              <ArrowRight size={13} />
+            </button>
+            <button
+              type="button"
+              disabled={!canReview}
+              onClick={() => {
+                setErrorMsg("");
+                setShowSummary(true);
+              }}
+              className="flex-1 sm:flex-initial py-3 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-black text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md shadow-emerald-600/25"
+            >
+              Review Booking
+            </button>
+          </div>
         </div>
       </div>
 
       <ACInspectionSummaryModal
         isOpen={showSummary}
-        onClose={() => setShowSummary(false)}
+        onClose={() => {
+          setErrorMsg("");
+          setShowSummary(false);
+        }}
         onConfirm={handleConfirmBooking}
         isSubmitting={isSubmitting}
+        errorMsg={errorMsg}
         estimationAcDetails={acDetails}
         estimationSymptom={customerReportedIssue}
         estimationNotes={notes}
@@ -323,7 +630,7 @@ export function ACInspectionBookingPage() {
         formData={formData}
         selectedDate={selectedDate}
         selectedTime={selectedTime}
-        fee={ESTIMATION_FEE}
+        fee={dynamicFee}
         payMethod="cash"
       />
 

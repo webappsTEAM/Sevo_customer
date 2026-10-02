@@ -102,3 +102,459 @@ export async function fetchAdminTierHistory(id) {
     return { ok: false, error: asError(err) }
   }
 }
+
+/* =========================================================================
+ * GOODS CATEGORIES ADMIN APIS
+ * ========================================================================= */
+
+const CAT_BASE = "/logistics/admin/categories/"
+
+export async function fetchAdminGoodsCategories(filters = {}) {
+  const params = new URLSearchParams()
+  if (filters.is_active !== undefined) params.set("is_active", filters.is_active)
+  if (filters.allows_two_wheeler !== undefined) params.set("allows_two_wheeler", filters.allows_two_wheeler)
+  if (filters.search) params.set("search", filters.search)
+  const qs = params.toString()
+  try {
+    const res = await apiRequest(`${CAT_BASE}${qs ? `?${qs}` : ""}`)
+    return {
+      ok: true,
+      categories: Array.isArray(res?.data) ? res.data : [],
+      total: res?.total_count || 0,
+    }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function createAdminGoodsCategory(payload) {
+  try {
+    const res = await apiRequest(CAT_BASE, { method: "POST", json: payload })
+    return { ok: true, category: res?.data, message: res?.message }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function updateAdminGoodsCategory(id, changes, reason = "") {
+  try {
+    const res = await apiRequest(`${CAT_BASE}${id}/`, {
+      method: "PATCH",
+      json: { ...changes, reason },
+    })
+    return { ok: true, category: res?.data, changed: res?.changed, message: res?.message }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function deleteAdminGoodsCategory(id, reason = "") {
+  try {
+    const res = await apiRequest(`${CAT_BASE}${id}/`, {
+      method: "DELETE",
+      json: { reason },
+    })
+    return { ok: true, category: res?.data, message: res?.message }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+/* =========================================================================
+ * GOODS ITEMS ADMIN APIS
+ * ========================================================================= */
+
+const ITEM_BASE = "/logistics/admin/items/"
+
+export async function fetchAdminGoodsItems(filters = {}) {
+  const params = new URLSearchParams()
+  if (filters.category) params.set("category", filters.category)
+  if (filters.is_active !== undefined) params.set("is_active", filters.is_active)
+  if (filters.is_prohibited !== undefined) params.set("is_prohibited", filters.is_prohibited)
+  if (filters.search) params.set("search", filters.search)
+  const qs = params.toString()
+  try {
+    const res = await apiRequest(`${ITEM_BASE}${qs ? `?${qs}` : ""}`)
+    return {
+      ok: true,
+      items: Array.isArray(res?.data) ? res.data : [],
+      total: res?.total_count || 0,
+    }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function createAdminGoodsItem(payload) {
+  try {
+    const res = await apiRequest(ITEM_BASE, { method: "POST", json: payload })
+    return { ok: true, item: res?.data, message: res?.message }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function updateAdminGoodsItem(id, changes, reason = "") {
+  try {
+    const res = await apiRequest(`${ITEM_BASE}${id}/`, {
+      method: "PATCH",
+      json: { ...changes, reason },
+    })
+    return { ok: true, item: res?.data, changed: res?.changed, message: res?.message }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function deleteAdminGoodsItem(id, reason = "") {
+  try {
+    const res = await apiRequest(`${ITEM_BASE}${id}/`, {
+      method: "DELETE",
+      json: { reason },
+    })
+    return { ok: true, item: res?.data, message: res?.message }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+/* =========================================================================
+ * PACKERS & MOVERS CONFIG ADMIN APIS
+ * ========================================================================= */
+
+const PM_BASE = "/logistics/admin/packers-movers-config/"
+
+export async function fetchAdminPMConfig(city = "Hosur") {
+  try {
+    const res = await apiRequest(`${PM_BASE}?city=${encodeURIComponent(city)}`)
+    return { ok: true, config: res?.data }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function updateAdminPMConfig(changes, reason = "", city = "Hosur") {
+  try {
+    const res = await apiRequest(PM_BASE, {
+      method: "PATCH",
+      json: { ...changes, city, reason },
+    })
+    return { ok: true, config: res?.data, changed: res?.changed, message: res?.message }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+/* =========================================================================
+ * OPERATING SLOTS ADMIN APIS
+ * ========================================================================= */
+
+const SLOT_BASE = "/logistics/admin/slots/"
+
+export async function fetchAdminSlots(filters = {}) {
+  const params = new URLSearchParams()
+  if (filters.category) params.set("category", filters.category)
+  if (filters.city) params.set("city", filters.city)
+  if (filters.group) params.set("group", filters.group)
+  if (filters.is_active !== undefined) params.set("is_active", filters.is_active)
+  if (filters.search) params.set("search", filters.search)
+  const qs = params.toString()
+  try {
+    const res = await apiRequest(`${SLOT_BASE}${qs ? `?${qs}` : ""}`)
+    return {
+      ok: true,
+      slots: Array.isArray(res?.data) ? res.data : [],
+      total: res?.total_count || 0,
+    }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function createAdminSlot(payload) {
+  try {
+    const res = await apiRequest(SLOT_BASE, { method: "POST", json: payload })
+    return { ok: true, slot: res?.data, message: res?.message }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function updateAdminSlot(id, changes, reason = "") {
+  try {
+    const res = await apiRequest(`${SLOT_BASE}${id}/`, {
+      method: "PATCH",
+      json: { ...changes, reason },
+    })
+    return { ok: true, slot: res?.data, changed: res?.changed, message: res?.message }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function deleteAdminSlot(id, reason = "") {
+  try {
+    const res = await apiRequest(`${SLOT_BASE}${id}/`, {
+      method: "DELETE",
+      json: { reason },
+    })
+    return { ok: true, slot: res?.data, message: res?.message }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+/* =========================================================================
+ * 6. LANES & INTERCITY ROUTES ADMINISTRATION
+ * ========================================================================= */
+
+const LANE_BASE = "/logistics/admin/lanes/"
+
+export async function fetchAdminLanes(filters = {}) {
+  const params = new URLSearchParams()
+  if (filters.category) params.set("category", filters.category)
+  if (filters.city) params.set("city", filters.city)
+  if (filters.is_active !== undefined) params.set("is_active", filters.is_active)
+  if (filters.search) params.set("search", filters.search)
+  const qs = params.toString()
+  try {
+    const res = await apiRequest(`${LANE_BASE}${qs ? `?${qs}` : ""}`)
+    return {
+      ok: true,
+      lanes: Array.isArray(res?.data) ? res.data : [],
+      total: res?.total_count || 0,
+    }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function createAdminLane(payload) {
+  try {
+    const res = await apiRequest(LANE_BASE, { method: "POST", json: payload })
+    return { ok: true, lane: res?.data, message: res?.message }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function updateAdminLane(id, changes, reason = "") {
+  try {
+    const res = await apiRequest(`${LANE_BASE}${id}/`, {
+      method: "PATCH",
+      json: { ...changes, reason },
+    })
+    return { ok: true, lane: res?.data, changed: res?.changed, message: res?.message }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function deleteAdminLane(id, reason = "") {
+  try {
+    const res = await apiRequest(`${LANE_BASE}${id}/`, {
+      method: "DELETE",
+      json: { reason },
+    })
+    return { ok: true, lane: res?.data, message: res?.message }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+/* =========================================================================
+ * 7. GT PLATFORM FAQS ADMINISTRATION
+ * ========================================================================= */
+
+const FAQ_BASE = "/logistics/admin/faqs/"
+
+export async function fetchAdminFaqs(filters = {}) {
+  const params = new URLSearchParams()
+  if (filters.category) params.set("category", filters.category)
+  if (filters.city) params.set("city", filters.city)
+  if (filters.is_active !== undefined) params.set("is_active", filters.is_active)
+  if (filters.search) params.set("search", filters.search)
+  const qs = params.toString()
+  try {
+    const res = await apiRequest(`${FAQ_BASE}${qs ? `?${qs}` : ""}`)
+    return {
+      ok: true,
+      faqs: Array.isArray(res?.data) ? res.data : [],
+      total: res?.total_count || 0,
+    }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function createAdminFaq(payload) {
+  try {
+    const res = await apiRequest(FAQ_BASE, { method: "POST", json: payload })
+    return { ok: true, faq: res?.data, message: res?.message }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function updateAdminFaq(id, changes, reason = "") {
+  try {
+    const res = await apiRequest(`${FAQ_BASE}${id}/`, {
+      method: "PATCH",
+      json: { ...changes, reason },
+    })
+    return { ok: true, faq: res?.data, changed: res?.changed, message: res?.message }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function deleteAdminFaq(id, reason = "") {
+  try {
+    const res = await apiRequest(`${FAQ_BASE}${id}/`, {
+      method: "DELETE",
+      json: { reason },
+    })
+    return { ok: true, faq: res?.data, message: res?.message }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+
+
+/* =========================================================================
+ * 8. SERVICE COVERAGE (geofenced service areas)
+ *
+ * Backed by the existing ServiceZone geofence API in settings_hub
+ * (/api/settings/service-zones/) -- the same zones the booking endpoint and
+ * the public /check/ endpoint enforce. This tab only manages the zones that
+ * are configured for Goods & Transport service slugs.
+ * ========================================================================= */
+
+const ZONE_BASE = "/settings/service-zones/"
+
+export const GT_COVERAGE_SERVICES = [
+  { slug: "goods_transport_truck", label: "Mini Truck" },
+  { slug: "goods_transport_two_wheeler", label: "Two Wheeler" },
+  { slug: "packers_movers", label: "Packers & Movers" },
+]
+
+export async function fetchCoverageZones(services = GT_COVERAGE_SERVICES.map((s) => s.slug)) {
+  const qs = services.length ? `?services=${encodeURIComponent(services.join(","))}` : ""
+  try {
+    const res = await apiRequest(`${ZONE_BASE}${qs}`)
+    const list = Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : []
+    return { ok: true, zones: list }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function createCoverageZone(payload) {
+  try {
+    const res = await apiRequest(ZONE_BASE, { method: "POST", json: payload })
+    return { ok: true, zone: res?.data || res }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function updateCoverageZone(id, changes) {
+  try {
+    const res = await apiRequest(`${ZONE_BASE}${id}/`, { method: "PATCH", json: changes })
+    return { ok: true, zone: res?.data || res }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function deleteCoverageZone(id) {
+  try {
+    await apiRequest(`${ZONE_BASE}${id}/`, { method: "DELETE" })
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+/* =========================================================================
+ * 9. GT MONEY POLICIES (cancellation fee, waiting charge, advance payment)
+ *
+ * Backed by /api/logistics/admin/policies/. Every policy defaults to "no effect";
+ * a category row overrides the blank/platform-wide row for that category only.
+ * ========================================================================= */
+
+const POLICY_BASE = "/logistics/admin/policies/"
+
+export async function fetchAdminPolicies() {
+  try {
+    const res = await apiRequest(POLICY_BASE)
+    return { ok: true, policies: res?.data || {} }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function createAdminPolicy(kind, payload) {
+  try {
+    const res = await apiRequest(`${POLICY_BASE}${kind}/`, { method: "POST", json: payload })
+    return { ok: true, policy: res?.data }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function updateAdminPolicy(kind, id, changes, reason = "") {
+  try {
+    const res = await apiRequest(`${POLICY_BASE}${kind}/${id}/`, { method: "PATCH", json: { ...changes, reason } })
+    return { ok: true, policy: res?.data }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function deactivateAdminPolicy(kind, id) {
+  try {
+    const res = await apiRequest(`${POLICY_BASE}${kind}/${id}/`, { method: "DELETE" })
+    return { ok: true, policy: res?.data }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+// ── GT lists with no other Admin screen: prohibited goods, P&M add-ons, P&M surcharges, cities ──
+// `base` is one of GT_ADMIN_LISTS[*].base. Nothing here prices anything; rows are validated by the
+// server with the model's own rules. DELETE deactivates (rows are kept).
+export const GT_ADMIN_LISTS = {
+  prohibited: "/logistics/admin/lists/prohibited-rules/",
+  addons: "/logistics/admin/pm-addons/",
+  surcharges: "/logistics/admin/lists/pm-surcharges/",
+  cities: "/logistics/admin/lists/cities/",
+}
+
+export async function fetchAdminListRows(base) {
+  try {
+    const res = await apiRequest(base)
+    return { ok: true, rows: Array.isArray(res?.data) ? res.data : [] }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function saveAdminListRow(base, id, payload) {
+  try {
+    const res = await apiRequest(id ? `${base}${id}/` : base, { method: id ? "PATCH" : "POST", json: payload })
+    return { ok: true, row: res?.data }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function deactivateAdminListRow(base, id) {
+  try {
+    const res = await apiRequest(`${base}${id}/`, { method: "DELETE" })
+    return { ok: true, row: res?.data }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}

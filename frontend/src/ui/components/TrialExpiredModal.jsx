@@ -111,8 +111,8 @@ export function TrialExpiredModal() {
             }}
           >
             {isAdmin
-              ? "Your 14-day free trial of Caltrack has expired. Upgrade your plan now to restore full access to your workspace and keep collaborating."
-              : "Your organization's 14-day free trial of Caltrack has expired. Please contact your system administrator to upgrade the plan and restore access."}
+              ? "Your 14-day free trial of sevo has expired. Upgrade your plan now to restore full access to your workspace and keep collaborating."
+              : "Your organization's 14-day free trial of sevo has expired. Please contact your system administrator to upgrade the plan and restore access."}
           </p>
         </div>
 

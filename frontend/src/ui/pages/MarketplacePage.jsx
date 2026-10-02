@@ -7,18 +7,16 @@ import {
   ShieldCheck, Sparkles, Filter, Trash2, Plus, Minus,
   RefreshCw, ChevronDown, Check, Info, AlertCircle, ShoppingBag,
   Layers, FolderTree, Tag, SlidersHorizontal, ArrowUpRight,
-  ListFilter, Grid, ChevronLeft, Boxes, Gift, Zap,
-  CreditCard, Banknote, MapPin,
+  ListFilter, Grid, ChevronLeft,
   Apple, Carrot, Milk, Coffee, Utensils, CupSoda, Cookie,
   Fish, Egg, Beef, Shirt, Dumbbell, Laptop, Smartphone,
-  Tv, Bath, Baby, Home, Package, Droplet, Hammer,
+  Tv, Bath, Baby, Home, Package, Boxes, Droplet, Hammer,
   PaintRoller, Wrench, HeartPulse, Croissant
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { useAuth } from "../../state/auth/useAuth.js"
 import { apiRequest } from "../../api/client.js"
 import { getCustomerSelectedAddress, getCustomerLocation } from "../../utils/customerLocationStorage.js"
-import { resolveImageUrl } from "../../utils/imageUrl.js"
 import {
   fetchMarketplaceProducts,
   fetchMarketplaceProductDetail,
@@ -37,7 +35,6 @@ import {
   cancelMarketplaceOrder,
   fetchMyOrders,
   fetchMarketplaceBaskets,
-  fetchMarketplaceBasketDetail,
   addBasketToCart,
   fetchMarketplaceDeliverySlots,
 } from "../../services/marketplaceApi.js"
@@ -405,7 +402,8 @@ export function MarketplacePage() {
   const [showCustomerEntryModal, setShowCustomerEntryModal] = useState(false)
   const [pendingAddToCart, setPendingAddToCart] = useState(null)
 
-  // Basket/Combo Offer State
+  // Published Seller Hub combo offers. They are fetched from the canonical
+  // Vendor catalog; an empty catalog deliberately renders no fallback cards.
   const [baskets, setBaskets] = useState([])
   const [basketsLoading, setBasketsLoading] = useState(true)
   const [basketDetailModal, setBasketDetailModal] = useState(null)
@@ -414,7 +412,6 @@ export function MarketplacePage() {
 
   // Product Catalog & Category State
   const [products, setProducts] = useState([])
-  const [selectedVariantByGroup, setSelectedVariantByGroup] = useState({})
   const [categoryTree, setCategoryTree] = useState([])
   const [categoriesLoading, setCategoriesLoading] = useState(true)
   const [categoriesUnavailable, setCategoriesUnavailable] = useState(false)
@@ -437,28 +434,18 @@ export function MarketplacePage() {
   // Product Detail Modal State
   const [detailProduct, setDetailProduct] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
-  const [isDescExpanded, setIsDescExpanded] = useState(false)
 
   // Checkout & Order Tracking State
   const [checkoutModalOpen, setCheckoutModalOpen] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [checkoutError, setCheckoutError] = useState("")
   const [paymentMethod, setPaymentMethod] = useState("UPI")
+  const [deliverySlots, setDeliverySlots] = useState([])
+  const [deliverySlotsLoading, setDeliverySlotsLoading] = useState(false)
+  const [selectedDeliverySlot, setSelectedDeliverySlot] = useState(null)
   const [activeOrder, setActiveOrder] = useState(null)
   const [trackingModalOpen, setTrackingModalOpen] = useState(false)
   const [cancelLoading, setCancelLoading] = useState(false)
-
-  // Delivery Slot Selection State
-  const [slotTypeMode, setSlotTypeMode] = useState("EXPRESS") // "EXPRESS" (Fast Delivery) | "STANDARD" (Schedule a Slot)
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0])
-  const [availableSlots, setAvailableSlots] = useState([])
-  const [slotsLoading, setSlotsLoading] = useState(false)
-  const [selectedSlot, setSelectedSlot] = useState(null)
-
-  // Drawer Accordion Expansion States (Instamart Pattern)
-  const [deliveryPreferenceExpanded, setDeliveryPreferenceExpanded] = useState(false)
-  const [paymentMethodExpanded, setPaymentMethodExpanded] = useState(false)
-  const [billDetailsExpanded, setBillDetailsExpanded] = useState(false)
 
   // Delivery Address & Location
   const [deliveryAddress, setDeliveryAddress] = useState("Hosur, Tamil Nadu")
@@ -492,99 +479,11 @@ export function MarketplacePage() {
     return getCategoryPathFromTree(categoryTree, currentCategorySlug)
   }, [categoryTree, currentCategorySlug, activeCategoryNode])
 
-  // Primary warehouse ID for delivery slots (v1 limitation: for multi-warehouse orders, delivery slot is resolved against primary/first warehouse group)
   const primaryWarehouseId = useMemo(() => {
-    if (cart?.warehouse_groups?.length > 0) {
-      return cart.warehouse_groups[0].warehouse_id
-    }
-    const itemWithWh = cart?.items?.find((it) => it.warehouse_id !== null && it.warehouse_id !== undefined)
-    return itemWithWh?.warehouse_id || null
+    const groupedWarehouse = cart?.warehouse_groups?.[0]?.warehouse_id
+    if (groupedWarehouse !== undefined && groupedWarehouse !== null) return groupedWarehouse
+    return cart?.items?.find((item) => item.warehouse_id !== undefined && item.warehouse_id !== null)?.warehouse_id ?? null
   }, [cart])
-
-  // Slot Date Options (Today + next 3 days)
-  const slotDateOptions = useMemo(() => {
-    const dates = []
-    const today = new Date()
-    for (let i = 0; i < 4; i++) {
-      const d = new Date()
-      d.setDate(today.getDate() + i)
-      const iso = d.toISOString().split("T")[0]
-      let label = ""
-      if (i === 0) label = "Today"
-      else if (i === 1) label = "Tomorrow"
-      else {
-        label = d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })
-      }
-      dates.push({ date: iso, label })
-    }
-    return dates
-  }, [])
-
-  // Fetch Delivery Slots when cart drawer opens or warehouse / date changes
-  useEffect(() => {
-    if (!cartDrawerOpen || !cart?.items?.length) return
-
-    let isMounted = true
-    setSlotsLoading(true)
-
-    fetchMarketplaceDeliverySlots({
-      warehouse_id: primaryWarehouseId,
-      date: selectedDate,
-    })
-      .then((res) => {
-        if (!isMounted) return
-        const rawData = res?.data
-        const slots = Array.isArray(rawData)
-          ? rawData
-          : Array.isArray(rawData?.slots)
-          ? rawData.slots
-          : Array.isArray(rawData?.results)
-          ? rawData.results
-          : []
-        setAvailableSlots(slots)
-
-        // In Fast Delivery mode, auto-pick earliest available EXPRESS slot
-        if (slotTypeMode === "EXPRESS") {
-          const expressSlot = slots.find((s) => s.slot_type === "EXPRESS" && s.available !== false)
-          if (expressSlot) {
-            setSelectedSlot(expressSlot)
-          } else {
-            // Fallback to first available slot if no EXPRESS slot configured
-            const anyAvailable = slots.find((s) => s.available !== false)
-            if (anyAvailable) setSelectedSlot(anyAvailable)
-            else setSelectedSlot(null)
-          }
-        } else {
-          // In STANDARD mode, maintain selected slot if valid, else pick first available STANDARD slot
-          setSelectedSlot((prev) => {
-            if (prev && slots.some((s) => s.id === prev.id && s.available !== false)) {
-              return prev
-            }
-            const firstStandard = slots.find((s) => s.slot_type === "STANDARD" && s.available !== false)
-            return firstStandard || slots.find((s) => s.available !== false) || null
-          })
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to load delivery slots:", err)
-        if (isMounted) setAvailableSlots([])
-      })
-      .finally(() => {
-        if (isMounted) setSlotsLoading(false)
-      })
-
-    return () => {
-      isMounted = false
-    }
-  }, [cartDrawerOpen, primaryWarehouseId, selectedDate, slotTypeMode, cart?.items?.length])
-
-  const handleSwitchSlotMode = (mode) => {
-    setSlotTypeMode(mode)
-    if (mode === "EXPRESS") {
-      const todayIso = new Date().toISOString().split("T")[0]
-      setSelectedDate(todayIso)
-    }
-  }
 
   // Deduplicated / aggregated root categories only (no leaf/child categories) for Instamart sidebar & top pill bar
   const uniqueRootCategories = useMemo(() => {
@@ -724,6 +623,25 @@ export function MarketplacePage() {
       })
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    setBasketsLoading(true)
+    fetchMarketplaceBaskets({ page_size: 12 })
+      .then((response) => {
+        if (cancelled) return
+        const payload = response?.data ?? response
+        const results = Array.isArray(payload) ? payload : (payload?.results || [])
+        setBaskets(Array.isArray(results) ? results : [])
+      })
+      .catch(() => {
+        if (!cancelled) setBaskets([])
+      })
+      .finally(() => {
+        if (!cancelled) setBasketsLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [])
+
   // Refetch products when category, seller, or debounced search changes
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -801,22 +719,34 @@ export function MarketplacePage() {
     }
   }
 
-  // Load Baskets on mount
-  useEffect(() => {
-    setBasketsLoading(true)
-    fetchMarketplaceBaskets({ page_size: 20 })
-      .then((res) => {
-        const raw = res?.results || res?.data?.results || (Array.isArray(res?.data) ? res.data : null) || (Array.isArray(res) ? res : [])
-        setBaskets(Array.isArray(raw) ? raw : [])
-      })
-      .catch(() => setBaskets([]))
-      .finally(() => setBasketsLoading(false))
-  }, [])
-
   useEffect(() => {
     reloadCart()
     reloadActiveOrder()
   }, [user])
+
+  useEffect(() => {
+    if (!cartDrawerOpen || !user || !cart?.items?.length) return
+    let cancelled = false
+    setDeliverySlotsLoading(true)
+    const date = new Date().toLocaleDateString("en-CA")
+    fetchMarketplaceDeliverySlots({ warehouse_id: primaryWarehouseId, date })
+      .then((response) => {
+        if (cancelled) return
+        const payload = response?.data ?? response
+        const slots = Array.isArray(payload) ? payload : (payload?.slots || payload?.results || [])
+        const available = Array.isArray(slots) ? slots.filter((slot) => slot.available !== false) : []
+        setDeliverySlots(available)
+        setSelectedDeliverySlot((current) => available.find((slot) => slot.id === current?.id) || available[0] || null)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDeliverySlots([])
+          setSelectedDeliverySlot(null)
+        }
+      })
+      .finally(() => { if (!cancelled) setDeliverySlotsLoading(false) })
+    return () => { cancelled = true }
+  }, [cartDrawerOpen, user, primaryWarehouseId, cart?.items?.length])
 
   // Sellers list derived from current products
   const availableSellers = useMemo(() => {
@@ -829,115 +759,7 @@ export function MarketplacePage() {
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }))
   }, [products])
 
-  // Group products by variant_group_id so variant siblings collapse into 1 product card
-  const groupedProducts = useMemo(() => {
-    if (!Array.isArray(products) || products.length === 0) return []
-
-    const groupMap = new Map()
-    const result = []
-
-    for (const prod of products) {
-      const gId = prod.variant_group_id
-      if (gId) {
-        if (!groupMap.has(gId)) {
-          const groupEntry = {
-            isVariantFamily: true,
-            groupId: gId,
-            groupTitle: prod.title,
-            brand: prod.brand,
-            seller_id: prod.seller_id,
-            seller_name: prod.seller_name,
-            variantAttributeName: prod.variant_attribute_name || "Size",
-            variants: [],
-          }
-          groupMap.set(gId, groupEntry)
-          result.push(groupEntry)
-        }
-        const group = groupMap.get(gId)
-
-        const exists = group.variants.some((v) => (v.id || v.seller_product_id) === (prod.id || prod.seller_product_id))
-        if (!exists) {
-          group.variants.push(prod)
-        }
-
-        if (Array.isArray(prod.variants) && prod.variants.length > 0) {
-          for (const v of prod.variants) {
-            const vId = v.id || v.seller_product_id
-            if (vId && !group.variants.some((existing) => (existing.id || existing.seller_product_id) === vId)) {
-              group.variants.push({
-                ...prod,
-                ...v,
-                id: vId,
-                seller_product_id: vId,
-                variant_label: v.variant_label || v.label || v.pack_size || prod.pack_size,
-                pack_size: v.pack_size || v.label || v.variant_label || prod.pack_size,
-                selling_price: v.selling_price ?? v.price ?? prod.selling_price,
-                mrp: v.mrp ?? prod.mrp,
-                in_stock: v.in_stock !== undefined ? Boolean(v.in_stock) : (v.available !== undefined ? Boolean(v.available) : (v.availability !== undefined ? Boolean(v.availability) : true)),
-                available: v.available !== undefined ? Boolean(v.available) : (v.in_stock !== undefined ? Boolean(v.in_stock) : true),
-                variant_group_id: gId,
-                variant_attribute_name: v.variant_attribute_name || prod.variant_attribute_name || group.variantAttributeName,
-              })
-            }
-          }
-        }
-      } else {
-        if (Array.isArray(prod.variants) && prod.variants.length > 1) {
-          const syntheticGroupId = `synth_group_${prod.id}`
-          const groupEntry = {
-            isVariantFamily: true,
-            groupId: syntheticGroupId,
-            groupTitle: prod.title,
-            brand: prod.brand,
-            seller_id: prod.seller_id,
-            seller_name: prod.seller_name,
-            variantAttributeName: prod.variant_attribute_name || "Size",
-            variants: [prod],
-          }
-          for (const v of prod.variants) {
-            const vId = v.id || v.seller_product_id
-            if (vId && !groupEntry.variants.some((existing) => (existing.id || existing.seller_product_id) === vId)) {
-              groupEntry.variants.push({
-                ...prod,
-                ...v,
-                id: vId,
-                seller_product_id: vId,
-                variant_label: v.variant_label || v.label || v.pack_size || prod.pack_size,
-                pack_size: v.pack_size || v.label || v.variant_label || prod.pack_size,
-                selling_price: v.selling_price ?? v.price ?? prod.selling_price,
-                mrp: v.mrp ?? prod.mrp,
-                in_stock: v.in_stock !== undefined ? Boolean(v.in_stock) : (v.available !== undefined ? Boolean(v.available) : true),
-                available: v.available !== undefined ? Boolean(v.available) : true,
-                variant_group_id: syntheticGroupId,
-              })
-            }
-          }
-          result.push(groupEntry)
-        } else {
-          result.push({
-            isVariantFamily: false,
-            product: prod,
-          })
-        }
-      }
-    }
-
-    for (const item of result) {
-      if (item.isVariantFamily) {
-        for (const v of item.variants) {
-          v.variants = item.variants
-          v.variant_group_id = item.groupId
-          v.variant_attribute_name = item.variantAttributeName
-        }
-        const defaultVar = item.variants.find((v) => v.in_stock !== false && v.available !== false) || item.variants[0]
-        item.defaultVariant = defaultVar
-      }
-    }
-
-    return result
-  }, [products])
-
-  // Handle Add To Cart (products only)
+  // Handle Add To Cart
   const handleAddToCart = async (product, quantityDelta = 1) => {
     if (!user) {
       setPendingAddToCart({ product, quantityDelta })
@@ -989,7 +811,6 @@ export function MarketplacePage() {
           current_seller_name: res.current_seller_name || cart?.seller_name || "another seller",
           new_seller_name: product.seller_name || "New Seller",
           pendingProduct: product,
-          pendingBasket: null,
           pendingQty: quantityDelta,
         })
       } else {
@@ -1001,7 +822,6 @@ export function MarketplacePage() {
           current_seller_name: err.body?.current_seller_name || cart?.seller_name || "another seller",
           new_seller_name: product.seller_name || "New Seller",
           pendingProduct: product,
-          pendingBasket: null,
           pendingQty: quantityDelta,
         })
       } else {
@@ -1080,7 +900,7 @@ export function MarketplacePage() {
           pendingCustomOptions: customOptions,
         })
       } else {
-        showToast(res?.message || "Could not add bundle to cart.", "error")
+        showToast(res?.message || "Failed to switch seller.", "error")
       }
     } catch (err) {
       if (err?.body?.error === "seller_mismatch" || err?.status === 409) {
@@ -1117,12 +937,6 @@ export function MarketplacePage() {
     } finally {
       setBasketDetailLoading(false)
     }
-  }
-
-  // Handle Confirm Seller Switch
-  const handleConfirmSellerSwitch = async () => {
-    if (!sellerConflict) return
-    const { pendingProduct, pendingBasket, pendingQty } = sellerConflict
     setCartLoading(true)
     try {
       if (pendingBasket) {
@@ -1159,93 +973,21 @@ export function MarketplacePage() {
           showToast(res?.message || "Failed to switch seller.", "error")
         }
       }
-    } catch (err) {
-      showToast(err?.body?.message || "Failed to switch seller.", "error")
+    } catch (error) {
+      showToast(error?.body?.message || "This offer could not be added to your cart.", "error")
     } finally {
       setCartLoading(false)
     }
   }
 
-  // Handle Selecting a Variant within Product Detail Modal
-  const handleSelectModalVariant = async (variant) => {
-    if (!variant || (variant.id || variant.seller_product_id) === (detailProduct?.id || detailProduct?.seller_product_id)) return
-    const isAvailable = variant.in_stock !== false && variant.available !== false && variant.availability !== false
-    if (!isAvailable) return
-
-    const targetId = variant.id || variant.seller_product_id
-    const currentVariants = detailProduct?.variants || []
-
-    const variantImg = variant.primary_image || (variant.images && variant.images[0]) || ""
-    // Update detailProduct state in place immediately
-    setDetailProduct((prev) => ({
-      ...prev,
-      ...variant,
-      id: targetId,
-      seller_product_id: targetId,
-      title: variant.title || prev?.title,
-      pack_size: variant.pack_size || variant.variant_label || variant.label || prev?.pack_size,
-      unit: variant.unit || prev?.unit,
-      sku: variant.sku || prev?.sku,
-      selling_price: variant.selling_price ?? variant.price ?? prev?.selling_price,
-      mrp: variant.mrp ?? prev?.mrp,
-      in_stock: isAvailable,
-      available: isAvailable,
-      primary_image: variantImg || prev?.primary_image,
-      images: (variant.images && variant.images.length > 0) ? variant.images : (variantImg ? [variantImg] : prev?.images),
-      description: variant.description || prev?.description,
-      variant_label: variant.variant_label || variant.label || prev?.variant_label,
-      variants: currentVariants,
-    }))
-
-    // Keep grid card in sync with this selection
-    const gId = detailProduct?.variant_group_id || variant.variant_group_id
-    if (gId) {
-      setSelectedVariantByGroup((prev) => ({ ...prev, [gId]: targetId }))
-    }
-
-    // Refresh full detail for the newly selected variant if possible
-    try {
-      const res = await fetchMarketplaceProductDetail(targetId)
-      const data = res?.data || (res?.id ? res : null)
-      if (data) {
-        setDetailProduct((prev) => {
-          if ((prev?.id || prev?.seller_product_id) !== targetId) return prev
-          return {
-            ...prev,
-            ...data,
-            primary_image: data.primary_image || (data.images && data.images[0]) || variantImg || prev?.primary_image,
-            variants: (prev?.variants && prev.variants.length > 0) ? prev.variants : (data.variants || currentVariants),
-          }
-        })
-      }
-    } catch (err) {
-      console.warn("Failed to fetch variant details:", err)
-    }
-  }
-
   // Handle Product Card Click (Open detail)
-  const handleOpenDetail = async (prod, familyVariants = null) => {
-    const allVariants = familyVariants || prod.variants || (prod.variant_group_id ? groupedProducts.find((g) => g.isVariantFamily && g.groupId === prod.variant_group_id)?.variants : null) || []
-    const initialDetail = {
-      ...prod,
-      variants: allVariants && allVariants.length > 0 ? allVariants : (prod.variants || [])
-    }
-    setIsDescExpanded(false)
-    setDetailProduct(initialDetail)
+  const handleOpenDetail = async (prod) => {
+    setDetailProduct(prod)
     setDetailLoading(true)
     try {
-      const res = await fetchMarketplaceProductDetail(prod.id || prod.seller_product_id)
-      const data = res?.data || (res?.id ? res : null)
-      if (data) {
-        setDetailProduct((prev) => {
-          const mergedVariants = (data.variants && data.variants.length > 0)
-            ? data.variants
-            : (prev?.variants && prev.variants.length > 0 ? prev.variants : allVariants)
-          return {
-            ...data,
-            variants: mergedVariants,
-          }
-        })
+      const res = await fetchMarketplaceProductDetail(prod.id)
+      if (res?.data) {
+        setDetailProduct(res.data)
       }
     } catch (err) {
       console.error("Failed to fetch product details:", err)
@@ -1254,7 +996,7 @@ export function MarketplacePage() {
     }
   }
 
-  // Handle Checkout Order via UPI (Razorpay) or Cash on Delivery (COD)
+  // Handle Checkout Order (COD or Razorpay UPI)
   const handleProceedToCheckout = async () => {
     if (cart.items.length === 0) return
     setCheckoutError("")
@@ -1270,9 +1012,9 @@ export function MarketplacePage() {
           customer_email: user?.email || "",
           payment_method: "COD",
           fulfilment_type: "DELIVERY",
-          delivery_slot_id: selectedSlot?.id || null,
-          delivery_slot_label: selectedSlot?.label || "",
-          delivery_date: selectedDate || null,
+          delivery_slot: selectedDeliverySlot?.label || "",
+          delivery_slot_id: selectedDeliverySlot?.id || null,
+          delivery_date: selectedDeliverySlot ? new Date().toLocaleDateString("en-CA") : null,
         })
 
         if (res?.success && res?.data) {
@@ -1294,7 +1036,9 @@ export function MarketplacePage() {
       return
     }
 
-    // Option B: UPI (Razorpay) Flow
+    // Option B: online payment. The backend returns the configured provider;
+    // the browser must still submit its server-issued completion payload for
+    // authoritative verification before an order is created.
     try {
       // Step 1: Initiate Payment Intent on backend
       const intentRes = await initiateMarketplacePayment({
@@ -1304,9 +1048,9 @@ export function MarketplacePage() {
         customer_email: user?.email || "",
         payment_method: "UPI",
         fulfilment_type: "DELIVERY",
-        delivery_slot_id: selectedSlot?.id || null,
-        delivery_slot_label: selectedSlot?.label || "",
-        delivery_date: selectedDate || null,
+        delivery_slot: selectedDeliverySlot?.label || "",
+        delivery_slot_id: selectedDeliverySlot?.id || null,
+        delivery_date: selectedDeliverySlot ? new Date().toLocaleDateString("en-CA") : null,
       })
 
       if (!intentRes?.success || !intentRes?.data) {
@@ -1317,12 +1061,18 @@ export function MarketplacePage() {
 
       const intentData = intentRes.data
 
-      // If sandbox fallback mode is active (no keys configured on backend)
-      if (intentData.sandbox_fallback) {
+      if (intentData.provider === "paytm_mock") {
+        const approved = window.confirm(
+          "Paytm MOCK payment\n\nThis is a local/test payment only. No money will be collected. Continue to place the order?"
+        )
+        if (!approved) {
+          setCheckoutLoading(false)
+          return
+        }
         const verifyRes = await verifyMarketplacePayment({
-          razorpay_order_id: intentData.razorpay_order_id,
-          razorpay_payment_id: `pay_mock_${Date.now()}`,
-          razorpay_signature: "sandbox_mock_signature",
+          order_id: intentData.order_id,
+          transaction_id: intentData.transaction_id,
+          signature: intentData.signature,
         })
         if (verifyRes?.success && verifyRes?.data) {
           setActiveOrder(verifyRes.data)
@@ -1333,6 +1083,12 @@ export function MarketplacePage() {
         } else {
           setCheckoutError(verifyRes?.message || "Order verification failed.")
         }
+        setCheckoutLoading(false)
+        return
+      }
+
+      if (intentData.provider === "paytm") {
+        setCheckoutError("Paytm merchant checkout will be enabled once the merchant account and CheckoutJS configuration are supplied.")
         setCheckoutLoading(false)
         return
       }
@@ -1352,7 +1108,7 @@ export function MarketplacePage() {
         currency: intentData.currency || "INR",
         name: intentData.name || "Sevo Mart",
         description: intentData.description || "Sevo Grocery Marketplace Order",
-        order_id: intentData.razorpay_order_id,
+        order_id: intentData.order_id || intentData.razorpay_order_id,
         prefill: intentData.prefill || {
           name: user?.name || "",
           email: user?.email || "",
@@ -1379,9 +1135,9 @@ export function MarketplacePage() {
           try {
             // Step 3: Authoritative HMAC signature verification on backend
             const verifyRes = await verifyMarketplacePayment({
-              razorpay_order_id: paymentResponse.razorpay_order_id,
-              razorpay_payment_id: paymentResponse.razorpay_payment_id,
-              razorpay_signature: paymentResponse.razorpay_signature,
+              order_id: paymentResponse.razorpay_order_id,
+              transaction_id: paymentResponse.razorpay_payment_id,
+              signature: paymentResponse.razorpay_signature,
             })
 
             if (verifyRes?.success && verifyRes?.data) {
@@ -1402,7 +1158,6 @@ export function MarketplacePage() {
         },
         modal: {
           ondismiss: () => {
-            // Customer closed popup without paying - leave cart untouched
             setCheckoutLoading(false)
           },
         },
@@ -1547,16 +1302,6 @@ export function MarketplacePage() {
                 >
                   Sign In
                 </button>
-              )}
-              {user && (
-                <Link
-                  to={routes.account_bookings}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-colors cursor-pointer"
-                  title="My Orders"
-                >
-                  <Package className="w-4 h-4" />
-                  <span className="hidden sm:inline">Orders</span>
-                </Link>
               )}
               <button
                 type="button"
@@ -1796,6 +1541,46 @@ export function MarketplacePage() {
                 )}
               </div>
 
+              {(currentCategorySlug === "all" && !searchQuery && (basketsLoading || baskets.length > 0)) && (
+                <section className="mb-6 rounded-2xl border border-violet-100 bg-violet-50/60 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-black text-slate-900">Seller combo offers</h3>
+                      <p className="text-xs text-slate-500">Curated bundles from verified local stores</p>
+                    </div>
+                    <Boxes className="h-5 w-5 text-violet-600" />
+                  </div>
+                  {basketsLoading ? (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      {[0, 1, 2].map((index) => <div key={index} className="h-28 animate-pulse rounded-xl bg-white" />)}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      {baskets.map((basket) => (
+                        <article key={basket.id} className="rounded-xl border border-violet-100 bg-white p-3 shadow-sm">
+                          <div className="flex gap-3">
+                            {basket.primary_image ? (
+                              <img src={basket.primary_image} alt="" className="h-14 w-14 rounded-lg bg-slate-50 object-cover" />
+                            ) : (
+                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700"><Boxes className="h-6 w-6" /></div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <h4 className="truncate text-sm font-extrabold text-slate-900">{basket.title}</h4>
+                              <p className="mt-0.5 line-clamp-2 text-[11px] text-slate-500">{basket.description || `${basket.item_count || 0} items`}</p>
+                              <p className="mt-1 text-sm font-black text-slate-900">₹{basket.bundle_price}</p>
+                            </div>
+                          </div>
+                          <button type="button" onClick={() => handleAddBasketToCart(basket)} disabled={cartLoading || basket.in_stock === false}
+                            className="mt-3 w-full rounded-lg bg-violet-600 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50">
+                            {basket.in_stock === false ? "Unavailable" : "Add bundle"}
+                          </button>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
+
               {/* Products Header */}
               <div className="flex items-center justify-between mb-6">
                 <div>
@@ -1803,7 +1588,7 @@ export function MarketplacePage() {
                     {activeCategoryNode?.name || (currentCategorySlug === "all" ? "Featured Products" : currentCategorySlug)}
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    {loading ? "Searching inventory..." : `${groupedProducts.length} product(s) found`}
+                    {loading ? "Searching inventory..." : `${products.length} product(s) found`}
                   </p>
                 </div>
 
@@ -1960,7 +1745,6 @@ export function MarketplacePage() {
               )}
 
               {/* Loading Skeletons */}
-
               {loading && (
                 <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                   {[...Array(8)].map((_, i) => (
@@ -1975,7 +1759,7 @@ export function MarketplacePage() {
               )}
 
               {/* Empty State */}
-              {!loading && groupedProducts.length === 0 && (
+              {!loading && products.length === 0 && (
                 <div className="bg-white rounded-3xl p-12 border border-slate-200 text-center max-w-md mx-auto my-12 shadow-sm">
                   <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto text-slate-400 mb-4">
                     <PackageCheck className="w-8 h-8" />
@@ -2000,34 +1784,19 @@ export function MarketplacePage() {
               )}
 
               {/* Product Cards */}
-              {!loading && groupedProducts.length > 0 && (
+              {!loading && products.length > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-                  {groupedProducts.map((item) => {
-                    const isFamily = item.isVariantFamily
-                    let activeProduct = null
-                    let familyVariants = []
-
-                    if (isFamily) {
-                      familyVariants = item.variants || []
-                      const selectedVariantId = selectedVariantByGroup[item.groupId]
-                      activeProduct = familyVariants.find((v) => (v.id || v.seller_product_id) === selectedVariantId) || item.defaultVariant || familyVariants[0]
-                    } else {
-                      activeProduct = item.product
-                    }
-
-                    if (!activeProduct) return null
-
-                    const cartItem = cart.items?.find((i) => i.seller_product_id === (activeProduct.id || activeProduct.seller_product_id))
+                  {products.map((product) => {
+                    const cartItem = cart.items?.find((i) => i.seller_product_id === product.id)
                     const inCartQty = cartItem ? cartItem.quantity : 0
-                    const price = Number(activeProduct.selling_price || 0)
-                    const mrp = Number(activeProduct.mrp || 0)
+                    const price = Number(product.selling_price || 0)
+                    const mrp = Number(product.mrp || 0)
                     const hasDiscount = mrp > price
                     const discountPct = hasDiscount ? Math.round(((mrp - price) / mrp) * 100) : 0
-                    const isAvailable = activeProduct.in_stock !== false && activeProduct.available !== false
 
                     return (
                       <motion.div
-                        key={isFamily ? `group-${item.groupId}` : `prod-${activeProduct.id || activeProduct.seller_product_id}`}
+                        key={product.id}
                         layout
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
@@ -2036,7 +1805,7 @@ export function MarketplacePage() {
                         {/* Top Image & Badge */}
                         <div
                           className="relative p-4 bg-slate-50/50 cursor-pointer overflow-hidden flex items-center justify-center min-h-[160px]"
-                          onClick={() => handleOpenDetail(activeProduct, isFamily ? familyVariants : null)}
+                          onClick={() => handleOpenDetail(product)}
                         >
                           {hasDiscount && (
                             <span className="absolute top-2.5 left-2.5 z-10 bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-sm">
@@ -2045,15 +1814,15 @@ export function MarketplacePage() {
                           )}
 
                           <img
-                            src={activeProduct.primary_image || (activeProduct.images && activeProduct.images[0]) || "/mockups/vegetables_realistic.png"}
-                            alt={activeProduct.title}
+                            src={product.primary_image || "/mockups/vegetables_realistic.png"}
+                            alt={product.title}
                             className="w-full h-32 object-contain group-hover:scale-105 transition-transform duration-300"
                             onError={(e) => {
                               e.target.src = "/mockups/vegetables_realistic.png"
                             }}
                           />
 
-                          {!isAvailable && (
+                          {!product.in_stock && (
                             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center">
                               <span className="bg-rose-600 text-white text-xs font-black px-3 py-1 rounded-lg shadow-sm">
                                 Out of Stock
@@ -2065,60 +1834,26 @@ export function MarketplacePage() {
                         {/* Product Meta */}
                         <div className="p-4 flex-1 flex flex-col justify-between">
                           <div>
-                            {activeProduct.brand && (
+                            {product.brand && (
                               <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                                {activeProduct.brand}
+                                {product.brand}
                               </div>
                             )}
                             <h4
-                              onClick={() => handleOpenDetail(activeProduct, isFamily ? familyVariants : null)}
+                              onClick={() => handleOpenDetail(product)}
                               className="text-sm font-extrabold text-slate-900 line-clamp-2 hover:text-emerald-700 cursor-pointer mt-0.5 leading-snug"
                             >
-                              {activeProduct.title}
+                              {product.title}
                             </h4>
                             <div className="text-xs text-slate-500 mt-1 font-medium">
-                              {activeProduct.pack_size || activeProduct.variant_label || activeProduct.unit || "1 unit"}
+                              {product.pack_size || product.unit || "1 unit"}
                             </div>
-
-                            {/* Variant / Size Chips on Card */}
-                            {isFamily && familyVariants.length > 1 && (
-                              <div className="mt-2.5 flex items-center gap-1.5 flex-wrap" onClick={(e) => e.stopPropagation()}>
-                                {familyVariants.map((v) => {
-                                  const vId = v.id || v.seller_product_id
-                                  const isSelected = vId === (activeProduct.id || activeProduct.seller_product_id)
-                                  const vAvailable = v.in_stock !== false && v.available !== false
-                                  return (
-                                    <button
-                                      key={vId}
-                                      type="button"
-                                      disabled={!vAvailable}
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        if (vAvailable) {
-                                          setSelectedVariantByGroup((prev) => ({ ...prev, [item.groupId]: vId }))
-                                        }
-                                      }}
-                                      title={v.variant_label || v.label || v.pack_size}
-                                      className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all border ${
-                                        !vAvailable
-                                          ? "bg-slate-50 border-slate-200/60 text-slate-400 line-through opacity-50 cursor-not-allowed"
-                                          : isSelected
-                                          ? "bg-emerald-50 border-emerald-500 text-emerald-950 ring-1 ring-emerald-500/20 shadow-2xs font-extrabold"
-                                          : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50 cursor-pointer"
-                                      }`}
-                                    >
-                                      {v.variant_label || v.label || v.pack_size || v.unit}
-                                    </button>
-                                  )
-                                })}
-                              </div>
-                            )}
                           </div>
 
                           {/* Store Tag */}
                           <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1 text-[11px] text-slate-400 font-semibold truncate">
                             <Store className="w-3 h-3 text-slate-400 shrink-0" />
-                            <span className="truncate">{activeProduct.seller_name || "Seller Store"}</span>
+                            <span className="truncate">{product.seller_name || "Seller Store"}</span>
                           </div>
 
                           {/* Price & Add To Cart */}
@@ -2135,11 +1870,11 @@ export function MarketplacePage() {
                             </div>
 
                             {/* Add / Stepper CTA */}
-                            {isAvailable ? (
+                            {product.in_stock ? (
                               inCartQty === 0 ? (
                                 <button
                                   type="button"
-                                  onClick={() => handleAddToCart(activeProduct, 1)}
+                                  onClick={() => handleAddToCart(product, 1)}
                                   className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-600 hover:text-white text-emerald-700 border border-emerald-200 hover:border-emerald-600 rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm active:scale-95"
                                 >
                                   ADD
@@ -2148,7 +1883,7 @@ export function MarketplacePage() {
                                 <div className="flex items-center bg-emerald-600 text-white rounded-xl shadow-sm overflow-hidden">
                                   <button
                                     type="button"
-                                    onClick={() => handleAddToCart(activeProduct, -1)}
+                                    onClick={() => handleAddToCart(product, -1)}
                                     className="px-2 py-1.5 hover:bg-emerald-700 transition-colors"
                                   >
                                     <Minus className="w-3 h-3" />
@@ -2156,7 +1891,7 @@ export function MarketplacePage() {
                                   <span className="px-2 text-xs font-black">{inCartQty}</span>
                                   <button
                                     type="button"
-                                    onClick={() => handleAddToCart(activeProduct, 1)}
+                                    onClick={() => handleAddToCart(product, 1)}
                                     className="px-2 py-1.5 hover:bg-emerald-700 transition-colors"
                                   >
                                     <Plus className="w-3 h-3" />
@@ -2180,150 +1915,81 @@ export function MarketplacePage() {
         </main>
       </div>
 
-      {/* ── Product Detail Modal (Instamart Style) ── */}
+      {/* ── Product Detail Modal ── */}
       <AnimatePresence>
-        {detailProduct && (() => {
-          const detailCartItem = cart?.items?.find(
-            (i) => i.seller_product_id === (detailProduct.id || detailProduct.seller_product_id)
-          )
-          const detailInCartQty = detailCartItem ? detailCartItem.quantity : 0
-          const hasDetailDiscount = detailProduct.mrp && Number(detailProduct.mrp) > Number(detailProduct.selling_price)
-          const detailDiscountPct = hasDetailDiscount
-            ? Math.round(((Number(detailProduct.mrp) - Number(detailProduct.selling_price)) / Number(detailProduct.mrp)) * 100)
-            : 0
-          const displayImg = detailProduct.primary_image || (detailProduct.images && detailProduct.images[0]) || ""
-          const resolvedImg = resolveImageUrl(displayImg) || "/mockups/vegetables_realistic.png"
-
-          return (
-            <div
-              className="fixed inset-0 z-[10005] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm"
-              onClick={() => {
-                setDetailProduct(null)
-                setIsDescExpanded(false)
-              }}
+        {detailProduct && (
+          <div className="fixed inset-0 z-[10005] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 30 }}
+              className="bg-white rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl border border-slate-100 max-h-[90vh] flex flex-col font-sans"
             >
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                transition={{ duration: 0.2 }}
-                onClick={(e) => e.stopPropagation()}
-                className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-100 max-h-[92vh] flex flex-col font-sans"
-              >
-                {/* Modal Header */}
-                <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between shrink-0 bg-slate-50/60">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 rounded-lg">
-                      {detailProduct.brand || "Fresh & Direct"}
-                    </span>
-                    {detailProduct.seller_name && (
-                      <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
-                        <Store className="w-3 h-3 text-slate-400" />
-                        {detailProduct.seller_name}
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDetailProduct(null)
-                      setIsDescExpanded(false)
-                    }}
-                    className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+              <div className="p-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+                <span className="text-xs font-black uppercase tracking-wider text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md">
+                  {detailProduct.brand || "Seller Hub Product"}
+                </span>
+                <button
+                  onClick={() => setDetailProduct(null)}
+                  className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto space-y-6 flex-1">
+                {/* Image Gallery */}
+                <div className="bg-slate-50 rounded-2xl p-6 flex items-center justify-center min-h-[220px]">
+                  <img
+                    src={detailProduct.primary_image || (detailProduct.images && detailProduct.images[0]) || "/mockups/vegetables_realistic.png"}
+                    alt={detailProduct.title}
+                    className="max-h-56 object-contain"
+                  />
                 </div>
 
-                {/* Modal Body */}
-                <div className="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1">
-                  {/* Large Square Hero Image Container (Instamart style) */}
-                  <div className="relative w-full h-64 sm:h-72 bg-gradient-to-b from-slate-50 to-slate-100/60 rounded-2xl p-4 flex items-center justify-center overflow-hidden border border-slate-100">
-                    {hasDetailDiscount && (
-                      <span className="absolute top-3 left-3 z-10 bg-rose-500 text-white text-xs font-black px-2.5 py-1 rounded-lg shadow-sm">
-                        {detailDiscountPct}% OFF
-                      </span>
-                    )}
-                    <img
-                      src={resolvedImg}
-                      alt={detailProduct.title}
-                      className="max-h-56 sm:max-h-64 w-full object-contain hover:scale-105 transition-transform duration-300"
-                      onError={(e) => {
-                        e.target.src = "/mockups/vegetables_realistic.png"
-                      }}
-                    />
-                    {!detailProduct.in_stock && (
-                      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center">
-                        <span className="bg-rose-600 text-white text-xs font-black px-3.5 py-1.5 rounded-xl shadow-md uppercase tracking-wider">
-                          Out of Stock
-                        </span>
-                      </div>
-                    )}
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                    {detailProduct.title}
+                  </h3>
+                  <div className="flex items-center gap-4 mt-2 text-sm text-slate-500">
+                    <span>Pack: <strong>{detailProduct.pack_size || detailProduct.unit}</strong></span>
+                    <span>SKU: <strong className="font-mono text-xs">{detailProduct.sku}</strong></span>
+                    <span>Store: <strong>{detailProduct.seller_name}</strong></span>
                   </div>
+                </div>
 
-                  {/* Title & Subtitle / Pack Info */}
+                {/* Price & Stock */}
+                <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-200">
                   <div>
-                    <h3 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight leading-snug">
-                      {detailProduct.title}
-                    </h3>
-                    <div className="text-xs sm:text-sm font-semibold text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
-                      <span>{detailProduct.pack_size || detailProduct.variant_label || detailProduct.unit || "Standard Pack"}</span>
-                      {detailProduct.sku && (
-                        <>
-                          <span>•</span>
-                          <span className="font-mono text-[11px] text-slate-400">SKU: {detailProduct.sku}</span>
-                        </>
+                    <div className="text-xs text-slate-400 font-bold uppercase tracking-wider">Selling Price</div>
+                    <div className="text-2xl font-black text-slate-900">
+                      ₹{detailProduct.selling_price}
+                      {detailProduct.mrp && Number(detailProduct.mrp) > Number(detailProduct.selling_price) && (
+                        <span className="text-sm font-bold text-slate-400 line-through ml-2">
+                          ₹{detailProduct.mrp}
+                        </span>
                       )}
                     </div>
                   </div>
-
-                  {/* Price & Discount Block */}
-                  <div className="flex items-center justify-between bg-slate-50/80 p-4 rounded-2xl border border-slate-200/80">
-                    <div>
-                      <div className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Price</div>
-                      <div className="flex items-baseline gap-2 mt-0.5">
-                        <span className="text-2xl sm:text-3xl font-black text-slate-900">
-                          ₹{detailProduct.selling_price}
-                        </span>
-                        {hasDetailDiscount && (
-                          <span className="text-sm font-bold text-slate-400 line-through">
-                            ₹{detailProduct.mrp}
-                          </span>
-                        )}
-                        {hasDetailDiscount && (
-                          <span className="bg-emerald-100 text-emerald-800 text-[11px] font-black px-2 py-0.5 rounded-md">
-                            {detailDiscountPct}% OFF
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div>
-                      <span className={`px-3 py-1.5 rounded-xl text-xs font-black ${
-                        detailProduct.in_stock ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
-                      }`}>
-                        {detailProduct.in_stock ? "In Stock" : "Out of Stock"}
-                      </span>
-                    </div>
+                  <div>
+                    <span className={`px-3 py-1 rounded-full text-xs font-black ${
+                      detailProduct.in_stock ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
+                    }`}>
+                      {detailProduct.in_stock ? "In Stock & Verified" : "Out of Stock"}
+                    </span>
                   </div>
+                </div>
 
-                  {/* Variant Options Selector (Instamart Pill Pattern) */}
-                  {Array.isArray(detailProduct.variants) && detailProduct.variants.length > 1 && (
-                    <div className="space-y-2.5 bg-slate-50/60 p-4 rounded-2xl border border-slate-200/80">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black text-slate-700 uppercase tracking-wider">
-                          Select {detailProduct.variant_attribute_name || "Size / Option"}: <strong className="text-emerald-700 ml-1">{detailProduct.variant_label || detailProduct.pack_size || detailProduct.unit || "Selected"}</strong>
-                        </span>
-                        <span className="text-[11px] font-bold text-slate-400 bg-white px-2 py-0.5 rounded-md border border-slate-200">
-                          {detailProduct.variants.length} options
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2.5 flex-wrap pt-1">
-                        {detailProduct.variants.map((v) => {
-                          const vId = v.id || v.seller_product_id
-                          const isSelected = vId === (detailProduct.id || detailProduct.seller_product_id)
-                          const isAvailable = v.in_stock !== false && v.available !== false
-                          const vPrice = v.selling_price ?? v.price
+                {/* Description */}
+                {detailProduct.description && (
+                  <div>
+                    <h5 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Description</h5>
+                    <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">
+                      {detailProduct.description}
+                    </p>
+                  </div>
+                )}
+              </div>
 
                           return (
                             <button
@@ -2758,681 +2424,334 @@ export function MarketplacePage() {
         })()}
       </AnimatePresence>
 
-      {/* ── Cart Drawer (Instamart Style) ── */}
-
+      {/* ── Cart Drawer ── */}
       <AnimatePresence>
-        {cartDrawerOpen && (() => {
-          const totalSavings = (Array.isArray(cart?.items) ? cart.items : []).reduce((acc, item) => {
-            if (item.mrp && Number(item.mrp) > Number(item.unit_price_snapshot)) {
-              return acc + (Number(item.mrp) - Number(item.unit_price_snapshot)) * item.quantity
-            }
-            return acc
-          }, 0)
+        {cartDrawerOpen && (
+          <div className="fixed inset-0 z-[10000] overflow-hidden" onClick={() => setCartDrawerOpen(false)}>
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity" />
 
-          return (
-            <div className="fixed inset-0 z-[10000] overflow-hidden" onClick={() => setCartDrawerOpen(false)}>
-              <div className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity" />
-
-              <motion.div
-                initial={{ x: "100%" }}
-                animate={{ x: 0 }}
-                exit={{ x: "100%" }}
-                transition={{ type: "spring", damping: 30, stiffness: 300 }}
-                onClick={(e) => e.stopPropagation()}
-                className="fixed top-0 right-0 bottom-0 w-full max-w-md bg-slate-50 h-full flex flex-col shadow-2xl overflow-hidden font-sans z-10"
-              >
-                {/* Drawer Header */}
-                <div className="px-5 py-4 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 shadow-xs">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
-                      <ShoppingBag className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
-                        Marketplace Cart
-                        {cart?.items?.length > 0 && (
-                          <span className="text-[11px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
-                            {cart.items.reduce((sum, it) => sum + (it.quantity || 1), 0)} items
-                          </span>
-                        )}
-                      </h3>
-                      {cart?.seller_name && (
-                        <p className="text-[11px] text-slate-500 font-semibold flex items-center gap-1">
-                          <Store className="w-3 h-3 text-slate-400" /> Store: {cart.seller_name}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setCartDrawerOpen(false)}
-                    className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Delivery ETA Banner (Instamart Prominent Promise) */}
-                {cart?.items?.length > 0 && (
-                  <div className={`px-5 py-2.5 flex items-center justify-between text-xs font-bold shrink-0 shadow-inner ${
-                    slotTypeMode === "EXPRESS"
-                      ? "bg-emerald-600 text-white"
-                      : "bg-emerald-800 text-white"
-                  }`}>
-                    <div className="flex items-center gap-2 min-w-0">
-                      {slotTypeMode === "EXPRESS" ? (
-                        <Zap className="w-4 h-4 fill-amber-300 text-amber-300 shrink-0" />
-                      ) : (
-                        <Clock className="w-4 h-4 text-emerald-200 shrink-0" />
-                      )}
-                      <span className="truncate">
-                        {slotTypeMode === "EXPRESS"
-                          ? (selectedSlot?.label ? `Delivery in 25-30 mins · ${selectedSlot.label}` : "Delivery in 25-30 mins")
-                          : `Scheduled for ${selectedSlot?.label || (selectedDate === new Date().toISOString().split("T")[0] ? "Today" : selectedDate)}`}
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-black uppercase tracking-wider bg-black/20 px-2 py-0.5 rounded shrink-0">
-                      {slotTypeMode === "EXPRESS" ? "Express" : "Scheduled"}
-                    </span>
-                  </div>
-                )}
-
-                {/* Drawer Body / Scrollable Area */}
-                <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5 bg-slate-50">
-                  {(!cart?.items || cart.items.length === 0) ? (
-                    <div className="text-center py-20 px-6 flex flex-col items-center justify-center">
-                      <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-4 border border-emerald-100 shadow-xs">
-                        <ShoppingBag className="w-9 h-9" />
-                      </div>
-                      <h4 className="font-black text-slate-900 text-base">Your cart is empty</h4>
-                      <p className="text-xs text-slate-500 mt-1 max-w-xs leading-relaxed">
-                        Explore fresh groceries, daily essentials, and bundle deals to fill your cart.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => setCartDrawerOpen(false)}
-                        className="mt-6 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
-                      >
-                        Continue Shopping
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      {/* Multi-Warehouse Split Warning Notice */}
-                      {cart?.multi_warehouse_notice && (
-                        <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs flex items-start gap-2.5">
-                          <Truck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                          <div>
-                            <div className="font-bold">Multi-Warehouse Delivery</div>
-                            <div className="text-[11px] text-amber-800 mt-0.5">{cart.multi_warehouse_notice}</div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Flattened Continuous Items List (Grouped by Warehouse or Single Panel) */}
-                      {Array.isArray(cart?.warehouse_groups) && cart.warehouse_groups.length > 0 ? (
-                        cart.warehouse_groups.map((group, gIdx) => (
-                          <div key={group.warehouse_id || gIdx} className="space-y-2">
-                            <div className="flex items-center justify-between px-1 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
-                              <span className="flex items-center gap-1.5">
-                                <Store className="w-3.5 h-3.5 text-emerald-600" />
-                                {group.warehouse_name || "Warehouse"}
-                              </span>
-                              <span className="text-[10px] text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-md font-bold">
-                                1 Consolidated Delivery
-                              </span>
-                            </div>
-
-                            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs divide-y divide-slate-100 overflow-hidden px-4">
-                              {group.items.map((item) => (
-                                <div key={item.id} className="py-3 flex items-center gap-3">
-                                  {/* Thumbnail */}
-                                  {item.basket_id ? (
-                                    <div className="w-12 h-12 bg-violet-50 rounded-xl flex items-center justify-center shrink-0 border border-violet-100">
-                                      <Boxes className="w-5 h-5 text-violet-500" />
-                                    </div>
-                                  ) : (
-                                    <img
-                                      src={resolveImageUrl(item.product_image) || "/mockups/vegetables_realistic.png"}
-                                      alt={item.product_title}
-                                      className="w-12 h-12 object-contain bg-slate-50 rounded-xl p-1 shrink-0 border border-slate-100"
-                                      onError={(e) => { e.target.src = "/mockups/vegetables_realistic.png" }}
-                                    />
-                                  )}
-
-                                  {/* Middle details */}
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-1.5 mb-0.5">
-                                      {item.basket_id && (
-                                        <span className="text-[9px] font-black uppercase tracking-wider text-violet-700 bg-violet-100 px-1.5 py-0.5 rounded">
-                                          BUNDLE
-                                        </span>
-                                      )}
-                                      <h4 className="text-xs font-bold text-slate-900 truncate">
-                                        {item.basket_title || item.product_title}
-                                      </h4>
-                                    </div>
-                                    <div className="text-[11px] text-slate-500 font-medium truncate">
-                                      {item.basket_id ? `Bundle · ₹${item.unit_price_snapshot}` : `${item.pack_size || item.unit} • ₹${item.unit_price_snapshot}`}
-                                    </div>
-                                    <div className="text-xs font-black text-slate-900 mt-0.5">
-                                      ₹{item.line_amount}
-                                    </div>
-                                  </div>
-
-                                  {/* Stepper */}
-                                  <div className={`flex items-center rounded-xl overflow-hidden shrink-0 border ${
-                                    item.basket_id ? "bg-violet-50 border-violet-200 text-violet-800" : "bg-emerald-50/70 border-emerald-200 text-emerald-800"
-                                  }`}>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        if (item.quantity === 1) {
-                                          removeMarketplaceCartItem(item.id).then(reloadCart)
-                                        } else {
-                                          updateMarketplaceCartItem(item.id, { quantity: item.quantity - 1 }).then(reloadCart)
-                                        }
-                                      }}
-                                      className={`p-1.5 transition-colors cursor-pointer ${item.basket_id ? "hover:bg-violet-100" : "hover:bg-emerald-100"}`}
-                                      aria-label="Decrease quantity"
-                                    >
-                                      <Minus className="w-3.5 h-3.5" />
-                                    </button>
-                                    <span className="px-2 text-xs font-black min-w-[20px] text-center">
-                                      {item.quantity}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        updateMarketplaceCartItem(item.id, { quantity: item.quantity + 1 }).then(reloadCart)
-                                      }}
-                                      className={`p-1.5 transition-colors cursor-pointer ${item.basket_id ? "hover:bg-violet-100" : "hover:bg-emerald-100"}`}
-                                      aria-label="Increase quantity"
-                                    >
-                                      <Plus className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs divide-y divide-slate-100 overflow-hidden px-4">
-                          {cart.items.map((item) => (
-                            <div key={item.id} className="py-3 flex items-center gap-3">
-                              {/* Thumbnail */}
-                              {item.basket_id ? (
-                                <div className="w-12 h-12 bg-violet-50 rounded-xl flex items-center justify-center shrink-0 border border-violet-100">
-                                  <Boxes className="w-5 h-5 text-violet-500" />
-                                </div>
-                              ) : (
-                                <img
-                                  src={resolveImageUrl(item.product_image) || "/mockups/vegetables_realistic.png"}
-                                  alt={item.product_title}
-                                  className="w-12 h-12 object-contain bg-slate-50 rounded-xl p-1 shrink-0 border border-slate-100"
-                                  onError={(e) => { e.target.src = "/mockups/vegetables_realistic.png" }}
-                                />
-                              )}
-
-                              {/* Middle details */}
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1.5 mb-0.5">
-                                  {item.basket_id && (
-                                    <span className="text-[9px] font-black uppercase tracking-wider text-violet-700 bg-violet-100 px-1.5 py-0.5 rounded">
-                                      BUNDLE
-                                    </span>
-                                  )}
-                                  <h4 className="text-xs font-bold text-slate-900 truncate">
-                                    {item.basket_title || item.product_title}
-                                  </h4>
-                                </div>
-                                <div className="text-[11px] text-slate-500 font-medium truncate">
-                                  {item.basket_id ? `Bundle · ₹${item.unit_price_snapshot}` : `${item.pack_size || item.unit} • ₹${item.unit_price_snapshot}`}
-                                </div>
-                                <div className="text-xs font-black text-slate-900 mt-0.5">
-                                  ₹{item.line_amount}
-                                </div>
-                              </div>
-
-                              {/* Stepper */}
-                              <div className={`flex items-center rounded-xl overflow-hidden shrink-0 border ${
-                                item.basket_id ? "bg-violet-50 border-violet-200 text-violet-800" : "bg-emerald-50/70 border-emerald-200 text-emerald-800"
-                              }`}>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (item.quantity === 1) {
-                                      removeMarketplaceCartItem(item.id).then(reloadCart)
-                                    } else {
-                                      updateMarketplaceCartItem(item.id, { quantity: item.quantity - 1 }).then(reloadCart)
-                                    }
-                                  }}
-                                  className={`p-1.5 transition-colors cursor-pointer ${item.basket_id ? "hover:bg-violet-100" : "hover:bg-emerald-100"}`}
-                                  aria-label="Decrease quantity"
-                                >
-                                  <Minus className="w-3.5 h-3.5" />
-                                </button>
-                                <span className="px-2 text-xs font-black min-w-[20px] text-center">
-                                  {item.quantity}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    updateMarketplaceCartItem(item.id, { quantity: item.quantity + 1 }).then(reloadCart)
-                                  }}
-                                  className={`p-1.5 transition-colors cursor-pointer ${item.basket_id ? "hover:bg-violet-100" : "hover:bg-emerald-100"}`}
-                                  aria-label="Increase quantity"
-                                >
-                                  <Plus className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Add more items strip (Instamart style) */}
-                      <button
-                        type="button"
-                        onClick={() => setCartDrawerOpen(false)}
-                        className="w-full py-2.5 px-4 bg-emerald-50/70 hover:bg-emerald-100/80 border border-dashed border-emerald-300 rounded-xl text-emerald-800 text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer group"
-                      >
-                        <div className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center group-hover:scale-110 transition-transform">
-                          <Plus className="w-3 h-3 stroke-[3]" />
-                        </div>
-                        <span>Missed something? <span className="font-black underline underline-offset-2">Add more items</span></span>
-                      </button>
-
-                      {/* Delivery Slot Section (Compact Expandable Row) */}
-                      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-                        <button
-                          type="button"
-                          onClick={() => setDeliveryPreferenceExpanded((prev) => !prev)}
-                          className="w-full p-3.5 flex items-center justify-between text-left hover:bg-slate-50/80 transition-colors cursor-pointer"
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                              slotTypeMode === "EXPRESS" ? "bg-amber-50 text-amber-600 border border-amber-200/60" : "bg-emerald-50 text-emerald-600 border border-emerald-200/60"
-                            }`}>
-                              {slotTypeMode === "EXPRESS" ? <Zap className="w-4 h-4 fill-amber-500 text-amber-500" /> : <Clock className="w-4 h-4" />}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                                Delivery Preference
-                              </div>
-                              <div className="text-xs font-bold text-slate-900 truncate">
-                                {slotTypeMode === "EXPRESS"
-                                  ? `⚡ Fast Delivery ${selectedSlot?.label ? `· ${selectedSlot.label}` : "· Instant"}`
-                                  : `📅 Scheduled · ${selectedSlot?.label || "Select Slot"}`}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0 text-slate-400">
-                            <span className="text-[11px] font-bold text-emerald-600">
-                              {deliveryPreferenceExpanded ? "Close" : "Change"}
-                            </span>
-                            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${deliveryPreferenceExpanded ? "rotate-180 text-slate-600" : ""}`} />
-                          </div>
-                        </button>
-
-                        {deliveryPreferenceExpanded && (
-                          <div className="px-4 pb-4 pt-2 border-t border-slate-100 space-y-3">
-                            <div className="flex items-center justify-between">
-                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                                Select Option
-                              </div>
-                              {slotsLoading && (
-                                <RefreshCw className="w-3.5 h-3.5 text-emerald-600 animate-spin" />
-                              )}
-                            </div>
-
-                            {/* Mode Toggle: Fast Delivery vs Schedule a Slot */}
-                            <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100/80 rounded-xl">
-                              <button
-                                type="button"
-                                onClick={() => handleSwitchSlotMode("EXPRESS")}
-                                className={`py-2 px-2.5 rounded-lg text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                                  slotTypeMode === "EXPRESS"
-                                    ? "bg-white text-emerald-800 shadow-xs ring-1 ring-slate-200/60"
-                                    : "text-slate-600 hover:text-slate-900"
-                                }`}
-                              >
-                                <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />
-                                <span>Fast Delivery</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => handleSwitchSlotMode("STANDARD")}
-                                className={`py-2 px-2.5 rounded-lg text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                                  slotTypeMode === "STANDARD"
-                                    ? "bg-white text-emerald-800 shadow-xs ring-1 ring-slate-200/60"
-                                    : "text-slate-600 hover:text-slate-900"
-                                }`}
-                              >
-                                <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                                <span>Schedule a Slot</span>
-                              </button>
-                            </div>
-
-                            {/* Fast Delivery View */}
-                            {slotTypeMode === "EXPRESS" && (
-                              <div className="space-y-2">
-                                {selectedSlot ? (
-                                  <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-black shrink-0">
-                                        <Check className="w-3.5 h-3.5 stroke-[3]" />
-                                      </div>
-                                      <div>
-                                        <div className="text-xs font-black text-emerald-950">
-                                          {selectedSlot.label}
-                                        </div>
-                                        <div className="text-[10px] text-emerald-700 font-medium">
-                                          Earliest express dispatch for today
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-200/70 text-emerald-900 px-2 py-0.5 rounded-md shrink-0">
-                                      Express
-                                    </span>
-                                  </div>
-                                ) : !slotsLoading ? (
-                                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 text-xs flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                      <Truck className="w-4 h-4 text-emerald-600 shrink-0" />
-                                      <div>
-                                        <div className="font-bold text-slate-900">Standard Delivery</div>
-                                        <div className="text-[10px] text-slate-500">Express slots not configured — standard dispatch will be used</div>
-                                      </div>
-                                    </div>
-                                    <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md shrink-0">
-                                      Standard
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <div className="py-4 text-center text-xs text-slate-400 font-medium">
-                                    Checking express availability...
-                                  </div>
-                                )}
-                              </div>
-                            )}
-
-                            {/* Schedule a Slot View */}
-                            {slotTypeMode === "STANDARD" && (
-                              <div className="space-y-3 pt-1">
-                                {/* Date Strip */}
-                                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                                  {slotDateOptions.map((opt) => {
-                                    const isDateSelected = selectedDate === opt.date
-                                    return (
-                                      <button
-                                        key={opt.date}
-                                        type="button"
-                                        onClick={() => setSelectedDate(opt.date)}
-                                        className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all border cursor-pointer ${
-                                          isDateSelected
-                                            ? "bg-slate-900 text-white border-slate-900 shadow-xs"
-                                            : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
-                                        }`}
-                                      >
-                                        {opt.label}
-                                      </button>
-                                    )
-                                  })}
-                                </div>
-
-                                {/* Slots Grid */}
-                                <div className="space-y-1.5">
-                                  {slotsLoading ? (
-                                    <div className="py-4 text-center text-xs text-slate-400 font-medium flex items-center justify-center gap-2">
-                                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-slate-400" />
-                                      <span>Loading available slots...</span>
-                                    </div>
-                                  ) : availableSlots.length === 0 ? (
-                                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 text-xs flex items-center justify-between">
-                                      <div className="flex items-center gap-2">
-                                        <Truck className="w-4 h-4 text-emerald-600 shrink-0" />
-                                        <div>
-                                          <div className="font-bold text-slate-900">Standard Delivery</div>
-                                          <div className="text-[10px] text-slate-500">Regular dispatch applied for this date</div>
-                                        </div>
-                                      </div>
-                                      <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md shrink-0">
-                                        Standard
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                      {availableSlots.map((slot) => {
-                                        const isSelected = selectedSlot?.id === slot.id
-                                        const isAvailable = slot.available !== false
-                                        return (
-                                          <button
-                                            key={slot.id}
-                                            type="button"
-                                            disabled={!isAvailable}
-                                            onClick={() => isAvailable && setSelectedSlot(slot)}
-                                            className={`p-2.5 rounded-xl border text-left flex items-center justify-between transition-all ${
-                                              !isAvailable
-                                                ? "bg-slate-50 border-slate-200/60 opacity-50 cursor-not-allowed text-slate-400"
-                                                : isSelected
-                                                ? "bg-emerald-50 border-emerald-500 text-emerald-950 ring-2 ring-emerald-500/20 shadow-xs cursor-pointer font-bold"
-                                                : "bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50/60 cursor-pointer"
-                                            }`}
-                                          >
-                                            <div className="min-w-0 pr-1">
-                                              <div className="text-xs font-black truncate">
-                                                {slot.label}
-                                              </div>
-                                              {slot.start_time && slot.end_time && (
-                                                <div className="text-[10px] text-slate-400">
-                                                  {slot.start_time.slice(0, 5)} - {slot.end_time.slice(0, 5)}
-                                                </div>
-                                              )}
-                                            </div>
-                                            {isSelected && (
-                                              <Check className="w-4 h-4 text-emerald-600 shrink-0 stroke-[3]" />
-                                            )}
-                                          </button>
-                                        )
-                                      })}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Delivery Address Section */}
-                      <div className="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-xs flex items-start gap-2.5">
-                        <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 border border-slate-200/60 mt-0.5">
-                          <MapPin className="w-4 h-4 text-emerald-600" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                            Delivery Address
-                          </div>
-                          <p className="text-xs text-slate-700 font-semibold leading-snug line-clamp-2 mt-0.5">
-                            {deliveryAddress}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Payment Method Selector (Compact Expandable Row) */}
-                      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-                        <button
-                          type="button"
-                          onClick={() => setPaymentMethodExpanded((prev) => !prev)}
-                          className="w-full p-3.5 flex items-center justify-between text-left hover:bg-slate-50/80 transition-colors cursor-pointer"
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                              paymentMethod === "UPI" ? "bg-emerald-50 text-emerald-600 border border-emerald-200/60" : "bg-amber-50 text-amber-600 border border-amber-200/60"
-                            }`}>
-                              {paymentMethod === "UPI" ? <CreditCard className="w-4 h-4" /> : <Banknote className="w-4 h-4" />}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                                Payment Method
-                              </div>
-                              <div className="text-xs font-bold text-slate-900 truncate">
-                                {paymentMethod === "UPI" ? "💳 UPI · Instant pay via QR/App" : "💵 Cash on Delivery · Pay at doorstep"}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0 text-slate-400">
-                            <span className="text-[11px] font-bold text-emerald-600">
-                              {paymentMethodExpanded ? "Close" : "Change"}
-                            </span>
-                            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${paymentMethodExpanded ? "rotate-180 text-slate-600" : ""}`} />
-                          </div>
-                        </button>
-
-                        {paymentMethodExpanded && (
-                          <div className="px-4 pb-4 pt-2 border-t border-slate-100">
-                            <div className="grid grid-cols-2 gap-2 mt-1">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setPaymentMethod("UPI")
-                                  setPaymentMethodExpanded(false)
-                                }}
-                                className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
-                                  paymentMethod === "UPI"
-                                    ? "bg-emerald-50/80 border-emerald-500 text-emerald-950 ring-2 ring-emerald-500/20"
-                                    : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100/70"
-                                }`}
-                              >
-                                <div className="flex items-center justify-between mb-1">
-                                  <div className="flex items-center gap-1.5">
-                                    <CreditCard className="w-3.5 h-3.5 text-emerald-600" />
-                                    <span className="font-extrabold text-xs text-slate-900">UPI</span>
-                                  </div>
-                                  <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-                                    paymentMethod === "UPI" ? "border-emerald-600 bg-emerald-600" : "border-slate-300 bg-white"
-                                  }`}>
-                                    {paymentMethod === "UPI" && <span className="w-1.5 h-1.5 rounded-full bg-white block" />}
-                                  </span>
-                                </div>
-                                <span className="text-[10px] text-slate-500 font-medium">Instant pay via QR/App</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setPaymentMethod("COD")
-                                  setPaymentMethodExpanded(false)
-                                }}
-                                className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
-                                  paymentMethod === "COD"
-                                    ? "bg-emerald-50/80 border-emerald-500 text-emerald-950 ring-2 ring-emerald-500/20"
-                                    : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100/70"
-                                }`}
-                              >
-                                <div className="flex items-center justify-between mb-1">
-                                  <div className="flex items-center gap-1.5">
-                                    <Banknote className="w-3.5 h-3.5 text-amber-600" />
-                                    <span className="font-extrabold text-xs text-slate-900">Cash on Delivery</span>
-                                  </div>
-                                  <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-                                    paymentMethod === "COD" ? "border-emerald-600 bg-emerald-600" : "border-slate-300 bg-white"
-                                  }`}>
-                                    {paymentMethod === "COD" && <span className="w-1.5 h-1.5 rounded-full bg-white block" />}
-                                  </span>
-                                </div>
-                                <span className="text-[10px] text-slate-500 font-medium">Pay cash at doorstep</span>
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Bill Summary (Expandable Details) */}
-                      <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                              To Pay
-                            </div>
-                            <div className="text-base font-black text-slate-900">
-                              ₹{cart.subtotal}
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setBillDetailsExpanded((prev) => !prev)}
-                            className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:text-emerald-700 py-1.5 px-3 rounded-xl hover:bg-emerald-50 border border-emerald-200/60 transition-colors cursor-pointer"
-                          >
-                            <span>{billDetailsExpanded ? "Hide bill details" : "View bill details"}</span>
-                            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${billDetailsExpanded ? "rotate-180" : ""}`} />
-                          </button>
-                        </div>
-
-                        {billDetailsExpanded && (
-                          <div className="pt-3 mt-2 border-t border-slate-100 space-y-2 text-xs">
-                            <div className="flex justify-between text-slate-600 font-medium">
-                              <span>Items Subtotal</span>
-                              <span className="font-bold text-slate-900">₹{cart.subtotal}</span>
-                            </div>
-                            <div className="flex justify-between text-slate-600 font-medium">
-                              <span>Delivery Fee</span>
-                              <span className="font-bold text-emerald-600">
-                                {cart?.delivery_count > 1 ? `FREE (${cart.delivery_count} shipments)` : "FREE"}
-                              </span>
-                            </div>
-                            {totalSavings > 0 && (
-                              <div className="flex justify-between text-emerald-700 font-bold bg-emerald-50 px-2.5 py-1.5 rounded-lg text-xs">
-                                <span>You saved on this order</span>
-                                <span>₹{Math.round(totalSavings)}</span>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {checkoutError && (
-                        <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold p-3 rounded-xl flex items-center gap-2">
-                          <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                          <span>{checkoutError}</span>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-
-                {/* Drawer Footer CTA */}
-                {cart?.items?.length > 0 && (
-                  <div className="p-4 bg-white border-t border-slate-200 shrink-0 shadow-lg">
-                    <button
-                      type="button"
-                      disabled={checkoutLoading || (availableSlots.length > 0 && !selectedSlot)}
-                      onClick={handleProceedToCheckout}
-                      className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-2xl text-sm font-black shadow-lg shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      {checkoutLoading ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <>
-                          <span>{paymentMethod === "COD" ? `Place Order (Pay on Delivery) • ₹${cart.subtotal}` : `Place Order • ₹${cart.subtotal}`}</span>
-                          <ChevronRight className="w-4 h-4" />
-                        </>
-                      )}
-                    </button>
-                    {availableSlots.length > 0 && !selectedSlot && (
-                      <p className="text-center text-[11px] text-slate-400 font-medium mt-2">
-                        Please select an available delivery slot to proceed
+            <motion.div
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              onClick={(e) => e.stopPropagation()}
+              className="fixed top-0 right-0 bottom-0 w-full max-w-md bg-[#F8FAFC] h-full flex flex-col shadow-2xl overflow-hidden font-sans z-10"
+            >
+              {/* Drawer Header */}
+              <div className="px-5 py-4 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 shadow-sm">
+                <div className="flex items-center gap-2.5">
+                  <ShoppingBag className="w-5 h-5 text-emerald-600" />
+                  <div>
+                    <h3 className="font-extrabold text-slate-900 text-base">Marketplace Cart</h3>
+                    {cart?.seller_name && (
+                      <p className="text-[11px] text-slate-500 font-semibold flex items-center gap-1">
+                        <Store className="w-3 h-3 text-slate-400" /> Store: {cart.seller_name}
                       </p>
                     )}
                   </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCartDrawerOpen(false)}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Drawer Items List */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                {(!cart?.items || cart.items.length === 0) ? (
+                  <div className="text-center py-16">
+                    <div className="w-16 h-16 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <ShoppingCart className="w-7 h-7" />
+                    </div>
+                    <h4 className="font-black text-slate-800 text-sm">Your cart is empty</h4>
+                    <p className="text-xs text-slate-500 mt-1">Add items from the store to check out</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Multi-Warehouse Split Warning Notice */}
+                    {cart?.multi_warehouse_notice && (
+                      <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs flex items-start gap-2.5">
+                        <Truck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-bold">Multi-Warehouse Delivery</div>
+                          <div className="text-[11px] text-amber-800 mt-0.5">{cart.multi_warehouse_notice}</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Grouped by Warehouse if available */}
+                    {Array.isArray(cart?.warehouse_groups) && cart.warehouse_groups.length > 0 ? (
+                      cart.warehouse_groups.map((group, gIdx) => (
+                        <div key={group.warehouse_id || gIdx} className="space-y-2.5">
+                          <div className="flex items-center justify-between px-1 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+                            <span className="flex items-center gap-1.5">
+                              <Store className="w-3.5 h-3.5 text-emerald-600" />
+                              {group.warehouse_name || "Warehouse"}
+                            </span>
+                            <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md font-bold">
+                              1 Consolidated Delivery
+                            </span>
+                          </div>
+
+                          <div className="space-y-2">
+                            {group.items.map((item) => (
+                              <div
+                                key={item.id}
+                                className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-sm flex items-center gap-3.5"
+                              >
+                                <img
+                                  src={item.product_image || "/mockups/vegetables_realistic.png"}
+                                  alt={item.product_title}
+                                  className="w-14 h-14 object-contain bg-slate-50 rounded-xl p-1 shrink-0"
+                                  onError={(e) => { e.target.src = "/mockups/vegetables_realistic.png" }}
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="text-xs font-extrabold text-slate-900 truncate">
+                                    {item.product_title}
+                                  </h4>
+                                  <div className="text-[11px] text-slate-400 font-medium">
+                                    {item.pack_size || item.unit} • ₹{item.unit_price_snapshot}
+                                  </div>
+                                  {item.seller_name && (
+                                    <div className="text-[10px] text-slate-500 font-bold mt-0.5">
+                                      Seller: <span className="text-slate-700">{item.seller_name}</span>
+                                    </div>
+                                  )}
+                                  <div className="text-xs font-black text-slate-900 mt-1">
+                                    ₹{item.line_amount}
+                                  </div>
+                                </div>
+
+                                {/* Stepper */}
+                                <div className="flex items-center bg-slate-100 rounded-xl overflow-hidden shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (item.quantity === 1) {
+                                        removeMarketplaceCartItem(item.id).then(reloadCart)
+                                      } else {
+                                        updateMarketplaceCartItem(item.id, { quantity: item.quantity - 1 }).then(reloadCart)
+                                      }
+                                    }}
+                                    className="p-1.5 hover:bg-slate-200 text-slate-700 transition-colors"
+                                  >
+                                    <Minus className="w-3.5 h-3.5" />
+                                  </button>
+                                  <span className="px-2 text-xs font-black text-slate-900">
+                                    {item.quantity}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      updateMarketplaceCartItem(item.id, { quantity: item.quantity + 1 }).then(reloadCart)
+                                    }}
+                                    className="p-1.5 hover:bg-slate-200 text-slate-700 transition-colors"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      cart.items.map((item) => (
+                        <div
+                          key={item.id}
+                          className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-sm flex items-center gap-3.5"
+                        >
+                          <img
+                            src={item.product_image || "/mockups/vegetables_realistic.png"}
+                            alt={item.product_title}
+                            className="w-14 h-14 object-contain bg-slate-50 rounded-xl p-1 shrink-0"
+                            onError={(e) => { e.target.src = "/mockups/vegetables_realistic.png" }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-xs font-extrabold text-slate-900 truncate">
+                              {item.product_title}
+                            </h4>
+                            <div className="text-[11px] text-slate-400 font-medium">
+                              {item.pack_size || item.unit} • ₹{item.unit_price_snapshot}
+                            </div>
+                            {item.seller_name && (
+                              <div className="text-[10px] text-slate-500 font-bold mt-0.5">
+                                Seller: <span className="text-slate-700">{item.seller_name}</span>
+                              </div>
+                            )}
+                            <div className="text-xs font-black text-slate-900 mt-1">
+                              ₹{item.line_amount}
+                            </div>
+                          </div>
+
+                          {/* Stepper */}
+                          <div className="flex items-center bg-slate-100 rounded-xl overflow-hidden shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (item.quantity === 1) {
+                                  removeMarketplaceCartItem(item.id).then(reloadCart)
+                                } else {
+                                  updateMarketplaceCartItem(item.id, { quantity: item.quantity - 1 }).then(reloadCart)
+                                }
+                              }}
+                              className="p-1.5 hover:bg-slate-200 text-slate-700 transition-colors"
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+                            <span className="px-2 text-xs font-black text-slate-900">
+                              {item.quantity}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updateMarketplaceCartItem(item.id, { quantity: item.quantity + 1 }).then(reloadCart)
+                              }}
+                              className="p-1.5 hover:bg-slate-200 text-slate-700 transition-colors"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+
+                    {/* Delivery Address Section */}
+                    <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-2">
+                      <div className="text-xs font-black text-slate-400 uppercase tracking-wider">
+                        Delivery Address
+                      </div>
+                      <p className="text-xs text-slate-700 font-medium leading-snug">
+                        {deliveryAddress}
+                      </p>
+                    </div>
+
+                    <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-xs font-black text-slate-400 uppercase tracking-wider">Delivery slot</div>
+                        {deliverySlotsLoading && <RefreshCw className="h-3.5 w-3.5 animate-spin text-emerald-600" />}
+                      </div>
+                      {deliverySlots.length > 0 ? (
+                        <div className="grid grid-cols-2 gap-2">
+                          {deliverySlots.map((slot) => (
+                            <button key={slot.id} type="button" onClick={() => setSelectedDeliverySlot(slot)}
+                              className={`rounded-xl border p-2 text-left text-xs transition-colors ${selectedDeliverySlot?.id === slot.id ? "border-emerald-500 bg-emerald-50 text-emerald-950" : "border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300"}`}>
+                              <span className="block truncate font-extrabold">{slot.label}</span>
+                              {slot.start_time && slot.end_time && <span className="mt-0.5 block text-[10px] text-slate-500">{slot.start_time} – {slot.end_time}</span>}
+                            </button>
+                          ))}
+                        </div>
+                      ) : !deliverySlotsLoading ? (
+                        <p className="text-xs text-slate-500">Delivery timing will be confirmed by the seller.</p>
+                      ) : null}
+                    </div>
+
+                    {/* Bill Summary */}
+                    <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-2.5 text-xs">
+                      <div className="font-black text-slate-900 uppercase tracking-wider text-[11px] mb-2">
+                        Bill Summary
+                      </div>
+                      <div className="flex justify-between text-slate-600 font-medium">
+                        <span>Items Subtotal</span>
+                        <span className="font-bold text-slate-900">₹{cart.subtotal}</span>
+                      </div>
+                      <div className="flex justify-between text-slate-600 font-medium">
+                        <span>Delivery Fee</span>
+                        <span className="font-bold text-emerald-600">
+                          {cart?.delivery_count > 1 ? `FREE (${cart.delivery_count} shipments)` : "FREE"}
+                        </span>
+                      </div>
+                      <div className="pt-2 border-t border-slate-100 flex justify-between text-sm font-black text-slate-900">
+                        <span>To Pay</span>
+                        <span>₹{cart.subtotal}</span>
+                      </div>
+                    </div>
+
+                    {/* Payment Method Selector */}
+                    <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-2.5">
+                      <div className="text-xs font-black text-slate-400 uppercase tracking-wider">
+                        Payment Method
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMethod("UPI")}
+                          className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
+                            paymentMethod === "UPI"
+                              ? "bg-emerald-50/80 border-emerald-500 text-emerald-950 ring-2 ring-emerald-500/20"
+                              : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100/70"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-extrabold text-xs text-slate-900">UPI</span>
+                            <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                              paymentMethod === "UPI" ? "border-emerald-600 bg-emerald-600" : "border-slate-300 bg-white"
+                            }`}>
+                              {paymentMethod === "UPI" && <span className="w-1.5 h-1.5 rounded-full bg-white block" />}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-500 font-medium">Instant pay via QR/App</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMethod("COD")}
+                          className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
+                            paymentMethod === "COD"
+                              ? "bg-emerald-50/80 border-emerald-500 text-emerald-950 ring-2 ring-emerald-500/20"
+                              : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100/70"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-extrabold text-xs text-slate-900">Cash on Delivery</span>
+                            <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                              paymentMethod === "COD" ? "border-emerald-600 bg-emerald-600" : "border-slate-300 bg-white"
+                            }`}>
+                              {paymentMethod === "COD" && <span className="w-1.5 h-1.5 rounded-full bg-white block" />}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-500 font-medium">Pay cash at doorstep</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {checkoutError && (
+                      <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold p-3 rounded-xl flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>{checkoutError}</span>
+                      </div>
+                    )}
+                  </>
                 )}
-              </motion.div>
-            </div>
-          )
-        })()}
+              </div>
+
+              {/* Drawer Footer CTA */}
+              {cart?.items?.length > 0 && (
+                <div className="p-4 bg-white border-t border-slate-200 shrink-0">
+                  <button
+                    type="button"
+                    disabled={checkoutLoading}
+                    onClick={handleProceedToCheckout}
+                    className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-2xl text-sm font-black shadow-lg shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {checkoutLoading ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <span>{paymentMethod === "COD" ? `Place Order (Pay on Delivery) • ₹${cart.subtotal}` : `Place Order • ₹${cart.subtotal}`}</span>
+                        <ChevronRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
 
       {/* ── Mobile Slide-in Category Drawer Modal ── */}
@@ -3778,6 +3097,43 @@ export function MarketplacePage() {
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Persistent Active Order Floating Tracker Pill ── */}
+      <AnimatePresence>
+        {!trackingModalOpen && activeOrder && !["DELIVERED", "CANCELLED"].includes(activeOrder.status) && (
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 30 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 max-w-md w-[calc(100%-2rem)]"
+          >
+            <button
+              type="button"
+              onClick={() => setTrackingModalOpen(true)}
+              className="w-full bg-slate-900/95 hover:bg-slate-900 text-white backdrop-blur-md rounded-2xl p-3.5 shadow-2xl border border-slate-700/60 flex items-center justify-between gap-3 transition-all group cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="relative flex h-2.5 w-2.5 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+                <div className="text-left truncate">
+                  <div className="text-xs font-black truncate">
+                    Order #{activeOrder.order_number} • <span className="text-emerald-400">{activeOrder.status_label || "Active"}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 truncate">
+                    {activeOrder.seller_name || "Marketplace"} • Tap to view live tracking
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 bg-emerald-600 group-hover:bg-emerald-500 text-white text-xs font-extrabold px-3 py-1.5 rounded-xl shrink-0 transition-colors shadow-sm">
+                <span>Track</span>
+                <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+              </div>
+            </button>
+          </motion.div>
         )}
       </AnimatePresence>
 

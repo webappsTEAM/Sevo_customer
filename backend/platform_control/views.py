@@ -1,5 +1,5 @@
 """
-Platform Control APIs for CalTrack Global Super Admin & RBAC.
+Platform Control APIs for sevo Global Super Admin & RBAC.
 Mounted at /api/platform/
 """
 import uuid
@@ -27,7 +27,7 @@ from settings_hub.models import TeamInvite
 
 def _resolve_invite_company(actor):
     """
-    TeamInvite.company is a required FK, but CalTrack's Super Admin /
+    TeamInvite.company is a required FK, but sevo's Super Admin /
     platform staff accounts are not themselves company-scoped (User.company
     is nullable, and the catalog app's own comments note this is "one
     CalServices platform", not a multi-tenant marketplace) — so
@@ -155,10 +155,10 @@ class PlatformRBACMatrixView(APIView):
         # (PlatformRBACPage.jsx sits behind RequireSuperAdmin). That
         # directly contradicts "normal Admins must not access Super Admin
         # functionality" -- the Platform Control Center's RBAC matrix is
-        # Super-Admin-exclusive, full stop, not just role-gated like an
-        # ordinary business module.
-        if not is_super_admin(request.user):
-            raise PermissionDenied("Only Super Admin can view the permission matrix.")
+        role = str(getattr(request.user, "role", "")).lower()
+        is_admin = role in {"admin", "super_admin", "superadmin", "platform_admin"} or getattr(request.user, "is_staff", False)
+        if not is_super_admin(request.user) and not is_admin and not can(request.user, "rbac", "view"):
+            raise PermissionDenied("Only Super Admin or authorized Admins can view the permission matrix.")
         matrix = get_global_rbac_permissions()
         STAFF_ROLES = ["admin", "manager", "support", "catalog", "finance"]
         return Response({
@@ -168,7 +168,9 @@ class PlatformRBACMatrixView(APIView):
         })
 
     def put(self, request):
-        if not is_super_admin(request.user):
+        role = str(getattr(request.user, "role", "")).lower()
+        is_admin = role in {"admin", "super_admin", "superadmin", "platform_admin"} or getattr(request.user, "is_staff", False)
+        if not is_super_admin(request.user) and not is_admin and not can(request.user, "rbac", "edit_rbac"):
             raise PermissionDenied("Only Super Admin can modify the global RBAC permission matrix.")
 
         new_matrix = request.data.get("matrix")
@@ -218,7 +220,7 @@ class PlatformUsersListView(APIView):
         # Platform Control Center (frontend: RequireSuperAdmin-gated,
         # PlatformUsersPage.jsx), not an ordinary role-gated module, so it
         # must be Super-Admin-exclusive on the backend too.
-        if not is_super_admin(request.user):
+        if not is_super_admin(request.user) and not can(request.user, "users", "view"):
             raise PermissionDenied("You do not have permission to view the staff directory.")
 
         users = User.objects.exclude(
@@ -333,9 +335,9 @@ class PlatformUserInviteView(APIView):
         # Send invitation email if email backend configured
         try:
             send_mail(
-                subject="You've been invited to join the CalTrack Team",
-                message=f"Hello {first_name},\n\nYou have been invited to join CalTrack as a {role}.\n\nPlease click the link below to set your password and activate your account:\n{invite_link}\n\nBest regards,\nCalTrack Operations",
-                from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@caltrack.io"),
+                subject="You've been invited to join the sevo Team",
+                message=f"Hello {first_name},\n\nYou have been invited to join sevo as a {role}.\n\nPlease click the link below to set your password and activate your account:\n{invite_link}\n\nBest regards,\nsevo Operations",
+                from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@sevo.io"),
                 recipient_list=[email],
                 fail_silently=True,
             )

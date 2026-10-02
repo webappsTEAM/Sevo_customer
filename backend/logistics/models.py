@@ -5,7 +5,7 @@ Read-mostly catalog for the two Goods & Transport flows (per TL-confirmed scope)
   - Goods Transport  → categories TRUCK, TWO_WHEELER
   - Packers & Movers → category  PACKERS_MOVERS
 
-Deliberately NOT the full CALTRACK_PHASE_14 entity set (Vehicle fleet, Trip,
+Deliberately NOT the full sevo_PHASE_14 entity set (Vehicle fleet, Trip,
 TripStop, Consignment, ManifestItem, EWayBill, InsurancePolicy...). That set
 is ~255 days of work per the architecture doc's own effort table and several
 of its pieces (e-way bill exemption, GST RCM mechanics) are marked [COUNSEL]
@@ -109,7 +109,7 @@ class ServiceTier(models.Model):
     )
     currency = models.CharField(max_length=3, default="INR")
 
-    # GT-B-01: real distance-based pricing, per CALTRACK_PHASE_14
+    # GT-B-01: real distance-based pricing, per sevo_PHASE_14
     # PART H.1 ("Goods Transport - deterministic"):
     #   fare = base_fare + distance_km x per_km_rate
     #        + loading_unloading + additional_stop_charge x (stops - 2)
@@ -155,6 +155,14 @@ class ServiceTier(models.Model):
         validators=[MinValueValidator(Decimal("0.00"))],
         help_text="Charged per stop beyond the standard two (one pickup, one drop).",
     )
+    max_additional_stops = models.PositiveSmallIntegerField(
+        default=3,
+        validators=[MaxValueValidator(10)],
+        help_text=(
+            "Most intermediate stops (beyond one pickup and one drop) a booking "
+            "on this tier may add. Enforced by the server on quote and booking."
+        ),
+    )
     surge_multiplier = models.DecimalField(
         max_digits=4, decimal_places=2, default=1,
         # Bounded on both sides. quote_logistics_fare already treats a
@@ -169,6 +177,19 @@ class ServiceTier(models.Model):
         help_text=(
             "Applied to the whole computed fare. A configurable per-tier value, "
             "not a live demand engine -- time-band/demand surge is its own system."
+        ),
+    )
+    gst_rate = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        validators=[
+            MinValueValidator(Decimal("0.00")),
+            MaxValueValidator(Decimal("100.00")),
+        ],
+        help_text=(
+            "GST already INCLUDED in this tier's fare, as a percentage (18.00 = 18%). "
+            "The fare a customer is quoted and pays does not change; the rate is recorded on "
+            "each quote and the invoice shows the GST component of the total. "
+            "Blank or 0 = no GST line on invoices."
         ),
     )
     minimum_fare = models.DecimalField(
@@ -188,6 +209,15 @@ class ServiceTier(models.Model):
         null=True, blank=True,
         help_text="Configured labor/crew size for relocation tiers. If unset, informational display only."
     )
+    # Light PTL (part-load, advance-booked, per-kg). Admin decides which
+    # vehicle tiers may carry part-load freight; the booking path additionally
+    # refuses two/three-wheeler classes even if this is ticked by mistake
+    # (see service_requests/services/ptl_pricing.py). Off by default, so no
+    # existing tier becomes PTL-bookable until ops opts it in.
+    ptl_eligible = models.BooleanField(
+        default=False, db_default=False,
+        help_text="Allow this vehicle tier for Part Truck Load (per-kg, slot-booked) bookings. 4-wheeler and larger only.",
+    )
 
     includes = models.JSONField(default=list, blank=True)   # value-added inclusions, movers mainly
     icon = models.CharField(max_length=100, blank=True, default="")  # lucide-react icon name used by frontend
@@ -201,11 +231,46 @@ class ServiceTier(models.Model):
     # read-only.
     image = models.CharField(max_length=500, blank=True, default="")
     duration = models.CharField(max_length=50, blank=True, default="")
+    # `order` is this tier's priority: it already governs both display
+    # ordering and, via recommend_vehicles_for_cargo()'s use of the same
+    # queryset ordering, which tier is preferred when more than one fits a
+    # piece of cargo. Admin-configurable (DESCRIPTIVE_FIELDS in
+    # logistics/pricing_admin.py) -- no separate "priority" field is added;
+    # this is that field.
     order = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
 
+    # Round 13 (Final Configurability Pass): optional effective-date window,
+    # matching the "effective dates" configuration the round's spec asks for.
+    # Both null/blank by default so every existing tier keeps being bookable
+    # exactly as before -- this is purely opt-in scheduling. When set, a tier
+    # outside its window is treated as unavailable by
+    # assert_catalog_matches_category() (service_requests/services/
+    # logistics_pricing.py), the same gate that already refuses an inactive
+    # tier -- so quote and booking cannot disagree about whether a
+    # date-scoped tier is currently biddable.
+    effective_from = models.DateField(
+        null=True, blank=True,
+        help_text="Tier is not bookable before this date. Blank = no start restriction.",
+    )
+    effective_to = models.DateField(
+        null=True, blank=True,
+        help_text="Tier is not bookable after this date (inclusive). Blank = no end restriction.",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def is_effective(self, as_of=None):
+        """True when `as_of` (default: today) falls inside this tier's
+        optional effective-date window. Unset bounds never restrict."""
+        import datetime as _dt
+        today = as_of or _dt.date.today()
+        if self.effective_from and today < self.effective_from:
+            return False
+        if self.effective_to and today > self.effective_to:
+            return False
+        return True
 
     class Meta:
         ordering = ["category", "city", "order", "name"]
@@ -220,7 +285,7 @@ class ServiceTier(models.Model):
         Authoritative vehicle classification string.
         SEVO P0 Rule: No hardcoded fallback to TRUCK. Blank or unset fails closed as empty string.
         """
-        return self.vehicle_class or ""
+        return str(self.vehicle_class) if self.vehicle_class else ""
 
     def get_max_weight_kg(self) -> Decimal:
         """
@@ -229,7 +294,7 @@ class ServiceTier(models.Model):
         Unconfigured tiers fail closed (return 0.00). No slug, name, or label guessing.
         """
         if self.max_weight_kg is not None and self.max_weight_kg > 0:
-            return self.max_weight_kg
+            return Decimal(str(self.max_weight_kg))
         return Decimal("0.00")
 
     def get_max_cft(self) -> Decimal:
@@ -239,7 +304,7 @@ class ServiceTier(models.Model):
         Unconfigured tiers fail closed (return 0.00). No slug, name, or label guessing.
         """
         if self.max_cft is not None and self.max_cft > 0:
-            return self.max_cft
+            return Decimal(str(self.max_cft))
         return Decimal("0.00")
 
     def evaluate_cargo_fit(self, total_weight_kg: Decimal, total_cft: Decimal):
@@ -257,14 +322,37 @@ class ServiceTier(models.Model):
 class Lane(models.Model):
     """
     A fixed-fare route card ('Popular Routes from Hosur').
+
+    destination_latitude / destination_longitude: city-centre coordinates for
+    the destination. Used by Packers & Movers intercity booking to resolve
+    drop_latitude/drop_longitude for the server-side quote without depending
+    on geocoding at runtime. Nullable so existing lanes keep working; admin
+    fills them in progressively. When blank the P&M booking page falls back
+    to geocoding the destination_label string.
     """
     category = models.CharField(max_length=20, choices=LogisticsCategory.choices, db_index=True)
     city = models.CharField(max_length=100, db_index=True)  # origin city, e.g. "Hosur"
     destination_label = models.CharField(max_length=150)     # "Bengaluru", "Whitefield / Bengaluru Hub"
+    destination_latitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True,
+        help_text="City-centre latitude for P&M intercity drop coordinate resolution. Leave blank to fall back to geocoding.",
+    )
+    destination_longitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True,
+        help_text="City-centre longitude for P&M intercity drop coordinate resolution. Leave blank to fall back to geocoding.",
+    )
     distance_km = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     eta_label = models.CharField(max_length=50, blank=True, default="")  # "~1.5 hrs", "Same Day", "1-2 Days"
     fare = models.DecimalField(max_digits=10, decimal_places=2)
     currency = models.CharField(max_length=3, default="INR")
+    # Light PTL: optional route-specific per-kg rate. When a PTL booking names
+    # this lane (truck category), this rate replaces the platform PTL rate in
+    # GTPTLPricingPolicy. Blank = the lane is not a PTL rate override.
+    ptl_rate_per_kg = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0.01"))],
+        help_text="Part Truck Load rate per kg on this route. Blank = use the platform PTL rate.",
+    )
 
     order = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
@@ -289,6 +377,10 @@ class GoodsCategory(models.Model):
     name = models.CharField(max_length=150)
     icon = models.CharField(max_length=50, blank=True, default="package")
     description = models.TextField(blank=True, default="")
+    info_banner = models.CharField(
+        max_length=255, blank=True, default="",
+        help_text="Custom info or tips banner displayed in customer inventory modal (e.g. 'What we pack in Bedrooms')"
+    )
     allows_two_wheeler = models.BooleanField(default=True)
     min_vehicle_class = models.CharField(max_length=30, blank=True, default="any")  # any | truck | pickup
     order = models.PositiveIntegerField(default=0)
@@ -314,6 +406,10 @@ class GoodsItem(models.Model):
     category = models.ForeignKey(GoodsCategory, on_delete=models.CASCADE, related_name="items")
     slug = models.SlugField(max_length=100, unique=True)
     name = models.CharField(max_length=150)
+    subcategory = models.CharField(
+        max_length=100, blank=True, default="",
+        help_text="Optional subcategory for UI grouping (e.g. 'Bed', 'Chair', 'Table', 'Cartons & Packaging', 'Appliances')"
+    )
     unit = models.CharField(max_length=30, default="piece")
     default_weight_kg = models.DecimalField(
         max_digits=7, decimal_places=2,
@@ -344,6 +440,36 @@ class GoodsItem(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.category.name})"
+
+
+# Hard ceiling for PackersMoversConfig.max_helpers (admin-editable up to this).
+MAX_HELPERS_CAP = 20
+
+
+def resolve_helpers_requested(cart_data, city=""):
+    """Return the helper count a P&M booking asked for, clamped to the admin
+    max for that city (0..PackersMoversConfig.max_helpers). None when the
+    booking did not request helpers at all. Never raises."""
+    try:
+        items = cart_data if isinstance(cart_data, list) else [cart_data]
+        raw = None
+        for it in items:
+            if isinstance(it, dict) and it.get("helpers_requested") not in (None, ""):
+                raw = it.get("helpers_requested")
+                city = city or str(it.get("city") or "")
+                break
+        if raw is None:
+            return None
+        n = int(raw)
+    except (TypeError, ValueError):
+        return None
+    cfg = None
+    if city:
+        cfg = PackersMoversConfig.objects.filter(city__iexact=city, is_active=True).first()
+    if cfg is None:
+        cfg = PackersMoversConfig.objects.filter(is_active=True).first()
+    limit = cfg.max_helpers if cfg else 2
+    return max(0, min(n, limit))
 
 
 class PackersMoversConfig(models.Model):
@@ -388,6 +514,14 @@ class PackersMoversConfig(models.Model):
         validators=[MinValueValidator(50.0)],
         help_text="Moves exceeding this CFT volume require an on-site / video survey before binding contract"
     )
+    max_helpers = models.PositiveSmallIntegerField(
+        default=2,
+        validators=[MaxValueValidator(MAX_HELPERS_CAP)],
+        help_text=(
+            "Maximum number of extra helpers a customer may request on a P&M booking "
+            f"(0-{MAX_HELPERS_CAP}). Crew-size/operations setting only -- no price is attached."
+        ),
+    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -400,3 +534,233 @@ class PackersMoversConfig(models.Model):
     def __str__(self):
         return f"P&M Pricing Config ({self.city})"
 
+
+class PMAddOnService(models.Model):
+    """
+    Admin-configurable Packers & Movers add-on/value-added service catalogue: rope pulling for
+    heavy goods, appliance install/uninstall, electrician, carpenter, and a labour/helper-only
+    line item -- the Porter-documented P&M add-ons and labour-only booking, none of which existed
+    as a priced, selectable catalogue before (max_helpers above only sets a crew-size cap, with
+    "no price attached", per its own help text).
+
+    pricing_mode:
+      FLAT       -- one fixed charge regardless of quantity (quantity is always 1)
+      PER_UNIT   -- unit_price * quantity (e.g. per appliance, per helper)
+      PER_CFT    -- unit_price * booking's total CFT (e.g. rope pulling priced by load size)
+    """
+    class PricingMode(models.TextChoices):
+        FLAT = "FLAT", "Flat fee"
+        PER_UNIT = "PER_UNIT", "Per unit"
+        PER_CFT = "PER_CFT", "Per CFT"
+
+    code = models.SlugField(max_length=40, unique=True, help_text="Stable identifier used by the booking payload, e.g. 'rope_pulling'.")
+    name = models.CharField(max_length=100)
+    description = models.CharField(max_length=255, blank=True, default="")
+    city = models.CharField(max_length=50, blank=True, default="", db_index=True, help_text="Blank = available in every city.")
+    pricing_mode = models.CharField(max_length=10, choices=PricingMode.choices, default=PricingMode.FLAT)
+    unit_price = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"), validators=[MinValueValidator(Decimal("0.00"))])
+    max_quantity = models.PositiveSmallIntegerField(default=1, help_text="Largest quantity a customer may select (ignored for FLAT).")
+    is_labour_only = models.BooleanField(default=False, help_text="This add-on represents a helper/labour-only line (Porter's helper-with-vehicle booking) rather than a physical task.")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name = "P&M Add-on Service"
+        verbose_name_plural = "P&M Add-on Services"
+
+    def __str__(self):
+        return f"{self.name} ({self.get_pricing_mode_display()})"
+
+    def price_for(self, quantity, total_cft):
+        if self.pricing_mode == self.PricingMode.FLAT:
+            return self.unit_price
+        if self.pricing_mode == self.PricingMode.PER_CFT:
+            return (self.unit_price * Decimal(str(total_cft or 0))).quantize(Decimal("0.01"))
+        return (self.unit_price * max(1, int(quantity or 1))).quantize(Decimal("0.01"))
+
+
+class GTFaq(models.Model):
+    """
+    Admin-manageable FAQ entries for Goods Transport and Packers & Movers
+    booking pages.
+
+    category: blank = applies to all GT categories (e.g. platform-wide FAQ).
+    city: blank = applies to all cities.
+    Admin can create category-specific FAQs (e.g. only for 'truck' pages) or
+    city-specific ones (e.g. only for Hosur launch FAQs).
+    """
+    category = models.CharField(
+        max_length=20, choices=LogisticsCategory.choices,
+        blank=True, default="", db_index=True,
+        help_text="Leave blank to show on all GT category pages.",
+    )
+    city = models.CharField(
+        max_length=100, blank=True, default="", db_index=True,
+        help_text="Leave blank to show in all cities.",
+    )
+    question = models.CharField(max_length=500)
+    answer = models.TextField()
+    order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["category", "city", "order"]
+        verbose_name = "GT FAQ"
+        verbose_name_plural = "GT FAQs"
+
+    def __str__(self):
+        cat = self.get_category_display() if self.category else "All"
+        city = self.city or "All cities"
+        return f"[{cat} / {city}] {self.question[:60]}"
+
+
+class LogisticsSlot(models.Model):
+    """
+    Authoritative time-slot configuration for logistics bookings.
+    Allows Admin/Superadmin to configure slots, lead times, capacity limits,
+    and active states per category and city without code changes.
+    """
+    category = models.CharField(
+        max_length=30, blank=True, default="",
+        help_text="Service category (e.g. 'truck', 'two_wheeler', 'packers_movers'), or blank for all."
+    )
+    city = models.CharField(
+        max_length=50, blank=True, default="",
+        help_text="Operating city (e.g. 'hosur'), or blank for all."
+    )
+    group = models.CharField(
+        max_length=50, default="Morning",
+        help_text="Slot group heading (e.g. 'Morning', 'Afternoon', 'Evening')"
+    )
+    slot_label = models.CharField(
+        max_length=50,
+        help_text="Standard slot time representation (e.g. '07:00 AM - 08:00 AM')"
+    )
+    start_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
+    capacity = models.PositiveIntegerField(
+        default=10,
+        help_text="Max concurrent bookings supported in this window"
+    )
+    is_active = models.BooleanField(default=True)
+    order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["category", "city", "order", "start_time"]
+        verbose_name = "Logistics Slot"
+        verbose_name_plural = "Logistics Slots"
+
+    def __str__(self):
+        cat = self.category or "all"
+        city = self.city or "all"
+        return f"[{cat}/{city}] {self.group} — {self.slot_label}"
+
+
+class ProhibitedGoodsRule(models.Model):
+    """
+    Admin-managed prohibited-goods rule for Goods Transport / Packers & Movers.
+
+    The built-in patterns in service_requests/services/prohibited_goods.py cover
+    safety-critical cargo; this table holds the commercial prohibited-items list
+    (Porter publishes one in its customer terms) so Admin can extend or relax it
+    without a code change. `keywords` is one term per line; each is matched as a
+    whole word/phrase, case-insensitively, against the declared cargo text.
+    """
+    label = models.CharField(max_length=80, unique=True)
+    keywords = models.TextField(help_text="One keyword or phrase per line. Whole-word, case-insensitive.")
+    message = models.CharField(max_length=255, blank=True, default="")
+    applies_to_packers_movers = models.BooleanField(
+        default=True,
+        help_text="Untick to let household Packers & Movers inventories through while still blocking it on Goods Transport.",
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["label"]
+
+    def __str__(self):
+        return self.label
+
+    def keyword_list(self):
+        return [k.strip() for k in (self.keywords or "").splitlines() if k.strip()]
+
+
+class PackersMoversSurchargeRule(models.Model):
+    """
+    Admin-configured surcharge for a Packers & Movers move date / time.
+
+    Porter's public customer terms say surcharges apply for services outside normal hours and
+    on peak days (month-end/month-start, weekends, holidays, auspicious days) but publish no
+    amounts and no calendar, so nothing is assumed here: no rule exists until Admin creates one,
+    and a move with no matching rule prices exactly as before.
+
+    rule_type decides which fields matter:
+      WEEKDAY       -- `weekdays` ("5,6" = Saturday, Sunday; Monday is 0)
+      DAY_OF_MONTH  -- `day_from`..`day_to`, wrapping month-end, e.g. 28..3
+      DATE          -- one `on_date` (public holiday, auspicious day, ...)
+      OUTSIDE_HOURS -- `window_start`..`window_end` is the normal service window; a move whose
+                       slot starts outside it is surcharged
+    The surcharge is `percent` of the pre-tax move fare plus `flat_amount`; GST applies on top.
+    """
+    class RuleType(models.TextChoices):
+        WEEKDAY = "WEEKDAY", "Days of the week"
+        DAY_OF_MONTH = "DAY_OF_MONTH", "Days of the month (peak period)"
+        DATE = "DATE", "Specific date (holiday / auspicious day)"
+        OUTSIDE_HOURS = "OUTSIDE_HOURS", "Outside normal service hours"
+
+    name = models.CharField(max_length=100)
+    rule_type = models.CharField(max_length=20, choices=RuleType.choices)
+    city = models.CharField(max_length=50, blank=True, default="", help_text="Blank = every city.")
+    weekdays = models.CharField(max_length=20, blank=True, default="", help_text="Comma-separated, Monday=0 ... Sunday=6.")
+    day_from = models.PositiveSmallIntegerField(null=True, blank=True)
+    day_to = models.PositiveSmallIntegerField(null=True, blank=True)
+    on_date = models.DateField(null=True, blank=True)
+    window_start = models.TimeField(null=True, blank=True)
+    window_end = models.TimeField(null=True, blank=True)
+    percent = models.DecimalField(max_digits=5, decimal_places=2, default=0,
+                                  validators=[MinValueValidator(Decimal("0.00")), MaxValueValidator(Decimal("100.00"))])
+    flat_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0,
+                                      validators=[MinValueValidator(Decimal("0.00"))])
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.get_rule_type_display()})"
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        errors = {}
+        if (self.percent or 0) <= 0 and (self.flat_amount or 0) <= 0:
+            errors["percent"] = "Set a percentage or a flat amount, otherwise this rule charges nothing."
+        t = self.rule_type
+        if t == self.RuleType.WEEKDAY:
+            try:
+                days = [int(x) for x in (self.weekdays or "").split(",") if x.strip() != ""]
+                if not days or any(d < 0 or d > 6 for d in days):
+                    raise ValueError
+            except ValueError:
+                errors["weekdays"] = "Enter weekday numbers 0-6 separated by commas (Monday=0)."
+        elif t == self.RuleType.DAY_OF_MONTH:
+            if not self.day_from or not self.day_to or not (1 <= self.day_from <= 31 and 1 <= self.day_to <= 31):
+                errors["day_from"] = "Enter day-of-month bounds between 1 and 31."
+        elif t == self.RuleType.DATE:
+            if not self.on_date:
+                errors["on_date"] = "Pick the date."
+        elif t == self.RuleType.OUTSIDE_HOURS:
+            if not self.window_start or not self.window_end or self.window_start >= self.window_end:
+                errors["window_start"] = "Enter the normal service window (start before end)."
+        if errors:
+            raise ValidationError(errors)

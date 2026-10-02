@@ -84,6 +84,9 @@ def process_outbox_queue(limit=50):
                     delivery_address=payload.get("delivery_address", {"formatted": order.delivery_address}),
                     payment_snapshot=payload.get("payment_snapshot", {}),
                     items=payload.get("items", []),
+                    delivery_slot=payload.get("delivery_slot", order.delivery_slot),
+                    delivery_slot_id=payload.get("delivery_slot_id"),
+                    delivery_date=payload.get("delivery_date"),
                 )
 
                 if res.get("success"):

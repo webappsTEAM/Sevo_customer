@@ -8,7 +8,7 @@ import {
   User, Shield, Palette, Bell, CreditCard, Users2,
   Building2, Database, AlertTriangle, ShieldCheck,
   CheckCircle2, X, ChevronRight, FileText,
-  Info, XCircle, MapPin,
+  Info, XCircle, MapPin, DollarSign,
 } from "lucide-react"
 
 /* ── Lazy section imports ─────────────────────────────────────── */
@@ -17,6 +17,7 @@ const AccountSecuritySection = lazy(() => import("./settings/AccountSecuritySect
 const AppearanceSection = lazy(() => import("./settings/AppearanceSection.jsx"))
 const NotificationsSection = lazy(() => import("./settings/NotificationsSection.jsx"))
 const BillingSection = lazy(() => import("./settings/BillingSection.jsx"))
+const PricingSection = lazy(() => import("./settings/PricingSection.jsx"))
 const TeamMembersSection = lazy(() => import("./settings/TeamMembersSection.jsx"))
 const InvoicesSection = lazy(() => import("./settings/InvoicesSection.jsx"))
 const WorkspaceSection = lazy(() => import("./settings/WorkspaceSection.jsx"))
@@ -122,6 +123,14 @@ const TABS = [
     icon: <MapPin size={15} />,
     adminOnly: true,
   },
+  {
+    id: "pricing",
+    label: "Pricing",
+    subtitle: "Platform fee, taxes, delivery and handling charges shown in the customer app.",
+    icon: <DollarSign size={15} />,
+    adminOnly: true,
+    to: routes.settings_pricing,
+  },
 ]
 
 /* ── Page ────────────────────────────────────────────────────── */
@@ -210,6 +219,7 @@ export function SettingsPage({ section: sectionProp }) {
               {activeSection === "appearance" && <AppearanceSection showToast={showToast} SectionHeader={SectionHeader} />}
               {activeSection === "notifications" && <NotificationsSection showToast={showToast} SectionHeader={SectionHeader} />}
               {activeSection === "billing" && <BillingSection showToast={showToast} SectionHeader={SectionHeader} />}
+              {activeSection === "pricing" && <PricingSection showToast={showToast} SectionHeader={SectionHeader} />}
               {activeSection === "team" && <TeamMembersSection showToast={showToast} SectionHeader={SectionHeader} />}
               {activeSection === "invoices" && <InvoicesSection />}
               {activeSection === "organization" && <WorkspaceSection showToast={showToast} SectionHeader={SectionHeader} />}

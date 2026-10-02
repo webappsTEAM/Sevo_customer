@@ -1596,6 +1596,7 @@ const EMPTY_PACKAGE = {
   gt_weight_class: "",
   gt_city: "",
   gt_dimensions_label: "",
+  gt_max_weight_kg: "",
   gt_base_fare: "",
   gt_per_km_rate: "",
   gt_free_km: "",
@@ -1603,6 +1604,7 @@ const EMPTY_PACKAGE = {
   gt_additional_stop_charge: "",
   gt_surge_multiplier: "",
   gt_minimum_fare: "",
+  gt_gst_rate: "",
 }
 
 const STATUS_TONE = {
@@ -1688,8 +1690,8 @@ const CORE_PILLARS = [
   },
   {
     key: "vegetables_groceries",
-    shortName: "Groceries & Fresh Produce",
-    fullName: "Farm-Fresh Groceries & Daily Produce",
+    shortName: "Vegetables",
+    fullName: "Farm-Fresh Vegetables",
     icon: Carrot,
     accentColor: "blue",
     activeClass: "bg-indigo-600 text-white shadow-md shadow-indigo-600/25 border-indigo-600",
@@ -2560,6 +2562,13 @@ export function CatalogPackagesPage() {
         return
       }
     }
+    if (editing.gt_gst_rate !== "" && editing.gt_gst_rate != null) {
+      const gstNum = Number(editing.gt_gst_rate)
+      if (isNaN(gstNum) || gstNum < 0 || gstNum > 100) {
+        showToast(`GST must be a percentage between 0 and 100. Got "${editing.gt_gst_rate}".`, "error")
+        return
+      }
+    }
     try {
       let finalSlug = (editing.slug || "").trim()
       if (!finalSlug && editing.name) {
@@ -2651,6 +2660,7 @@ export function CatalogPackagesPage() {
         gt_weight_class: editing.gt_weight_class || "",
         gt_city: editing.gt_city || "",
         gt_dimensions_label: editing.gt_dimensions_label || "",
+        gt_max_weight_kg: editing.gt_max_weight_kg !== "" && editing.gt_max_weight_kg != null && !isNaN(Number(editing.gt_max_weight_kg)) ? Number(editing.gt_max_weight_kg) : null,
         gt_base_fare: editing.gt_base_fare !== "" && editing.gt_base_fare != null && !isNaN(Number(editing.gt_base_fare)) ? Number(editing.gt_base_fare) : null,
         gt_per_km_rate: editing.gt_per_km_rate !== "" && editing.gt_per_km_rate != null && !isNaN(Number(editing.gt_per_km_rate)) ? Number(editing.gt_per_km_rate) : null,
         gt_free_km: editing.gt_free_km !== "" && editing.gt_free_km != null && !isNaN(Number(editing.gt_free_km)) ? Number(editing.gt_free_km) : null,
@@ -2658,6 +2668,9 @@ export function CatalogPackagesPage() {
         gt_additional_stop_charge: editing.gt_additional_stop_charge !== "" && editing.gt_additional_stop_charge != null && !isNaN(Number(editing.gt_additional_stop_charge)) ? Number(editing.gt_additional_stop_charge) : null,
         gt_surge_multiplier: editing.gt_surge_multiplier !== "" && editing.gt_surge_multiplier != null && !isNaN(Number(editing.gt_surge_multiplier)) ? Number(editing.gt_surge_multiplier) : null,
         gt_minimum_fare: editing.gt_minimum_fare !== "" && editing.gt_minimum_fare != null && !isNaN(Number(editing.gt_minimum_fare)) ? Number(editing.gt_minimum_fare) : null,
+        gt_gst_rate: editing.gt_gst_rate !== "" && editing.gt_gst_rate != null && !isNaN(Number(editing.gt_gst_rate)) ? Number(editing.gt_gst_rate) : null,
+        // The server requires a reason whenever a Goods & Transport price changes (pricing audit trail).
+        ...(String(editing.gt_price_change_reason || "").trim() ? { reason: String(editing.gt_price_change_reason).trim() } : {}),
       }
       if (editing.virtualSlug && editing.virtualSlug.startsWith("tab_")) {
         payload.tag = editing.virtualSlug
@@ -2881,8 +2894,14 @@ export function CatalogPackagesPage() {
         name: quickPriceEditing.name,
         description: quickPriceEditing.description || "",
         base_price: Math.round(Number(quickPriceEditing.base_price) || 0),
-        gst_rate: quickPriceEditing.gst_rate !== undefined && quickPriceEditing.gst_rate !== "" ? parseFloat(quickPriceEditing.gst_rate) : 18.0,
-        platform_fee: quickPriceEditing.platform_fee !== undefined && quickPriceEditing.platform_fee !== "" ? parseFloat(quickPriceEditing.platform_fee) : 29.0,
+        ...(quickPriceEditing.category_slug === "goods_transports" && String(quickPriceEditing.price_change_reason || "").trim()
+          ? { reason: String(quickPriceEditing.price_change_reason).trim() } : {}),
+        // Goods & Transport fares are all-inclusive and priced by distance (Edit Package Details), so
+        // the generic GST / platform-fee pair is neither shown nor sent for that pillar.
+        ...(quickPriceEditing.category_slug === "goods_transports" ? {} : {
+          gst_rate: quickPriceEditing.gst_rate !== undefined && quickPriceEditing.gst_rate !== "" ? parseFloat(quickPriceEditing.gst_rate) : 18.0,
+          platform_fee: quickPriceEditing.platform_fee !== undefined && quickPriceEditing.platform_fee !== "" ? parseFloat(quickPriceEditing.platform_fee) : 29.0,
+        }),
         tag: quickPriceEditing.tag || "",
         popular: isPop,
         duration: quickPriceEditing.duration || "",
@@ -3144,7 +3163,7 @@ export function CatalogPackagesPage() {
   }
 
   const handleDeletePackage = async (pkg) => {
-    if (!window.confirm(`Are you sure you want to permanently delete "${pkg.name}"? This will delete it from database and applications.`)) {
+    if (!window.confirm(`Are you sure you want to permanently delete "${pkg.name}"? This action cannot be undone.`)) {
       return
     }
     try {
@@ -3669,9 +3688,20 @@ export function CatalogPackagesPage() {
                                   <div className="inline-flex items-center gap-1 text-sm font-extrabold text-indigo-700 bg-blue-50/80 border border-indigo-200/90 px-2.5 py-1 rounded-lg">
                                     <span>₹{Math.round(Number(pkg.base_price) || 0).toLocaleString("en-IN")}</span>
                                   </div>
-                                  <span className="text-[10px] text-slate-500 font-semibold pl-0.5">
-                                    +{pkg.gst_rate !== undefined ? pkg.gst_rate : 18}% GST • ₹{pkg.platform_fee !== undefined ? pkg.platform_fee : 29} fee
-                                  </span>
+                                  {activeCategoryKey === "goods_transports" ? (
+                                    // Goods & Transport fares are all-inclusive: show the admin-configured GST
+                                    // that is already inside the fare (none configured => nothing to show),
+                                    // never a made-up "+18% GST / fee" line.
+                                    Number(pkg.gt_gst_rate) > 0 && (
+                                      <span className="text-[10px] text-slate-500 font-semibold pl-0.5">
+                                        GST {Number(pkg.gt_gst_rate)}% included
+                                      </span>
+                                    )
+                                  ) : (
+                                    <span className="text-[10px] text-slate-500 font-semibold pl-0.5">
+                                      +{pkg.gst_rate !== undefined ? pkg.gst_rate : 18}% GST • ₹{pkg.platform_fee !== undefined ? pkg.platform_fee : 29} fee
+                                    </span>
+                                  )}
                                 </div>
                               </td>
 
@@ -5736,7 +5766,7 @@ export function CatalogPackagesPage() {
                     </div>
                   </div>
 
-                  {/* 5. Calservices Freshness & Quality Promise Cards (Checklist format) */}
+                  {/* 5. SEVO Freshness & Quality Promise Cards (Checklist format) */}
                   <div className="space-y-2 pt-1">
                     <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 block">
                       Trust &amp; Freshness Promise Cards (Checklist)
@@ -5992,6 +6022,21 @@ export function CatalogPackagesPage() {
                   })()}
                 </div>
 
+                {quickPriceEditing.category_slug === "goods_transports" ? (
+                  <div className="space-y-3">
+                  <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                    Goods &amp; Transport fares are priced by distance and are all-inclusive. Set the fare components
+                    and any GST included in the fare under <span className="font-bold">Edit Package Details &rarr; Goods &amp; Transport Distance Pricing</span>.
+                  </p>
+                  <Input
+                    label="Reason for price change (required if the starting fare changes -- kept in the pricing audit trail)"
+                    placeholder="e.g. Fuel price revision"
+                    value={quickPriceEditing.price_change_reason ?? ""}
+                    onChange={(e) => setQuickPriceEditing({ ...quickPriceEditing, price_change_reason: e.target.value })}
+                  />
+                  </div>
+                ) : (
+                  <>
                 {/* GST & Platform Fee Row */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input
@@ -6035,6 +6080,8 @@ export function CatalogPackagesPage() {
                     </span>
                   </div>
                 </div>
+                  </>
+                )}
 
                 <div>
                   <TextArea
@@ -6583,11 +6630,29 @@ export function CatalogPackagesPage() {
               }}
             />
 
-            {/* Sub-Service picker removed -- packages now always connect directly
-                under their Service (no optional deeper sub-service layer). Any
-                pre-existing sub_service_key on older packages is left untouched
-                (still cleared to "" whenever the Parent Service is changed above),
-                it just can't be set from this form anymore. */}
+            {/* Service Group / Sub-Service picker (Tier 3: Category -> Service -> Service Group -> Package) */}
+            {(() => {
+              const currentSvc = services.find(s => String(s.id) === String(editing.service?.id || editing.service || ""))
+              const availableSubtabs = currentSvc?.customization?.subtabs || []
+              if (availableSubtabs.length === 0) return null
+
+              const subOptions = [
+                { value: "", label: "-- General / Default (No Specific Group) --" },
+                ...availableSubtabs.map(t => ({
+                  value: t.id,
+                  label: `${t.label}${t.description ? ` (${t.description})` : ""}`
+                }))
+              ]
+
+              return (
+                <Select
+                  label="Service Group / Sub-Service Category"
+                  options={subOptions}
+                  value={editing.sub_service_key || ""}
+                  onChange={(e) => setEditing({ ...editing, sub_service_key: e.target.value })}
+                />
+              )
+            })()}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input
@@ -6730,6 +6795,14 @@ export function CatalogPackagesPage() {
                   onChange={(e) => setEditing({ ...editing, gt_dimensions_label: e.target.value })}
                 />
 
+                <Input
+                  label="Max Cargo Weight (kg) -- used for fitment, PTL eligibility and dispatch"
+                  type="number"
+                  placeholder="e.g. 750"
+                  value={editing.gt_max_weight_kg ?? ""}
+                  onChange={(e) => setEditing({ ...editing, gt_max_weight_kg: e.target.value })}
+                />
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input
                     label="Base Fare (₹)"
@@ -6790,6 +6863,24 @@ export function CatalogPackagesPage() {
                   placeholder="e.g. 1.00"
                   value={editing.gt_surge_multiplier ?? ""}
                   onChange={(e) => setEditing({ ...editing, gt_surge_multiplier: e.target.value })}
+                />
+
+                <Input
+                  label="GST included in the fare (%, e.g. 18.00 — the fare does not change; invoices show the GST part. Enter 0 to remove, leave blank to keep the current setting)"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  placeholder="e.g. 18.00"
+                  value={editing.gt_gst_rate ?? ""}
+                  onChange={(e) => setEditing({ ...editing, gt_gst_rate: e.target.value })}
+                />
+
+                <Input
+                  label="Reason for price change (required when any fare, GST or starting price changes -- kept in the pricing audit trail)"
+                  placeholder="e.g. Fuel price revision"
+                  value={editing.gt_price_change_reason ?? ""}
+                  onChange={(e) => setEditing({ ...editing, gt_price_change_reason: e.target.value })}
                 />
               </div>
             )}
