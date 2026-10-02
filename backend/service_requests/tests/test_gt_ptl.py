@@ -3,6 +3,7 @@ Light PTL (Part Truck Load): advance-booked, admin-slot-based, per-kg goods tran
 ptl_eligible 4W+ tiers, flowing through the ordinary goods_transport_truck booking pipeline.
 """
 import uuid
+from importlib import import_module
 from service_requests.booking_window import next_bookable_date
 from datetime import timedelta
 from decimal import Decimal
@@ -416,13 +417,25 @@ class PTLAdminPolicyApiTests(TestCase):
 
 
 class PTLClaimPolicySeedMigrationTests(TestCase):
-    """Verifies migration 0119's fill-missing-only seed, on the DB as the migration left it
-    (no setUp clearing here, unlike PTLPorterGapsRound11Tests below)."""
+    """Verifies the migration 0119 seed operation against the test schema.
+
+    ``quicktims.test_settings`` intentionally disables migrations for fast,
+    isolated tests, so the Django test runner cannot leave data-migration
+    rows behind. Calling the migration's public forward operation directly
+    exercises its fill-missing-only contract without pretending migrations
+    ran in this test database.
+    """
 
     def test_seeded_migration_row_is_ptl_scoped_1000_cap_72h_window(self):
+        from django.apps import apps
         from service_requests.models import GTClaimPolicy
+
+        migration = import_module(
+            "service_requests.migrations.0119_gt_ptl_porter_gaps"
+        )
+        migration.seed_ptl_claim_defaults(apps, None)
         pol = GTClaimPolicy.objects.filter(applies_to_ptl=True, service_category=TRUCK).first()
-        self.assertIsNotNone(pol, "Round 11 fill-missing-only seed migration should have created this row")
+        self.assertIsNotNone(pol, "Round 11 PTL seed should create the default policy when it is missing")
         self.assertEqual(pol.included_liability_cap, Decimal("1000.00"))
         self.assertEqual(pol.claim_window_hours, 72)
         self.assertTrue(pol.cap_at_fare)

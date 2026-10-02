@@ -1341,7 +1341,7 @@ def resolve_logistics_fare_v2(
                 survey_status = computed_quote.get("survey_status") or "SURVEY_REQUIRED"
                 reason = computed_quote.get("estimate_notice") or computed_quote.get("review_reason") or "Pre-move survey required."
                 raise UnresolvedLogisticsFareError(f"Packers & Movers booking requires survey/review ({survey_status}: {reason}) and cannot be finalized as an instant booking.")
-            
+
             # P1-7: Verify that the resulting quote tier equals the booking tier
             computed_tier_id = computed_quote.get("tier_id")
             if tier_id and computed_tier_id and str(computed_tier_id) != str(tier_id):
