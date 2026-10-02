@@ -11,7 +11,7 @@ import {
   Apple, Carrot, Milk, Coffee, Utensils, CupSoda, Cookie,
   Fish, Egg, Beef, Shirt, Dumbbell, Laptop, Smartphone,
   Tv, Bath, Baby, Home, Package, Boxes, Droplet, Hammer,
-  PaintRoller, Wrench, HeartPulse, Croissant
+  PaintRoller, Wrench, HeartPulse, Croissant, Gift
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { useAuth } from "../../state/auth/useAuth.js"
@@ -1541,46 +1541,6 @@ export function MarketplacePage() {
                 )}
               </div>
 
-              {(currentCategorySlug === "all" && !searchQuery && (basketsLoading || baskets.length > 0)) && (
-                <section className="mb-6 rounded-2xl border border-violet-100 bg-violet-50/60 p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                      <h3 className="text-sm font-black text-slate-900">Seller combo offers</h3>
-                      <p className="text-xs text-slate-500">Curated bundles from verified local stores</p>
-                    </div>
-                    <Boxes className="h-5 w-5 text-violet-600" />
-                  </div>
-                  {basketsLoading ? (
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                      {[0, 1, 2].map((index) => <div key={index} className="h-28 animate-pulse rounded-xl bg-white" />)}
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                      {baskets.map((basket) => (
-                        <article key={basket.id} className="rounded-xl border border-violet-100 bg-white p-3 shadow-sm">
-                          <div className="flex gap-3">
-                            {basket.primary_image ? (
-                              <img src={basket.primary_image} alt="" className="h-14 w-14 rounded-lg bg-slate-50 object-cover" />
-                            ) : (
-                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700"><Boxes className="h-6 w-6" /></div>
-                            )}
-                            <div className="min-w-0 flex-1">
-                              <h4 className="truncate text-sm font-extrabold text-slate-900">{basket.title}</h4>
-                              <p className="mt-0.5 line-clamp-2 text-[11px] text-slate-500">{basket.description || `${basket.item_count || 0} items`}</p>
-                              <p className="mt-1 text-sm font-black text-slate-900">₹{basket.bundle_price}</p>
-                            </div>
-                          </div>
-                          <button type="button" onClick={() => handleAddBasketToCart(basket)} disabled={cartLoading || basket.in_stock === false}
-                            className="mt-3 w-full rounded-lg bg-violet-600 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50">
-                            {basket.in_stock === false ? "Unavailable" : "Add bundle"}
-                          </button>
-                        </article>
-                      ))}
-                    </div>
-                  )}
-                </section>
-              )}
-
               {/* Products Header */}
               <div className="flex items-center justify-between mb-6">
                 <div>
@@ -1991,116 +1951,31 @@ export function MarketplacePage() {
                 )}
               </div>
 
-                          return (
-                            <button
-                              key={vId}
-                              type="button"
-                              disabled={!isAvailable}
-                              onClick={() => handleSelectModalVariant(v)}
-                              className={`min-w-[80px] px-3.5 py-2 rounded-xl border text-center transition-all flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
-                                !isAvailable
-                                  ? "bg-slate-50 border-slate-200/70 text-slate-400 line-through opacity-50 cursor-not-allowed"
-                                  : isSelected
-                                  ? "bg-emerald-600 border-emerald-600 text-white ring-2 ring-emerald-600/30 shadow-sm font-bold"
-                                  : "bg-white border-slate-200 text-slate-800 hover:border-emerald-300 hover:bg-emerald-50/30"
-                              }`}
-                            >
-                              <span className={`text-xs font-black leading-tight ${isSelected ? "text-white" : "text-slate-900"}`}>
-                                {v.variant_label || v.label || v.pack_size || v.unit || "Option"}
-                              </span>
-                              {vPrice !== undefined && vPrice !== null && (
-                                <span className={`text-[11px] font-bold ${isSelected ? "text-emerald-100" : "text-slate-500"}`}>
-                                  ₹{vPrice}
-                                </span>
-                              )}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Description / Product Details Section (Collapsible) */}
-                  {detailProduct.description && (
-                    <div className="border-t border-slate-100 pt-4">
-                      <h5 className="text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Product Details</h5>
-                      <div className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                        <p className={!isDescExpanded && detailProduct.description.length > 180 ? "line-clamp-3" : ""}>
-                          {detailProduct.description}
-                        </p>
-                        {detailProduct.description.length > 180 && (
-                          <button
-                            type="button"
-                            onClick={() => setIsDescExpanded(!isDescExpanded)}
-                            className="text-xs font-bold text-emerald-600 hover:text-emerald-700 mt-1.5 inline-flex items-center gap-1 cursor-pointer"
-                          >
-                            {isDescExpanded ? "Read Less" : "Read More"}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Sticky Bottom CTA Bar */}
-                <div className="p-4 bg-slate-50 border-t border-slate-200/80 flex items-center justify-between gap-3 shrink-0">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Price</span>
-                    <span className="text-base sm:text-lg font-black text-slate-900">₹{detailProduct.selling_price}</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDetailProduct(null)
-                        setIsDescExpanded(false)
-                      }}
-                      className="px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-extrabold transition-colors cursor-pointer"
-                    >
-                      Close
-                    </button>
-
-                    {detailProduct.in_stock ? (
-                      detailInCartQty > 0 ? (
-                        <div className="flex items-center bg-emerald-600 text-white rounded-xl shadow-md shadow-emerald-600/20 overflow-hidden font-black">
-                          <button
-                            type="button"
-                            onClick={() => handleAddToCart(detailProduct, -1)}
-                            className="px-3.5 py-2 hover:bg-emerald-700 transition-colors flex items-center justify-center cursor-pointer"
-                          >
-                            <Minus className="w-3.5 h-3.5" />
-                          </button>
-                          <span className="px-3 text-xs sm:text-sm font-black min-w-[24px] text-center">{detailInCartQty}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleAddToCart(detailProduct, 1)}
-                            className="px-3.5 py-2 hover:bg-emerald-700 transition-colors flex items-center justify-center cursor-pointer"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleAddToCart(detailProduct, 1)}
-                          className="px-5 sm:px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-md shadow-emerald-600/20 transition-all cursor-pointer active:scale-95 flex items-center gap-1.5"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          Add to Cart • ₹{detailProduct.selling_price}
-                        </button>
-                      )
-                    ) : (
-                      <span className="px-4 py-2.5 bg-slate-200 text-slate-500 rounded-xl text-xs font-black">
-                        Out of Stock
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-            </div>
-          )
-        })()}
+              {/* Bottom CTA */}
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setDetailProduct(null)}
+                  className="px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-extrabold transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+                {detailProduct.in_stock && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleAddToCart(detailProduct, 1)
+                      setDetailProduct(null)
+                    }}
+                    className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+                  >
+                    Add to Cart • ₹{detailProduct.selling_price}
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
 
       {/* ── Basket / Combo Deal Detail Modal ── */}

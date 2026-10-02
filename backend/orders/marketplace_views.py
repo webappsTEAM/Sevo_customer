@@ -277,8 +277,9 @@ def _finalize_marketplace_orders(
                 total_amount = subtotal + delivery_fee
                 source_order_id = _generate_marketplace_order_number()
 
-                intake_items = [
-                    {
+                intake_items = []
+                for ci in s_items:
+                    intake_item = {
                         "basket_id": ci.basket_id,
                         "quantity": ci.quantity,
                         "unit_price": str(ci.unit_price_snapshot),
@@ -290,10 +291,6 @@ def _finalize_marketplace_orders(
                         "unit_price": str(ci.unit_price_snapshot),
                         "customization": ci.customization or {},
                     }
-                    if ci.basket_id:
-                        intake_item["basket_id"] = ci.basket_id
-                    else:
-                        intake_item["product_id"] = ci.seller_product_id
                     intake_items.append(intake_item)
 
                 payment_snapshot = {
@@ -534,8 +531,9 @@ class MarketplaceInitiatePaymentView(APIView):
             return _error("Cart total must be greater than zero.", status.HTTP_400_BAD_REQUEST)
 
         # Pre-checkout validation with Vendor before taking payment
-        validation_items = [
-            {
+        validation_items = []
+        for ci in cart_items:
+            validation_item = {
                 "basket_id": ci.basket_id,
                 "requested_quantity": ci.quantity,
                 "expected_unit_price": str(ci.unit_price_snapshot),
@@ -547,10 +545,6 @@ class MarketplaceInitiatePaymentView(APIView):
                 "expected_unit_price": str(ci.unit_price_snapshot),
                 "customization": ci.customization or {},
             }
-            if ci.basket_id:
-                validation_item["basket_id"] = ci.basket_id
-            else:
-                validation_item["product_id"] = ci.seller_product_id
             validation_items.append(validation_item)
 
         val_res = MarketplaceIntegrationClient.validate_cart(seller_id=None, items=validation_items)
