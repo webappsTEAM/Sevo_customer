@@ -45,7 +45,7 @@ def _valid_cart_type(cart_type):
 
 
 def _get_active_cart(customer, cart_type, create=False):
-    cart = Cart.objects.filter(customer=customer, cart_type=cart_type, status=CartStatus.ACTIVE).first()
+    cart = Cart.objects.filter(customer=customer, cart_type=cart_type, status=CartStatus.ACTIVE).prefetch_related("items", "items__package").first()
     if cart is None and create:
         cart = Cart.objects.create(customer=customer, cart_type=cart_type, status=CartStatus.ACTIVE)
     return cart

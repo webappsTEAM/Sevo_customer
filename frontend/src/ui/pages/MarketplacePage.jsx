@@ -605,7 +605,9 @@ export function MarketplacePage() {
         existing.product_count = existing.total_product_count
         if (Array.isArray(cat.children) && cat.children.length > 0) {
           const currentChildren = existing.children || []
-          existing.children = [...currentChildren, ...cat.children]
+          const existingChildKeys = new Set(currentChildren.map((c) => String(c.slug || c.id)))
+          const newChildren = cat.children.filter((c) => !existingChildKeys.has(String(c.slug || c.id)))
+          existing.children = [...currentChildren, ...newChildren]
         }
         if (!existing.image_url && cat.image_url) existing.image_url = cat.image_url
         if (!existing.image && cat.image) existing.image = cat.image
@@ -661,11 +663,14 @@ export function MarketplacePage() {
 
   // Stale request cancellation ref
   const activeRequestRef = useRef(0)
+  const isPollingRef = useRef(false)
 
   // Load Products with request cancellation token
-  const loadProducts = useCallback(async () => {
+  const loadProducts = useCallback(async (isSilent = false) => {
     const reqId = ++activeRequestRef.current
-    setLoading(true)
+    if (!isSilent) {
+      setLoading(true)
+    }
     try {
       const res = await fetchMarketplaceProducts({
         search: searchQuery,
@@ -687,11 +692,11 @@ export function MarketplacePage() {
       console.error("Failed to load marketplace products:", err)
       if (err?.status === 404 || err?.body?.code === "CATEGORY_NOT_FOUND") {
         setProducts([])
-      } else {
+      } else if (!isSilent) {
         showToast("Unable to load marketplace products. Please check connection.", "error")
       }
     } finally {
-      if (reqId === activeRequestRef.current) {
+      if (reqId === activeRequestRef.current && !isSilent) {
         setLoading(false)
       }
     }
@@ -726,6 +731,36 @@ export function MarketplacePage() {
     }, 250)
     return () => clearTimeout(timer)
   }, [loadProducts])
+
+  // Background Auto-Refresh Polling for Products & Active Order (15s interval)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState !== "visible") return
+      if (checkoutModalOpen || isPollingRef.current) return
+
+      isPollingRef.current = true
+      Promise.allSettled([
+        loadProducts(true),
+        reloadActiveOrder(),
+      ]).finally(() => {
+        isPollingRef.current = false
+      })
+    }, 15000)
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && !checkoutModalOpen) {
+        loadProducts(true)
+        reloadActiveOrder()
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
+  }, [loadProducts, checkoutModalOpen])
 
   // Load Cart
   const reloadCart = async () => {
