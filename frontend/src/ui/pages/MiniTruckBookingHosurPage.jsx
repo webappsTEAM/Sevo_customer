@@ -1334,6 +1334,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
         })),
         goodsCategoryId: selectedGoodsCategoryObj?.id,
         loadingHelp,
+        laneId: selectedRoute?._laneId,
       })
       if (cancelled) return
       setQuoteLoading(false)
@@ -1354,6 +1355,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
     JSON.stringify(intermediateStops.map((s) => [s.address, s.coords?.lat, s.coords?.lng])),
     selectedGoodsCategoryObj?.id,
     loadingHelp,
+    selectedRoute?._laneId,
   ])
 
 
@@ -1527,6 +1529,14 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
     }
   }
 
+  // GT_LANE_UI: a lane only applies to its own destination; if the customer edits the drop elsewhere, deselect it.
+  useEffect(() => {
+    if (selectedRoute?.to && drop && !String(drop).toLowerCase().includes(String(selectedRoute.to).toLowerCase())) {
+      setSelectedRoute(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drop])
+
   const handleRouteSelect = (route) => {
     const destination = route.to || route.destination_label || ""
     if (destination) {
@@ -1593,6 +1603,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
         drop: dropPoint,
         stops: located.map((l) => l.point),
         vehicleClass: (selectedVehicle || selectedVehicleEffective)?.vehicle_class || "",
+        laneId: selectedRoute?._laneId, // GT_LANE_COVCHECK
       })
       if (cancelled) return
       const stopIssue = coverageIssueForStops(res, located)
@@ -1602,7 +1613,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
     }, 300)
     return () => { cancelled = true; clearTimeout(timer) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pickupPoint?.lat, pickupPoint?.lng, dropPoint?.lat, dropPoint?.lng, stopsCoverageKey, (selectedVehicle || selectedVehicleEffective)?.vehicle_class])
+  }, [pickupPoint?.lat, pickupPoint?.lng, dropPoint?.lat, dropPoint?.lng, stopsCoverageKey, (selectedVehicle || selectedVehicleEffective)?.vehicle_class, selectedRoute?._laneId])
 
   const handleGetEstimate = (e) => {
     if (e) e.preventDefault()
@@ -1694,6 +1705,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
           })),
           goodsCategoryId: selectedGoodsCategoryObj?.id,
           loadingHelp,
+          laneId: selectedRoute?._laneId,
         })
         setQuoteLoading(false)
         if (freshQuote && !freshQuote.error && freshQuote.total != null) {
@@ -1961,6 +1973,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
             })),
             goodsCategoryId: selectedGoodsCategoryObj?.id,
             loadingHelp,
+            laneId: selectedRoute?._laneId,
           }).then((fresh) => {
             if (fresh && !fresh.error && fresh.total != null) {
               setServerQuote(fresh)
@@ -2335,7 +2348,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                       type="button"
                       onClick={() => setMapPickerTarget("pickup")}
                       title="Pick on interactive map"
-                      className="text-slate-400 hover:text-emerald-600 p-1 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer"
+                      className="text-slate-400 hover:text-emerald-600 p-2.5 -m-1.5 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer"
                     >
                       <MapPin className="w-3.5 h-3.5 text-emerald-600 hover:scale-110 transition-transform" />
                     </button>
@@ -2344,7 +2357,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                       onClick={handleFetchLiveLocation}
                       disabled={isDetectingLocation}
                       title="Fetch live GPS location"
-                      className="text-slate-400 hover:text-emerald-600 p-1 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer"
+                      className="text-slate-400 hover:text-emerald-600 p-2.5 -m-1.5 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer"
                     >
                       {isDetectingLocation ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
@@ -2465,7 +2478,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                     type="button"
                     onClick={() => setMapPickerTarget("drop")}
                     title="Pick on interactive map"
-                    className="absolute right-2 text-slate-400 hover:text-emerald-600 p-1 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer"
+                    className="absolute right-2 text-slate-400 hover:text-emerald-600 p-2.5 -m-1.5 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer"
                   >
                     <MapPin className="w-3.5 h-3.5 text-rose-500 hover:scale-110 transition-transform" />
                   </button>

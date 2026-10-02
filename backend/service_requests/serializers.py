@@ -585,6 +585,10 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"preferred_date": slot_error})
         if (attrs.get("logistics_booking_mode") or "spot") != "ptl":
             from .booking_window import slot_capacity_error
+            from .booking_window import unknown_slot_error  # GT_SLOT_UNKNOWN
+            _unk = unknown_slot_error(attrs.get("service_category"), attrs.get("preferred_time"), city=attrs.get("city") or "")
+            if _unk:
+                raise serializers.ValidationError({"preferred_time": _unk, "code": "SLOT_UNKNOWN"})
             _cap_err = slot_capacity_error(
                 attrs.get("service_category"), attrs.get("preferred_date"), attrs.get("preferred_time"),
                 city=attrs.get("city") or "",

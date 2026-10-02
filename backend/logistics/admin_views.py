@@ -1160,6 +1160,17 @@ def _normalize_lane_category(raw, default="truck"):
     return val if val in LogisticsCategory.values else None
 
 
+# GT_LANE_ADMIN_COORDS
+def _lane_coords_error(category, is_active, fare, lat, lng):
+    """A fixed-fare lane is authoritative only when its destination can be verified."""
+    if category in ("truck", "two_wheeler") and is_active and fare is not None and fare > 0 and (lat is None or lng is None):
+        return _fail(
+            "A fixed-fare lane needs destination latitude and longitude so the drop can be verified.",
+            "LANE_COORDS_REQUIRED", status.HTTP_400_BAD_REQUEST,
+        )
+    return None
+
+
 class AdminLaneListView(APIView):
     """
     GET  /api/logistics/admin/lanes/  -- list all lanes with filtering
@@ -1266,6 +1277,9 @@ class AdminLaneListView(APIView):
             if not _can(request.user, "modify_price"):
                 return _fail("Setting a lane's PTL rate requires the 'modify_price' permission on the Pricing module.",
                              "PRICING_FORBIDDEN", status.HTTP_403_FORBIDDEN)
+        _ce = _lane_coords_error(category, bool(data.get("is_active", True)), fare, dest_lat, dest_lng)
+        if _ce is not None:
+            return _ce
         lane = Lane.objects.create(
             category=category,
             city=city,
@@ -1412,6 +1426,10 @@ class AdminLaneDetailView(APIView):
                 lane.is_active = b_val
                 changes.append("is_active")
 
+        if changes and any(c in changes for c in ("fare", "destination_latitude", "destination_longitude", "is_active")):
+            _ce = _lane_coords_error(lane.category, lane.is_active, lane.fare, lane.destination_latitude, lane.destination_longitude)
+            if _ce is not None:
+                return _ce
         if changes:
             lane.save()
 

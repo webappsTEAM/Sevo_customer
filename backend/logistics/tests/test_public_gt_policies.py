@@ -67,3 +67,23 @@ class PublicGTPolicyTests(APITestCase):
         self.assertIn("not insured by default", d["terms"][0])
         self.assertNotIn("insurance at booking", d["terms"][0])  # P&M is not sold transit insurance
         self.assertFalse(any("final fare" in t or "drop location" in t for t in d["terms"]))
+
+
+class EwayTermsConfigTests(APITestCase):
+    """GT_EWAY_TERMS: customer states responsibility; SEVO does not claim to generate; threshold is Admin config."""
+    def _terms(self):
+        return self.client.get(URL, {"service_category": "goods_transport_truck"}).json()["data"]["terms"]
+
+    def test_default_threshold_and_responsibility_wording(self):
+        t = " ".join(self._terms())
+        self.assertIn("You (the consignor) are responsible", t)
+        self.assertIn("SEVO does not generate e-way bills", t)
+        self.assertIn("₹50000", t)
+
+    def test_admin_threshold_is_used(self):
+        from service_requests.models import GTOperationsConfig
+        GTOperationsConfig.objects.all().delete()
+        GTOperationsConfig.objects.create(eway_bill_required_above=Decimal("75000"), is_active=True)
+        t = " ".join(self._terms())
+        self.assertIn("₹75000", t)
+        self.assertNotIn("₹50000", t)

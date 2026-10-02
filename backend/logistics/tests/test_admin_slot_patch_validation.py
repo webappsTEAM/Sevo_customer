@@ -36,7 +36,7 @@ class AdminLanePatchValidationTests(TestCase):
         U = get_user_model()
         self.admin = U.objects.create_superuser("laneadm", "laneadm@x.com", "pw12345678")
         self.c = APIClient(); self.c.force_authenticate(self.admin)
-        r = self.c.post("/api/logistics/admin/lanes/", {"category": "truck", "city": "Hosur", "destination_label": "QA Hub", "fare": "1000"}, format="json")
+        r = self.c.post("/api/logistics/admin/lanes/", {"category": "truck", "city": "Hosur", "destination_label": "QA Hub", "fare": "1000", "destination_latitude": "12.9716", "destination_longitude": "77.5946"}, format="json")
         self.assertEqual(r.status_code, 200, r.content)
         self.id = r.json()["data"]["id"]; self.Lane = Lane
 

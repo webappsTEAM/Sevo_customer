@@ -91,3 +91,59 @@ def covered_area_zones(*, company, city_slug, category):
             covered.append(zone)
     covered.sort(key=lambda z: (z.name or "").lower())
     return covered
+
+
+# GT_LANE_FARE: lane selection rules shared by the quote endpoint, the booking gate and the pricer.
+LANE_DESTINATION_TOLERANCE_KM = 15.0
+
+
+def _km_between(la1, lo1, la2, lo2):
+    import math
+    p1, p2 = math.radians(float(la1)), math.radians(float(la2))
+    dphi, dl = p2 - p1, math.radians(float(lo2) - float(lo1))
+    a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 6371.0 * 2 * math.asin(math.sqrt(a))
+
+
+def lane_fixed_fare_configured(lane):
+    from decimal import Decimal, InvalidOperation
+    try:
+        return lane is not None and lane.fare is not None and Decimal(str(lane.fare)) > 0
+    except (InvalidOperation, ValueError, TypeError):
+        return False
+
+
+def validate_lane_selection(lane, tier, drop_lat, drop_lng):
+    """Returns (error_code, message, fixed_fare_applies). error_code is '' when the selection is acceptable.
+    * no lane                       -> ok, not fixed
+    * inactive / wrong category     -> error
+    * lane without a fixed fare     -> ok, not fixed (normal distance pricing)
+    * fixed fare                    -> drop must be within LANE_DESTINATION_TOLERANCE_KM of the lane destination
+    """
+    if lane is None:
+        return "", "", False
+    if not getattr(lane, "is_active", False):
+        return "LANE_INACTIVE", "This route is not currently available.", False
+    tcat = getattr(tier, "category", None)
+    if tier is not None and tcat and getattr(lane, "category", None) != tcat:
+        return "LANE_CATEGORY_MISMATCH", "This route is not available for the selected vehicle type.", False
+    if not lane_fixed_fare_configured(lane):
+        return "", "", False
+    la, lo = lane.destination_latitude, lane.destination_longitude
+    if la is None or lo is None:
+        return "", "", False  # destination not configured: cannot be verified, keeps legacy distance pricing
+    if drop_lat is None or drop_lng is None:
+        return "LANE_DESTINATION_MISMATCH", "The drop location does not match the selected route.", False
+    try:
+        km = _km_between(la, lo, drop_lat, drop_lng)
+    except (TypeError, ValueError):
+        return "LANE_DESTINATION_MISMATCH", "The drop location does not match the selected route.", False
+    if km > LANE_DESTINATION_TOLERANCE_KM:
+        return "LANE_DESTINATION_MISMATCH", "The drop location does not match the selected route.", False
+    return "", "", True
+
+
+def lane_drop_waiver(lane, drop_lat, drop_lng, tier=None):
+    """True when an explicitly selected, active, fixed-fare lane covers this drop (pickup is still zone-checked)."""
+    code, _msg, fixed = validate_lane_selection(lane, tier, drop_lat, drop_lng)
+    return bool(not code and fixed)

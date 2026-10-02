@@ -526,7 +526,7 @@ export function MultiStopRouteManager({
             onClick={() => addStopAt(index)}
             aria-label={index === 0 ? "Add a stop right after pickup" : index >= stops.length ? "Add a stop right before drop" : `Add a stop before stop ${index + 1}`}
             title="Add a stop here"
-            className="w-5 h-5 rounded-full border border-blue-300 bg-white text-blue-600 hover:bg-blue-600 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+            className="relative before:absolute before:-inset-2.5 before:content-[''] w-5 h-5 rounded-full border border-blue-300 bg-white text-blue-600 hover:bg-blue-600 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
           >
             <Plus className="w-3 h-3" />
           </button>
@@ -792,7 +792,7 @@ export function MultiStopRouteManager({
       {route.length >= 2 && (
         <div>
           <button type="button" onClick={() => setShowMap((v) => !v)}
-            className="text-[11px] font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 mb-1.5 cursor-pointer">
+            className="text-[11px] font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 mb-1.5 cursor-pointer min-h-[32px]">
             <MapIcon className="w-3.5 h-3.5" /> {showMap ? "Hide route map" : "Show route map"}
           </button>
           {showMap && <RoutePreviewMap points={route} highlightId={highlightId} serviceSlug={serviceSlug} />}

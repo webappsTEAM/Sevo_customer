@@ -528,6 +528,27 @@ class ServiceZoneCheckView(APIView):
                 vehicle_class=vehicle_class,
                 stops=data.get("stops") or data.get("waypoints"),
             )
+            # GT_LANE_COVCHECK: an explicitly selected, active, fixed-fare lane serves its own destination
+            # (pickup still zone-checked); same rule as the quote and booking gates.
+            _lane_waived = False
+            if not route.allowed and route.failed_point == "drop" and data.get("lane_id") not in (None, ""):
+                try:
+                    from logistics.models import Lane
+                    from logistics.coverage import validate_lane_selection
+                    _cat = {"goods_transport_truck": "truck", "goods_transport_two_wheeler": "two_wheeler"}.get(service_slug)
+                    _lane = Lane.objects.filter(id=int(data.get("lane_id"))).first()
+                    if _lane is not None and _cat and _lane.category == _cat:
+                        _lc, _lm, _fixed = validate_lane_selection(_lane, None, raw_drop_lat, raw_drop_lng)
+                        _lane_waived = bool(not _lc and _fixed)
+                except (TypeError, ValueError):
+                    _lane_waived = False
+            if _lane_waived:
+                return Response({
+                    "in_zone": True, "service_allowed": True, "failed_point": "", "failed_stop_index": None,
+                    "error_code": "", "message": "", "coming_soon_zone": None, "open_access": False,
+                    "pickup_zone": {"id": route.pickup_zone_id, "name": route.pickup_zone_name} if route.pickup_zone_id else None,
+                    "drop_zone": None, "lane_applied": True,
+                })
             return Response({
                 "in_zone": route.allowed,
                 "service_allowed": route.allowed,

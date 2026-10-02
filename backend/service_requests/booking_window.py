@@ -169,6 +169,30 @@ def slot_capacity_error(service_category, preferred_date, preferred_time, city="
     return None
 
 
+# GT_SLOT_UNKNOWN
+def unknown_slot_error(service_category, preferred_time, city=""):
+    """Error string when slots are configured for this category/city and the label matches none of them."""
+    cat = (service_category or "").strip().lower()
+    keys = _SLOT_CATEGORY_KEYS.get(cat)
+    label = str(preferred_time or "").strip()
+    if not keys or not label or label.lower().startswith("immediate"):
+        return None
+    try:
+        from django.db.models import Q
+        from logistics.models import LogisticsSlot
+        slots = LogisticsSlot.objects.filter(is_active=True).filter(Q(category="") | Q(category__in=keys))
+        city = str(city or "").strip()
+        if city:
+            slots = slots.filter(Q(city="") | Q(city__iexact=city))
+        if not slots.exists():
+            return None
+        if slots.filter(slot_label__iexact=label).exists():
+            return None
+    except Exception:
+        return None
+    return "That time slot is not available. Please choose one of the listed slots."
+
+
 def validate_booking_slot(preferred_date, preferred_time=None, now=None, service_category=None, service=None):
     """
     Validate a requested date/slot against the booking window and service time slot engine.

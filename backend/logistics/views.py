@@ -392,6 +392,23 @@ class LogisticsQuoteView(APIView):
             request, category, tier, pickup_lat, pickup_lng, drop_lat, drop_lng,
             stops=data.get("waypoints") or data.get("intermediate_stops"),
         )
+        # GT_LANE_FARE: an explicitly selected lane is validated here and priced by the single backend pricer.
+        lane = None
+        if data.get("lane_id") not in (None, ""):
+            from .coverage import validate_lane_selection
+            try:
+                lane = Lane.objects.filter(id=int(data.get("lane_id"))).first()
+            except (TypeError, ValueError):
+                lane = None
+            if lane is None:
+                return Response({"success": False, "error_code": "LANE_NOT_FOUND", "message": "The selected route was not found."},
+                                status=status.HTTP_400_BAD_REQUEST)
+            _lc, _lm, _lane_fixed = validate_lane_selection(lane, tier, drop_lat, drop_lng)
+            if _lc:
+                return Response({"success": False, "error_code": _lc, "message": _lm}, status=status.HTTP_400_BAD_REQUEST)
+            if _lane_fixed and not coverage.allowed and coverage.failed_point == "drop":
+                from settings_hub.service_zone_engine import RouteCoverageResult
+                coverage = RouteCoverageResult(allowed=True)
         if not coverage.allowed:
             return Response(
                 {
@@ -497,6 +514,7 @@ class LogisticsQuoteView(APIView):
                 # for this category -- see gst_policy.resolve_tax_treatment).
                 service_category=category,
                 customer_gstin=data.get("customer_gstin"),
+                lane=lane,
             )
         except TooManyStopsError as exc:
             return Response(
@@ -552,7 +570,8 @@ class LogisticsQuoteView(APIView):
             "quote_hash": payload.get("quote_hash"),
             "created_at": payload.get("created_at"),
             "expires_at": payload.get("expires_at"),
-            "pricing_mode": "distance",
+            "pricing_mode": "lane_fixed" if payload.get("fare_basis") == "lane_fixed" else "distance",
+            "lane_id": payload.get("lane_id"),
             "is_authoritative": bool(payload.get("is_authoritative", False)),
             "is_estimate": bool(payload.get("is_estimate", False)),
             "distance_source": payload.get("distance_source"),

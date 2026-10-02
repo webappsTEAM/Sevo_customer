@@ -23,7 +23,8 @@ class AdminLaneCategoryRegressionTests(TestCase):
 
     def _create(self, category, **extra):
         body = {"category": category, "city": "hosur", "destination_label": "Bengaluru Hub",
-                "fare": "1500", "ptl_rate_per_kg": "3.00", **extra}
+                "fare": "1500", "ptl_rate_per_kg": "3.00",
+                "destination_latitude": "12.9716", "destination_longitude": "77.5946", **extra}
         return self.c.post("/api/logistics/admin/lanes/", body, format="json")
 
     def test_legacy_form_value_is_stored_as_truck_and_prices_everywhere(self):
@@ -67,3 +68,36 @@ class AdminLaneCategoryRegressionTests(TestCase):
         self.assertEqual(r.status_code, 200, r.content)
         lane.refresh_from_db()
         self.assertEqual(lane.category, "two_wheeler")
+
+
+class AdminLaneFixedFareNeedsCoordinatesTests(TestCase):
+    """GT_LANE_ADMIN_COORDS: a fixed-fare truck/2W lane must be verifiable."""
+    URL = "/api/logistics/admin/lanes/"
+
+    def setUp(self):
+        self.c = APIClient()
+        self.c.force_authenticate(_user("admin"))
+
+    def _post(self, **extra):
+        body = {"category": "truck", "city": "hosur", "destination_label": "Bengaluru", "fare": "900", **extra}
+        return self.c.post(self.URL, body, format="json")
+
+    def test_create_without_coordinates_refused(self):
+        r = self._post()
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["error_code"] if "error_code" in r.json() else r.json().get("code"), "LANE_COORDS_REQUIRED")
+        self.assertFalse(Lane.objects.exists())
+
+    def test_create_with_coordinates_ok_and_zero_fare_or_inactive_exempt(self):
+        self.assertEqual(self._post(destination_latitude="12.97", destination_longitude="77.59").status_code, 200)
+        self.assertEqual(self._post(destination_label="Zero", fare="0").status_code, 200)
+        self.assertEqual(self._post(destination_label="Off", is_active=False).status_code, 200)
+
+    def test_patch_cannot_clear_coordinates_or_activate_coordless_fare_lane(self):
+        lane = Lane.objects.create(category="truck", city="hosur", destination_label="L", fare=Decimal("0"),
+                                   destination_latitude=Decimal("12.97"), destination_longitude=Decimal("77.59"), is_active=True)
+        url = f"{self.URL}{lane.id}/"
+        self.assertEqual(self.c.patch(url, {"fare": "800"}, format="json").status_code, 200)
+        self.assertEqual(self.c.patch(url, {"destination_latitude": ""}, format="json").status_code, 400)
+        lane.refresh_from_db()
+        self.assertIsNotNone(lane.destination_latitude)

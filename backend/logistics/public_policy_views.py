@@ -100,8 +100,18 @@ def build_policy_terms(category):
                      "recalculated at your booked per-km rate.")
     # GST e-way bill (statutory, CGST Rule 138): goods moving between states above Rs. 50,000 in
     # value need one. Hosur-Bengaluru and other lanes cross a state border, so say it up front.
-    terms.append("For goods worth more than Rs. 50,000 moving between states, keep a valid GST e-way bill "
-                 "and hand it to the driver at pickup.")
+    # GT_EWAY_TERMS: threshold is Admin configuration; the customer (consignor) provides the e-way bill.
+    _thr = None
+    try:
+        from service_requests.models import GTOperationsConfig
+        _cfg = GTOperationsConfig.objects.filter(is_active=True).order_by("-updated_at", "-id").first()
+        _thr = _cfg.eway_bill_required_above if _cfg is not None else Decimal("50000")
+    except Exception:
+        _thr = None
+    _above = f" worth {_rupees(_thr)} or more" if _thr is not None else ""
+    terms.append(f"You (the consignor) are responsible for providing and maintaining any e-way bill and other GST compliance "
+                 f"documents the law requires for your goods{_above}. SEVO does not generate e-way bills; "
+                 f"keep it ready and hand it to the driver at pickup.")
     return terms, cancellation, waiting, extra, claims
 
 

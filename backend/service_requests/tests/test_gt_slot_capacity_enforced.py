@@ -35,3 +35,18 @@ class SlotCapacityTests(TestCase):
 
     def test_unconfigured_label_is_not_blocked(self):
         self.assertIsNone(slot_capacity_error("packers_movers", self.day, "Morning", "hosur"))
+
+
+class UnknownSlotLabelTests(TestCase):
+    """GT_SLOT_UNKNOWN: a label matching no configured slot is refused; immediate and unconfigured cities are not."""
+    def setUp(self):
+        LogisticsSlot.objects.create(category="packers_movers", city="hosur", group="Morning", slot_label="07:00 AM - 08:00 AM",
+                                     start_time="07:00", end_time="08:00", capacity=1, order=1, is_active=True)
+
+    def test_unknown_label_refused_known_and_immediate_ok(self):
+        from service_requests.booking_window import unknown_slot_error
+        self.assertIsNotNone(unknown_slot_error("packers_movers", "03:33 AM - 04:00 AM", "hosur"))
+        self.assertIsNone(unknown_slot_error("packers_movers", "07:00 am - 08:00 am", "hosur"))
+        self.assertIsNone(unknown_slot_error("packers_movers", "Immediate / Next Available", "hosur"))
+        self.assertIsNone(unknown_slot_error("packers_movers", "anything", "chennai"))  # a city with its own slots would still be checked
+        self.assertIsNone(unknown_slot_error("grocery", "whatever", "hosur"))

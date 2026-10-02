@@ -76,7 +76,7 @@ export async function evaluateCargoFitment(payload) {
  * for display only, and never treat that as an authoritative fare.
  */
 export async function fetchLogisticsQuote({
-  serviceCategory, tierId, pickup, drop, stopCount, waypoints, cargoItems, goodsCategoryId, goodsCategorySlug, declaredWeightKg, loadingHelp,
+  serviceCategory, tierId, pickup, drop, stopCount, waypoints, cargoItems, goodsCategoryId, goodsCategorySlug, declaredWeightKg, loadingHelp, laneId,
 }) {
   if (!serviceCategory || !tierId || !pickup?.lat || !pickup?.lng || !drop?.lat || !drop?.lng) {
     return { error: true, errorCode: "COORDINATES_REQUIRED" }
@@ -98,6 +98,8 @@ export async function fetchLogisticsQuote({
         ...(goodsCategorySlug ? { goods_category: goodsCategorySlug } : {}),
         ...(declaredWeightKg != null ? { declared_weight_kg: declaredWeightKg } : {}),
         ...(loadingHelp === false ? { loading_help: false } : {}),
+        // GT_LANE_UI: the backend validates the lane and prices it; the client never computes a lane fare.
+        ...(laneId ? { lane_id: laneId } : {}),
       },
     })
     const data = res?.data || res
@@ -320,7 +322,7 @@ export async function checkPointCoverage({ serviceCategory, point, location, veh
   }
 }
 
-export async function checkRouteCoverage({ serviceCategory, pickup, drop, vehicleClass, stops }) {
+export async function checkRouteCoverage({ serviceCategory, pickup, drop, vehicleClass, stops, laneId }) {
   if (!pickup?.lat || !pickup?.lng || !drop?.lat || !drop?.lng) return { inCoverage: true, skipped: true }
   try {
     const res = await apiRequest("/settings/service-zones/check/", {
@@ -334,6 +336,8 @@ export async function checkRouteCoverage({ serviceCategory, pickup, drop, vehicl
         // Intermediate stops must be inside coverage too (same rule as pickup/drop).
         ...(Array.isArray(stops) && stops.length > 0 ? { stops: stops.map((p) => ({ lat: p.lat, lng: p.lng })) } : {}),
         ...(vehicleClass ? { vehicle_class: vehicleClass } : {}),
+        // GT_LANE_COVCHECK: lane is validated server-side; the client never decides coverage.
+        ...(laneId ? { lane_id: laneId } : {}),
       },
     })
     const data = res?.data || res || {}

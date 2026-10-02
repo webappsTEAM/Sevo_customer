@@ -228,10 +228,13 @@ def _get_company(request):
     # company), and only fall back to the old count()==1 heuristic if that
     # slug isn't found -- so a clean single-company environment (e.g. a
     # fresh install) still works without any extra configuration.
+    # GT_COMPANY_FALLBACK: try the configured slug, then the known operating-company slugs, so a missing env
+    # var cannot leave company=None (which turns GT zone checks open-access and blocks dispatch).
     default_slug = os.environ.get("DEFAULT_COMPANY_SLUG", "calservices")
-    company = Company.objects.filter(slug=default_slug).first()
-    if company:
-        return company
+    for _slug in (default_slug, "calservices", "caldim-engineering-services"):
+        company = Company.objects.filter(slug=_slug).first()
+        if company:
+            return company
     if Company.objects.count() == 1:
         return Company.objects.first()
     return None
@@ -535,6 +538,13 @@ class BookingCreateView(APIView):
                 # Intermediate stops must be covered (and located) too.
                 stops=(request.data.get("stops") or request.data.get("trip_stops") or request.data.get("waypoints")),
             )
+            # GT_LANE_COVERAGE: a published lane's own destination is served even outside the local zone.
+            _gt_lane = serializer.validated_data.get("logistics_lane")
+            if not route_result.allowed and route_result.failed_point == "drop" and _gt_lane is not None:
+                from logistics.coverage import lane_drop_waiver
+                if lane_drop_waiver(_gt_lane, serializer.validated_data.get("drop_latitude"), serializer.validated_data.get("drop_longitude"), tier=_tier):
+                    from settings_hub.service_zone_engine import RouteCoverageResult
+                    route_result = RouteCoverageResult(allowed=True, pickup_zone_id=route_result.pickup_zone_id, pickup_zone_name=route_result.pickup_zone_name)
             if not route_result.allowed:
                 if idem_cache_key:
                     from django.core.cache import cache

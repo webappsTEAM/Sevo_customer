@@ -337,6 +337,7 @@ def quote_logistics_fare(
     loading_help=True,
     service_category=None,
     customer_gstin=None,
+    lane=None,
 ):
     """
     Compute a real, itemised, distance-based fare for one goods-transport
@@ -345,9 +346,18 @@ def quote_logistics_fare(
     """
     if tier is None:
         return None
+    # GT_LANE_FARE: an explicitly selected, active lane with a configured fixed fare IS the transport fare.
+    _lane_fixed = False
+    if lane is not None:
+        from logistics.coverage import validate_lane_selection
+        _lc, _lm, _lane_fixed = validate_lane_selection(lane, tier, drop_lat, drop_lng)
+        if _lc:
+            raise UnresolvedLogisticsFareError(f"{_lc}: {_lm}")
     per_km_rate = getattr(tier, "per_km_rate", None)
-    if per_km_rate is None:
+    if per_km_rate is None and not _lane_fixed:
         return None
+    if per_km_rate is None:
+        per_km_rate = Decimal("0")
     if None in (pickup_lat, pickup_lng, drop_lat, drop_lng):
         return None
 
@@ -395,6 +405,8 @@ def quote_logistics_fare(
         stop_count = len(points)
     else:
         route = get_route_eta(pickup_lat, pickup_lng, drop_lat, drop_lng)
+        if route is None and _lane_fixed:
+            route = {"distance_km": float(getattr(lane, "distance_km", None) or 0), "duration_seconds": 0, "source": "lane_fixed_fare"}
         if route is None:
             return None
 
@@ -410,6 +422,11 @@ def quote_logistics_fare(
     base_fare = _money(base_fare)
 
     distance_charge = _money(chargeable_km * _money(per_km_rate))
+    if _lane_fixed:
+        # GT_LANE_FARE: the Admin-configured lane fare replaces base + distance; configured add-ons below still apply.
+        base_fare = _money(lane.fare)
+        chargeable_km = Decimal("0.00")
+        distance_charge = Decimal("0.00")
     # Loading / unloading help is an optional, separately charged add-on (Porter's
     # "Load Assist"); the tier's admin-set charge applies only when it is requested.
     loading = _money(getattr(tier, "loading_unloading_charge", 0) or 0) if loading_help else Decimal("0.00")
@@ -437,15 +454,15 @@ def quote_logistics_fare(
 
     surge = getattr(tier, "surge_multiplier", None)
     surge = _money(surge) if surge is not None else Decimal("1.00")
-    if surge <= 0:
-        surge = Decimal("1.00")
+    if surge <= 0 or _lane_fixed:
+        surge = Decimal("1.00")  # a fixed lane fare is not surge-priced
     total = _money(subtotal * surge)
 
     minimum_fare = getattr(tier, "minimum_fare", None)
     minimum_applied = False
     if minimum_fare is not None:
         minimum_fare = _money(minimum_fare)
-        if total < minimum_fare:
+        if total < minimum_fare and not _lane_fixed:
             total = minimum_fare
             minimum_applied = True
 
@@ -477,7 +494,7 @@ def quote_logistics_fare(
         gst_rate_str = None
 
     source = route.get("source")
-    is_authoritative = (source == "google_maps")
+    is_authoritative = (source == "google_maps") or _lane_fixed
     is_estimate = not is_authoritative
     estimate_notice = (
         "Road routing unavailable; this fare is an estimate based on straight-line distance and is subject to actual road distance verification."
@@ -521,6 +538,8 @@ def quote_logistics_fare(
     canonical_route_str = f"{round(float(pickup_lat), 5)},{round(float(pickup_lng), 5)}->{round(float(drop_lat), 5)},{round(float(drop_lng), 5)}"
     wp_str = ";".join(f"{p[0]},{p[1]}" for p in canonical_waypoints)
     raw_hash_str = f"{getattr(tier, 'id', '')}:{canonical_route_str}:{wp_str}:{cargo_hash_str}:{chargeable_km}:{total}:{stops}"
+    if _lane_fixed:
+        raw_hash_str += f":lane{lane.id}:{base_fare}"
     quote_hash = hashlib.sha256(raw_hash_str.encode("utf-8")).hexdigest()[:16]
 
     cached_data = {
@@ -544,6 +563,8 @@ def quote_logistics_fare(
         "stops": stops,
         "loading_help": bool(loading_help),
         "cargo_hash": cargo_hash_str,
+        "lane_id": lane.id if _lane_fixed else None,
+        "fare_basis": "lane_fixed" if _lane_fixed else "distance",
     }
 
     breakdown = LogisticsFareBreakdown(
@@ -594,6 +615,10 @@ def quote_logistics_fare(
         is_estimate=is_estimate,
         estimate_notice=estimate_notice,
         currency=getattr(tier, "currency", "INR") or "INR",
+        fare_basis="lane_fixed" if _lane_fixed else "distance",
+        lane_id=lane.id if _lane_fixed else None,
+        lane_label=(getattr(lane, "destination_label", "") if _lane_fixed else ""),
+        lane_fixed_fare=(_money(lane.fare) if _lane_fixed else None),
     )
     cached_data["breakdown"] = dict(breakdown)
     try:
@@ -834,6 +859,13 @@ def resolve_logistics_fare_v2(
         )
 
     if service_category in DISTANCE_PRICED_CATEGORIES:
+        # GT_LANE_FARE: validate an explicitly selected lane before any price is produced.
+        _sel_lane = logistics_lane
+        if _sel_lane is not None:
+            from logistics.coverage import validate_lane_selection
+            _lc, _lm, _ = validate_lane_selection(_sel_lane, logistics_tier, drop_lat, drop_lng)
+            if _lc:
+                raise UnresolvedLogisticsFareError(f"{_lc}: {_lm}")
         submitted_quote_id = None
         submitted_quote_hash = None
         submitted_expires_at = None
@@ -935,6 +967,18 @@ def resolve_logistics_fare_v2(
                 if quoted_tier_id and logistics_tier and str(quoted_tier_id) != str(logistics_tier.id):
                     raise UnresolvedLogisticsFareError(
                         f"Quote tier mismatch: quote '{submitted_quote_id}' was generated for tier #{quoted_tier_id}, but tier #{logistics_tier.id} ({getattr(logistics_tier, 'name', '')}) was selected."
+                    )
+
+                # GT_LANE_FARE: a quote is bound to the lane it was priced for (and to 'no lane').
+                _req_lane_id = getattr(logistics_lane, "id", None) if logistics_lane is not None else None
+                _fixed_here = False
+                if _req_lane_id is not None:
+                    from logistics.coverage import validate_lane_selection as _vls
+                    _fixed_here = _vls(logistics_lane, logistics_tier, drop_lat, drop_lng)[2]
+                _quoted_lane_id = cached_quote.get("lane_id")
+                if str(_quoted_lane_id or "") != str((_req_lane_id if _fixed_here else None) or ""):
+                    raise UnresolvedLogisticsFareError(
+                        "Quote lane mismatch: the selected route does not match the quoted route. Please recalculate fare."
                     )
 
                 # 2. Authoritative Route Verification: Cannot substitute arbitrary coordinates
@@ -1084,6 +1128,7 @@ def resolve_logistics_fare_v2(
             cargo_summary=cargo_summary,
             waypoints=extracted_waypoints,
             service_category=service_category,
+            lane=logistics_lane,
         )
         if breakdown is not None:
             if not breakdown.get("is_cargo_fit", True):
