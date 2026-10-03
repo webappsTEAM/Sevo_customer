@@ -165,6 +165,8 @@ class LoginView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
     def post(self, request, *args, **kwargs):
+        if not hasattr(request.data, "get"):  # GT_BODY_OBJECT: a JSON array/string body crashed with a 500
+            return Response({"error": "Request body must be a JSON object.", "code": "INVALID_BODY"}, status=400)
         response = super().post(request, *args, **kwargs)
         if response.status_code == 200:
             # ── HIGH 3: 2FA enforcement ──────────────────────────────────────

@@ -276,6 +276,10 @@ class WorkforceWebhookView(APIView):
                     
                     if sr.status in ["confirmed", "reviewed"]:
                         safe_apply_transition(sr, "assigned")
+                    # GT_DISPATCH_RECONCILE: an offer/assignment event proves Workforce is actively dispatching this job.
+                    # A handoff recorded as PENDING / PENDING_RETRY (held, or no vendor yet) must not stay PENDING forever.
+                    if sr.dispatch_status in (sr.DispatchStatus.PENDING, sr.DispatchStatus.PENDING_RETRY):
+                        sr.dispatch_status = sr.DispatchStatus.DISPATCHED
                     sr.save()
 
                     transaction.on_commit(lambda: self._broadcast_event(sr, "job_dispatched"))
@@ -340,6 +344,8 @@ class WorkforceWebhookView(APIView):
                         sr.external_assignment_id = assign_id
 
                     safe_apply_transition(sr, "accepted")
+                    if sr.dispatch_status in (sr.DispatchStatus.PENDING, sr.DispatchStatus.PENDING_RETRY):  # GT_DISPATCH_RECONCILE
+                        sr.dispatch_status = sr.DispatchStatus.DISPATCHED
                     sr.save()
 
                     transaction.on_commit(lambda: self._broadcast_event(sr, "employee_accepted"))
@@ -889,7 +895,7 @@ class WorkforceWebhookView(APIView):
                         cache.delete(f"wf_quote_{sr.id}")
                     except Exception:
                         pass
-                    transaction.on_commit(lambda: self._broadcast_event(sr, "quote_scope_reduced", payload))
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "quote_scope_reduced", {"scope_reduction": payload}))
 
                 webhook_event.processing_status = WorkforceWebhookEvent.ProcessingStatus.PROCESSED
                 webhook_event.processed_at = timezone.now()
@@ -1168,7 +1174,9 @@ class WorkforceWebhookView(APIView):
             logger.warning("Failed to record delivery proof for booking %s: %s", sr.id, exc)
 
     @classmethod
-    def _broadcast_event(cls, sr, event_type):
+    def _broadcast_event(cls, sr, event_type, extra=None):
+        # GT_BROADCAST_EXTRA: five callers pass the event's own data as a third argument; it is merged into the
+        # tracking payload. broadcast_tracking_event strips OTPs/phones for the shared (token) groups.
         # Was followed by a second `except Exception as e:` clause that was
         # unreachable (the first except already catches everything) and, even
         # if it had been reachable, wrongly returned an HTTP Response from a
@@ -1177,7 +1185,13 @@ class WorkforceWebhookView(APIView):
         # handler. Removed; behaviour is unchanged since it never executed.
         try:
             from service_requests.notifications import broadcast_tracking_event
-            broadcast_tracking_event(sr, event_type=event_type)
+            if isinstance(extra, dict) and extra:
+                from service_requests.views import _build_tracking_payload
+                data = _build_tracking_payload(sr, has_full_access=True)
+                data.update(extra)
+                broadcast_tracking_event(sr, event_type=event_type, custom_data=data)
+            else:
+                broadcast_tracking_event(sr, event_type=event_type)
         except Exception as b_err:
             logger.warning(f"Error broadcasting {event_type}: {b_err}")
 

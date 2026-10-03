@@ -1570,7 +1570,8 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
       // Self-healing: if quote was expired or rejected due to price/staleness, trigger fresh quote fetch
       const isQuoteIssue =
         /expired|invalid|recalculate|quote/i.test(detail) ||
-        err?.body?.code === "UNRESOLVED_FARE"
+        err?.body?.code === "UNRESOLVED_FARE" ||
+        err?.body?.code === "PRICE_CHANGED"
 
       if (isQuoteIssue) {
         const vehicle = selectedVehicle || TWO_WHEELER_VEHICLES[0]

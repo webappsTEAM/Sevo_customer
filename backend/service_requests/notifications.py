@@ -1712,6 +1712,9 @@ def broadcast_tracking_event(service_request, event_type="job_updated", custom_d
 
         from service_requests.views import _build_tracking_payload
         payload = custom_data or _build_tracking_payload(service_request, has_full_access=True)
+        # GT_TRACK_NO_OTP: these groups include sockets joined with only the public tracking token.
+        from service_requests.tracking_privacy import public_tracking_safe
+        payload = public_tracking_safe(payload)
 
         group_names = [
             f"tracking_{service_request.id}",

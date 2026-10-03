@@ -509,11 +509,25 @@ PAYTM_MOCK_SECRET = os.getenv("PAYTM_MOCK_SECRET", "").strip()
 # on a machine with no gateway credentials. Must never be enabled outside
 # local development.
 PAYMENT_SANDBOX_MODE = os.getenv("PAYMENT_SANDBOX_MODE", "0").strip().lower() in ("1", "true", "yes")
+# GT_SANDBOX_GUARD: sandbox mode accepts any payment signature. It must be impossible to enable in a non-DEBUG (production) process.
+if PAYMENT_SANDBOX_MODE and not DEBUG:
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured("PAYMENT_SANDBOX_MODE must not be enabled when DJANGO_DEBUG is off (it accepts forged payment signatures).")
 # Unpaid online/wallet logistics bookings are cancelled after this many minutes.
 GT_ONLINE_PAYMENT_WINDOW_MINUTES = int(os.getenv("GT_ONLINE_PAYMENT_WINDOW_MINUTES", "30") or 30)
 
 # ── Workforce Integration ────────────────────────────────────────────────────
-WORKFORCE_API_BASE_URL = os.getenv("WORKFORCE_API_BASE_URL", "http://localhost:8001/api/workforce" if DEBUG else "https://vendor.sevo.co.in/api/workforce").rstrip("/")
+# GT_CONFIG_GUARD: a non-DEBUG process must NAME its Workforce (vendor) URL (no silent fallback to the production vendor).
+_WF_URL = os.getenv("WORKFORCE_API_BASE_URL", "").strip()
+if not _WF_URL:
+    if DEBUG:
+        _WF_URL = "http://localhost:8001/api/workforce"
+    elif os.getenv("ALLOW_DEFAULT_WORKFORCE_URL", "").strip().lower() in ("1", "true", "yes"):
+        _WF_URL = "https://vendor.sevo.co.in/api/workforce"
+    else:
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured("WORKFORCE_API_BASE_URL must be set when DJANGO_DEBUG is off (no implicit production default).")
+WORKFORCE_API_BASE_URL = _WF_URL.rstrip("/")
 WORKFORCE_API_KEY = os.getenv("WORKFORCE_API_KEY", "").strip()
 WORKFORCE_WEBHOOK_SECRET = os.getenv(
     "WORKFORCE_WEBHOOK_SECRET",

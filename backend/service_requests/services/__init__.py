@@ -14,7 +14,7 @@ Rules:
 """
 from decimal import Decimal, InvalidOperation
 from django.db import transaction
-from django.db.models import Q, F
+from django.db.models import Q, F, Sum
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError, NotFound, PermissionDenied
 
@@ -450,6 +450,16 @@ def list_reschedule_requests(actor, persona, filters=None):
 
 def create_refund_request(booking, customer, amount, reason, additional_notes="", refund_type=RefundType.FULL):
     with transaction.atomic():
+        # GT_REFUND_CAP: serialise on the booking row and never let live refund requests exceed what was actually paid.
+        # (Concurrent late-payment verifications used to each pass an "already queued?" check and create duplicate full refunds.)
+        locked = type(booking).objects.select_for_update().filter(pk=booking.pk).first()
+        if locked is not None:
+            from .. import models as _m
+            _paid = _m.Payment.objects.filter(service_request_id=booking.pk, status=_m.ServiceRequest.PaymentStatus.PAID).aggregate(t=Sum("amount"))["t"]
+            _cap = Decimal(str(_paid)) if _paid else Decimal(str(booking.total_amount or 0))
+            _live = RefundRequest.objects.filter(booking=booking).exclude(status=RefundStatus.REJECTED).aggregate(t=Sum("requested_amount"))["t"] or Decimal("0")
+            if Decimal(str(amount)) + Decimal(str(_live)) > _cap:
+                raise ValidationError({"detail": f"Refund requests would exceed the amount paid ({_cap}); {_live} is already requested."})
         rr = RefundRequest.objects.create(
             booking=booking,
             customer=customer,

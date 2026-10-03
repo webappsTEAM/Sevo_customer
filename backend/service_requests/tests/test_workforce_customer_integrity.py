@@ -244,7 +244,7 @@ class WorkforceCustomerIntegrityTest(TestCase):
         res = self.client.get(url)
         data = res.json()["data"]
         self.assertEqual(data["status"], "arrived")
-        self.assertEqual(data["start_otp"], self.booking.start_otp)
+        self.assertIsNone(data["start_otp"])  # GT Pass 6: a token-only link never carries the OTP
 
     # 8. OTP valid -> work starts
     def test_08_otp_valid_transitions_to_in_progress(self):

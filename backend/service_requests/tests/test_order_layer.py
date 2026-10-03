@@ -48,6 +48,9 @@ class BookingCreateOrderLayerTests(APITestCase):
             email="order_layer_customer@example.com",
             role="CUSTOMER",
         )
+        # GT Pass 7: an anonymous caller is never attached to a registered account by phone/e-mail,
+        # so a customer-owned booking (and its Order) is made by the signed-in customer.
+        self.client.force_authenticate(self.customer)
 
     def _booking_payload(self, **overrides):
         payload = {

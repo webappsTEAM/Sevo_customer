@@ -725,7 +725,7 @@ class ServiceRequest(models.Model):
             _request_id_was_generated = True
         if self.customer and getattr(self.customer, "customer_id", None):
             self.customer_code = self.customer.customer_id
-        elif not self.customer_code and (self.phone or self.email):
+        elif not self.customer_code and (self.phone or self.email) and not __import__('service_requests.guest_identity', fromlist=['x']).autolink_suppressed():  # GT_GUEST_NO_ATTACH
             from django.contrib.auth import get_user_model
             User = get_user_model()
             q = models.Q()

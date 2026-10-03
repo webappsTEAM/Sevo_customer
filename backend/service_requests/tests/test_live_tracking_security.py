@@ -102,7 +102,7 @@ class LiveTrackingSecurityTests(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json().get("data", {})
         self.assertTrue(data.get("is_accepted"))
-        self.assertEqual(data.get("start_otp"), self.booking_a.start_otp)
+        self.assertIsNone(data.get("start_otp"))  # GT Pass 6: a token-only link never carries the OTP
         self.assertEqual(data.get("technician", {}).get("phone"), "9840123456")
         self.assertEqual(data.get("technician", {}).get("name"), "Ramesh Kumar")
         self.assertEqual(data.get("technician", {}).get("eta_minutes"), 8)
@@ -164,7 +164,7 @@ class LiveTrackingSecurityTests(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json().get("data", {})
         self.assertEqual(data.get("request_id"), self.booking_a.request_id)
-        self.assertEqual(data.get("start_otp"), self.booking_a.start_otp)
+        self.assertIsNone(data.get("start_otp"))  # GT Pass 6
         self.assertEqual(data.get("technician", {}).get("name"), "Ramesh Kumar")
 
     def test_public_tracking_endpoint_with_invalid_token_returns_404(self):

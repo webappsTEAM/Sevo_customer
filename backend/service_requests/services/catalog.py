@@ -433,7 +433,7 @@ _GT_NON_NEGATIVE_FIELDS = (
 )
 
 
-def _assert_gt_money_valid(data):
+def _assert_gt_money_valid(data, package=None):
     """
     Goods & Transport rates are mirrored straight onto the live ServiceTier, which the fare engine
     prices from. A negative (or non-finite) rate would flow there without ever passing the tier's
@@ -462,6 +462,53 @@ def _assert_gt_money_valid(data):
                 errors.setdefault("gt_max_weight_kg", []).append("Must be a finite number greater than 0.")
         except (InvalidOperation, TypeError, ValueError):
             errors.setdefault("gt_max_weight_kg", []).append("Enter a valid number.")
+
+    # GT_ADMIN_VALIDATE ------------------------------------------------------------------------------------------------
+    # (1) the surge multiplier multiplies every fare: it must be a positive finite number (the fare engine already ignores <= 0,
+    #     which silently hides the mistake); (2) a GST rate is a percentage; (3) a value larger than the tier column can hold used
+    #     to crash with a database overflow (HTTP 500) instead of a field message; (4) a rate card whose every fixed component is
+    #     zero makes every trip free.
+    if "gt_surge_multiplier" in data and data["gt_surge_multiplier"] not in (None, ""):
+        try:
+            _sv = Decimal(str(data["gt_surge_multiplier"]))
+            if not _sv.is_finite() or _sv <= 0:
+                errors.setdefault("gt_surge_multiplier", []).append("Must be a finite number greater than 0 (1 = no surge).")
+        except (InvalidOperation, TypeError, ValueError):
+            errors.setdefault("gt_surge_multiplier", []).append("Enter a valid number.")
+    if "gt_gst_rate" in data and data["gt_gst_rate"] not in (None, ""):
+        try:
+            _gv = Decimal(str(data["gt_gst_rate"]))
+            if not _gv.is_finite() or _gv < 0 or _gv > 100:
+                errors.setdefault("gt_gst_rate", []).append("Must be a percentage between 0 and 100.")
+        except (InvalidOperation, TypeError, ValueError):
+            errors.setdefault("gt_gst_rate", []).append("Enter a valid number.")
+    try:
+        from logistics.models import ServiceTier as _ST
+        _map = {"gt_base_fare": "base_fare", "gt_per_km_rate": "per_km_rate", "gt_free_km": "free_km",
+                "gt_loading_unloading_charge": "loading_unloading_charge", "gt_additional_stop_charge": "additional_stop_charge",
+                "gt_surge_multiplier": "surge_multiplier", "gt_minimum_fare": "minimum_fare", "gt_gst_rate": "gst_rate",
+                "gt_max_weight_kg": "max_weight_kg"}
+        for _gf, _tf in _map.items():
+            if _gf in errors or _gf not in data or data[_gf] in (None, ""):
+                continue
+            _fld = _ST._meta.get_field(_tf)
+            _limit = Decimal(10) ** (int(_fld.max_digits) - int(_fld.decimal_places))
+            if abs(Decimal(str(data[_gf]))) >= _limit:
+                errors.setdefault(_gf, []).append(f"Too large: must be less than {_limit}.")
+    except Exception:
+        pass
+    _fixed = ("gt_base_fare", "gt_minimum_fare", "gt_loading_unloading_charge", "gt_per_km_rate")
+    if any(f in data for f in _fixed) and not errors:
+        def _eff(f):
+            v = data[f] if f in data else (getattr(package, f, None) if package is not None else None)
+            try:
+                return Decimal(str(v)) if v not in (None, "") else Decimal(0)
+            except (InvalidOperation, TypeError, ValueError):
+                return Decimal(0)
+        # Only on EDITS of an existing package: package creation (including the restore tooling, which creates unpriced placeholders)
+        # is covered at quote time by GT_ZERO_FARE_GUARD, which fails closed.
+        if package is not None and all(_eff(f) == 0 for f in _fixed) and any(f in data and data[f] not in (None, "") for f in _fixed):
+            errors["gt_base_fare"] = ["Base fare, minimum fare, loading charge and per-km rate cannot all be zero: every trip would be free."]
 
     if errors:
         raise ValidationError(errors)
@@ -652,7 +699,7 @@ def _sync_goods_tables(package):
 
 
 def update_package(package, data, actor, reason=None):
-    _assert_gt_money_valid(data)
+    _assert_gt_money_valid(data, package)
     # ── GT pricing permission gate ─────────────────────────────────────────
     # If this package maps to a logistics ServiceTier AND base_price is
     # changing, the caller must hold pricing:modify_price and supply a reason.

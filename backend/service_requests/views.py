@@ -11,7 +11,7 @@ import logging
 import os
 import re
 import uuid
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
@@ -404,6 +404,8 @@ class BookingCreateView(APIView):
         # unchanged from before, since we can't safely infer "duplicate" from
         # payload contents alone without risking two genuinely different
         # bookings from the same customer being wrongly deduplicated.
+        if not hasattr(request.data, "get"):  # GT_BODY_OBJECT: a JSON array / string body crashed with a 500
+            return Response({"error": "Request body must be a JSON object.", "code": "INVALID_BODY"}, status=400)
         idem_key = (request.headers.get("Idempotency-Key") or request.data.get("idempotency_key") or "").strip()
         idem_cache_key = f"booking_idem_{idem_key}" if idem_key else None
         req_payload_hash = None
@@ -610,6 +612,8 @@ class BookingCreateView(APIView):
                 booking_mode=serializer.validated_data.get("logistics_booking_mode"),
                 declared_weight_kg=serializer.validated_data.get("ptl_declared_weight_kg"),
                 load_assist=request.data.get("ptl_load_assist"),
+                customer_gstin=serializer.validated_data.get("customer_gstin"),  # GT_QUOTE_BIND
+                requester_user_id=(request.user.id if getattr(request.user, "is_authenticated", False) else None),
                 request_cargo={
                     "cargo_items": request.data.get("cargo_items") or request.data.get("items"),
                     "goods_category_id": request.data.get("goods_category_id"),
@@ -635,6 +639,30 @@ class BookingCreateView(APIView):
                 error=err_text,
                 code="SURVEY_OR_REVIEW_REQUIRED" if is_survey_review else "UNRESOLVED_FARE",
             )
+
+        # GT_PRICE_CONFIRM: when the booking names a quote that is no longer live in the cache (fake / evicted quote id), the quote
+        # verification inside resolve_logistics_fare_v2 cannot run and the server silently charged its own price. Never charge a
+        # different amount than the customer was shown: if the submitted total differs from the server fare, ask them to re-confirm.
+        try:
+            _pc_slug = (serializer.validated_data.get("service_category") or "").strip().lower()
+            _pc_mode = (serializer.validated_data.get("logistics_booking_mode") or "spot").strip().lower()
+            if _pc_slug in ("goods_transport_truck", "goods_transport_two_wheeler") and _pc_mode != "ptl":
+                _pc_cart = serializer.validated_data.get("cart_data")
+                _pc_first = _pc_cart[0] if isinstance(_pc_cart, list) and _pc_cart and isinstance(_pc_cart[0], dict) else (_pc_cart if isinstance(_pc_cart, dict) else {})
+                _pc_qid = _pc_first.get("quote_id")
+                from django.core.cache import cache as _pc_cache
+                _pc_bound = bool(_pc_qid and _pc_cache.get(f"gt_quote_{_pc_qid}"))
+                _pc_sub = serializer.validated_data.get("total_amount")
+                if _pc_qid and not _pc_bound and _pc_sub is not None and abs(Decimal(str(_pc_sub)) - Decimal(str(corrected_fare))) > Decimal("1.00"):
+                    if idem_cache_key:
+                        from django.core.cache import cache
+                        cache.delete(idem_cache_key)
+                    return _error(
+                        f"The fare has changed to \u20b9{Decimal(str(corrected_fare)).quantize(Decimal('0.01'))}. Please review the new fare and confirm your booking again. You have not been charged.",
+                        409, code="PRICE_CHANGED", server_total=str(Decimal(str(corrected_fare)).quantize(Decimal("0.01"))),
+                    )
+        except (InvalidOperation, TypeError, ValueError):
+            pass
 
         # GT audit fix: a pickup and drop that resolve to (near) the same
         # point produce a real, chargeable, dispatchable booking with zero
@@ -765,6 +793,8 @@ class BookingCreateView(APIView):
                 if target_cust_id:
                     customer_user = User.objects.filter(id=target_cust_id).first()
 
+        _guest_request = not (request.user and request.user.is_authenticated)  # GT_GUEST_NO_ATTACH
+        _guest_matched_account = False
         if not customer_user:
             phone_clean = str(request.data.get("phone") or "").strip()
             email_clean = str(request.data.get("email") or "").strip().lower()
@@ -772,8 +802,12 @@ class BookingCreateView(APIView):
                 customer_user = User.objects.filter(phone=phone_clean).first()
             if not customer_user and email_clean:
                 customer_user = User.objects.filter(email__iexact=email_clean).first()
+            if _guest_request and customer_user:
+                # An anonymous caller proves nothing about owning that account: stay a guest.
+                customer_user = None
+                _guest_matched_account = True
 
-            if not customer_user and (phone_clean or email_clean):
+            if not customer_user and not _guest_matched_account and (phone_clean or email_clean):
                 cust_name = str(request.data.get("customer_name") or "").strip()
                 first_name = ""
                 last_name = ""
@@ -809,10 +843,14 @@ class BookingCreateView(APIView):
                         except Exception as ref_err:
                             logger.warning(f"Could not link referral code for new customer {customer_user.id}: {ref_err}")
                 except Exception:
-                    if phone_clean:
-                        customer_user = User.objects.filter(phone=phone_clean).first()
-                    if not customer_user and email_clean:
-                        customer_user = User.objects.filter(email__iexact=email_clean).first()
+                    if _guest_request:
+                        customer_user = None
+                        _guest_matched_account = True
+                    else:
+                        if phone_clean:
+                            customer_user = User.objects.filter(phone=phone_clean).first()
+                        if not customer_user and email_clean:
+                            customer_user = User.objects.filter(email__iexact=email_clean).first()
 
         # Resolve email if missing in validated_data but present on customer_user
         final_email = serializer.validated_data.get("email")
@@ -1066,7 +1104,12 @@ class BookingCreateView(APIView):
                             from django.core.cache import cache
                             cache.delete(idem_cache_key)
                         return _error(str(_e), 400, error=str(_e), code=_e.code)
-                sr = serializer.save(**save_kwargs)
+                if _guest_matched_account:
+                    from service_requests.guest_identity import suppress_identity_autolink
+                    with suppress_identity_autolink():
+                        sr = serializer.save(**save_kwargs)
+                else:
+                    sr = serializer.save(**save_kwargs)
 
                 # Hard-block on insufficient vegetable stock (mirrors GroceryCheckoutView's
                 # pattern in orders/views.py, see DAILY_ESSENTIALS_IMPLEMENTATION_PLAN.md
@@ -2430,9 +2473,7 @@ def _build_tracking_payload(sr, has_full_access, include_delivery_otp=False, inc
         sr.start_otp if (is_accepted and not is_terminal) else None
     )
 
-    start_otp = target_sr.start_otp if (is_accepted and effective_status not in ["cancelled", "rejected"]) else (
-        sr.start_otp if (is_accepted and sr.status not in ["cancelled", "rejected"]) else None
-    )
+    # GT_OTP_TERMINAL: a completed/cancelled/rejected booking must never expose the start OTP (this second assignment used to override the terminal check above).
 
     # Cash Payment Confirmation OTP the vendor app issued for this booking (see
     # _latest_payment_confirmation_otp: it must work in autocommit, i.e. on PostgreSQL).
@@ -2775,6 +2816,9 @@ class CustomerBookingLiveLocationView(APIView):
             return _error("Valid tracking token or authentication required.", 401)
 
         payload = _build_tracking_payload(sr, has_full_access=True, include_delivery_otp=True, include_feedback=True)
+        if not (is_owner or is_admin_user):  # GT_TRACK_NO_OTP_LIVE: token-only access (forwarded link) carries no OTP / full phone
+            from .tracking_privacy import public_tracking_safe
+            payload = public_tracking_safe(payload)
         return _success(data=payload)
 
 
@@ -2802,7 +2846,10 @@ class CustomerPublicTrackingView(APIView):
         if _tracking_token_is_expired(sr):  # Fixes EC-08
             return _error("Tracking link not found or expired.", 404)
 
-        payload = _build_tracking_payload(sr, has_full_access=True, include_delivery_otp=True, include_feedback=True)
+        # GT_TRACK_NO_OTP: the link is a forwardable bearer credential. It carries no start / delivery / cash-confirmation OTP and no full
+        # customer or receiver phone (see service_requests/tracking_privacy.py). The signed-in owner gets the codes from the authenticated endpoints.
+        from .tracking_privacy import public_tracking_safe
+        payload = public_tracking_safe(_build_tracking_payload(sr, has_full_access=True, include_delivery_otp=False, include_feedback=True))
         return _success(data=payload)
 
 
@@ -3872,6 +3919,8 @@ class CustomerRefundRequestCreateView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsCustomer]
 
     def post(self, request):
+        if not hasattr(request.data, "get"):  # GT_BODY_OBJECT: a JSON array/string body crashed with a 500
+            return Response({"error": "Request body must be a JSON object.", "code": "INVALID_BODY"}, status=400)
         booking_id = request.data.get("booking_id")
         refund_type = request.data.get("refund_type", "FULL")
         requested_amount = request.data.get("requested_amount")

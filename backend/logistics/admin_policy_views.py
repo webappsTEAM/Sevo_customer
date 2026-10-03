@@ -238,8 +238,27 @@ def _clean(kind, data, *, partial):
     for name, spec in KINDS[kind]["fields"].items():
         if name in data:
             cleaned[name] = _coerce(name, spec, data[name])
+            _gt_check_column_range(kind, name, cleaned[name])
     # Fee math would silently be 0 (or nonsense) for a mode without its amount.
     return cleaned
+
+
+def _gt_check_column_range(kind, name, value):
+    """GT_ADMIN_RANGE: a value that does not fit its database column used to surface as an HTTP 500 (numeric overflow). Refuse it with a
+    field message instead. Purely structural: the limits are the column's own precision, not business values."""
+    if value is None or isinstance(value, (bool, str)):
+        return
+    try:
+        fld = KINDS[kind]["model"]._meta.get_field(name)
+    except Exception:
+        return
+    md, dp = getattr(fld, "max_digits", None), getattr(fld, "decimal_places", None)
+    if md is not None and dp is not None:
+        limit = Decimal(10) ** (int(md) - int(dp))
+        if abs(Decimal(str(value))) >= limit:
+            raise _Invalid(f"{name} is too large (must be less than {limit}).")
+    elif isinstance(value, int) and abs(value) > 2147483647:
+        raise _Invalid(f"{name} is too large (maximum 2147483647).")
 
 
 def _validate_business_rules(kind, values):

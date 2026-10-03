@@ -175,7 +175,7 @@ def unknown_slot_error(service_category, preferred_time, city=""):
     cat = (service_category or "").strip().lower()
     keys = _SLOT_CATEGORY_KEYS.get(cat)
     label = str(preferred_time or "").strip()
-    if not keys or not label or label.lower().startswith("immediate"):
+    if not keys or (label and label.lower().startswith("immediate")):
         return None
     try:
         from django.db.models import Q
@@ -186,6 +186,8 @@ def unknown_slot_error(service_category, preferred_time, city=""):
             slots = slots.filter(Q(city="") | Q(city__iexact=city))
         if not slots.exists():
             return None
+        if not label:  # GT_SLOT_REQUIRED: omitting the slot skipped both the slot check and the capacity cap
+            return "Please choose a time slot."
         if slots.filter(slot_label__iexact=label).exists():
             return None
     except Exception:
@@ -258,3 +260,20 @@ def validate_booking_slot(preferred_date, preferred_time=None, now=None, service
         )
     return None
 
+
+
+def immediate_date_error(service_category, preferred_date, preferred_time, booking_mode="spot", now=None):
+    """GT_SPOT_ON_DEMAND: an 'Immediate / Next Available' Goods & Transport booking is on-demand, so it can only be for today.
+    A future date must use an admin-configured LogisticsSlot (the scheduled flow). Packers & Movers and PTL are scheduled and unaffected.
+    No maximum advance horizon is introduced here."""
+    cat = (service_category or "").strip().lower()
+    if cat not in ("goods_transport_truck", "goods_transport_two_wheeler", "goods_transport"):
+        return None
+    if (booking_mode or "spot").strip().lower() == "ptl" or preferred_date is None:
+        return None
+    if not str(preferred_time or "").strip().lower().startswith("immediate"):
+        return None
+    today = (now or timezone.localtime()).date()
+    if preferred_date != today:
+        return "Immediate bookings are for today. Please pick a time slot to schedule for a later date."
+    return None

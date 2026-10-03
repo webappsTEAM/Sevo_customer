@@ -132,6 +132,19 @@ class PaymentInitiateView(APIView):
     throttle_scope    = "payment"
 
     def post(self, request):
+        if not hasattr(request.data, "get"):  # GT_BODY_OBJECT: a JSON array/string body crashed with a 500
+            return Response({"error": "Request body must be a JSON object.", "code": "INVALID_BODY"}, status=400)
+        # GT_INITIATE_LOCK: two simultaneous initiates (double click, two tabs) both found "no open order" and each minted a
+        # gateway order. Serialise per booking so the second call sees the first one's open order and reuses it.
+        _lock_id = request.data.get("booking_id")
+        with transaction.atomic():
+            try:
+                ServiceRequest.objects.select_for_update().only("id").get(pk=_lock_id)
+            except (ServiceRequest.DoesNotExist, ValueError, TypeError):
+                pass   # the normal handling below answers 404 / 400
+            return self._initiate_locked(request)
+
+    def _initiate_locked(self, request):
         booking_id = request.data.get("booking_id")
         if not booking_id:
             return _error("booking_id is required.")
@@ -399,6 +412,20 @@ class PaymentVerifyView(APIView):
     throttle_scope    = "payment"
 
     def post(self, request):
+        # GT_PAYMENT_LOCK: verification reads the booking, decides "first payment or duplicate", then writes. Two verifications of the
+        # same booking at once (double click, two tabs, a webhook plus the browser) both read the unpaid state, both recorded PAID and
+        # both dispatched; the duplicate was never flagged. Serialise per booking: the second one now sees the first one's result.
+        if not hasattr(request.data, "get"):  # GT_BODY_OBJECT
+            return _error("Request body must be a JSON object.")
+        _lock_id = request.data.get("booking_id")
+        with transaction.atomic():
+            try:
+                ServiceRequest.objects.select_for_update().only("id").get(pk=_lock_id)
+            except (ServiceRequest.DoesNotExist, ValueError, TypeError):
+                pass   # the normal handling below answers 404 / 400
+            return self._verify_locked(request)
+
+    def _verify_locked(self, request):
         booking_id = request.data.get("booking_id")
         order_id   = request.data.get("order_id")
         payment_id = request.data.get("payment_id")
@@ -509,6 +536,19 @@ class PaymentVerifyView(APIView):
             )
             payment.save(update_fields=["error_code", "error_description", "updated_at"])
             logger.error("[DUPLICATE_PAYMENT] %s", payment.error_description)
+            # GT_DUP_REFUND: the customer is told this is "flagged for refund", but nothing read the flag. Queue a real RefundRequest
+            # (deduplicated per payment id; the refund cap still applies) so finance sees it.
+            try:
+                from .models import RefundRequest, RefundReason, RefundType
+                from . import services as sr_services
+                _dup_note = f"Auto-created: duplicate payment {payment.razorpay_payment_id} on an already-paid booking."
+                if not RefundRequest.objects.filter(booking=sr, additional_notes=_dup_note).exists():
+                    sr_services.create_refund_request(
+                        booking=sr, customer=sr.customer, amount=payment.amount, reason=RefundReason.OTHER,
+                        additional_notes=_dup_note, refund_type=RefundType.FULL,
+                    )
+            except Exception:
+                logger.exception("Could not queue refund for duplicate payment on booking %s", sr.id)
             return _success(
                 data={
                     "request_id":     sr.request_id,
@@ -771,6 +811,8 @@ class PaymentWalletPayView(APIView):
     throttle_scope = "payment"
 
     def post(self, request):
+        if not hasattr(request.data, "get"):  # GT_BODY_OBJECT: a JSON array/string body crashed with a 500
+            return Response({"error": "Request body must be a JSON object.", "code": "INVALID_BODY"}, status=400)
         from .services import debit_wallet
         from .models import CustomerWallet, WalletTransaction
 

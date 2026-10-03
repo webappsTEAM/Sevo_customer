@@ -1171,6 +1171,21 @@ def _lane_coords_error(category, is_active, fare, lat, lng):
     return None
 
 
+def _lane_overflow(field, value):
+    """GT_LANE_RANGE: a value larger than the Lane column holds used to crash with a database overflow (HTTP 500)."""
+    if value is None:
+        return None
+    try:
+        from .models import Lane as _Lane
+        f = _Lane._meta.get_field(field)
+        lim = Decimal(10) ** (int(f.max_digits) - int(f.decimal_places))
+    except Exception:
+        return None
+    if abs(value) >= lim:
+        return _fail(f"{field} is too large (must be less than {lim}).", "VALIDATION_ERROR", status.HTTP_400_BAD_REQUEST)
+    return None
+
+
 class AdminLaneListView(APIView):
     """
     GET  /api/logistics/admin/lanes/  -- list all lanes with filtering
@@ -1277,6 +1292,14 @@ class AdminLaneListView(APIView):
             if not _can(request.user, "modify_price"):
                 return _fail("Setting a lane's PTL rate requires the 'modify_price' permission on the Pricing module.",
                              "PRICING_FORBIDDEN", status.HTTP_403_FORBIDDEN)
+        if dest_lat is not None and not (-90 <= dest_lat <= 90):
+            return _fail("destination_latitude must be between -90 and 90.", "VALIDATION_ERROR", status.HTTP_400_BAD_REQUEST)
+        if dest_lng is not None and not (-180 <= dest_lng <= 180):
+            return _fail("destination_longitude must be between -180 and 180.", "VALIDATION_ERROR", status.HTTP_400_BAD_REQUEST)
+        for _f, _v in (("fare", fare), ("distance_km", distance_km), ("ptl_rate_per_kg", ptl_rate)):
+            _ov = _lane_overflow(_f, _v)
+            if _ov is not None:
+                return _ov
         _ce = _lane_coords_error(category, bool(data.get("is_active", True)), fare, dest_lat, dest_lng)
         if _ce is not None:
             return _ce
@@ -1379,6 +1402,9 @@ class AdminLaneDetailView(APIView):
                     return _fail("destination_latitude must be between -90 and 90.", "VALIDATION_ERROR", status.HTTP_400_BAD_REQUEST)
                 if dec_field == "destination_longitude" and new_val is not None and not (-180 <= new_val <= 180):
                     return _fail("destination_longitude must be between -180 and 180.", "VALIDATION_ERROR", status.HTTP_400_BAD_REQUEST)
+                _ov = _lane_overflow(dec_field, new_val)
+                if _ov is not None:
+                    return _ov
                 if new_val != old_val:
                     # GT audit fix: same modify_price gate as the create path
                     # above -- fare is a real money field, the other three

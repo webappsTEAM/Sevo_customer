@@ -30,6 +30,12 @@ MIN_UPDATE_INTERVAL_SECONDS = 3.0
 MIN_HEADING_DELTA_DEGREES = 20.0
 
 
+def _tech_safe(payload):
+    """GT_TECH_NO_OTP: a legacy technician response never carries any OTP (phones are left as they are)."""
+    from .tracking_privacy import public_tracking_safe
+    return public_tracking_safe(payload, mask_phones=False)
+
+
 def _resolve_sr(pk=None, identifier=None):
     sr_id = pk or identifier
     if not sr_id:
@@ -212,7 +218,7 @@ class TechnicianAvailableBookingsView(APIView):
                 "technician_latitude": float(sr.technician_latitude) if getattr(sr, "technician_latitude", None) else None,
                 "technician_longitude": float(sr.technician_longitude) if getattr(sr, "technician_longitude", None) else None,
                 # OTP & tracking
-                "start_otp": sr.start_otp,
+                "start_otp": None,  # GT_TECH_NO_OTP: the technician never reads the code, it is only compared server-side
                 "otp_verified": getattr(sr, "otp_verified", False),
                 "tracking_token": str(sr.tracking_token) if sr.tracking_token else None,
             }
@@ -340,7 +346,7 @@ class TechnicianAcceptBookingView(APIView):
             )
 
         # Broadcast WebSocket event to Customer App group
-        payload = _build_tracking_payload(sr, has_full_access=True)
+        payload = _tech_safe(_build_tracking_payload(sr, has_full_access=True))
         broadcast_tracking_event(sr, "technician_accepted", payload)
         broadcast_tracking_event(sr, "job_updated", payload)
         broadcast_tracking_event(sr, "technician_location_updated", payload)
@@ -418,7 +424,7 @@ class TechnicianUpdateLocationView(APIView):
             elapsed = (now - last_fix.created_at).total_seconds()
             heading_delta = abs(((heading - float(last_fix.heading or 0.0)) + 180) % 360 - 180)
             if distance < MIN_MOVE_METERS and elapsed < MIN_UPDATE_INTERVAL_SECONDS and heading_delta < MIN_HEADING_DELTA_DEGREES:
-                payload = _build_tracking_payload(sr, has_full_access=True)
+                payload = _tech_safe(_build_tracking_payload(sr, has_full_access=True))
                 return Response({"success": True, "data": payload}, status=status.HTTP_200_OK)
 
         # Update ServiceRequest
@@ -459,7 +465,7 @@ class TechnicianUpdateLocationView(APIView):
         logger.info(f"[TRACKING] Location saved: booking_id={sr.id}, lat={lat}, lng={lng}")
 
         # Broadcast live GPS update to Customer App via Channels
-        payload = _build_tracking_payload(sr, has_full_access=True)
+        payload = _tech_safe(_build_tracking_payload(sr, has_full_access=True))
         broadcast_tracking_event(sr, "technician_location_updated", payload)
         logger.info(f"[TRACKING] Realtime event broadcast: booking_id={sr.id}, request_id={sr.request_id}")
 
@@ -542,7 +548,7 @@ class TechnicianStatusUpdateView(APIView):
         sr.save()
 
         # Broadcast status change to customer
-        payload = _build_tracking_payload(sr, has_full_access=True)
+        payload = _tech_safe(_build_tracking_payload(sr, has_full_access=True))
         broadcast_tracking_event(sr, "technician_status_updated", payload)
         broadcast_tracking_event(sr, "job_updated", payload)
 
@@ -591,7 +597,7 @@ class TechnicianVerifyStartOTPView(APIView):
         sr.status = ServiceRequest.Status.IN_PROGRESS
         sr.save(update_fields=["otp_verified", "otp_verified_at", "status", "updated_at"])
 
-        payload = _build_tracking_payload(sr, has_full_access=True)
+        payload = _tech_safe(_build_tracking_payload(sr, has_full_access=True))
         broadcast_tracking_event(sr, "otp_verification_success", payload)
         broadcast_tracking_event(sr, "technician_status_updated", payload)
 
@@ -717,7 +723,7 @@ class TechnicianBookingDetailView(APIView):
             "technician_latitude": float(sr.technician_latitude) if getattr(sr, "technician_latitude", None) else None,
             "technician_longitude": float(sr.technician_longitude) if getattr(sr, "technician_longitude", None) else None,
             # OTP & tracking
-            "start_otp": sr.start_otp,
+            "start_otp": None,  # GT_TECH_NO_OTP: the technician never reads the code, it is only compared server-side
             "otp_verified": getattr(sr, "otp_verified", False),
             "tracking_token": str(sr.tracking_token) if sr.tracking_token else None,
             # This technician's assignment state on this booking

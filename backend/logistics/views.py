@@ -304,7 +304,7 @@ class LogisticsQuoteView(APIView):
         from service_requests.services.logistics_pricing import (
             DISTANCE_PRICED_CATEGORIES, LogisticsCatalogMismatchError,
             assert_catalog_matches_category, quote_logistics_fare,
-            TooManyStopsError,
+            TooManyStopsError, FareNotConfiguredError,
         )
 
         data = request.data if isinstance(request.data, dict) else {}
@@ -515,6 +515,13 @@ class LogisticsQuoteView(APIView):
                 service_category=category,
                 customer_gstin=data.get("customer_gstin"),
                 lane=lane,
+                requester_user_id=(request.user.id if getattr(request.user, "is_authenticated", False) else None),  # GT_QUOTE_BIND
+            )
+        except FareNotConfiguredError as exc:
+            logger.error("GT_ZERO_FARE_GUARD: tier %s resolved to a non-positive fare", getattr(tier, "id", "?"))
+            return Response(
+                {"success": False, "quotable": False, "error_code": "FARE_NOT_CONFIGURED", "message": str(exc)},
+                status=status.HTTP_409_CONFLICT,
             )
         except TooManyStopsError as exc:
             return Response(

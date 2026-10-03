@@ -186,5 +186,10 @@ class DeliveryOtpVisibilityTests(TestCase):
         self._issue(sr, "482913")
         self._set_leg(sr, "EN_ROUTE_DROP")
         url = f"/api/booking/{sr.request_id}/live-location/?token={sr.tracking_token}"
-        self.assertEqual(self.client.get(url).json()["data"]["delivery_otp"], "482913")
+        # GT Pass 6: a forwardable token-only link never carries the code; the signed-in owner still gets it when due
+        self.assertIsNone(self.client.get(url).json()["data"]["delivery_otp"])
+        if sr.customer_id:
+            from rest_framework.test import APIClient
+            owner = APIClient(); owner.force_authenticate(sr.customer)
+            self.assertEqual(owner.get(f"/api/booking/{sr.request_id}/live-location/").json()["data"]["delivery_otp"], "482913")
         self.assertEqual(self.client.get(f"/api/booking/{sr.request_id}/live-location/?token=wrong").status_code, 403)

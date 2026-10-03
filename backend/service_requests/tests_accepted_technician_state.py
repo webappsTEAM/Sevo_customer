@@ -168,7 +168,7 @@ class AcceptedTechnicianStateTests(TestCase):
         data = res.json().get("data", {})
         self.assertTrue(data.get("is_accepted"))
         self.assertEqual(data.get("status"), "arrived")
-        self.assertEqual(data.get("start_otp"), "123456")
+        self.assertIsNone(data.get("start_otp"))  # GT Pass 6: the public tracking link never carries an OTP
 
     def test_08_completed_stops_live_tracking_and_suppresses_coordinates(self):
         """8. completed -> tracking stopped, GPS coordinates suppressed"""

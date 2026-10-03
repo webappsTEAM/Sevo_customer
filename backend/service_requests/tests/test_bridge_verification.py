@@ -127,4 +127,4 @@ class BridgeVerificationTests(TransactionTestCase):
         self.assertAlmostEqual(float(snap_data.get("technician", {}).get("latitude")), 12.743500, places=4)
         self.assertAlmostEqual(float(snap_data.get("technician", {}).get("longitude")), 77.827500, places=4)
         self.assertEqual(snap_data.get("status"), "on_the_way")
-        self.assertEqual(snap_data.get("start_otp"), "7502")
+        self.assertIsNone(snap_data.get("start_otp"))  # GT Pass 6: token-only snapshot never carries the OTP

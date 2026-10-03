@@ -1951,7 +1951,8 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
 
       const isQuoteIssue =
         /expired|invalid|recalculate|quote/i.test(detail) ||
-        err?.body?.code === "UNRESOLVED_FARE"
+        err?.body?.code === "UNRESOLVED_FARE" ||
+        err?.body?.code === "PRICE_CHANGED"
 
       if (isQuoteIssue) {
         const vehicle = selectedVehicle || LIGHT_VEHICLES[0]

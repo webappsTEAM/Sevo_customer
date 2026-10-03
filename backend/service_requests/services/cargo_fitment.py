@@ -197,7 +197,8 @@ def resolve_cargo_payload(
                 continue
 
             raw_qty = entry.get("quantity") if "quantity" in entry else entry.get("qty")
-            if raw_qty is None or raw_qty == "":
+            # GT_QTY_BOOL: JSON true/false is not a quantity (int(True) == 1 used to be accepted silently)
+            if raw_qty is None or raw_qty == "" or isinstance(raw_qty, bool):
                 validation_errors.append({
                     "error": f"Quantity cannot be null or empty for item '{identifier}'.",
                     "code": "INVALID_CARGO_QUANTITY",

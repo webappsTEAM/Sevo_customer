@@ -106,6 +106,10 @@ class LogisticsCatalogMismatchError(UnresolvedLogisticsFareError):
     pass
 
 
+class FareNotConfiguredError(UnresolvedLogisticsFareError):
+    """GT_ZERO_FARE_GUARD: the rate card resolves to a zero/negative fare. Never quote or book that."""
+
+
 class TooManyStopsError(UnresolvedLogisticsFareError):
     """The route has more intermediate stops than the tier allows."""
 
@@ -338,6 +342,7 @@ def quote_logistics_fare(
     service_category=None,
     customer_gstin=None,
     lane=None,
+    requester_user_id=None,
 ):
     """
     Compute a real, itemised, distance-based fare for one goods-transport
@@ -466,6 +471,11 @@ def quote_logistics_fare(
             total = minimum_fare
             minimum_applied = True
 
+    # GT_ZERO_FARE_GUARD: a rate card that leaves every component at zero (or a lane fixed fare of 0) used to be quoted as Rs 0.00
+    # with HTTP 200 and could be booked. Fail closed: the customer is asked to choose another vehicle; the admin must fix the rate card.
+    if total <= 0:
+        raise FareNotConfiguredError("The fare for this vehicle is not configured yet. Please choose another vehicle or contact support.")
+
     # Round 13 (Final Configurability Pass): GST/RCM configuration branch.
     # Resolved only when a caller supplies service_category (every current
     # caller may now do so; callers that don't are completely unaffected --
@@ -566,6 +576,12 @@ def quote_logistics_fare(
         "lane_id": lane.id if _lane_fixed else None,
         "fare_basis": "lane_fixed" if _lane_fixed else "distance",
     }
+    # GT_QUOTE_BIND: a quote that depends on the customer (a GSTIN changes the tax treatment) is bound to that customer. The GSTIN itself
+    # is never stored in the quote, only a hash; a quote built from route + tier + cargo alone stays shareable.
+    _gstin = str(customer_gstin or "").strip().upper().replace(" ", "")
+    if _gstin:
+        cached_data["bound_gstin_hash"] = hashlib.sha256(_gstin.encode("utf-8")).hexdigest()[:24]
+        cached_data["bound_user_id"] = requester_user_id
 
     breakdown = LogisticsFareBreakdown(
         quote_id=quote_id,
@@ -821,6 +837,8 @@ def resolve_logistics_fare_v2(
     declared_weight_kg=None,
     load_assist=None,
     request_cargo=None,
+    customer_gstin=None,
+    requester_user_id=None,
 ):
     """
     GT-B-01. Returns (fare, breakdown_or_None).
@@ -962,6 +980,13 @@ def resolve_logistics_fare_v2(
                     except (ValueError, TypeError):
                         raise UnresolvedLogisticsFareError("Quote expiry timestamp is invalid or malformed.")
 
+                # GT_QUOTE_BIND_CHECK: a customer-specific quote can only be used by that customer / tax identity.
+                if cached_quote.get("bound_gstin_hash") is not None:
+                    import hashlib as _hl
+                    _mine = _hl.sha256(str(customer_gstin or "").strip().upper().replace(" ", "").encode("utf-8")).hexdigest()[:24]
+                    _owner = cached_quote.get("bound_user_id")
+                    if _mine != cached_quote["bound_gstin_hash"] or (_owner is not None and _owner != requester_user_id):
+                        raise UnresolvedLogisticsFareError("This quote was prepared for a different customer. Please calculate a fresh quote.")
                 # 1. Authoritative Tier Verification: Cannot use quote from a different vehicle
                 quoted_tier_id = cached_quote.get("tier_id")
                 if quoted_tier_id and logistics_tier and str(quoted_tier_id) != str(logistics_tier.id):
