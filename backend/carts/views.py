@@ -45,7 +45,7 @@ def _valid_cart_type(cart_type):
 
 
 def _get_active_cart(customer, cart_type, create=False):
-    cart = Cart.objects.filter(customer=customer, cart_type=cart_type, status=CartStatus.ACTIVE).first()
+    cart = Cart.objects.filter(customer=customer, cart_type=cart_type, status=CartStatus.ACTIVE).prefetch_related("items", "items__package").first()
     if cart is None and create:
         cart = Cart.objects.create(customer=customer, cart_type=cart_type, status=CartStatus.ACTIVE)
     return cart
@@ -154,23 +154,19 @@ class CartItemListView(APIView):
                         cart.seller_name = basket_seller_name
                         cart.save(update_fields=["seller_id", "seller_name", "updated_at"])
 
-                    item, created = CartItem.objects.get_or_create(
-                        cart=cart,
+                    customization_val = data.get("customization") or {}
+                    if isinstance(customization_val, dict) and customization_val.get("live_mrp"):
+                        try:
+                            mrp_total = Decimal(str(customization_val.get("live_mrp")))
+                        except Exception:
+                            pass
+
+                    item = cart.items.filter(
                         basket_id=basket_id_val,
-                        defaults={
-                            "basket_title": basket_title,
-                            "seller_id": basket_seller_id,
-                            "seller_name": basket_seller_name,
-                            "warehouse_id": basket_warehouse_id,
-                            "warehouse_name": basket_warehouse_name,
-                            "product_title": basket_title,
-                            "quantity": data["quantity"],
-                            "unit_price_snapshot": bundle_price,
-                            "mrp_snapshot": mrp_total,
-                            "customization": data.get("customization") or {},
-                        },
-                    )
-                    if not created:
+                        customization=customization_val,
+                    ).first()
+
+                    if item:
                         item.quantity += data["quantity"]
                         item.unit_price_snapshot = bundle_price
                         item.mrp_snapshot = mrp_total
@@ -180,6 +176,21 @@ class CartItemListView(APIView):
                             "quantity", "unit_price_snapshot", "mrp_snapshot",
                             "basket_title", "product_title", "updated_at",
                         ])
+                    else:
+                        item = CartItem.objects.create(
+                            cart=cart,
+                            basket_id=basket_id_val,
+                            basket_title=basket_title,
+                            seller_id=basket_seller_id,
+                            seller_name=basket_seller_name,
+                            warehouse_id=basket_warehouse_id,
+                            warehouse_name=basket_warehouse_name,
+                            product_title=basket_title,
+                            quantity=data["quantity"],
+                            unit_price_snapshot=bundle_price,
+                            mrp_snapshot=mrp_total,
+                            customization=customization_val,
+                        )
 
                 return _success(CartItemSerializer(item).data, status_code=status.HTTP_201_CREATED)
 

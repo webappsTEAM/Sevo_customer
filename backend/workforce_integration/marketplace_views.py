@@ -286,10 +286,50 @@ def _safe_decimal_str(value, default="0"):
 def _sanitize_basket(basket):
     """
     Sanitize and normalise a basket/combo-offer payload from the Vendor feed.
-    Handles field-name variation across vendor API versions.
+    Handles field-name variation across vendor API versions, including multi-option slots.
     """
     if not isinstance(basket, dict):
         return {}
+
+    raw_slots = basket.get("slots") or []
+    slots = []
+    for slot in raw_slots:
+        if not isinstance(slot, dict):
+            continue
+        raw_options = slot.get("options") or []
+        options = []
+        for opt in raw_options:
+            if not isinstance(opt, dict):
+                continue
+            options.append({
+                "id": opt.get("id"),
+                "option_id": opt.get("option_id") or opt.get("id"),
+                "product_id": opt.get("product_id") or opt.get("id"),
+                "sku": str(opt.get("sku") or opt.get("product_sku") or ""),
+                "title": str(opt.get("title") or opt.get("product_title") or ""),
+                "product_title": str(opt.get("product_title") or opt.get("title") or ""),
+                "brand": str(opt.get("brand") or opt.get("product_brand") or ""),
+                "product_brand": str(opt.get("product_brand") or opt.get("brand") or ""),
+                "unit": str(opt.get("unit") or ""),
+                "pack_size": str(opt.get("pack_size") or ""),
+                "mrp": _safe_decimal_str(opt.get("mrp")),
+                "selling_price": _safe_decimal_str(opt.get("selling_price") or opt.get("unit_price")),
+                "is_default": bool(opt.get("is_default", False)),
+                "primary_image": str(opt.get("primary_image") or opt.get("image_url") or opt.get("image") or ""),
+                "images": opt.get("images") or [],
+                "in_stock": bool(opt.get("in_stock", True)),
+                "available_quantity": opt.get("available_quantity") or 0,
+            })
+        slots.append({
+            "id": slot.get("id"),
+            "slot_title": str(slot.get("slot_title") or ""),
+            "quantity": int(slot.get("quantity") or 1),
+            "display_order": int(slot.get("display_order") or 0),
+            "default_product_id": slot.get("default_product_id"),
+            "options": options,
+            "options_count": len(options),
+            "is_multi_option": len(options) > 1,
+        })
 
     raw_items = basket.get("items") or []
     items = []
@@ -318,6 +358,8 @@ def _sanitize_basket(basket):
         basket.get("savings_vs_mrp") or basket.get("savings") or basket.get("discount_amount") or basket.get("saving")
     )
 
+    is_multi_option = bool(basket.get("is_multi_option") or any(s.get("is_multi_option") for s in slots))
+
     return {
         "id": basket.get("id"),
         "title": str(basket.get("title") or basket.get("name") or "Combo Bundle"),
@@ -333,8 +375,10 @@ def _sanitize_basket(basket):
         "available_stock": basket.get("available_stock"),
         "in_stock": bool(basket.get("in_stock", True)),
         "primary_image": str(basket.get("image_url") or basket.get("primary_image") or basket.get("image") or ""),
+        "slots": slots,
+        "is_multi_option": is_multi_option,
         "items": items,
-        "item_count": int(basket.get("item_count") or len(items)),
+        "item_count": int(basket.get("item_count") or len(slots) or len(items)),
         "is_active": bool(basket.get("status") == "ACTIVE" if "status" in basket else basket.get("is_active", True)),
     }
 

@@ -518,11 +518,24 @@ export function useCustomerTracking({ bookingId, jobId, trackingToken }) {
   /* ── Initial REST Fetch & Polling Fallback ── */
   useEffect(() => {
     fetchLive()
-    const interval = wsConnected ? 25000 : 5000 // Fast 5s REST polling when WS disconnected
-    pollRef.current = setInterval(fetchLive, interval)
+    const interval = wsConnected ? 20000 : 5000 // Fast 5s REST polling when WS disconnected, 20s heartbeat when WS connected
+    pollRef.current = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchLive()
+      }
+    }, interval)
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && mountedRef.current) {
+        fetchLive()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
       if (pollRef.current) clearInterval(pollRef.current)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [fetchLive, wsConnected])
 

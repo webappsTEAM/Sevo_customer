@@ -11,7 +11,7 @@ import {
   Apple, Carrot, Milk, Coffee, Utensils, CupSoda, Cookie,
   Fish, Egg, Beef, Shirt, Dumbbell, Laptop, Smartphone,
   Tv, Bath, Baby, Home, Package, Boxes, Droplet, Hammer,
-  PaintRoller, Wrench, HeartPulse, Croissant
+  PaintRoller, Wrench, HeartPulse, Croissant, Gift
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { useAuth } from "../../state/auth/useAuth.js"
@@ -405,7 +405,10 @@ export function MarketplacePage() {
   // Published Seller Hub combo offers. They are fetched from the canonical
   // Vendor catalog; an empty catalog deliberately renders no fallback cards.
   const [baskets, setBaskets] = useState([])
-  const [basketsLoading, setBasketsLoading] = useState(false)
+  const [basketsLoading, setBasketsLoading] = useState(true)
+  const [basketDetailModal, setBasketDetailModal] = useState(null)
+  const [basketDetailLoading, setBasketDetailLoading] = useState(false)
+  const [selectedBasketSlotOptions, setSelectedBasketSlotOptions] = useState({})
 
   // Product Catalog & Category State
   const [products, setProducts] = useState([])
@@ -501,7 +504,9 @@ export function MarketplacePage() {
         existing.product_count = existing.total_product_count
         if (Array.isArray(cat.children) && cat.children.length > 0) {
           const currentChildren = existing.children || []
-          existing.children = [...currentChildren, ...cat.children]
+          const existingChildKeys = new Set(currentChildren.map((c) => String(c.slug || c.id)))
+          const newChildren = cat.children.filter((c) => !existingChildKeys.has(String(c.slug || c.id)))
+          existing.children = [...currentChildren, ...newChildren]
         }
         if (!existing.image_url && cat.image_url) existing.image_url = cat.image_url
         if (!existing.image && cat.image) existing.image = cat.image
@@ -557,11 +562,14 @@ export function MarketplacePage() {
 
   // Stale request cancellation ref
   const activeRequestRef = useRef(0)
+  const isPollingRef = useRef(false)
 
   // Load Products with request cancellation token
-  const loadProducts = useCallback(async () => {
+  const loadProducts = useCallback(async (isSilent = false) => {
     const reqId = ++activeRequestRef.current
-    setLoading(true)
+    if (!isSilent) {
+      setLoading(true)
+    }
     try {
       const res = await fetchMarketplaceProducts({
         search: searchQuery,
@@ -583,11 +591,11 @@ export function MarketplacePage() {
       console.error("Failed to load marketplace products:", err)
       if (err?.status === 404 || err?.body?.code === "CATEGORY_NOT_FOUND") {
         setProducts([])
-      } else {
+      } else if (!isSilent) {
         showToast("Unable to load marketplace products. Please check connection.", "error")
       }
     } finally {
-      if (reqId === activeRequestRef.current) {
+      if (reqId === activeRequestRef.current && !isSilent) {
         setLoading(false)
       }
     }
@@ -641,6 +649,36 @@ export function MarketplacePage() {
     }, 250)
     return () => clearTimeout(timer)
   }, [loadProducts])
+
+  // Background Auto-Refresh Polling for Products & Active Order (15s interval)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState !== "visible") return
+      if (checkoutModalOpen || isPollingRef.current) return
+
+      isPollingRef.current = true
+      Promise.allSettled([
+        loadProducts(true),
+        reloadActiveOrder(),
+      ]).finally(() => {
+        isPollingRef.current = false
+      })
+    }, 15000)
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && !checkoutModalOpen) {
+        loadProducts(true)
+        reloadActiveOrder()
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
+  }, [loadProducts, checkoutModalOpen])
 
   // Load Cart
   const reloadCart = async () => {
@@ -794,49 +832,146 @@ export function MarketplacePage() {
     }
   }
 
-  // Handle Confirm Seller Switch
-  const handleConfirmSellerSwitch = async () => {
-    if (!sellerConflict) return
-    const { pendingProduct, pendingQty } = sellerConflict
+  // Helper to extract default selections from a basket
+  const initBasketSlotSelections = (b) => {
+    const initial = {}
+    if (Array.isArray(b?.slots) && b.slots.length > 0) {
+      b.slots.forEach((slot) => {
+        const defaultOpt = slot.options?.find((o) => o.is_default) || slot.options?.[0]
+        if (defaultOpt) {
+          initial[slot.id] = defaultOpt.id
+        }
+      })
+    }
+    return initial
+  }
+
+  // Handle Add Basket To Cart
+  const handleAddBasketToCart = async (basket, clearExisting = false, customOptions = null) => {
+    if (!user) {
+      // Store pending basket, reuse modal flow
+      setPendingAddToCart({ basket, isBasket: true, customOptions })
+      setShowCustomerEntryModal(true)
+      return
+    }
+    const customization = customOptions ? {
+      slot_selections: customOptions.slot_selections || [],
+      live_mrp: customOptions.live_mrp,
+    } : (basket.customization || {})
+
+    const cartItems = Array.isArray(cart?.items) ? cart.items : []
+    const existingItem = cartItems.find((i) => {
+      if (i.basket_id !== basket.id) return false
+      if (!customOptions && (!i.customization || !i.customization.slot_selections)) return true
+      const existingSelections = i.customization?.slot_selections || []
+      const targetSelections = customOptions?.slot_selections || []
+      return JSON.stringify(existingSelections) === JSON.stringify(targetSelections)
+    })
+
+    if (existingItem && !clearExisting) {
+      // Already in cart - just increment
+      try {
+        await updateMarketplaceCartItem(existingItem.id, { quantity: existingItem.quantity + 1 })
+        await reloadCart()
+        showToast(`Added another "${basket.title}" bundle to cart`, "success")
+      } catch (err) {
+        showToast(err?.body?.message || "Failed to update cart.", "error")
+      }
+      return
+    }
     setCartLoading(true)
     try {
-      const res = await addMarketplaceCartItem({
-        seller_product_id: pendingProduct.id,
-        quantity: pendingQty,
-        clear_cart: true,
+      const res = await addBasketToCart({
+        basket_id: basket.id,
+        quantity: 1,
+        clear_cart: clearExisting,
+        customization,
       })
       if (res?.success) {
-        setSellerConflict(null)
-        reloadCart()
-        showToast(`Cart updated with items from "${pendingProduct.seller_name}"`, "success")
+        await reloadCart()
+        showToast(`Bundle "${basket.title}" added to cart!`, "success")
+      } else if (res?.error === "seller_mismatch" || res?.status_code === 409) {
+        setSellerConflict({
+          current_seller_name: res.current_seller_name || cart?.seller_name || "another seller",
+          new_seller_name: basket.seller_name || "New Seller",
+          pendingBasket: basket,
+          pendingProduct: null,
+          pendingQty: 1,
+          pendingCustomOptions: customOptions,
+        })
       } else {
         showToast(res?.message || "Failed to switch seller.", "error")
       }
     } catch (err) {
-      showToast(err?.body?.message || "Failed to switch seller.", "error")
+      if (err?.body?.error === "seller_mismatch" || err?.status === 409) {
+        setSellerConflict({
+          current_seller_name: err.body?.current_seller_name || cart?.seller_name || "another seller",
+          new_seller_name: basket.seller_name || "New Seller",
+          pendingBasket: basket,
+          pendingProduct: null,
+          pendingQty: 1,
+          pendingCustomOptions: customOptions,
+        })
+      } else {
+        showToast(err?.body?.message || "Failed to add bundle to cart.", "error")
+      }
     } finally {
       setCartLoading(false)
     }
   }
 
-  const handleAddBasketToCart = async (basket) => {
-    if (!user) {
-      setShowCustomerEntryModal(true)
-      return
+  // Handle Open Basket Detail Modal
+  const handleOpenBasketDetail = async (basket) => {
+    setBasketDetailModal(basket)
+    setSelectedBasketSlotOptions(initBasketSlotSelections(basket))
+    setBasketDetailLoading(true)
+    try {
+      const res = await fetchMarketplaceBasketDetail(basket.id)
+      const detailed = res?.data || res
+      if (detailed?.id) {
+        setBasketDetailModal(detailed)
+        setSelectedBasketSlotOptions(initBasketSlotSelections(detailed))
+      }
+    } catch (err) {
+      console.error("Failed to load basket detail:", err)
+    } finally {
+      setBasketDetailLoading(false)
     }
     setCartLoading(true)
     try {
-      let response = await addBasketToCart({ basket_id: basket.id, quantity: 1 })
-      if (!response?.success && (response?.status_code === 409 || response?.error === "seller_mismatch")) {
-        const currentSeller = response?.current_seller_name || cart?.seller_name || "another seller"
-        const replace = window.confirm(`Your cart contains items from ${currentSeller}. Replace it with this offer?`)
-        if (replace) response = await addBasketToCart({ basket_id: basket.id, quantity: 1, clear_cart: true })
-      }
-      if (response?.success) {
-        await reloadCart()
-        showToast(`Added “${basket.title}” to cart`, "success")
-      } else {
-        showToast(response?.message || "This offer could not be added to your cart.", "error")
+      if (pendingBasket) {
+        // Basket seller switch
+        const customOpt = sellerConflict.pendingCustomOptions
+        const customization = customOpt ? {
+          slot_selections: customOpt.slot_selections || [],
+          live_mrp: customOpt.live_mrp,
+        } : (pendingBasket.customization || {})
+        const res = await addBasketToCart({
+          basket_id: pendingBasket.id,
+          quantity: pendingQty || 1,
+          clear_cart: true,
+          customization,
+        })
+        if (res?.success) {
+          setSellerConflict(null)
+          reloadCart()
+          showToast(`Cart updated with bundle from "${pendingBasket.seller_name}"`, "success")
+        } else {
+          showToast(res?.message || "Failed to switch seller.", "error")
+        }
+      } else {        // Product seller switch (existing logic)
+        const res = await addMarketplaceCartItem({
+          seller_product_id: pendingProduct.id,
+          quantity: pendingQty,
+          clear_cart: true,
+        })
+        if (res?.success) {
+          setSellerConflict(null)
+          reloadCart()
+          showToast(`Cart updated with items from "${pendingProduct.seller_name}"`, "success")
+        } else {
+          showToast(res?.message || "Failed to switch seller.", "error")
+        }
       }
     } catch (error) {
       showToast(error?.body?.message || "This offer could not be added to your cart.", "error")
@@ -1406,46 +1541,6 @@ export function MarketplacePage() {
                 )}
               </div>
 
-              {(currentCategorySlug === "all" && !searchQuery && (basketsLoading || baskets.length > 0)) && (
-                <section className="mb-6 rounded-2xl border border-violet-100 bg-violet-50/60 p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                      <h3 className="text-sm font-black text-slate-900">Seller combo offers</h3>
-                      <p className="text-xs text-slate-500">Curated bundles from verified local stores</p>
-                    </div>
-                    <Boxes className="h-5 w-5 text-violet-600" />
-                  </div>
-                  {basketsLoading ? (
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                      {[0, 1, 2].map((index) => <div key={index} className="h-28 animate-pulse rounded-xl bg-white" />)}
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                      {baskets.map((basket) => (
-                        <article key={basket.id} className="rounded-xl border border-violet-100 bg-white p-3 shadow-sm">
-                          <div className="flex gap-3">
-                            {basket.primary_image ? (
-                              <img src={basket.primary_image} alt="" className="h-14 w-14 rounded-lg bg-slate-50 object-cover" />
-                            ) : (
-                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700"><Boxes className="h-6 w-6" /></div>
-                            )}
-                            <div className="min-w-0 flex-1">
-                              <h4 className="truncate text-sm font-extrabold text-slate-900">{basket.title}</h4>
-                              <p className="mt-0.5 line-clamp-2 text-[11px] text-slate-500">{basket.description || `${basket.item_count || 0} items`}</p>
-                              <p className="mt-1 text-sm font-black text-slate-900">₹{basket.bundle_price}</p>
-                            </div>
-                          </div>
-                          <button type="button" onClick={() => handleAddBasketToCart(basket)} disabled={cartLoading || basket.in_stock === false}
-                            className="mt-3 w-full rounded-lg bg-violet-600 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50">
-                            {basket.in_stock === false ? "Unavailable" : "Add bundle"}
-                          </button>
-                        </article>
-                      ))}
-                    </div>
-                  )}
-                </section>
-              )}
-
               {/* Products Header */}
               <div className="flex items-center justify-between mb-6">
                 <div>
@@ -1465,6 +1560,149 @@ export function MarketplacePage() {
                   </div>
                 )}
               </div>
+
+              {/* ── Combo Deals / Basket Offers Strip ── */}
+              {currentCategorySlug === "all" && !searchQuery && (baskets.length > 0 || basketsLoading) && (
+                <div className="mb-7">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Gift className="w-4 h-4 text-violet-600" />
+                    <h4 className="text-sm font-black text-slate-900 tracking-tight">Combo Deals</h4>
+                    <span className="text-[11px] font-bold text-violet-700 bg-violet-50 border border-violet-200 px-2 py-0.5 rounded-full">
+                      Bundle & Save
+                    </span>
+                  </div>
+
+                  {basketsLoading ? (
+                    <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
+                      {[...Array(3)].map((_, i) => (
+                        <div key={i} className="shrink-0 w-64 h-36 bg-white rounded-2xl border border-slate-200 animate-pulse" />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
+                      {baskets.map((basket) => {
+                        const bundlePrice = Number(basket.bundle_price || 0)
+                        const mrpTotal = Number(basket.mrp_total || 0)
+                        const savings = Number(basket.savings || (mrpTotal > bundlePrice ? mrpTotal - bundlePrice : 0))
+                        const savingsPct = mrpTotal > 0 ? Math.round((savings / mrpTotal) * 100) : 0
+                        const inCartItem = cart.items?.find((i) => i.basket_id === basket.id)
+                        const inCartQty = inCartItem ? inCartItem.quantity : 0
+
+                        return (
+                          <motion.div
+                            key={basket.id}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="shrink-0 w-64 bg-white rounded-2xl border border-violet-200/60 hover:border-violet-400/60 hover:shadow-xl shadow-sm overflow-hidden flex flex-col transition-all duration-200 cursor-pointer group"
+                            onClick={() => handleOpenBasketDetail(basket)}
+                          >
+                            {/* Top Banner */}
+                            <div className="bg-gradient-to-r from-violet-600 to-purple-700 px-3.5 pt-3 pb-2 flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <Boxes className="w-3.5 h-3.5 text-violet-200 shrink-0" />
+                                <span className="text-[11px] font-black text-white uppercase tracking-wide">Bundle Deal</span>
+                              </div>
+                              {savingsPct > 0 && (
+                                <span className="bg-amber-400 text-amber-950 text-[10px] font-black px-1.5 py-0.5 rounded-full">
+                                  Save {savingsPct}%
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Basket Body */}
+                            <div className="px-3.5 pt-2.5 pb-3 flex-1 flex flex-col justify-between">
+                              <div>
+                                <h5 className="text-sm font-extrabold text-slate-900 line-clamp-2 leading-snug mb-1 group-hover:text-violet-800 transition-colors">
+                                  {basket.title}
+                                </h5>
+                                <p className="text-[11px] text-slate-400 font-medium">
+                                  {basket.item_count || basket.items?.length || "?"} items · {basket.seller_name || "Seller Hub Partner"}
+                                </p>
+                                {/* Preview items */}
+                                {Array.isArray(basket.items) && basket.items.length > 0 && (
+                                  <div className="mt-2 flex gap-1">
+                                    {basket.items.slice(0, 3).map((it, idx) => (
+                                      <div key={idx} className="w-8 h-8 rounded-lg border border-slate-100 bg-slate-50 overflow-hidden flex items-center justify-center shrink-0">
+                                        {it.primary_image ? (
+                                          <img src={it.primary_image} alt={it.product_title} className="w-full h-full object-cover" onError={(e) => { e.target.src = "/mockups/vegetables_realistic.png" }} />
+                                        ) : (
+                                          <Boxes className="w-4 h-4 text-slate-300" />
+                                        )}
+                                      </div>
+                                    ))}
+                                    {(basket.items?.length || 0) > 3 && (
+                                      <div className="w-8 h-8 rounded-lg border border-slate-100 bg-slate-50 flex items-center justify-center text-[10px] font-bold text-slate-400">
+                                        +{basket.items.length - 3}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Price + CTA */}
+                              <div className="flex items-center justify-between mt-3 gap-2">
+                                <div>
+                                  <div className="text-sm font-black text-slate-900">₹{bundlePrice}</div>
+                                  {mrpTotal > bundlePrice && (
+                                    <div className="text-[11px] text-slate-400 line-through">₹{mrpTotal}</div>
+                                  )}
+                                </div>
+                                {(() => {
+                                  const isMultiOption = Boolean(basket.is_multi_option || basket.slots?.some((s) => s.options?.length > 1))
+                                  if (isMultiOption) {
+                                    return (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); handleOpenBasketDetail(basket) }}
+                                        className="px-3 py-1.5 bg-violet-50 hover:bg-violet-600 hover:text-white text-violet-700 border border-violet-200 hover:border-violet-600 rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm active:scale-95"
+                                      >
+                                        Customize
+                                      </button>
+                                    )
+                                  }
+                                  if (inCartQty > 0) {
+                                    return (
+                                      <div
+                                        className="flex items-center bg-violet-600 text-white rounded-xl overflow-hidden shadow-sm"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <button
+                                          type="button"
+                                          onClick={(e) => { e.stopPropagation(); removeMarketplaceCartItem(inCartItem.id).then(reloadCart) }}
+                                          className="px-2 py-1.5 hover:bg-violet-700 transition-colors"
+                                        >
+                                          <Minus className="w-3 h-3" />
+                                        </button>
+                                        <span className="px-2 text-xs font-black">{inCartQty}</span>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => { e.stopPropagation(); handleAddBasketToCart(basket) }}
+                                          className="px-2 py-1.5 hover:bg-violet-700 transition-colors"
+                                        >
+                                          <Plus className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                    )
+                                  }
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); handleAddBasketToCart(basket) }}
+                                      className="px-3 py-1.5 bg-violet-50 hover:bg-violet-600 hover:text-white text-violet-700 border border-violet-200 hover:border-violet-600 rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm active:scale-95"
+                                    >
+                                      Add Bundle
+                                    </button>
+                                  )
+                                })()}
+                              </div>
+                            </div>
+                          </motion.div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Loading Skeletons */}
               {loading && (
@@ -1738,6 +1976,327 @@ export function MarketplacePage() {
             </motion.div>
           </div>
         )}
+      </AnimatePresence>
+
+      {/* ── Basket / Combo Deal Detail Modal ── */}
+      <AnimatePresence>
+        {basketDetailModal && (() => {
+          const slots = Array.isArray(basketDetailModal.slots) && basketDetailModal.slots.length > 0 ? basketDetailModal.slots : []
+          const legacyItems = Array.isArray(basketDetailModal.items) ? basketDetailModal.items : []
+          const bundlePrice = Number(basketDetailModal.bundle_price || basketDetailModal.selling_price || 0)
+
+          // Compute Dynamic Live Total MRP based on currently chosen options
+          let liveTotalMrp = 0
+          let hasOutOfStockChoice = false
+
+          if (slots.length > 0) {
+            slots.forEach((slot) => {
+              const selectedOptId = selectedBasketSlotOptions[slot.id] || slot.options?.find((o) => o.is_default)?.id || slot.options?.[0]?.id
+              const chosenOpt = slot.options?.find((o) => o.id === selectedOptId) || slot.options?.[0]
+              const optMrp = Number(chosenOpt?.mrp || chosenOpt?.selling_price || 0)
+              const qty = Number(slot.quantity || 1)
+              liveTotalMrp += optMrp * qty
+              if (chosenOpt && (chosenOpt.in_stock === false || (chosenOpt.available_stock !== undefined && chosenOpt.available_stock <= 0))) {
+                hasOutOfStockChoice = true
+              }
+            })
+          } else if (legacyItems.length > 0) {
+            legacyItems.forEach((it) => {
+              const itMrp = Number(it.mrp || it.unit_price || 0)
+              const qty = Number(it.quantity || 1)
+              liveTotalMrp += itMrp * qty
+            })
+          } else {
+            liveTotalMrp = Number(basketDetailModal.mrp_total || basketDetailModal.total_mrp || 0)
+          }
+
+          const liveSavings = Math.max(0, liveTotalMrp - bundlePrice)
+          const liveSavingsPct = liveTotalMrp > 0 ? Math.round((liveSavings / liveTotalMrp) * 100) : 0
+
+          return (
+            <div className="fixed inset-0 z-[10006] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 30 }}
+                className="bg-white rounded-3xl max-w-xl w-full overflow-hidden shadow-2xl border border-slate-100 max-h-[90vh] flex flex-col font-sans"
+              >
+                {/* Modal Header */}
+                <div className="p-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-gradient-to-r from-violet-50 via-purple-50 to-indigo-50">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-xl bg-violet-100 flex items-center justify-center">
+                      <Boxes className="w-4 h-4 text-violet-700" />
+                    </div>
+                    <span className="text-xs font-black uppercase tracking-wider text-violet-800 bg-violet-100/90 px-2.5 py-1 rounded-md">
+                      Combo Offer
+                    </span>
+                    {slots.some((s) => s.options?.length > 1) && (
+                      <span className="text-[10px] font-extrabold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md">
+                        Customizable
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setBasketDetailModal(null)}
+                    className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-6 overflow-y-auto space-y-5 flex-1">
+                  {/* Title & Meta */}
+                  <div>
+                    <h3 className="text-xl font-black text-slate-900 tracking-tight leading-snug">
+                      {basketDetailModal.title}
+                    </h3>
+                    <div className="flex items-center gap-3 mt-2 text-xs text-slate-500 flex-wrap">
+                      <span className="flex items-center gap-1"><Store className="w-3.5 h-3.5 text-slate-400" />{basketDetailModal.seller_name || "Seller Hub Partner"}</span>
+                      <span className="flex items-center gap-1"><Boxes className="w-3.5 h-3.5 text-slate-400" />{slots.length || legacyItems.length || basketDetailModal.item_count || 0} Slots</span>
+                      {basketDetailModal.warehouse_name && (
+                        <span className="text-[11px] text-slate-400 font-medium">Ships from {basketDetailModal.warehouse_name}</span>
+                      )}
+                    </div>
+                    {basketDetailModal.description && (
+                      <p className="text-xs text-slate-500 mt-2 leading-relaxed">{basketDetailModal.description}</p>
+                    )}
+                  </div>
+
+                  {/* Savings Summary (Dynamic Live Recalculation) */}
+                  <div className="bg-gradient-to-br from-violet-50 via-purple-50/50 to-indigo-50/40 border border-violet-200/80 rounded-2xl p-4 flex items-center justify-between gap-4 shadow-2xs">
+                    <div>
+                      <div className="text-[11px] font-black text-violet-600 uppercase tracking-wider">Fixed Combo Price</div>
+                      <div className="text-3xl font-black text-slate-900 mt-0.5">₹{bundlePrice}</div>
+                      {liveTotalMrp > bundlePrice && (
+                        <div className="text-xs text-slate-400 font-semibold mt-0.5">
+                          Total MRP: <span className="line-through">₹{liveTotalMrp}</span>
+                        </div>
+                      )}
+                    </div>
+                    {liveSavings > 0 && (
+                      <div className="bg-amber-400 text-amber-950 px-3.5 py-2 rounded-2xl text-center shrink-0 shadow-xs">
+                        <div className="text-[10px] font-black uppercase tracking-wider">You Save</div>
+                        <div className="text-lg font-black leading-tight">₹{liveSavings}</div>
+                        {liveSavingsPct > 0 && <div className="text-[9px] font-extrabold opacity-80">({liveSavingsPct}% off)</div>}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Component Slots / Items */}
+                  {basketDetailLoading ? (
+                    <div className="space-y-3 animate-pulse">
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className="h-16 bg-slate-100 rounded-2xl" />
+                      ))}
+                    </div>
+                  ) : slots.length > 0 ? (
+                    <div>
+                      <div className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2.5 flex items-center justify-between">
+                        <span>Included Slots ({slots.length})</span>
+                        <span className="text-[11px] font-bold text-violet-600 lowercase">select your options</span>
+                      </div>
+                      <div className="space-y-3.5">
+                        {slots.map((slot, sIdx) => {
+                          const isMulti = Array.isArray(slot.options) && slot.options.length > 1
+                          const selectedOptId = selectedBasketSlotOptions[slot.id] || slot.options?.find((o) => o.is_default)?.id || slot.options?.[0]?.id
+                          const selectedOpt = slot.options?.find((o) => o.id === selectedOptId) || slot.options?.[0]
+
+                          return (
+                            <div key={slot.id || sIdx} className="bg-slate-50/90 rounded-2xl p-3.5 border border-slate-200/90 shadow-2xs space-y-2.5">
+                              {/* Slot Header */}
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="w-5 h-5 rounded-full bg-violet-600 text-white text-[10px] font-black flex items-center justify-center shrink-0">
+                                    {sIdx + 1}
+                                  </span>
+                                  <span className="text-xs font-black text-slate-800 truncate">
+                                    {slot.slot_title || selectedOpt?.product_title || `Slot ${sIdx + 1}`}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {isMulti && (
+                                    <span className="text-[10px] font-black text-violet-700 bg-violet-100/90 border border-violet-200 px-2 py-0.5 rounded-full">
+                                      Choose 1 of {slot.options.length}
+                                    </span>
+                                  )}
+                                  <span className="text-xs font-black text-slate-700 bg-white px-2 py-0.5 rounded-lg border border-slate-200 shadow-2xs">
+                                    Qty: {slot.quantity || 1}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Multi-Option Selector */}
+                              {isMulti ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
+                                  {slot.options.map((opt) => {
+                                    const isSelected = selectedOptId === opt.id
+                                    const isOutOfStock = opt.in_stock === false || (opt.available_stock !== undefined && opt.available_stock <= 0)
+                                    return (
+                                      <div
+                                        key={opt.id}
+                                        onClick={() => {
+                                          if (!isOutOfStock) {
+                                            setSelectedBasketSlotOptions((prev) => ({ ...prev, [slot.id]: opt.id }))
+                                          }
+                                        }}
+                                        className={`relative flex items-center gap-2.5 p-2.5 rounded-xl border transition-all cursor-pointer ${
+                                          isSelected
+                                            ? "bg-violet-50/80 border-violet-500 ring-1 ring-violet-500 shadow-xs"
+                                            : isOutOfStock
+                                            ? "bg-slate-100/70 border-slate-200 opacity-60 cursor-not-allowed"
+                                            : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
+                                        }`}
+                                      >
+                                        {/* Radio Indicator */}
+                                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                                          isSelected ? "border-violet-600 bg-violet-600" : "border-slate-300 bg-white"
+                                        }`}>
+                                          {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                        </div>
+
+                                        {/* Image */}
+                                        <div className="w-9 h-9 shrink-0 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center overflow-hidden">
+                                          {opt.primary_image ? (
+                                            <img src={opt.primary_image} alt={opt.product_title} className="w-full h-full object-cover"
+                                              onError={(e) => { e.target.src = "/mockups/vegetables_realistic.png" }} />
+                                          ) : (
+                                            <Boxes className="w-4 h-4 text-slate-300" />
+                                          )}
+                                        </div>
+
+                                        {/* Info */}
+                                        <div className="flex-1 min-w-0">
+                                          <div className="text-[11px] font-bold text-slate-900 truncate leading-tight">
+                                            {opt.product_title}
+                                          </div>
+                                          <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-400">
+                                            {opt.product_brand && <span className="font-semibold text-slate-600">{opt.product_brand}</span>}
+                                            {opt.pack_size && <span>• {opt.pack_size}</span>}
+                                            {opt.mrp && <span className="text-slate-500 font-medium">• MRP ₹{opt.mrp}</span>}
+                                          </div>
+                                        </div>
+
+                                        {/* Out of stock tag */}
+                                        {isOutOfStock && (
+                                          <span className="text-[9px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
+                                            Out of Stock
+                                          </span>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              ) : (
+                                /* Single Fixed Option (No clutter) */
+                                <div className="flex items-center gap-3 bg-white rounded-xl p-2.5 border border-slate-200">
+                                  <div className="w-10 h-10 shrink-0 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center overflow-hidden">
+                                    {selectedOpt?.primary_image ? (
+                                      <img src={selectedOpt.primary_image} alt={selectedOpt.product_title} className="w-full h-full object-cover"
+                                        onError={(e) => { e.target.src = "/mockups/vegetables_realistic.png" }} />
+                                    ) : (
+                                      <Boxes className="w-4 h-4 text-slate-300" />
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-xs font-bold text-slate-900 truncate">{selectedOpt?.product_title}</div>
+                                    <div className="text-[11px] text-slate-400 font-medium">
+                                      {[selectedOpt?.product_brand, selectedOpt?.pack_size || selectedOpt?.unit].filter(Boolean).join(" • ")}
+                                      {selectedOpt?.mrp && ` • MRP ₹${selectedOpt.mrp}`}
+                                    </div>
+                                  </div>
+                                  {selectedOpt?.in_stock === false && (
+                                    <span className="text-[9px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
+                                      Out of Stock
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ) : legacyItems.length > 0 ? (
+                    <div>
+                      <div className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">What's Included</div>
+                      <div className="space-y-2">
+                        {legacyItems.map((it, idx) => (
+                          <div key={idx} className="flex items-center gap-3 bg-slate-50 rounded-xl p-3 border border-slate-100">
+                            <div className="w-11 h-11 shrink-0 rounded-xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden">
+                              {it.primary_image ? (
+                                <img src={it.primary_image} alt={it.product_title} className="w-full h-full object-cover"
+                                  onError={(e) => { e.target.src = "/mockups/vegetables_realistic.png" }} />
+                              ) : (
+                                <Boxes className="w-5 h-5 text-slate-300" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-extrabold text-slate-900 truncate">{it.product_title}</div>
+                              <div className="text-[11px] text-slate-400 font-medium">
+                                {[it.pack_size || it.unit, it.product_sku].filter(Boolean).join(" · ") || ""}
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <div className="text-xs font-black text-slate-900">×{it.quantity}</div>
+                              {it.unit_price && (
+                                <div className="text-[11px] text-slate-400">₹{it.unit_price} each</div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* Modal Footer CTA */}
+                <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3 shrink-0">
+                  <div className="text-xs font-bold text-slate-500">
+                    Combo Total: <span className="text-sm font-black text-slate-900">₹{bundlePrice}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setBasketDetailModal(null)}
+                      className="px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-extrabold transition-colors cursor-pointer"
+                    >
+                      Close
+                    </button>
+                    <button
+                      type="button"
+                      disabled={hasOutOfStockChoice}
+                      onClick={() => {
+                        const slotSelections = slots.map((slot) => {
+                          const optId = selectedBasketSlotOptions[slot.id]
+                          const opt = slot.options?.find((o) => o.id === optId) || slot.options?.find((o) => o.is_default) || slot.options?.[0]
+                          return {
+                            slot_id: slot.id,
+                            product_id: opt ? opt.product_id : (slot.product_id || slot.options?.[0]?.product_id),
+                          }
+                        })
+                        const customOptions = slotSelections.length > 0 ? {
+                          slot_selections: slotSelections,
+                          live_mrp: liveTotalMrp,
+                        } : null
+
+                        handleAddBasketToCart(basketDetailModal, false, customOptions)
+                        setBasketDetailModal(null)
+                      }}
+                      className={`px-6 py-2.5 rounded-xl text-xs font-black shadow-md transition-all cursor-pointer flex items-center gap-2 ${
+                        hasOutOfStockChoice
+                          ? "bg-slate-300 text-slate-500 cursor-not-allowed"
+                          : "bg-violet-600 hover:bg-violet-700 text-white shadow-violet-600/20"
+                      }`}
+                    >
+                      <Gift className="w-3.5 h-3.5" />
+                      {hasOutOfStockChoice ? "Selection Out of Stock" : `Add Bundle • ₹${bundlePrice}`}
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )
+        })()}
       </AnimatePresence>
 
       {/* ── Cart Drawer ── */}
@@ -2466,10 +3025,14 @@ export function MarketplacePage() {
             await refreshMe?.()
             await reloadCart()
             if (pendingAddToCart) {
-              const { product, quantityDelta } = pendingAddToCart
+              const { product, quantityDelta, basket, isBasket, customOptions } = pendingAddToCart
               setPendingAddToCart(null)
               setTimeout(() => {
-                handleAddToCart(product, quantityDelta)
+                if (isBasket && basket) {
+                  handleAddBasketToCart(basket, false, customOptions)
+                } else if (product) {
+                  handleAddToCart(product, quantityDelta)
+                }
               }, 300)
             }
           }}
